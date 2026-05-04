@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.3
+
+- Keep the Socket.IO/Engine.IO long-polling session open after startup.
+- Replace separate HTTP ping with periodic setpoint polling.
+- Poll ODB ID 0 every 600 seconds by default.
+- Use the existing session for setpoint writes via ODB ID 66.
+- Improve reconnect handling when the DHE closes the session.
+
 ## 0.4.2
 
 - Schedule the persistent Engine.IO/Socket.IO polling loop as a Home Assistant background task.

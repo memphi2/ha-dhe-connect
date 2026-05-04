@@ -30,61 +30,20 @@ Experimentelle Custom Integration. Getestet gegen einen lokal erreichbaren DHE C
 Die Temperatur wird in Zehntelgrad übertragen, also z. B. `345` für `34,5 °C`. Das Setzen über ID `66` nutzt zusätzlich die vom Web-UI bekannte Request-Adressierung in den oberen Bits.
 
 
-## Repository-Upload nach GitHub
 
-Das Repository ist für diese URL vorbereitet:
 
-```text
-https://github.com/memphi2/ha-dhe-connect
-```
 
-Minimaler Upload:
 
-```bash
-git clone https://github.com/memphi2/ha-dhe-connect.git
-cd ha-dhe-connect
-# Inhalt dieses ZIPs in diesen Ordner kopieren
-git add .
-git commit -m "Initial HACS custom integration"
-git push origin main
-```
-
-Optionaler Release-Tag für HACS:
-
-```bash
-git tag v0.4.1
-git push origin v0.4.1
-```
-
-## Installation über HACS als Custom Repository
-
-1. Dieses Repository in GitHub anlegen, `ha-dhe-connect`.
-2. Den Inhalt dieses ZIPs ins Repository legen. Die Struktur muss so aussehen:
-
-```text
-hacs.json
-README.md
-custom_components/
-  stiebel_dhe_connect/
-    __init__.py
-    manifest.json
-    config_flow.py
-    client.py
-    climate.py
-    const.py
-    strings.json
-```
-
-3. In HACS öffnen:
+1. In HACS öffnen:
 
 ```text
 HACS → Integrationen → Drei Punkte → Benutzerdefinierte Repositorys
 ```
 
-4. Repository-URL `https://github.com/memphi2/ha-dhe-connect` eintragen und Kategorie `Integration` wählen.
-5. Integration installieren.
-6. Home Assistant neu starten.
-7. Hinzufügen über:
+2. Repository-URL `https://github.com/memphi2/ha-dhe-connect` eintragen und Kategorie `Integration` wählen.
+3. Integration installieren.
+4. Home Assistant neu starten.
+5. Hinzufügen über:
 
 ```text
 Einstellungen → Geräte & Dienste → Integration hinzufügen → Stiebel DHE Connect
@@ -162,6 +121,14 @@ Typische Probleme:
 | Temperatur ändert sich nicht | DHE-Grenzen, Sperren oder Gerätemodus prüfen |
 
 ## Release Notes
+
+## 0.4.3
+
+- Keep the Socket.IO/Engine.IO long-polling session open after startup.
+- Replace separate HTTP ping with periodic setpoint polling.
+- Poll ODB ID 0 every 600 seconds by default.
+- Use the existing session for setpoint writes via ODB ID 66.
+- Improve reconnect handling when the DHE closes the session.
 
 ### v0.4.1
 
