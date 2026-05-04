@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Stiebel DHE Connect einrichten",
-        "description": "Lokale Verbindung zum DHE Connect konfigurieren. Beim ersten Zugriff kann Pairing am DHE erforderlich sein.",
+        "description": "Lokale Verbindung zum DHE Connect konfigurieren. {pairing_hint}",
         "data": {
           "host": "IP-Adresse oder Hostname",
           "port": "Port",
