@@ -395,8 +395,9 @@ class DHEClient:
         self._handle_setpoint(setpoint)
 
     def _handle_setpoint(self, value: float) -> None:
+        previous = self._last_setpoint
         self._last_setpoint = value
-        if self._setpoint_callback:
+        if self._setpoint_callback and (previous is None or abs(previous - value) >= 0.01):
             self._setpoint_callback(value)
         future = self._pending_setpoint_future
         expected = self._pending_expected_setpoint
