@@ -29,6 +29,13 @@ Experimentelle Custom Integration. Getestet gegen einen lokal erreichbaren DHE C
 
 Die Temperatur wird in Zehntelgrad übertragen, also z. B. `345` für `34,5 °C`. Das Setzen über ID `66` nutzt zusätzlich die vom Web-UI bekannte Request-Adressierung in den oberen Bits.
 
+## Verbrauchswerte (Energie/Leistung)
+
+Aktuell liest diese Integration **keine** separaten Verbrauchs-, Leistungs- oder Energiesensoren aus.
+Der derzeit implementierte Datenpfad nutzt ausschließlich ODB ID `0` (Soll-/Anzeigetemperatur) und ODB ID `66` (Setpoint-Schreiben).
+
+Wenn Verbrauchswerte benötigt werden, müssen zuerst die passenden ODB-IDs des Geräts verifiziert und dann als zusätzliche `sensor`-Entitäten implementiert werden.
+
 
 ## Repository-Upload nach GitHub
 

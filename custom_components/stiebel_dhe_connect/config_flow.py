@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ipaddress
 import logging
+import os
 import re
 from typing import Any
 from urllib.parse import urlsplit
@@ -115,6 +116,14 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     )
 
 
+
+
+def _has_saved_token(hass: HomeAssistant) -> bool:
+    """Return whether a saved DHE token already exists."""
+    token_path = hass.config.path(".storage/stiebel_dhe_connect_token.txt")
+    return os.path.exists(token_path) and os.path.getsize(token_path) > 0
+
+
 async def _can_connect(hass: HomeAssistant, host: str, port: int) -> bool:
     """Check if the DHE web endpoint is reachable before creating the config entry."""
     session = async_get_clientsession(hass)
@@ -164,10 +173,13 @@ class StiebelDHEConnectConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         },
                     )
 
+        pairing_hint = "" if _has_saved_token(self.hass) else "Kein gespeicherter Token gefunden. Beim ersten Verbindungsaufbau Pairing am DHE bestätigen."
+
         return self.async_show_form(
             step_id="user",
             data_schema=_schema(),
             errors=errors,
+            description_placeholders={"pairing_hint": pairing_hint},
         )
 
     @staticmethod
