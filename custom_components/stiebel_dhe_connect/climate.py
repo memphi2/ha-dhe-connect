@@ -62,8 +62,14 @@ class StiebelDHEClimate(ClimateEntity):
         self._poll_interval = max(60, int(poll_interval))
         self._attr_target_temperature: float | None = None
         self._attr_available = False
+        self._connection_state = "starting"
+        self._update_extra_state_attributes()
+
+    def _update_extra_state_attributes(self) -> None:
+        """Update diagnostic attributes without doing I/O in properties."""
         self._attr_extra_state_attributes = {
             "communication_model": "persistent_socketio_polling",
+            "connection_state": self._connection_state,
             "readback_id": 0,
             "write_id": 66,
             "poll_interval_seconds": self._poll_interval,
@@ -83,12 +89,31 @@ class StiebelDHEClimate(ClimateEntity):
         """Handle setpoint updates from the persistent client."""
         self._attr_target_temperature = value
         self._attr_available = True
+        self._connection_state = "connected"
+        self._update_extra_state_attributes()
         self.async_write_ha_state()
 
     @callback
     def _handle_availability_update(self, available: bool) -> None:
-        """Handle DHE connection availability updates."""
-        self._attr_available = available
+        """Handle DHE connection availability updates.
+
+        The DHE may close and reopen long-polling sessions during normal operation.
+        Once a valid setpoint has been read, keep the entity available during short
+        reconnect phases to avoid Home Assistant UI flapping between available and
+        unavailable. The diagnostic connection_state attribute still shows the
+        reconnecting state.
+        """
+        if available:
+            self._attr_available = True
+            self._connection_state = "connected"
+        elif self._attr_target_temperature is None:
+            self._attr_available = False
+            self._connection_state = "unavailable"
+        else:
+            self._attr_available = True
+            self._connection_state = "reconnecting"
+
+        self._update_extra_state_attributes()
         self.async_write_ha_state()
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
@@ -101,6 +126,8 @@ class StiebelDHEClimate(ClimateEntity):
         try:
             self._attr_target_temperature = await self._client.set_temperature(temperature)
             self._attr_available = True
+            self._connection_state = "connected"
+            self._update_extra_state_attributes()
             self.async_write_ha_state()
         except DHEError as err:
             _LOGGER.error("Could not set DHE temperature: %s", err)
