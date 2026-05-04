@@ -199,3 +199,8 @@ Typische Probleme:
 - Config Flow/UI-Konfiguration.
 - Keine dauerhafte Socket.IO-Verbindung.
 - Einmaliges Lesen beim Start, Lesen nach Änderung, Verfügbarkeits-Ping alle 600 Sekunden. *(bis v0.3.x)*
+
+
+## Startup behavior
+
+Since v0.4.2 the persistent DHE polling loop is scheduled as a Home Assistant background task. This avoids keeping Home Assistant in the startup phase while the long-polling connection is active.

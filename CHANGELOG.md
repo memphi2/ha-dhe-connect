@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.2
+
+- Schedule the persistent Engine.IO/Socket.IO polling loop as a Home Assistant background task.
+- Prevent the long-running DHE connection task from holding Home Assistant in the startup phase.
+- No protocol change: the connection is still kept open and ODB ID 0 is polled every configured interval.
+
 ## v0.4.1
 
 - Repository metadata set to `memphi2/ha-dhe-connect`.

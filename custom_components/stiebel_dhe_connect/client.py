@@ -143,7 +143,23 @@ class DHEClient:
             return
 
         self._stopped.clear()
-        self._runner = self.hass.async_create_task(self._run_loop(), name="stiebel_dhe_connect_poll_loop")
+
+        # Important for Home Assistant startup:
+        # this is a long-running Engine.IO long-poll loop and must be scheduled as a
+        # background task. Using hass.async_create_task during setup can make HA keep
+        # showing "Home Assistant is starting" because the task is considered part
+        # of startup work.
+        create_background_task = getattr(self.hass, "async_create_background_task", None)
+        if create_background_task is not None:
+            self._runner = create_background_task(
+                self._run_loop(),
+                "stiebel_dhe_connect_poll_loop",
+            )
+        else:
+            self._runner = self.hass.async_create_task(
+                self._run_loop(),
+                name="stiebel_dhe_connect_poll_loop",
+            )
 
     async def stop(self) -> None:
         """Stop persistent polling loop and close the DHE namespace session."""

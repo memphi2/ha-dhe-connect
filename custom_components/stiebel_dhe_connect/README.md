@@ -199,3 +199,8 @@ Typische Probleme:
 - Config Flow/UI-Konfiguration.
 - Keine dauerhafte Socket.IO-Verbindung.
 - Einmaliges Lesen beim Start, Lesen nach Änderung, Verfügbarkeits-Ping alle 600 Sekunden. *(bis v0.3.x)*
+
+
+## Startup behavior
+
+The persistent polling session runs as a Home Assistant background task and should not block HA startup.
