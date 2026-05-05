@@ -2,7 +2,8 @@
   "name": "Stiebel DHE Connect",
   "render_readme": true,
   "domains": [
-    "climate"
+    "climate",
+    "sensor"
   ],
   "country": [
     "DE"

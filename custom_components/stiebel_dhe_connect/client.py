@@ -3,7 +3,8 @@
 Design for this integration version:
 - A single Engine.IO/Socket.IO long-polling session is kept open while Home Assistant runs.
 - The client continuously long-polls the DHE and handles Engine.IO ping/pong frames.
-- The setpoint is polled through ODB id 0 at the configured interval, default 600 seconds.
+- The setpoint, water flow and power values are polled through ODB ids at the configured
+  interval, default 600 seconds.
 - Writes use the same open session whenever possible: ODB id 66 is written, then ODB id 0
   is requested as readback.
 - If the DHE closes the session, the client marks the entity unavailable and reconnects.
@@ -32,10 +33,15 @@ _LOGGER = logging.getLogger(__name__)
 
 NS = "1.0.0"
 ID_SETPOINT = 0
+ID_WATER_FLOW = 15
+ID_POWER = 16
 ID_SET_REQ = 66
+POLL_VALUE_IDS = (ID_SETPOINT, ID_WATER_FLOW, ID_POWER)
 
 SetpointCallback = Callable[[float], None]
 AvailabilityCallback = Callable[[bool], None]
+MeasurementCallback = Callable[[int, float], None]
+CallbackRemover = Callable[[], None]
 
 
 class DHEError(Exception):
@@ -110,13 +116,15 @@ class DHEClient:
         self._command_lock = asyncio.Lock()
 
         self._poll_interval = 600
-        self._setpoint_callback: SetpointCallback | None = None
-        self._availability_callback: AvailabilityCallback | None = None
+        self._setpoint_callbacks: list[SetpointCallback] = []
+        self._availability_callbacks: list[AvailabilityCallback] = []
+        self._measurement_callbacks: list[MeasurementCallback] = []
         self._available = False
         self._last_setpoint: float | None = None
+        self._last_measurements: dict[int, float] = {}
         self._pending_setpoint_future: asyncio.Future[float] | None = None
         self._pending_expected_setpoint: float | None = None
-        self._last_setpoint_request = 0.0
+        self._last_poll_request = 0.0
 
     @property
     def last_setpoint(self) -> float | None:
@@ -128,16 +136,41 @@ class DHEClient:
         """Return current connection availability."""
         return self._available
 
-    async def start(
-        self,
-        poll_interval: int,
-        setpoint_callback: SetpointCallback,
-        availability_callback: AvailabilityCallback,
-    ) -> None:
+    @property
+    def last_measurements(self) -> dict[int, float]:
+        """Return the last known converted measurements keyed by ODB id."""
+        return dict(self._last_measurements)
+
+    def add_setpoint_callback(self, callback: SetpointCallback) -> CallbackRemover:
+        """Subscribe to setpoint updates."""
+        return self._add_callback(self._setpoint_callbacks, callback)
+
+    def add_availability_callback(self, callback: AvailabilityCallback) -> CallbackRemover:
+        """Subscribe to availability updates."""
+        return self._add_callback(self._availability_callbacks, callback)
+
+    def add_measurement_callback(self, callback: MeasurementCallback) -> CallbackRemover:
+        """Subscribe to converted ODB measurement updates."""
+        return self._add_callback(self._measurement_callbacks, callback)
+
+    @staticmethod
+    def _add_callback(
+        callbacks: list[Callable[..., None]],
+        callback: Callable[..., None],
+    ) -> CallbackRemover:
+        callbacks.append(callback)
+
+        def _remove_callback() -> None:
+            try:
+                callbacks.remove(callback)
+            except ValueError:
+                pass
+
+        return _remove_callback
+
+    async def start(self, poll_interval: int) -> None:
         """Start persistent DHE session and polling loop."""
         self._poll_interval = max(60, int(poll_interval))
-        self._setpoint_callback = setpoint_callback
-        self._availability_callback = availability_callback
 
         if self._runner and not self._runner.done():
             return
@@ -241,13 +274,13 @@ class DHEClient:
                 self._ctx = await self._open_authenticated_session()
                 self._ready.set()
                 self._set_available(True)
-                self._last_setpoint_request = 0.0
-                await self._request_setpoint(self._ctx)
+                self._last_poll_request = 0.0
+                await self._request_polled_values(self._ctx)
 
                 while not self._stopped.is_set() and self._ctx is not None:
                     now = time.monotonic()
-                    if now - self._last_setpoint_request >= self._poll_interval:
-                        await self._request_setpoint(self._ctx)
+                    if now - self._last_poll_request >= self._poll_interval:
+                        await self._request_polled_values(self._ctx)
 
                     events = await self._read_events_once(self._ctx)
                     for event in events:
@@ -383,22 +416,24 @@ class DHEClient:
 
         data = event.data
         value = data.get("value")
-        if not (
-            data.get("command") == "set:ste.common.odb:value"
-            and isinstance(value, dict)
-            and int(value.get("id", -1)) == ID_SETPOINT
-        ):
+        if not (data.get("command") == "set:ste.common.odb:value" and isinstance(value, dict)):
             return
 
+        odb_id = int(value.get("id", -1))
         raw = int(value.get("value"))
-        setpoint = _raw_tenths_to_c(raw)
-        self._handle_setpoint(setpoint)
+        if odb_id == ID_SETPOINT:
+            self._handle_setpoint(_raw_tenths_to_c(raw))
+        elif odb_id == ID_WATER_FLOW:
+            self._handle_measurement(odb_id, raw / 10.0)
+        elif odb_id == ID_POWER:
+            self._handle_measurement(odb_id, raw / 100.0 * 24.0)
 
     def _handle_setpoint(self, value: float) -> None:
         previous = self._last_setpoint
         self._last_setpoint = value
-        if self._setpoint_callback and (previous is None or abs(previous - value) >= 0.01):
-            self._setpoint_callback(value)
+        if previous is None or abs(previous - value) >= 0.01:
+            for callback in tuple(self._setpoint_callbacks):
+                callback(value)
         future = self._pending_setpoint_future
         expected = self._pending_expected_setpoint
         if future is not None and not future.done():
@@ -407,12 +442,30 @@ class DHEClient:
                 self._pending_setpoint_future = None
                 self._pending_expected_setpoint = None
 
+    def _handle_measurement(self, odb_id: int, value: float) -> None:
+        previous = self._last_measurements.get(odb_id)
+        self._last_measurements[odb_id] = value
+        if previous is not None and abs(previous - value) < 0.001:
+            return
+        for callback in tuple(self._measurement_callbacks):
+            callback(odb_id, value)
+
     async def _request_setpoint(self, ctx: DHESession) -> None:
         """Request ODB id 0 setpoint on the persistent session."""
-        self._last_setpoint_request = time.monotonic()
+        self._last_poll_request = time.monotonic()
+        await self._request_odb_value(ctx, ID_SETPOINT)
+
+    async def _request_polled_values(self, ctx: DHESession) -> None:
+        """Request all ODB values exposed by this integration."""
+        self._last_poll_request = time.monotonic()
+        for odb_id in POLL_VALUE_IDS:
+            await self._request_odb_value(ctx, odb_id)
+
+    async def _request_odb_value(self, ctx: DHESession, odb_id: int) -> None:
+        """Request one ODB value on the persistent session."""
         await self._post_packet(ctx, self._message_packet({
             "command": "get:ste.common.odb:value",
-            "value": {"id": ID_SETPOINT, "value": ""},
+            "value": {"id": odb_id, "value": ""},
         }))
 
     def _new_setpoint_future(self, expected: float | None = None) -> asyncio.Future[float]:
@@ -436,8 +489,8 @@ class DHEClient:
         if self._available == available:
             return
         self._available = available
-        if self._availability_callback:
-            self._availability_callback(available)
+        for callback in tuple(self._availability_callbacks):
+            callback(available)
 
     async def _read_events_once(self, ctx: DHESession) -> list[DHEEvent]:
         raw = await self._get_text(self._poll_url(ctx.url_token, ctx.sid))

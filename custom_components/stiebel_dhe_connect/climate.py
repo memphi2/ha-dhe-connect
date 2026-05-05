@@ -77,12 +77,18 @@ class StiebelDHEClimate(ClimateEntity):
 
     async def async_added_to_hass(self) -> None:
         """Start persistent DHE connection and value polling."""
-        await self._client.start(
-            poll_interval=self._poll_interval,
-            setpoint_callback=self._handle_setpoint_update,
-            availability_callback=self._handle_availability_update,
+        self.async_on_remove(
+            self._client.add_setpoint_callback(self._handle_setpoint_update)
         )
-        self.async_on_remove(lambda: self.hass.async_create_task(self._client.stop()))
+        self.async_on_remove(
+            self._client.add_availability_callback(self._handle_availability_update)
+        )
+        if self._client.last_setpoint is not None:
+            self._attr_target_temperature = self._client.last_setpoint
+            self._attr_available = True
+            self._connection_state = "connected" if self._client.available else "reconnecting"
+            self._update_extra_state_attributes()
+        await self._client.start(poll_interval=self._poll_interval)
 
     @callback
     def _handle_setpoint_update(self, value: float) -> None:

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.5
+
+- Add `sensor` platform support for current water consumption from ODB ID `15`.
+- Add current power consumption sensor from ODB ID `16`.
+- Poll ODB IDs `0`, `15` and `16` over the existing persistent DHE session.
+- Document conversion formulas: `flow_l_min = ODB_ID_15 / 10` and `power_kw = ODB_ID_16 / 100 * 24`.
+
 ## 0.4.4
 
 - Keep the climate entity available during short DHE long-polling reconnect phases after a valid setpoint has been read.
