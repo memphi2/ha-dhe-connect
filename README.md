@@ -23,8 +23,8 @@ Experimental custom integration. Tested against a locally reachable DHE Connect 
 - Sensor `Configured power`: ODB ID `20` in `kW`.
 - Sensor `Current power consumption`: ODB ID `16` / `100` * configured power in `kW`.
 - Switch `Eco mode`: ODB ID `6`.
-- Number `Eco flow limit`: ODB ID `7` in `L/min`.
-- Number `Maximum temperature`: ODB ID `5` in `degrees C`.
+- Number `Eco flow limit`: ODB ID `7`, displayed as raw `/ 10` in `L/min`, selectable as `6`, `7` or `8 L/min`.
+- Number `Maximum temperature`: ODB ID `5`, selectable from `30` to `50 degrees C`.
 - Number `Bath fill target volume`: ODB ID `3` in `L`.
 - Buttons `Start bath fill` and `Stop bath fill`: ODB ID `1` with `true` / `false`.
 - Home Assistant UI strings are available in English and German.
@@ -36,15 +36,15 @@ Experimental custom integration. Tested against a locally reachable DHE Connect 
 | Read displayed target temperature | `get:ste.common.odb:value` | `0` | raw tenths of `degrees C` |
 | Start / stop bath fill | `assign:ste.common.odb:value` | `1` | `true` / `false` |
 | Set bath fill target volume | `assign:ste.common.odb:value` | `3` | `L` |
-| Set maximum temperature | `assign:ste.common.odb:value` | `5` | `degrees C` |
+| Set maximum temperature | `assign:ste.common.odb:value` | `5` | `30` to `50 degrees C` |
 | Enable / disable Eco mode | `assign:ste.common.odb:value` | `6` | `true` / `false` |
-| Set Eco flow limit | `assign:ste.common.odb:value` | `7` | `L/min` |
+| Set Eco flow limit | `assign:ste.common.odb:value` | `7` | raw `/ 10`, values `60`, `70`, `80` => `6`, `7`, `8 L/min` |
 | Read current water consumption | `get:ste.common.odb:value` | `15` | raw `/ 10` in `L/min` |
 | Read current power consumption | `get:ste.common.odb:value` | `16` | raw `/ 100 * configured power` in `kW` |
 | Read configured power | `get:ste.common.odb:value` | `20` | `kW` |
 | Set displayed target temperature | `assign:ste.common.odb:value` | `66` | raw request value with UI addressing bits |
 
-Temperature values for ODB ID `0` are transferred in tenths of a degree, for example `345` for `34.5 degrees C`. Current water consumption is calculated as `ODB ID 15 / 10` in `L/min`. Configured power is read from ODB ID `20` once after startup and is expected to be `18` through `24 kW`. Current power consumption is calculated as `ODB ID 16 / 100 * configured power` in `kW`. Writes through ID `66` also use the request addressing known from the DHE web UI in the upper bits.
+Temperature values for ODB ID `0` are transferred in tenths of a degree, for example `345` for `34.5 degrees C`. Current water consumption is calculated as `ODB ID 15 / 10` in `L/min`. Eco flow limit values on ODB ID `7` are also transferred as tenths, for example `60` for `6 L/min`. Configured power is read from ODB ID `20` once after startup and is expected to be `18` through `24 kW`. Current power consumption is calculated as `ODB ID 16 / 100 * configured power` in `kW`. Writes through ID `66` also use the request addressing known from the DHE web UI in the upper bits.
 
 The writable setting IDs use the generic Socket.IO message command `assign:ste.common.odb:value`. The integration waits until the DHE sends back the same ODB id and confirmed value before updating the Home Assistant entity state.
 
