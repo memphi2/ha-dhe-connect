@@ -2,7 +2,7 @@
 
 Custom Integration für Stiebel-Eltron-DHE-Connect-Durchlauferhitzer über die lokale Socket.IO-/Engine.IO-v3-Long-Polling-Schnittstelle.
 
-Die Integration ist für den Betrieb im lokalen Heimnetz gedacht. Sie stellt eine `climate`-Entität bereit, über die die Anzeige-/Solltemperatur des DHE gesetzt und gelesen wird.
+Die Integration ist für den Betrieb im lokalen Heimnetz gedacht. Sie stellt eine `climate`-Entität bereit, über die die Anzeige-/Solltemperatur des DHE gesetzt und gelesen wird. Zusätzlich werden Sensoren für aktuellen Wasserverbrauch und aktuellen Stromverbrauch angelegt.
 
 ## Status
 
@@ -16,8 +16,10 @@ Experimentelle Custom Integration. Getestet gegen einen lokal erreichbaren DHE C
 - Token wird lokal in Home Assistant gespeichert.
 - Nach dem HA-Start wird eine Socket.IO-/Engine.IO-Long-Polling-Session dauerhaft offen gehalten.
 - Die Integration antwortet auf Engine.IO-Pings und reconnectet automatisch, falls der DHE die Session schließt.
-- ODB ID `0` wird im konfigurierten Intervall gelesen, Standard `600` Sekunden.
+- ODB IDs `0`, `15` und `16` werden im konfigurierten Intervall gelesen, Standard `600` Sekunden.
 - Bei einer Temperaturänderung wird über die bestehende Session ODB ID `66` geschrieben und ODB ID `0` als Readback gelesen.
+- Sensor `Aktueller Wasserverbrauch`: ODB ID `15` / `10` in `L/min`.
+- Sensor `Aktueller Stromverbrauch`: ODB ID `16` / `100` * `24` in `kW`.
 - Die Entität bleibt sichtbar; die Verfügbarkeit ergibt sich aus der persistenten DHE-Session, nicht mehr aus einem separaten HTTP-Ping.
 
 ## Verwendete ODB-IDs
@@ -25,9 +27,11 @@ Experimentelle Custom Integration. Getestet gegen einen lokal erreichbaren DHE C
 | Zweck | Befehl | ODB ID |
 |---|---|---:|
 | Anzeige-/Solltemperatur lesen | `get:ste.common.odb:value` | `0` |
+| Aktueller Wasserverbrauch lesen | `get:ste.common.odb:value` | `15` |
+| Aktueller Stromverbrauch lesen | `get:ste.common.odb:value` | `16` |
 | Anzeige-/Solltemperatur setzen | `assign:ste.common.odb:value` | `66` |
 
-Die Temperatur wird in Zehntelgrad übertragen, also z. B. `345` für `34,5 °C`. Das Setzen über ID `66` nutzt zusätzlich die vom Web-UI bekannte Request-Adressierung in den oberen Bits.
+Die Temperatur wird in Zehntelgrad übertragen, also z. B. `345` für `34,5 °C`. Der aktuelle Wasserverbrauch wird als `ODB ID 15 / 10` in `L/min` berechnet. Der aktuelle Stromverbrauch wird als `ODB ID 16 / 100 * 24` in `kW` berechnet. Das Setzen über ID `66` nutzt zusätzlich die vom Web-UI bekannte Request-Adressierung in den oberen Bits.
 
 
 
@@ -68,7 +72,7 @@ Danach Home Assistant neu starten und die Integration über die Oberfläche hinz
 | IP-Adresse oder Hostname | Adresse des DHE im lokalen Netz | `172.16.2.124` |
 | Port | HTTP-/Socket.IO-Port | `8443` |
 | Name der Entität | Anzeigename in HA | `DHE Connect` |
-| Werte-Polling | Leseintervall für ODB ID `0` in Sekunden | `600` |
+| Werte-Polling | Leseintervall für ODB IDs `0`, `15` und `16` in Sekunden | `600` |
 
 Eingaben werden validiert: Host darf nur IP-Adresse oder Hostname sein; Pfade, Benutzerinformationen, Query-Strings und eingebettete Ports werden abgewiesen. Der Port muss zwischen `1` und `65535` liegen. Das Werte-Polling muss zwischen `60` und `86400` Sekunden liegen.
 
@@ -90,7 +94,7 @@ Die Integration hält ab v0.4.0 eine dauerhafte Socket.IO-/Engine.IO-v3-Long-Pol
 
 - Beim Start: Session öffnen, Token prüfen/refreshen, authentifizieren.
 - Laufend: Long-Polling-GETs offen halten und Engine.IO-Pings beantworten.
-- Alle konfigurierten `poll_interval` Sekunden: ODB ID `0` lesen.
+- Alle konfigurierten `poll_interval` Sekunden: ODB IDs `0`, `15` und `16` lesen.
 - Bei Änderung der Zieltemperatur: über dieselbe Session ODB ID `66` schreiben und ODB ID `0` als Readback lesen.
 - Bei Session-Close: Entity kurz unavailable, automatischer Reconnect.
 

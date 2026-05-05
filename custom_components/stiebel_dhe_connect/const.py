@@ -14,4 +14,4 @@ CONF_POLL_INTERVAL = "poll_interval"
 # Backward compatibility for entries created by v0.2/v0.3.
 CONF_PING_INTERVAL = "ping_interval"
 
-PLATFORMS = [Platform.CLIMATE]
+PLATFORMS = [Platform.CLIMATE, Platform.SENSOR]
