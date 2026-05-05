@@ -255,6 +255,8 @@ class DHEClient:
                         "command": ODB_ASSIGN_COMMAND,
                         "value": {"id": int(odb_id), "value": value},
                     }))
+                    if not future.done():
+                        await self._request_odb_value(ctx, odb_id)
                     confirmed = await asyncio.wait_for(future, timeout=12)
                     if _values_equal(confirmed, expected):
                         return confirmed
@@ -280,7 +282,7 @@ class DHEClient:
 
     async def set_maximum_temperature(self, temperature: float) -> float:
         requested = _round_to_half_c(_clamp(float(temperature), 30.0, 50.0))
-        return float(await self.write_odb_value(ID_MAX_TEMPERATURE, requested))
+        return float(await self.write_odb_value(ID_MAX_TEMPERATURE, _c_to_raw_tenths(requested)))
 
     async def set_eco_mode(self, enabled: bool) -> bool:
         return bool(await self.write_odb_value(ID_ECO_MODE, bool(enabled)))
@@ -471,6 +473,8 @@ class DHEClient:
     def _convert_odb_value(odb_id: int, raw_value: Any) -> ODBValue:
         if odb_id in {ID_BATH_FILL_ACTIVE, ID_ECO_MODE}:
             return _raw_to_bool(raw_value)
+        if odb_id == ID_MAX_TEMPERATURE:
+            return _raw_tenths_to_c(float(raw_value))
         if odb_id == ID_ECO_FLOW_LIMIT:
             return float(raw_value) / 10.0
         return float(raw_value)

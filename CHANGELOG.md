@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.2
+
+- Write maximum temperature as raw tenths of a degree, e.g. `45.0 degrees C` as `450`.
+- Request ODB readback after writable setting changes so Eco flow limit, maximum temperature and bath-fill settings can confirm reliably.
+
 ## 0.6.1
 
 - Add writable Eco mode, Eco flow limit, maximum temperature and bath-fill controls.
