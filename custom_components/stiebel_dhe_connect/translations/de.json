@@ -39,6 +39,25 @@
     }
   },
   "entity": {
+    "button": {
+      "start_bath_fill": {
+        "name": "Wannenfüllung starten"
+      },
+      "stop_bath_fill": {
+        "name": "Wannenfüllung stoppen"
+      }
+    },
+    "number": {
+      "bath_fill_target_volume": {
+        "name": "Wannenfüllmenge"
+      },
+      "maximum_temperature": {
+        "name": "Maximaltemperatur"
+      },
+      "eco_flow_limit": {
+        "name": "Eco-Durchflussbegrenzung"
+      }
+    },
     "sensor": {
       "water_flow": {
         "name": "Aktueller Wasserverbrauch"
@@ -48,6 +67,11 @@
       },
       "configured_power": {
         "name": "Eingestellte Leistung"
+      }
+    },
+    "switch": {
+      "eco_mode": {
+        "name": "Eco-Modus"
       }
     }
   }
