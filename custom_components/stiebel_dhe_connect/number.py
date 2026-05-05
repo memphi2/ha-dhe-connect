@@ -5,9 +5,9 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from homeassistant.components.number import NumberEntity, NumberEntityDescription
+from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberEntityDescription
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfTemperature, UnitOfVolumeFlowRate
+from homeassistant.const import UnitOfTemperature, UnitOfVolume, UnitOfVolumeFlowRate
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -36,7 +36,9 @@ NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
     StiebelDHENumberEntityDescription(
         key="bath_fill_target_volume",
         translation_key="bath_fill_target_volume",
-        native_unit_of_measurement="L",
+        native_unit_of_measurement=UnitOfVolume.LITERS,
+        device_class=NumberDeviceClass.VOLUME,
+        icon="mdi:bathtub",
         native_min_value=1.0,
         native_max_value=300.0,
         native_step=1.0,
@@ -46,6 +48,8 @@ NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         key="maximum_temperature",
         translation_key="maximum_temperature",
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=NumberDeviceClass.TEMPERATURE,
+        icon="mdi:thermometer-high",
         native_min_value=30.0,
         native_max_value=50.0,
         native_step=0.5,
@@ -55,6 +59,8 @@ NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         key="eco_flow_limit",
         translation_key="eco_flow_limit",
         native_unit_of_measurement=UnitOfVolumeFlowRate.LITERS_PER_MINUTE,
+        device_class=NumberDeviceClass.VOLUME_FLOW_RATE,
+        icon="mdi:water-pump",
         native_min_value=6.0,
         native_max_value=8.0,
         native_step=1.0,

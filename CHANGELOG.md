@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.1
+
+- Add writable Eco mode, Eco flow limit, maximum temperature and bath-fill controls.
+- Add bath-fill start and stop buttons.
+- Request ODB IDs `1`, `3`, `5`, `6` and `7` at session startup for the new control entities.
+- Rename the instantaneous water metric to current water flow while keeping the `volume_flow_rate` device class and `L/min` unit.
+- Add base translations for the new button, number and switch entities.
+- Add device classes and icons for configuration number entities.
+
 ## 0.5.2
 
 - Remove the configurable 600-second value polling interval.
@@ -22,7 +31,7 @@
 
 ## 0.4.5
 
-- Add `sensor` platform support for current water consumption from ODB ID `15`.
+- Add `sensor` platform support for current water flow from ODB ID `15`.
 - Add current power consumption sensor from ODB ID `16`.
 - Poll ODB IDs `0`, `15` and `16` over the existing persistent DHE session.
 - Document conversion formulas: `flow_l_min = ODB_ID_15 / 10` and `power_kw = ODB_ID_16 / 100 * 24`.

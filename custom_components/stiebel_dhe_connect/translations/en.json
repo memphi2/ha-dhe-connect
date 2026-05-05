@@ -60,7 +60,7 @@
     },
     "sensor": {
       "water_flow": {
-        "name": "Current water consumption"
+        "name": "Current water flow"
       },
       "power": {
         "name": "Current power consumption"

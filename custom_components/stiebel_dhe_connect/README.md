@@ -2,7 +2,7 @@
 
 Custom Home Assistant integration for Stiebel Eltron DHE Connect instantaneous water heaters through the local Socket.IO / Engine.IO v3 long-polling interface.
 
-The integration is intended for use on a trusted local network. It exposes a `climate` entity for reading and setting the displayed target temperature, plus sensors for current water consumption and current power consumption.
+The integration is intended for use on a trusted local network. It exposes a `climate` entity for reading and setting the displayed target temperature, sensors for current water flow and current power consumption, plus controls for Eco mode, maximum temperature and bath-fill settings.
 
 ## Status
 
@@ -16,26 +16,38 @@ Experimental custom integration. Tested against a locally reachable DHE Connect 
 - Token is stored locally in Home Assistant.
 - Keeps one Socket.IO / Engine.IO long-polling session open after Home Assistant starts.
 - Responds to Engine.IO pings and reconnects automatically if the DHE closes the session.
-- Reads configured device power from ODB ID `20` once after the integration session starts.
-- Requests ODB IDs `0`, `15` and `16` after session startup and then updates from incoming DHE events.
+- Requests ODB IDs `0`, `1`, `3`, `5`, `6`, `7`, `15`, `16` and `20` after session startup and then updates from incoming DHE events.
 - Writes temperature changes through ODB ID `66` and reads back ODB ID `0` on the existing session.
-- Sensor `Current water consumption`: ODB ID `15` / `10` in `L/min`.
+- Writes Eco mode, Eco flow limit, maximum temperature and bath-fill settings through `assign:ste.common.odb:value` and waits for the DHE to confirm the written id/value pair.
+- Sensor `Current water flow`: ODB ID `15` / `10` in `L/min`.
 - Sensor `Configured power`: ODB ID `20` in `kW`.
 - Sensor `Current power consumption`: ODB ID `16` / `100` * configured power in `kW`.
+- Switch `Eco mode`: ODB ID `6`.
+- Number `Eco flow limit`: ODB ID `7`, displayed as raw `/ 10` in `L/min`, selectable as `6`, `7` or `8 L/min`.
+- Number `Maximum temperature`: ODB ID `5`, selectable from `30` to `50 degrees C`.
+- Number `Bath fill target volume`: ODB ID `3` in `L`.
+- Buttons `Start bath fill` and `Stop bath fill`: ODB ID `1` with `true` / `false`.
 - Keeps entities visible; availability is based on the persistent DHE session instead of a separate HTTP ping.
 - Home Assistant UI strings are available in English and German.
 
 ## ODB IDs
 
-| Purpose | Command | ODB ID |
-|---|---|---:|
-| Read displayed target temperature | `get:ste.common.odb:value` | `0` |
-| Read current water consumption | `get:ste.common.odb:value` | `15` |
-| Read current power consumption | `get:ste.common.odb:value` | `16` |
-| Read configured power | `get:ste.common.odb:value` | `20` |
-| Set displayed target temperature | `assign:ste.common.odb:value` | `66` |
+| Purpose | Command | ODB ID | Scaling / value |
+|---|---|---:|---|
+| Read displayed target temperature | `get:ste.common.odb:value` | `0` | raw tenths of `degrees C` |
+| Start / stop bath fill | `assign:ste.common.odb:value` | `1` | `true` / `false` |
+| Set bath fill target volume | `assign:ste.common.odb:value` | `3` | `L` |
+| Set maximum temperature | `assign:ste.common.odb:value` | `5` | `30` to `50 degrees C` |
+| Enable / disable Eco mode | `assign:ste.common.odb:value` | `6` | `true` / `false` |
+| Set Eco flow limit | `assign:ste.common.odb:value` | `7` | raw `/ 10`, values `60`, `70`, `80` => `6`, `7`, `8 L/min` |
+| Read current water flow | `get:ste.common.odb:value` | `15` | raw `/ 10` in `L/min` |
+| Read current power consumption | `get:ste.common.odb:value` | `16` | raw `/ 100 * configured power` in `kW` |
+| Read configured power | `get:ste.common.odb:value` | `20` | `kW` |
+| Set displayed target temperature | `assign:ste.common.odb:value` | `66` | raw request value with UI addressing bits |
 
-Temperature values are transferred in tenths of a degree, for example `345` for `34.5 degrees C`. Current water consumption is calculated as `ODB ID 15 / 10` in `L/min`. Configured power is read from ODB ID `20` once after startup and is expected to be `18` through `24 kW`. Current power consumption is calculated as `ODB ID 16 / 100 * configured power` in `kW`. Writes through ID `66` also use the request addressing known from the DHE web UI in the upper bits.
+Temperature values for ODB ID `0` are transferred in tenths of a degree, for example `345` for `34.5 degrees C`. Current water flow is calculated as `ODB ID 15 / 10` in `L/min`. Eco flow limit values on ODB ID `7` are also transferred as tenths, for example `60` for `6 L/min`. Configured power is read from ODB ID `20` once after startup and is expected to be `18` through `24 kW`. Current power consumption is calculated as `ODB ID 16 / 100 * configured power` in `kW`. Writes through ID `66` also use the request addressing known from the DHE web UI in the upper bits.
+
+The writable setting IDs use the generic Socket.IO message command `assign:ste.common.odb:value`. The integration waits until the DHE sends back the same ODB id and confirmed value before updating the Home Assistant entity state.
 
 ## HACS Installation
 
@@ -90,13 +102,12 @@ To pair again, delete this file and restart Home Assistant or reload the integra
 
 ## Connection Behavior
 
-Since v0.4.0 the integration keeps one Socket.IO / Engine.IO v3 long-polling session open. This matters for this device because Engine.IO expects ping / pong frames during longer idle periods.
-
 - Startup: open session, check or refresh token, authenticate.
 - Runtime: keep long-polling GETs open and answer Engine.IO pings.
-- After startup: request ODB IDs `0`, `15`, `16` and `20` once to seed entity state.
+- After startup: request ODB IDs `0`, `1`, `3`, `5`, `6`, `7`, `15`, `16` and `20` once to seed entity state.
 - Runtime updates: process incoming DHE ODB messages from the open session.
 - Temperature change: write ODB ID `66` through the same session and read back ODB ID `0`.
+- Setting changes: write the respective ODB id through `assign:ste.common.odb:value` and wait for the id/value confirmation from the DHE.
 - Session close: entity becomes temporarily unavailable or reconnecting, then reconnects automatically.
 
 ## Security Notes
@@ -107,6 +118,7 @@ Since v0.4.0 the integration keeps one Socket.IO / Engine.IO v3 long-polling ses
 - Tokens are not intentionally written to normal logs. Still avoid sharing debug raw data publicly.
 - The integration uses HTTP to the local DHE web interface because the device exposes the local interface this way.
 - The integration limits the settable temperature to `20.0 degrees C` through `60.0 degrees C` and rounds to `0.5 degrees C`.
+- Bath fill start/stop is exposed as buttons rather than a switch to avoid accidental persistent switch-state semantics.
 
 ## Debugging
 

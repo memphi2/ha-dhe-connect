@@ -7,6 +7,7 @@ import logging
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .client import DHEClient, DHEError, ID_ECO_MODE, ODBValue
@@ -35,6 +36,7 @@ class StiebelDHEEcoModeSwitch(SwitchEntity):
     """Eco mode switch backed by DHE ODB id 6."""
 
     _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.CONFIG
     _attr_should_poll = False
     _attr_translation_key = "eco_mode"
     _attr_icon = "mdi:leaf"
