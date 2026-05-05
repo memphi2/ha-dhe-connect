@@ -9,4 +9,10 @@ DOMAIN = "stiebel_dhe_connect"
 DEFAULT_NAME = "DHE Connect"
 DEFAULT_PORT = 8443
 
-PLATFORMS = [Platform.CLIMATE, Platform.SENSOR]
+PLATFORMS = [
+    Platform.CLIMATE,
+    Platform.SENSOR,
+    Platform.NUMBER,
+    Platform.SWITCH,
+    Platform.BUTTON,
+]
