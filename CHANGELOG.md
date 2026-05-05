@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.6
+
+- Convert README, component README, release notes and HACS info text to English.
+- Add Home Assistant translation files for English and German.
+- Move sensor display names into Home Assistant entity translations.
+- Move config flow text to English base strings with German translation override.
+
 ## 0.4.5
 
 - Add `sensor` platform support for current water consumption from ODB ID `15`.

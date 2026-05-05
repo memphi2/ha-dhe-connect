@@ -1,9 +1,9 @@
 # Stiebel DHE Connect
 
-Lokale Home-Assistant-Integration für Stiebel-Eltron-DHE-Connect-Geräte.
+Local Home Assistant integration for Stiebel Eltron DHE Connect devices.
 
 Repository: `memphi2/ha-dhe-connect`.
 
-Diese Version hält eine Socket.IO-/Engine.IO-v3-Long-Polling-Verbindung offen, beantwortet Engine.IO-Pings und liest Anzeige-/Solltemperatur, aktuellen Wasserverbrauch und aktuellen Stromverbrauch standardmäßig alle 600 Sekunden über ODB IDs `0`, `15` und `16`.
+This version keeps one Socket.IO / Engine.IO v3 long-polling connection open, answers Engine.IO pings, and reads displayed target temperature, current water consumption and current power consumption every 600 seconds by default through ODB IDs `0`, `15` and `16`.
 
-Setzen erfolgt über ODB ID `66` mit anschließendem Readback über ODB ID `0`.
+Temperature writes use ODB ID `66` with readback through ODB ID `0`.
