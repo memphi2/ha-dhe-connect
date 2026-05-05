@@ -1,16 +1,4 @@
-"""Persistent local Socket.IO/Engine.IO v3 client for Stiebel DHE Connect.
-
-Design for this integration version:
-- A single Engine.IO/Socket.IO long-polling session is kept open while Home Assistant runs.
-- The client continuously long-polls the DHE and handles Engine.IO ping/pong frames.
-- The configured power is read once after integration startup. Setpoint, water flow and
-  live power usage values are requested when a session starts and then updated from
-  incoming DHE events.
-- Writes use the same open session whenever possible: ODB id 66 is written, then ODB id 0
-  is requested as readback.
-- If the DHE closes the session, the client marks the entity unavailable and reconnects.
-"""
-
+"""Persistent local Socket.IO/Engine.IO v3 client for Stiebel DHE Connect."""
 from __future__ import annotations
 
 import asyncio
@@ -33,17 +21,37 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 _LOGGER = logging.getLogger(__name__)
 
 NS = "1.0.0"
+ODB_GET_COMMAND = "get:ste.common.odb:value"
+ODB_SET_COMMAND = "set:ste.common.odb:value"
+ODB_ASSIGN_COMMAND = "assign:ste.common.odb:value"
+
 ID_SETPOINT = 0
+ID_BATH_FILL_ACTIVE = 1
+ID_BATH_FILL_TARGET_VOLUME = 3
+ID_MAX_TEMPERATURE = 5
+ID_ECO_MODE = 6
+ID_ECO_FLOW_LIMIT = 7
 ID_WATER_FLOW = 15
 ID_POWER = 16
 ID_CONFIGURED_POWER = 20
 ID_SET_REQ = 66
 DEFAULT_CONFIGURED_POWER_KW = 24.0
-INITIAL_VALUE_IDS = (ID_SETPOINT, ID_WATER_FLOW, ID_POWER, ID_CONFIGURED_POWER)
+INITIAL_VALUE_IDS = (
+    ID_SETPOINT,
+    ID_BATH_FILL_ACTIVE,
+    ID_BATH_FILL_TARGET_VOLUME,
+    ID_MAX_TEMPERATURE,
+    ID_ECO_MODE,
+    ID_ECO_FLOW_LIMIT,
+    ID_WATER_FLOW,
+    ID_POWER,
+    ID_CONFIGURED_POWER,
+)
 
+ODBValue = bool | float
 SetpointCallback = Callable[[float], None]
 AvailabilityCallback = Callable[[bool], None]
-MeasurementCallback = Callable[[int, float], None]
+MeasurementCallback = Callable[[int, ODBValue], None]
 CallbackRemover = Callable[[], None]
 
 
@@ -92,17 +100,30 @@ def _build_req66(temp_c: float, addr: int) -> int:
     return int(raw | ((addr & 0xFF) << 10))
 
 
+def _raw_to_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"true", "on", "yes"}:
+            return True
+        if lowered in {"false", "off", "no", ""}:
+            return False
+    return bool(int(float(value)))
+
+
+def _values_equal(a: ODBValue | None, b: ODBValue | None) -> bool:
+    if a is None or b is None:
+        return a is b
+    if isinstance(a, bool) or isinstance(b, bool):
+        return bool(a) is bool(b)
+    return abs(float(a) - float(b)) < 0.001
+
+
 class DHEClient:
     """Persistent Engine.IO v3 long-polling client for DHE Connect."""
 
-    def __init__(
-        self,
-        hass: HomeAssistant,
-        host: str,
-        port: int,
-        token_file: str,
-        name: str,
-    ) -> None:
+    def __init__(self, hass: HomeAssistant, host: str, port: int, token_file: str, name: str) -> None:
         self.hass = hass
         self.host = host.strip().removeprefix("http://").removeprefix("https://").rstrip("/")
         self.port = int(port)
@@ -110,57 +131,49 @@ class DHEClient:
         self.base_url = f"http://{self.host}:{self.port}"
         self.token_path = token_file if os.path.isabs(token_file) else hass.config.path(token_file)
         self._session = async_get_clientsession(hass)
-
         self._ctx: DHESession | None = None
         self._token: str | None = None
         self._runner: asyncio.Task[None] | None = None
         self._stopped = asyncio.Event()
         self._ready = asyncio.Event()
         self._command_lock = asyncio.Lock()
-
         self._setpoint_callbacks: list[SetpointCallback] = []
         self._availability_callbacks: list[AvailabilityCallback] = []
         self._measurement_callbacks: list[MeasurementCallback] = []
         self._available = False
         self._last_setpoint: float | None = None
-        self._last_measurements: dict[int, float] = {}
+        self._last_measurements: dict[int, ODBValue] = {}
         self._configured_power_kw = DEFAULT_CONFIGURED_POWER_KW
         self._last_power_fraction: float | None = None
         self._pending_setpoint_future: asyncio.Future[float] | None = None
         self._pending_expected_setpoint: float | None = None
+        self._pending_write_future: asyncio.Future[ODBValue] | None = None
+        self._pending_write_id: int | None = None
+        self._pending_write_expected: ODBValue | None = None
 
     @property
     def last_setpoint(self) -> float | None:
-        """Return the last known setpoint."""
         return self._last_setpoint
 
     @property
     def available(self) -> bool:
-        """Return current connection availability."""
         return self._available
 
     @property
-    def last_measurements(self) -> dict[int, float]:
-        """Return the last known converted measurements keyed by ODB id."""
+    def last_measurements(self) -> dict[int, ODBValue]:
         return dict(self._last_measurements)
 
     def add_setpoint_callback(self, callback: SetpointCallback) -> CallbackRemover:
-        """Subscribe to setpoint updates."""
         return self._add_callback(self._setpoint_callbacks, callback)
 
     def add_availability_callback(self, callback: AvailabilityCallback) -> CallbackRemover:
-        """Subscribe to availability updates."""
         return self._add_callback(self._availability_callbacks, callback)
 
     def add_measurement_callback(self, callback: MeasurementCallback) -> CallbackRemover:
-        """Subscribe to converted ODB measurement updates."""
         return self._add_callback(self._measurement_callbacks, callback)
 
     @staticmethod
-    def _add_callback(
-        callbacks: list[Callable[..., None]],
-        callback: Callable[..., None],
-    ) -> CallbackRemover:
+    def _add_callback(callbacks: list[Callable[..., None]], callback: Callable[..., None]) -> CallbackRemover:
         callbacks.append(callback)
 
         def _remove_callback() -> None:
@@ -172,42 +185,25 @@ class DHEClient:
         return _remove_callback
 
     async def start(self) -> None:
-        """Start persistent DHE session and event loop."""
         if self._runner and not self._runner.done():
             return
-
         self._stopped.clear()
-
-        # Important for Home Assistant startup:
-        # this is a long-running Engine.IO long-poll loop and must be scheduled as a
-        # background task. Using hass.async_create_task during setup can make HA keep
-        # showing "Home Assistant is starting" because the task is considered part
-        # of startup work.
         create_background_task = getattr(self.hass, "async_create_background_task", None)
         if create_background_task is not None:
-            self._runner = create_background_task(
-                self._run_loop(),
-                "stiebel_dhe_connect_session_loop",
-            )
+            self._runner = create_background_task(self._run_loop(), "stiebel_dhe_connect_session_loop")
         else:
-            self._runner = self.hass.async_create_task(
-                self._run_loop(),
-                name="stiebel_dhe_connect_session_loop",
-            )
+            self._runner = self.hass.async_create_task(self._run_loop(), name="stiebel_dhe_connect_session_loop")
 
     async def stop(self) -> None:
-        """Stop persistent session loop and close the DHE namespace session."""
         self._stopped.set()
         runner = self._runner
         self._runner = None
-
         if runner:
             runner.cancel()
             try:
                 await runner
             except asyncio.CancelledError:
                 pass
-
         ctx = self._ctx
         self._ctx = None
         self._ready.clear()
@@ -216,9 +212,7 @@ class DHEClient:
         self._set_available(False)
 
     async def set_temperature(self, temperature: float) -> float:
-        """Set setpoint via ODB id 66 and verify by reading ODB id 0 on the open session."""
         requested = _round_to_half_c(_clamp(float(temperature), 20.0, 60.0))
-
         async with self._command_lock:
             for attempt in range(2):
                 try:
@@ -226,142 +220,152 @@ class DHEClient:
                     ctx = self._ctx
                     if ctx is None:
                         raise DHEError("DHE session is not connected")
-
                     addr = random.randint(1, 63)
                     req_value = _build_req66(requested, addr)
-
-                    _LOGGER.debug(
-                        "Setting DHE setpoint to %.1f °C via ODB id 66, addr=%s, raw=%s",
-                        requested,
-                        addr,
-                        req_value,
-                    )
-
                     future = self._new_setpoint_future(requested)
-
                     await self._post_packet(ctx, self._message_packet({
-                        "command": "assign:ste.common.odb:value",
+                        "command": ODB_ASSIGN_COMMAND,
                         "value": {"id": ID_SET_REQ, "value": req_value},
                     }))
                     await self._request_setpoint(ctx)
-
                     readback = await asyncio.wait_for(future, timeout=12)
                     if abs(readback - requested) < 0.01:
                         return readback
-
                     raise DHEError(f"readback was {readback:.1f} °C, expected {requested:.1f} °C")
                 except Exception as err:  # noqa: BLE001
-                    _LOGGER.debug("Could not set DHE setpoint on attempt %s/2: %s", attempt + 1, err)
                     self._clear_pending_future(err)
                     if attempt == 0:
                         await self._force_reconnect()
                         await asyncio.sleep(1)
                         continue
                     raise DHEError(f"Could not set DHE setpoint: {err}") from err
-
         raise DHEError("Could not set DHE setpoint")
 
+    async def write_odb_value(self, odb_id: int, value: Any) -> ODBValue:
+        expected = self._convert_odb_value(odb_id, value)
+        async with self._command_lock:
+            for attempt in range(2):
+                try:
+                    await self._ensure_ready(timeout=45)
+                    ctx = self._ctx
+                    if ctx is None:
+                        raise DHEError("DHE session is not connected")
+                    future = self._new_write_future(odb_id, expected)
+                    await self._post_packet(ctx, self._message_packet({
+                        "command": ODB_ASSIGN_COMMAND,
+                        "value": {"id": int(odb_id), "value": value},
+                    }))
+                    confirmed = await asyncio.wait_for(future, timeout=12)
+                    if _values_equal(confirmed, expected):
+                        return confirmed
+                    raise DHEError(f"write confirmation was {confirmed!r}, expected {expected!r}")
+                except Exception as err:  # noqa: BLE001
+                    self._clear_pending_write_future(err)
+                    if attempt == 0:
+                        await self._force_reconnect()
+                        await asyncio.sleep(1)
+                        continue
+                    raise DHEError(f"Could not write DHE ODB id {odb_id}: {err}") from err
+        raise DHEError(f"Could not write DHE ODB id {odb_id}")
+
+    async def start_bath_fill(self) -> bool:
+        return bool(await self.write_odb_value(ID_BATH_FILL_ACTIVE, True))
+
+    async def stop_bath_fill(self) -> bool:
+        return bool(await self.write_odb_value(ID_BATH_FILL_ACTIVE, False))
+
+    async def set_bath_fill_target_volume(self, liters: float) -> float:
+        requested = int(round(_clamp(float(liters), 1.0, 300.0)))
+        return float(await self.write_odb_value(ID_BATH_FILL_TARGET_VOLUME, requested))
+
+    async def set_maximum_temperature(self, temperature: float) -> float:
+        requested = _round_to_half_c(_clamp(float(temperature), 20.0, 60.0))
+        return float(await self.write_odb_value(ID_MAX_TEMPERATURE, requested))
+
+    async def set_eco_mode(self, enabled: bool) -> bool:
+        return bool(await self.write_odb_value(ID_ECO_MODE, bool(enabled)))
+
+    async def set_eco_flow_limit(self, liters_per_minute: float) -> float:
+        requested = _round_to_half_c(_clamp(float(liters_per_minute), 1.0, 20.0))
+        return float(await self.write_odb_value(ID_ECO_FLOW_LIMIT, requested))
+
     async def _run_loop(self) -> None:
-        """Persistent reconnecting Engine.IO event loop."""
         while not self._stopped.is_set():
             try:
                 self._ctx = await self._open_authenticated_session()
                 self._ready.set()
                 self._set_available(True)
                 await self._request_initial_values(self._ctx)
-
                 while not self._stopped.is_set() and self._ctx is not None:
-                    events = await self._read_events_once(self._ctx)
-                    for event in events:
+                    for event in await self._read_events_once(self._ctx):
                         await self._handle_runtime_event(event)
-
             except asyncio.CancelledError:
                 raise
             except Exception as err:  # noqa: BLE001
                 _LOGGER.debug("DHE persistent session failed: %s", err)
                 self._clear_pending_future(err)
+                self._clear_pending_write_future(err)
                 self._ready.clear()
                 self._set_available(False)
                 ctx = self._ctx
                 self._ctx = None
                 if ctx is not None:
                     await self._close_session(ctx)
-
                 try:
                     await asyncio.wait_for(self._stopped.wait(), timeout=10)
                 except TimeoutError:
                     pass
 
     async def _open_authenticated_session(self) -> DHESession:
-        """Open an authenticated persistent Socket.IO session."""
         token = await self._load_token()
-
         if not token:
             _LOGGER.info("No stored DHE token. Requesting new token; confirm pairing on DHE if prompted.")
             token = await self._request_initial_token()
             if not token:
                 raise DHEError("No token received. Pairing may be required on the DHE.")
-
         ctx = await self._open_session(token)
         try:
             await self._post_packet(ctx, self._event_packet("token_request", {"token": token, "name": self.name}))
-
             deadline = time.monotonic() + 45.0
             last_nudge = 0.0
-
             while time.monotonic() < deadline and not self._stopped.is_set():
                 for event in await self._read_events_once(ctx):
                     if event.name == "__closed":
                         raise DHESessionClosed("DHE closed Socket.IO session during authentication")
-
                     if event.name == "token_response" and isinstance(event.data, str) and len(event.data) > 20:
                         token = event.data
                         await self._save_token(token)
                         await self._post_packet(ctx, self._event_packet("authenticate", {"token": token}))
-
                     elif event.name == "authenticated":
-                        _LOGGER.debug("DHE authenticated")
                         return ctx
-
                     elif event.name == "pairing_request":
                         _LOGGER.info("DHE pairing requested. Confirm on the DHE if prompted.")
-
                     elif event.name == "pairing_result":
-                        # Some devices return result=false,response=true with a valid authenticated session.
                         _LOGGER.debug("DHE pairing_result received: %s", event.data)
-
                 if time.monotonic() - last_nudge > 0.9:
                     await self._post_packet(ctx, self._event_packet("token_request", {"token": token, "name": self.name}))
                     last_nudge = time.monotonic()
-
                 await asyncio.sleep(0.25)
-
             raise DHEError("Auth timeout: no authenticated event received")
         except (asyncio.CancelledError, Exception):
             await self._close_session(ctx)
             raise
 
     async def _request_initial_token(self) -> str:
-        """Open a blank-token session and request a token."""
         ctx = await self._open_session("")
         try:
             await self._post_packet(ctx, self._event_packet("token_request", {"token": "", "name": self.name}))
-
             deadline = time.monotonic() + 120.0
             while time.monotonic() < deadline and not self._stopped.is_set():
                 for event in await self._read_events_once(ctx):
                     if event.name == "__closed":
                         raise DHESessionClosed("DHE closed Socket.IO session while requesting token")
-
                     if event.name == "pairing_request":
                         _LOGGER.info("DHE pairing requested. Confirm on the DHE.")
-
                     if event.name == "token_response" and isinstance(event.data, str) and len(event.data) > 20:
                         await self._save_token(event.data)
                         return event.data
-
                 await asyncio.sleep(0.3)
-
             raise DHEError("Token request timeout")
         finally:
             await self._close_session(ctx)
@@ -369,19 +373,14 @@ class DHEClient:
     async def _open_session(self, token_for_url: str) -> DHESession:
         open_payload = await self._get_text(self._poll_url(token_for_url, None))
         sid_match = re.search(r'"sid":"([^"]+)"', open_payload)
-
         if not sid_match:
             raise DHEError(f"Could not extract sid from open payload: {open_payload!r}")
-
         ctx = DHESession(sid=sid_match.group(1), url_token=token_for_url)
-
         await self._post_packet(ctx, "40")
         await self._post_packet(ctx, f"40/{NS},")
-
         return ctx
 
     async def _close_session(self, ctx: DHESession) -> None:
-        """Best-effort namespace close."""
         try:
             await self._post_packet(ctx, f"41/{NS}")
         except Exception:  # noqa: BLE001
@@ -403,35 +402,36 @@ class DHEClient:
     async def _handle_runtime_event(self, event: DHEEvent) -> None:
         if event.name == "__closed":
             raise DHESessionClosed("DHE closed Socket.IO session")
-
         if event.name != "message" or not isinstance(event.data, dict):
             return
-
         data = event.data
         value = data.get("value")
-        if not (data.get("command") == "set:ste.common.odb:value" and isinstance(value, dict)):
+        if data.get("command") not in {ODB_SET_COMMAND, ODB_ASSIGN_COMMAND} or not isinstance(value, dict):
             return
+        try:
+            odb_id = int(value.get("id", -1))
+        except (TypeError, ValueError):
+            return
+        self._handle_odb_value(odb_id, value.get("value"))
 
-        odb_id = int(value.get("id", -1))
-        raw = int(value.get("value"))
-        if odb_id == ID_SETPOINT:
-            self._handle_setpoint(_raw_tenths_to_c(raw))
-        elif odb_id == ID_WATER_FLOW:
-            self._handle_measurement(odb_id, raw / 10.0)
-        elif odb_id == ID_POWER:
-            self._last_power_fraction = raw / 100.0
-            self._handle_measurement(
-                odb_id,
-                self._last_power_fraction * self._configured_power_kw,
-            )
-        elif odb_id == ID_CONFIGURED_POWER:
-            self._configured_power_kw = self._raw_configured_power_to_kw(raw)
-            self._handle_measurement(odb_id, self._configured_power_kw)
-            if self._last_power_fraction is not None:
-                self._handle_measurement(
-                    ID_POWER,
-                    self._last_power_fraction * self._configured_power_kw,
-                )
+    def _handle_odb_value(self, odb_id: int, raw_value: Any) -> None:
+        try:
+            if odb_id == ID_SETPOINT:
+                self._handle_setpoint(_raw_tenths_to_c(float(raw_value)))
+            elif odb_id == ID_WATER_FLOW:
+                self._handle_measurement(odb_id, float(raw_value) / 10.0)
+            elif odb_id == ID_POWER:
+                self._last_power_fraction = float(raw_value) / 100.0
+                self._handle_measurement(odb_id, self._last_power_fraction * self._configured_power_kw)
+            elif odb_id == ID_CONFIGURED_POWER:
+                self._configured_power_kw = self._raw_configured_power_to_kw(float(raw_value))
+                self._handle_measurement(odb_id, self._configured_power_kw)
+                if self._last_power_fraction is not None:
+                    self._handle_measurement(ID_POWER, self._last_power_fraction * self._configured_power_kw)
+            elif odb_id in {ID_BATH_FILL_ACTIVE, ID_BATH_FILL_TARGET_VOLUME, ID_MAX_TEMPERATURE, ID_ECO_MODE, ID_ECO_FLOW_LIMIT}:
+                self._handle_measurement(odb_id, self._convert_odb_value(odb_id, raw_value))
+        except (TypeError, ValueError) as err:
+            _LOGGER.debug("Ignoring invalid DHE ODB value id=%s value=%r: %s", odb_id, raw_value, err)
 
     def _handle_setpoint(self, value: float) -> None:
         previous = self._last_setpoint
@@ -441,23 +441,39 @@ class DHEClient:
                 callback(value)
         future = self._pending_setpoint_future
         expected = self._pending_expected_setpoint
-        if future is not None and not future.done():
-            if expected is None or abs(value - expected) < 0.01:
-                future.set_result(value)
-                self._pending_setpoint_future = None
-                self._pending_expected_setpoint = None
+        if future is not None and not future.done() and (expected is None or abs(value - expected) < 0.01):
+            future.set_result(value)
+            self._pending_setpoint_future = None
+            self._pending_expected_setpoint = None
 
-    def _handle_measurement(self, odb_id: int, value: float) -> None:
+    def _handle_measurement(self, odb_id: int, value: ODBValue) -> None:
         previous = self._last_measurements.get(odb_id)
         self._last_measurements[odb_id] = value
-        if previous is not None and abs(previous - value) < 0.001:
+        self._maybe_complete_write_future(odb_id, value)
+        if previous is not None and _values_equal(previous, value):
             return
         for callback in tuple(self._measurement_callbacks):
             callback(odb_id, value)
 
+    def _maybe_complete_write_future(self, odb_id: int, value: ODBValue) -> None:
+        future = self._pending_write_future
+        if future is None or future.done() or self._pending_write_id != odb_id:
+            return
+        expected = self._pending_write_expected
+        if expected is None or _values_equal(value, expected):
+            future.set_result(value)
+            self._pending_write_future = None
+            self._pending_write_id = None
+            self._pending_write_expected = None
+
+    @staticmethod
+    def _convert_odb_value(odb_id: int, raw_value: Any) -> ODBValue:
+        if odb_id in {ID_BATH_FILL_ACTIVE, ID_ECO_MODE}:
+            return _raw_to_bool(raw_value)
+        return float(raw_value)
+
     @staticmethod
     def _raw_configured_power_to_kw(raw: int | float) -> float:
-        """Convert ODB id 20 to configured DHE power in kW."""
         value = float(raw)
         if 18.0 <= value <= 24.0:
             return value
@@ -465,28 +481,19 @@ class DHEClient:
             return value / 10.0
         if 1800.0 <= value <= 2400.0:
             return value / 100.0
-        _LOGGER.warning(
-            "Ignoring unexpected configured DHE power value from ODB id 20: %s",
-            raw,
-        )
+        _LOGGER.warning("Ignoring unexpected configured DHE power value from ODB id 20: %s", raw)
         return DEFAULT_CONFIGURED_POWER_KW
 
     async def _request_setpoint(self, ctx: DHESession) -> None:
-        """Request ODB id 0 setpoint on the persistent session."""
         await self._request_odb_value(ctx, ID_SETPOINT)
 
     async def _request_initial_values(self, ctx: DHESession) -> None:
-        """Request ODB values needed to seed entity state after session startup."""
         for odb_id in INITIAL_VALUE_IDS:
             if odb_id != ID_CONFIGURED_POWER or odb_id not in self._last_measurements:
                 await self._request_odb_value(ctx, odb_id)
 
     async def _request_odb_value(self, ctx: DHESession, odb_id: int) -> None:
-        """Request one ODB value on the persistent session."""
-        await self._post_packet(ctx, self._message_packet({
-            "command": "get:ste.common.odb:value",
-            "value": {"id": odb_id, "value": ""},
-        }))
+        await self._post_packet(ctx, self._message_packet({"command": ODB_GET_COMMAND, "value": {"id": odb_id, "value": ""}}))
 
     def _new_setpoint_future(self, expected: float | None = None) -> asyncio.Future[float]:
         self._clear_pending_future(None)
@@ -505,6 +512,25 @@ class DHEClient:
             else:
                 future.cancel()
 
+    def _new_write_future(self, odb_id: int, expected: ODBValue | None = None) -> asyncio.Future[ODBValue]:
+        self._clear_pending_write_future(None)
+        future: asyncio.Future[ODBValue] = self.hass.loop.create_future()
+        self._pending_write_future = future
+        self._pending_write_id = int(odb_id)
+        self._pending_write_expected = expected
+        return future
+
+    def _clear_pending_write_future(self, err: Exception | None) -> None:
+        future = self._pending_write_future
+        self._pending_write_future = None
+        self._pending_write_id = None
+        self._pending_write_expected = None
+        if future is not None and not future.done():
+            if err is not None:
+                future.set_exception(err)
+            else:
+                future.cancel()
+
     def _set_available(self, available: bool) -> None:
         if self._available == available:
             return
@@ -514,13 +540,10 @@ class DHEClient:
 
     async def _read_events_once(self, ctx: DHESession) -> list[DHEEvent]:
         raw = await self._get_text(self._poll_url(ctx.url_token, ctx.sid))
-
         if not raw:
             return []
-
         if re.search(r"(^|[\ufffd\x1e])41(?:/1\.0\.0)?", raw):
             return [DHEEvent("__closed", None)]
-
         packets = self._decode_engineio_payload(raw)
         app_packets: list[str] = []
         for packet in packets:
@@ -528,25 +551,18 @@ class DHEClient:
             if stripped == "1" or stripped == "41" or stripped.startswith("41/"):
                 return [DHEEvent("__closed", None)]
             if stripped == "2":
-                # Engine.IO ping. The client must pong to keep long-polling sessions alive.
                 await self._post_packet(ctx, "3")
                 continue
             if stripped == "3" or not stripped:
                 continue
             app_packets.append(packet)
-
         return self._parse_socketio_events(app_packets)
 
     def _poll_url(self, token: str, sid: str | None) -> str:
         token_q = quote(token or "", safe="")
         t = format(int(time.time() * 1000), "x")
-
         if sid:
-            return (
-                f"{self.base_url}/socket.io/?EIO=3&transport=polling"
-                f"&sid={quote(sid, safe='')}&token={token_q}&t={t}"
-            )
-
+            return f"{self.base_url}/socket.io/?EIO=3&transport=polling&sid={quote(sid, safe='')}&token={token_q}&t={t}"
         return f"{self.base_url}/socket.io/?EIO=3&transport=polling&token={token_q}&t={t}"
 
     async def _get_text(self, url: str) -> str:
@@ -585,7 +601,6 @@ class DHEClient:
             return [part for part in text.split("\x1e") if part.strip()]
         if "\ufffd" in text:
             return [part for part in text.split("\ufffd") if part.strip()]
-
         packets: list[str] = []
         i = 0
         try:
@@ -595,19 +610,16 @@ class DHEClient:
                         i += 1
                         continue
                     return [text]
-
                 j = i
                 while j < len(text) and text[j].isdigit():
                     j += 1
                 if j >= len(text) or text[j] != ":":
                     return [text]
-
                 length = int(text[i:j])
                 start = j + 1
                 end = start + length
                 if end > len(text):
                     return [text]
-
                 packets.append(text[start:end])
                 i = end
             return packets or [text]
@@ -619,11 +631,9 @@ class DHEClient:
         start = text.find("[", start_index)
         if start < 0:
             return None, -1
-
         depth = 0
         in_string = False
         escape = False
-
         for idx in range(start, len(text)):
             ch = text[idx]
             if in_string:
@@ -634,7 +644,6 @@ class DHEClient:
                 elif ch == '"':
                     in_string = False
                 continue
-
             if ch == '"':
                 in_string = True
                 continue
@@ -644,28 +653,23 @@ class DHEClient:
                 depth -= 1
                 if depth == 0:
                     return text[start : idx + 1], idx + 1
-
         return None, -1
 
     def _parse_socketio_events(self, packets: list[str]) -> list[DHEEvent]:
         out: list[DHEEvent] = []
-
         for raw_packet in packets:
             packet = raw_packet.strip("\x00\x1e\ufffd")
             if not packet:
                 continue
-
             pos = 0
             while pos < len(packet):
                 match = re.search(r"42(?:/1\.0\.0,)?\d*", packet[pos:])
                 if not match:
                     break
-
                 frame_start = pos + match.start()
                 json_text, next_pos = self._balanced_json_array(packet, frame_start)
                 if not json_text:
                     break
-
                 try:
                     parsed = json.loads(json_text)
                     if isinstance(parsed, list) and parsed:
@@ -674,9 +678,7 @@ class DHEClient:
                         out.append(DHEEvent(name, data))
                 except json.JSONDecodeError:
                     _LOGGER.debug("Could not parse Socket.IO JSON frame: %s", json_text)
-
                 pos = next_pos
-
         return out
 
     async def _load_token(self) -> str:
@@ -708,7 +710,6 @@ class DHEClient:
             try:
                 os.chmod(tmp_path, stat.S_IRUSR | stat.S_IWUSR)
             except OSError:
-                # Some filesystems used by Home Assistant containers may not support chmod.
                 pass
             os.replace(tmp_path, self.token_path)
 
