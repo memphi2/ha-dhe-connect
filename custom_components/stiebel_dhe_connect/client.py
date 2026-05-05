@@ -36,6 +36,8 @@ ID_POWER = 16
 ID_CONFIGURED_POWER = 20
 ID_SET_REQ = 66
 DEFAULT_CONFIGURED_POWER_KW = 24.0
+COMMAND_CONFIRMATION_TIMEOUT = 12.0
+COMMAND_READBACK_INTERVAL = 1.0
 INITIAL_VALUE_IDS = (
     ID_SETPOINT,
     ID_BATH_FILL_ACTIVE,
@@ -95,6 +97,12 @@ def _raw_tenths_to_c(value: int | float) -> float:
     return float(value) / 10.0
 
 
+def _raw_to_float(value: Any) -> float:
+    if isinstance(value, str):
+        value = value.strip().replace(",", ".")
+    return float(value)
+
+
 def _build_req66(temp_c: float, addr: int) -> int:
     raw = _c_to_raw_tenths(temp_c) & 1023
     return int(raw | ((addr & 0xFF) << 10))
@@ -109,7 +117,7 @@ def _raw_to_bool(value: Any) -> bool:
             return True
         if lowered in {"false", "off", "no", ""}:
             return False
-    return bool(int(float(value)))
+    return bool(int(_raw_to_float(value)))
 
 
 def _values_equal(a: ODBValue | None, b: ODBValue | None) -> bool:
@@ -227,13 +235,12 @@ class DHEClient:
                         "command": ODB_ASSIGN_COMMAND,
                         "value": {"id": ID_SET_REQ, "value": req_value},
                     }))
-                    await self._request_setpoint(ctx)
-                    readback = await asyncio.wait_for(future, timeout=12)
+                    readback = await self._wait_for_setpoint_confirmation(ctx, future)
                     if abs(readback - requested) < 0.01:
                         return readback
-                    raise DHEError(f"readback was {readback:.1f} °C, expected {requested:.1f} °C")
+                    raise DHEError(f"readback was {readback:.1f} C, expected {requested:.1f} C")
                 except Exception as err:  # noqa: BLE001
-                    self._clear_pending_future(err)
+                    self._clear_pending_future(None)
                     if attempt == 0:
                         await self._force_reconnect()
                         await asyncio.sleep(1)
@@ -255,14 +262,12 @@ class DHEClient:
                         "command": ODB_ASSIGN_COMMAND,
                         "value": {"id": int(odb_id), "value": value},
                     }))
-                    if not future.done():
-                        await self._request_odb_value(ctx, odb_id)
-                    confirmed = await asyncio.wait_for(future, timeout=12)
+                    confirmed = await self._wait_for_write_confirmation(ctx, future, odb_id)
                     if _values_equal(confirmed, expected):
                         return confirmed
                     raise DHEError(f"write confirmation was {confirmed!r}, expected {expected!r}")
                 except Exception as err:  # noqa: BLE001
-                    self._clear_pending_write_future(err)
+                    self._clear_pending_write_future(None)
                     if attempt == 0:
                         await self._force_reconnect()
                         await asyncio.sleep(1)
@@ -420,14 +425,14 @@ class DHEClient:
     def _handle_odb_value(self, odb_id: int, raw_value: Any) -> None:
         try:
             if odb_id == ID_SETPOINT:
-                self._handle_setpoint(_raw_tenths_to_c(float(raw_value)))
+                self._handle_setpoint(_raw_tenths_to_c(_raw_to_float(raw_value)))
             elif odb_id == ID_WATER_FLOW:
-                self._handle_measurement(odb_id, float(raw_value) / 10.0)
+                self._handle_measurement(odb_id, _raw_to_float(raw_value) / 10.0)
             elif odb_id == ID_POWER:
-                self._last_power_fraction = float(raw_value) / 100.0
+                self._last_power_fraction = _raw_to_float(raw_value) / 100.0
                 self._handle_measurement(odb_id, self._last_power_fraction * self._configured_power_kw)
             elif odb_id == ID_CONFIGURED_POWER:
-                self._configured_power_kw = self._raw_configured_power_to_kw(float(raw_value))
+                self._configured_power_kw = self._raw_configured_power_to_kw(_raw_to_float(raw_value))
                 self._handle_measurement(odb_id, self._configured_power_kw)
                 if self._last_power_fraction is not None:
                     self._handle_measurement(ID_POWER, self._last_power_fraction * self._configured_power_kw)
@@ -469,15 +474,68 @@ class DHEClient:
             self._pending_write_id = None
             self._pending_write_expected = None
 
+    async def _wait_for_setpoint_confirmation(
+        self,
+        ctx: DHESession,
+        future: asyncio.Future[float],
+    ) -> float:
+        deadline = time.monotonic() + COMMAND_CONFIRMATION_TIMEOUT
+        next_readback = 0.0
+        while not future.done():
+            now = time.monotonic()
+            if now >= deadline:
+                break
+            if now >= next_readback:
+                await self._request_setpoint(ctx)
+                next_readback = now + COMMAND_READBACK_INTERVAL
+            timeout = min(COMMAND_READBACK_INTERVAL, max(0.1, deadline - now))
+            try:
+                return await asyncio.wait_for(asyncio.shield(future), timeout=timeout)
+            except TimeoutError:
+                continue
+        if future.done():
+            return future.result()
+        raise DHEError("setpoint confirmation timed out")
+
+    async def _wait_for_write_confirmation(
+        self,
+        ctx: DHESession,
+        future: asyncio.Future[ODBValue],
+        odb_id: int,
+    ) -> ODBValue:
+        deadline = time.monotonic() + COMMAND_CONFIRMATION_TIMEOUT
+        next_readback = 0.0
+        while not future.done():
+            now = time.monotonic()
+            if now >= deadline:
+                break
+            if now >= next_readback:
+                await self._request_odb_value(ctx, odb_id)
+                next_readback = now + COMMAND_READBACK_INTERVAL
+            timeout = min(COMMAND_READBACK_INTERVAL, max(0.1, deadline - now))
+            try:
+                return await asyncio.wait_for(asyncio.shield(future), timeout=timeout)
+            except TimeoutError:
+                continue
+        if future.done():
+            return future.result()
+        raise DHEError(f"write confirmation timed out for DHE ODB id {odb_id}")
+
     @staticmethod
     def _convert_odb_value(odb_id: int, raw_value: Any) -> ODBValue:
         if odb_id in {ID_BATH_FILL_ACTIVE, ID_ECO_MODE}:
             return _raw_to_bool(raw_value)
         if odb_id == ID_MAX_TEMPERATURE:
-            return _raw_tenths_to_c(float(raw_value))
+            value = _raw_to_float(raw_value)
+            if 300.0 <= value <= 500.0:
+                return _raw_tenths_to_c(value)
+            return value
         if odb_id == ID_ECO_FLOW_LIMIT:
-            return float(raw_value) / 10.0
-        return float(raw_value)
+            value = _raw_to_float(raw_value)
+            if 60.0 <= value <= 80.0:
+                return value / 10.0
+            return value
+        return _raw_to_float(raw_value)
 
     @staticmethod
     def _raw_configured_power_to_kw(raw: int | float) -> float:

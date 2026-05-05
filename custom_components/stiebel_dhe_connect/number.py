@@ -5,7 +5,11 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberEntityDescription
+from homeassistant.components.number import (
+    NumberDeviceClass,
+    NumberEntityDescription,
+    RestoreNumber,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature, UnitOfVolume, UnitOfVolumeFlowRate
 from homeassistant.core import HomeAssistant, callback
@@ -89,7 +93,7 @@ async def async_setup_entry(
     )
 
 
-class StiebelDHENumber(NumberEntity):
+class StiebelDHENumber(RestoreNumber):
     """Writable DHE ODB setting represented as a Home Assistant number."""
 
     entity_description: StiebelDHENumberEntityDescription
@@ -132,6 +136,11 @@ class StiebelDHENumber(NumberEntity):
         if last_value is not None and not isinstance(last_value, bool):
             self._attr_native_value = float(last_value)
             self._attr_available = True
+        else:
+            last_number_data = await self.async_get_last_number_data()
+            if last_number_data and last_number_data.native_value is not None:
+                self._attr_native_value = float(last_number_data.native_value)
+                self._attr_available = True
 
         await self._client.start()
 
@@ -150,6 +159,8 @@ class StiebelDHENumber(NumberEntity):
                     value,
                 )
         except DHEError as err:
+            self._attr_available = self._attr_native_value is not None
+            self.async_write_ha_state()
             _LOGGER.error("Could not set DHE number %s: %s", self.entity_description.key, err)
             raise
 
