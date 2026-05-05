@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.7
+
+- Read configured DHE power from ODB ID `20` once after session startup.
+- Add a configured power sensor.
+- Calculate current power consumption with configured power instead of the fixed `24 kW` multiplier.
+
 ## 0.4.6
 
 - Convert README, component README, release notes and HACS info text to English.

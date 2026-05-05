@@ -15,7 +15,7 @@ from homeassistant.const import UnitOfPower, UnitOfVolumeFlowRate
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .client import DHEClient, ID_POWER, ID_WATER_FLOW
+from .client import DHEClient, ID_CONFIGURED_POWER, ID_POWER, ID_WATER_FLOW
 from .const import DOMAIN
 
 
@@ -42,6 +42,13 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
         odb_id=ID_POWER,
+    ),
+    StiebelDHESensorEntityDescription(
+        key="configured_power",
+        translation_key="configured_power",
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        device_class=SensorDeviceClass.POWER,
+        odb_id=ID_CONFIGURED_POWER,
     ),
 )
 

@@ -51,6 +51,9 @@
       },
       "power": {
         "name": "Aktueller Stromverbrauch"
+      },
+      "configured_power": {
+        "name": "Eingestellte Leistung"
       }
     }
   }

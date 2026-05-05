@@ -1,4 +1,4 @@
-# Release v0.4.6
+# Release v0.4.7
 
 ## Contents
 
@@ -6,7 +6,8 @@
 - Persistent Engine.IO v3 / Socket.IO long-polling session.
 - Displayed target temperature read through ODB ID `0`.
 - Current water consumption sensor from ODB ID `15` with `flow_l_min = ODB_ID_15 / 10`.
-- Current power consumption sensor from ODB ID `16` with `power_kw = ODB_ID_16 / 100 * 24`.
+- Configured power sensor from ODB ID `20`.
+- Current power consumption sensor from ODB ID `16` with `power_kw = ODB_ID_16 / 100 * configured_power_kw`.
 - Temperature writes through ODB ID `66` with readback through ODB ID `0`.
 - UI configuration through the Home Assistant config flow.
 - English and German Home Assistant UI translations.
