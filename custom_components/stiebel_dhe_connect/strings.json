@@ -39,15 +39,39 @@
     }
   },
   "entity": {
+    "button": {
+      "start_bath_fill": {
+        "name": "Start bath fill"
+      },
+      "stop_bath_fill": {
+        "name": "Stop bath fill"
+      }
+    },
+    "number": {
+      "bath_fill_target_volume": {
+        "name": "Bath fill target volume"
+      },
+      "maximum_temperature": {
+        "name": "Maximum temperature"
+      },
+      "eco_flow_limit": {
+        "name": "Eco flow limit"
+      }
+    },
     "sensor": {
       "water_flow": {
-        "name": "Current water consumption"
+        "name": "Current water flow"
       },
       "power": {
         "name": "Current power consumption"
       },
       "configured_power": {
         "name": "Configured power"
+      }
+    },
+    "switch": {
+      "eco_mode": {
+        "name": "Eco mode"
       }
     }
   }
