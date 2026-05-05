@@ -1,4 +1,4 @@
-# Release v0.6.1
+# Release v0.6.2
 
 ## Contents
 
@@ -11,10 +11,11 @@
 - Current power consumption sensor from ODB ID `16` with `power_kw = ODB_ID_16 / 100 * configured_power_kw`.
 - Eco mode switch from ODB ID `6`.
 - Eco flow limit number from ODB ID `7`.
-- Maximum temperature number from ODB ID `5`.
+- Maximum temperature number from ODB ID `5`, written as raw tenths of a degree.
 - Bath fill target volume number from ODB ID `3`.
 - Bath fill start and stop buttons through ODB ID `1`.
 - Temperature writes through ODB ID `66` with readback through ODB ID `0`.
+- Writable setting changes request ODB readback after assignment and wait for DHE confirmation.
 - UI configuration through the Home Assistant config flow.
 - English and German Home Assistant UI translations.
 - Repository metadata for `memphi2/ha-dhe-connect`.
