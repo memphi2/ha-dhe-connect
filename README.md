@@ -1,177 +1,127 @@
-# Stiebel DHE Connect für Home Assistant
+# Stiebel DHE Connect for Home Assistant
 
-Custom Integration für Stiebel-Eltron-DHE-Connect-Durchlauferhitzer über die lokale Socket.IO-/Engine.IO-v3-Long-Polling-Schnittstelle.
+Custom Home Assistant integration for Stiebel Eltron DHE Connect instantaneous water heaters through the local Socket.IO / Engine.IO v3 long-polling interface.
 
-Die Integration ist für den Betrieb im lokalen Heimnetz gedacht. Sie stellt eine `climate`-Entität bereit, über die die Anzeige-/Solltemperatur des DHE gesetzt und gelesen wird. Zusätzlich werden Sensoren für aktuellen Wasserverbrauch und aktuellen Stromverbrauch angelegt.
+The integration is intended for use on a trusted local network. It exposes a `climate` entity for reading and setting the displayed target temperature, plus sensors for current water consumption and current power consumption.
 
 ## Status
 
-Experimentelle Custom Integration. Getestet gegen einen lokal erreichbaren DHE Connect auf Port `8443`.
+Experimental custom integration. Tested against a locally reachable DHE Connect on port `8443`.
 
-## Funktionsumfang
+## Features
 
-- Konfiguration über die Home-Assistant-Oberfläche, kein YAML erforderlich.
-- IP/Hostname, Port, Entitätsname und Werte-Polling-Intervall konfigurierbar.
-- Lokaler Betrieb ohne Cloud.
-- Token wird lokal in Home Assistant gespeichert.
-- Nach dem HA-Start wird eine Socket.IO-/Engine.IO-Long-Polling-Session dauerhaft offen gehalten.
-- Die Integration antwortet auf Engine.IO-Pings und reconnectet automatisch, falls der DHE die Session schließt.
-- ODB IDs `0`, `15` und `16` werden im konfigurierten Intervall gelesen, Standard `600` Sekunden.
-- Bei einer Temperaturänderung wird über die bestehende Session ODB ID `66` geschrieben und ODB ID `0` als Readback gelesen.
-- Sensor `Aktueller Wasserverbrauch`: ODB ID `15` / `10` in `L/min`.
-- Sensor `Aktueller Stromverbrauch`: ODB ID `16` / `100` * `24` in `kW`.
-- Die Entität bleibt sichtbar; die Verfügbarkeit ergibt sich aus der persistenten DHE-Session, nicht mehr aus einem separaten HTTP-Ping.
+- UI-based Home Assistant config flow, no YAML required.
+- Configurable IP address or hostname, port, device name and value polling interval.
+- Local operation without cloud access.
+- Token is stored locally in Home Assistant.
+- Keeps one Socket.IO / Engine.IO long-polling session open after Home Assistant starts.
+- Responds to Engine.IO pings and reconnects automatically if the DHE closes the session.
+- Polls ODB IDs `0`, `15` and `16` at the configured interval, default `600` seconds.
+- Writes temperature changes through ODB ID `66` and reads back ODB ID `0` on the existing session.
+- Sensor `Current water consumption`: ODB ID `15` / `10` in `L/min`.
+- Sensor `Current power consumption`: ODB ID `16` / `100` * `24` in `kW`.
+- Keeps entities visible; availability is based on the persistent DHE session instead of a separate HTTP ping.
+- Home Assistant UI strings are available in English and German.
 
-## Verwendete ODB-IDs
+## ODB IDs
 
-| Zweck | Befehl | ODB ID |
+| Purpose | Command | ODB ID |
 |---|---|---:|
-| Anzeige-/Solltemperatur lesen | `get:ste.common.odb:value` | `0` |
-| Aktueller Wasserverbrauch lesen | `get:ste.common.odb:value` | `15` |
-| Aktueller Stromverbrauch lesen | `get:ste.common.odb:value` | `16` |
-| Anzeige-/Solltemperatur setzen | `assign:ste.common.odb:value` | `66` |
+| Read displayed target temperature | `get:ste.common.odb:value` | `0` |
+| Read current water consumption | `get:ste.common.odb:value` | `15` |
+| Read current power consumption | `get:ste.common.odb:value` | `16` |
+| Set displayed target temperature | `assign:ste.common.odb:value` | `66` |
 
-Die Temperatur wird in Zehntelgrad übertragen, also z. B. `345` für `34,5 °C`. Der aktuelle Wasserverbrauch wird als `ODB ID 15 / 10` in `L/min` berechnet. Der aktuelle Stromverbrauch wird als `ODB ID 16 / 100 * 24` in `kW` berechnet. Das Setzen über ID `66` nutzt zusätzlich die vom Web-UI bekannte Request-Adressierung in den oberen Bits.
+Temperature values are transferred in tenths of a degree, for example `345` for `34.5 degrees C`. Current water consumption is calculated as `ODB ID 15 / 10` in `L/min`. Current power consumption is calculated as `ODB ID 16 / 100 * 24` in `kW`. Writes through ID `66` also use the request addressing known from the DHE web UI in the upper bits.
 
+## HACS Installation
 
-
-
-
-
-1. In HACS öffnen:
+1. Open HACS:
 
 ```text
-HACS → Integrationen → Drei Punkte → Benutzerdefinierte Repositorys
+HACS -> Integrations -> Three dots -> Custom repositories
 ```
 
-2. Repository-URL `https://github.com/memphi2/ha-dhe-connect` eintragen und Kategorie `Integration` wählen.
-3. Integration installieren.
-4. Home Assistant neu starten.
-5. Hinzufügen über:
+2. Add repository URL `https://github.com/memphi2/ha-dhe-connect` and choose category `Integration`.
+3. Install the integration.
+4. Restart Home Assistant.
+5. Add the integration:
 
 ```text
-Einstellungen → Geräte & Dienste → Integration hinzufügen → Stiebel DHE Connect
+Settings -> Devices & services -> Add integration -> Stiebel DHE Connect
 ```
 
-## Manuelle Installation
+## Manual Installation
 
-Alternativ den Ordner kopieren nach:
+Copy the integration folder to:
 
 ```text
 /config/custom_components/stiebel_dhe_connect/
 ```
 
-Danach Home Assistant neu starten und die Integration über die Oberfläche hinzufügen.
+Then restart Home Assistant and add the integration through the UI.
 
-## Konfiguration
+## Configuration
 
-Über die HA-Oberfläche werden abgefragt:
+The Home Assistant UI asks for:
 
-| Feld | Bedeutung | Beispiel |
+| Field | Meaning | Example |
 |---|---|---|
-| IP-Adresse oder Hostname | Adresse des DHE im lokalen Netz | `172.16.2.124` |
-| Port | HTTP-/Socket.IO-Port | `8443` |
-| Name der Entität | Anzeigename in HA | `DHE Connect` |
-| Werte-Polling | Leseintervall für ODB IDs `0`, `15` und `16` in Sekunden | `600` |
+| IP address or hostname | DHE address on the local network | `172.16.2.124` |
+| Port | HTTP / Socket.IO port | `8443` |
+| Device name | Name shown in Home Assistant | `DHE Connect` |
+| Value polling | Read interval for ODB IDs `0`, `15` and `16` in seconds | `600` |
 
-Eingaben werden validiert: Host darf nur IP-Adresse oder Hostname sein; Pfade, Benutzerinformationen, Query-Strings und eingebettete Ports werden abgewiesen. Der Port muss zwischen `1` und `65535` liegen. Das Werte-Polling muss zwischen `60` und `86400` Sekunden liegen.
+Input is validated: host must be an IP address or hostname only; paths, usernames, query strings and embedded ports are rejected. The port must be between `1` and `65535`. Value polling must be between `60` and `86400` seconds.
 
-## Pairing und Token
+## Pairing and Token
 
-Beim ersten Zugriff kann der DHE ein Pairing verlangen. In diesem Fall am DHE bestätigen.
+On first connection the DHE may request pairing. Confirm pairing on the DHE when prompted.
 
-Der Token wird lokal gespeichert unter:
+The token is stored locally at:
 
 ```text
 /config/.storage/stiebel_dhe_connect_token.txt
 ```
 
-Zum Neu-Pairing diese Datei löschen und Home Assistant neu starten oder die Integration neu laden.
+To pair again, delete this file and restart Home Assistant or reload the integration.
 
-## Verhalten der Verbindung
+## Connection Behavior
 
-Die Integration hält ab v0.4.0 eine dauerhafte Socket.IO-/Engine.IO-v3-Long-Polling-Session offen. Das ist für dieses Gerät wichtig, weil Engine.IO bei längerer Inaktivität eigene Ping/Pong-Frames erwartet.
+Since v0.4.0 the integration keeps one Socket.IO / Engine.IO v3 long-polling session open. This matters for this device because Engine.IO expects ping / pong frames during longer idle periods.
 
-- Beim Start: Session öffnen, Token prüfen/refreshen, authentifizieren.
-- Laufend: Long-Polling-GETs offen halten und Engine.IO-Pings beantworten.
-- Alle konfigurierten `poll_interval` Sekunden: ODB IDs `0`, `15` und `16` lesen.
-- Bei Änderung der Zieltemperatur: über dieselbe Session ODB ID `66` schreiben und ODB ID `0` als Readback lesen.
-- Bei Session-Close: Entity kurz unavailable, automatischer Reconnect.
+- Startup: open session, check or refresh token, authenticate.
+- Runtime: keep long-polling GETs open and answer Engine.IO pings.
+- Every configured `poll_interval` seconds: read ODB IDs `0`, `15` and `16`.
+- Temperature change: write ODB ID `66` through the same session and read back ODB ID `0`.
+- Session close: entity becomes temporarily unavailable or reconnecting, then reconnects automatically.
 
-## Sicherheitshinweise
+## Security Notes
 
-- Die Integration sollte nur in einem vertrauenswürdigen lokalen Netzwerk eingesetzt werden.
-- Den Port `8443` des DHE nicht ins Internet weiterleiten.
-- Der Token liegt lokal in der HA-Konfiguration. Die Integration setzt beim Speichern nach Möglichkeit Dateirechte `0600`; die tatsächliche Durchsetzung hängt vom HA-Dateisystem ab.
-- Token werden nicht bewusst ins Log geschrieben. Debug-Rohdaten sollten trotzdem nicht öffentlich geteilt werden.
-- Die Integration nutzt HTTP zur lokalen DHE-Weboberfläche, weil das Gerät diese lokale Schnittstelle so bereitstellt.
-- Die Integration beschränkt die einstellbare Temperatur auf `20,0 °C` bis `60,0 °C` und rundet auf `0,5 °C`.
+- Use this integration only on a trusted local network.
+- Do not expose DHE port `8443` to the internet.
+- The token is stored in the Home Assistant configuration directory. The integration tries to set file permissions to `0600`; actual enforcement depends on the Home Assistant filesystem.
+- Tokens are not intentionally written to normal logs. Still avoid sharing debug raw data publicly.
+- The integration uses HTTP to the local DHE web interface because the device exposes the local interface this way.
+- The integration limits the settable temperature to `20.0 degrees C` through `60.0 degrees C` and rounds to `0.5 degrees C`.
 
 ## Debugging
 
-Home-Assistant-Log prüfen:
+Check the Home Assistant log:
 
 ```text
-Einstellungen → System → Protokolle
+Settings -> System -> Logs
 ```
 
-Typische Probleme:
+Common issues:
 
-| Symptom | Ursache / Lösung |
+| Symptom | Cause / solution |
 |---|---|
-| Integration nicht verfügbar | IP/Port prüfen, DHE-Weboberfläche im Browser testen |
-| Pairing kommt immer wieder | Token-Datei löschen und einmal neu pairen |
-| Schreiben klappt nicht | Prüfen, ob DHE lokal über Port `8443` erreichbar ist |
-| Temperatur ändert sich nicht | DHE-Grenzen, Sperren oder Gerätemodus prüfen |
+| Integration unavailable | Check IP address and port, test the DHE web UI in a browser |
+| Pairing keeps repeating | Delete the token file and pair once again |
+| Writing fails | Check whether the DHE is locally reachable on port `8443` |
+| Temperature does not change | Check DHE limits, locks or device mode |
 
-## Release Notes
-
-## 0.4.3
-
-- Keep the Socket.IO/Engine.IO long-polling session open after startup.
-- Replace separate HTTP ping with periodic setpoint polling.
-- Poll ODB ID 0 every 600 seconds by default.
-- Use the existing session for setpoint writes via ODB ID 66.
-- Improve reconnect handling when the DHE closes the session.
-
-### v0.4.1
-
-- Repository-Metadaten auf `memphi2/ha-dhe-connect` angepasst.
-- Manifest-Links und Code Owner gesetzt.
-- Dokumentation für GitHub-/HACS-Veröffentlichung ergänzt.
-
-### v0.4.0
-
-- Verbindung wird jetzt persistent offen gehalten.
-- HTTP-Ping entfernt; stattdessen wird ODB ID `0` im konfigurierten Intervall gepollt.
-- Engine.IO-Ping/Pong für dauerhafte Long-Polling-Session ergänzt.
-- Schreiben läuft über die bestehende Session und wartet auf passendes Readback.
-- Config-Option von `ping_interval` auf `poll_interval` umgestellt; alte Einträge bleiben kompatibel.
-
-### v0.3.0
-
-- Sicherheits- und Robustheitsreview.
-- Host-/Port-/Intervall-Validierung verschärft.
-- Token-Speicherung atomar gemacht; Dateirechte nach Möglichkeit auf User-only gesetzt.
-- Keine Token-Ausgabe in normalen Logs.
-- Startup-Read auf genau eine Socket.IO-Session reduziert.
-- Write-Retry von 3 auf 2 Versuche reduziert, damit keine unnötigen Schreibsessions entstehen.
-- Device-Info für Home Assistant ergänzt.
-- Dokumentation um Sicherheitskapitel ergänzt.
-
-### v0.2.1
-
-- HACS-kompatible Repository-Struktur ergänzt.
-- Root-README, `hacs.json` und Lizenz ergänzt.
-- Dokumentation für Installation, Pairing, Konfiguration und Betriebsverhalten ergänzt.
-
-### v0.2.0
-
-- Config Flow/UI-Konfiguration.
-- Keine dauerhafte Socket.IO-Verbindung.
-- Einmaliges Lesen beim Start, Lesen nach Änderung, Verfügbarkeits-Ping alle 600 Sekunden. *(bis v0.3.x)*
-
-
-## Startup behavior
+## Startup Behavior
 
 Since v0.4.2 the persistent DHE polling loop is scheduled as a Home Assistant background task. This avoids keeping Home Assistant in the startup phase while the long-polling connection is active.

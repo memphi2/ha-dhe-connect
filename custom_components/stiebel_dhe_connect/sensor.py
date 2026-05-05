@@ -29,7 +29,7 @@ class StiebelDHESensorEntityDescription(SensorEntityDescription):
 SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
     StiebelDHESensorEntityDescription(
         key="water_flow",
-        name="Aktueller Wasserverbrauch",
+        translation_key="water_flow",
         native_unit_of_measurement=UnitOfVolumeFlowRate.LITERS_PER_MINUTE,
         device_class=SensorDeviceClass.VOLUME_FLOW_RATE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -37,7 +37,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
     ),
     StiebelDHESensorEntityDescription(
         key="power",
-        name="Aktueller Stromverbrauch",
+        translation_key="power",
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
@@ -84,7 +84,7 @@ class StiebelDHESensor(SensorEntity):
     ) -> None:
         """Initialize the sensor."""
         self.entity_description = description
-        self._attr_name = description.name
+        self._attr_translation_key = description.translation_key
         self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_{description.key}"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, client.host)},
