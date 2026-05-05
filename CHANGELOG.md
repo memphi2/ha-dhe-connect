@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.3
+
+- Harden writable configuration entities against temporary readback delays.
+- Harden target-temperature writes with repeated readback confirmation.
+- Accept both raw and already scaled readbacks for Eco flow limit and maximum temperature.
+- Restore last known number and Eco mode states after Home Assistant reloads to avoid unknown states.
+
 ## 0.6.2
 
 - Write maximum temperature as raw tenths of a degree, e.g. `45.0 degrees C` as `450`.

@@ -1,4 +1,4 @@
-# Release v0.6.2
+# Release v0.6.3
 
 ## Contents
 
@@ -16,6 +16,8 @@
 - Bath fill start and stop buttons through ODB ID `1`.
 - Temperature writes through ODB ID `66` with readback through ODB ID `0`.
 - Writable setting changes request ODB readback after assignment and wait for DHE confirmation.
+- Target-temperature and writable-setting confirmations repeat readback without cancelling pending confirmations too early.
+- Writable configuration entities restore their last known state after reloads and tolerate raw or scaled readback values.
 - UI configuration through the Home Assistant config flow.
 - English and German Home Assistant UI translations.
 - Repository metadata for `memphi2/ha-dhe-connect`.

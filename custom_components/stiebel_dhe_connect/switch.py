@@ -6,9 +6,11 @@ import logging
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import STATE_OFF, STATE_ON
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .client import DHEClient, DHEError, ID_ECO_MODE, ODBValue
 from .const import DOMAIN
@@ -32,7 +34,7 @@ async def async_setup_entry(
     ])
 
 
-class StiebelDHEEcoModeSwitch(SwitchEntity):
+class StiebelDHEEcoModeSwitch(SwitchEntity, RestoreEntity):
     """Eco mode switch backed by DHE ODB id 6."""
 
     _attr_has_entity_name = True
@@ -68,6 +70,11 @@ class StiebelDHEEcoModeSwitch(SwitchEntity):
         if last_value is not None:
             self._attr_is_on = bool(last_value)
             self._attr_available = True
+        else:
+            last_state = await self.async_get_last_state()
+            if last_state and last_state.state in {STATE_ON, STATE_OFF}:
+                self._attr_is_on = last_state.state == STATE_ON
+                self._attr_available = True
 
         await self._client.start()
 
@@ -76,6 +83,8 @@ class StiebelDHEEcoModeSwitch(SwitchEntity):
         try:
             self._attr_is_on = await self._client.set_eco_mode(True)
         except DHEError as err:
+            self._attr_available = self._attr_is_on is not None
+            self.async_write_ha_state()
             _LOGGER.error("Could not turn on DHE Eco mode: %s", err)
             raise
         self._attr_available = True
@@ -86,6 +95,8 @@ class StiebelDHEEcoModeSwitch(SwitchEntity):
         try:
             self._attr_is_on = await self._client.set_eco_mode(False)
         except DHEError as err:
+            self._attr_available = self._attr_is_on is not None
+            self.async_write_ha_state()
             _LOGGER.error("Could not turn off DHE Eco mode: %s", err)
             raise
         self._attr_available = True
