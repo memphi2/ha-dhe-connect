@@ -1,9 +1,10 @@
-# Release v0.4.7
+# Release v0.4.8
 
 ## Contents
 
 - HACS-compatible Home Assistant custom integration for Stiebel DHE Connect.
 - Persistent Engine.IO v3 / Socket.IO long-polling session.
+- No periodic 600-second value polling.
 - Displayed target temperature read through ODB ID `0`.
 - Current water consumption sensor from ODB ID `15` with `flow_l_min = ODB_ID_15 / 10`.
 - Configured power sensor from ODB ID `20`.

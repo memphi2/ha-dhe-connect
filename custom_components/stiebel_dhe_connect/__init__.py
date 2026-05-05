@@ -11,10 +11,7 @@ from homeassistant.core import HomeAssistant
 
 from .client import DHEClient
 from .const import (
-    CONF_PING_INTERVAL,
-    CONF_POLL_INTERVAL,
     DEFAULT_NAME,
-    DEFAULT_POLL_INTERVAL,
     DEFAULT_PORT,
     DOMAIN,
     PLATFORMS,
@@ -29,7 +26,6 @@ class DHEConnectRuntimeData:
 
     client: DHEClient
     name: str
-    poll_interval: int
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -40,9 +36,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     host = data[CONF_HOST]
     port = int(data.get(CONF_PORT, DEFAULT_PORT))
     name = data.get(CONF_NAME, DEFAULT_NAME)
-    poll_interval = int(
-        data.get(CONF_POLL_INTERVAL, data.get(CONF_PING_INTERVAL, DEFAULT_POLL_INTERVAL))
-    )
 
     token_file = ".storage/stiebel_dhe_connect_token.txt"
 
@@ -57,7 +50,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id] = DHEConnectRuntimeData(
         client=client,
         name=name,
-        poll_interval=poll_interval,
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

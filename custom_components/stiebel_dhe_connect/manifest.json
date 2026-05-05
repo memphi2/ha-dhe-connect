@@ -1,7 +1,7 @@
 {
   "domain": "stiebel_dhe_connect",
   "name": "Stiebel DHE Connect",
-  "version": "0.4.7",
+  "version": "0.4.8",
   "documentation": "https://github.com/memphi2/ha-dhe-connect",
   "requirements": [],
   "codeowners": [
@@ -9,7 +9,7 @@
   ],
   "config_flow": true,
   "single_config_entry": true,
-  "iot_class": "local_polling",
+  "iot_class": "local_push",
   "integration_type": "device",
   "issue_tracker": "https://github.com/memphi2/ha-dhe-connect/issues"
 }

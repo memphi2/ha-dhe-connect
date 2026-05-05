@@ -30,13 +30,12 @@ async def async_setup_entry(
             entry_id=entry.entry_id,
             name=runtime.name,
             client=runtime.client,
-            poll_interval=runtime.poll_interval,
         )
     ])
 
 
 class StiebelDHEClimate(ClimateEntity):
-    """Stiebel DHE setpoint entity with persistent local polling session."""
+    """Stiebel DHE setpoint entity with persistent local long-polling session."""
 
     _attr_has_entity_name = True
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
@@ -48,7 +47,7 @@ class StiebelDHEClimate(ClimateEntity):
     _attr_target_temperature_step = 0.5
     _attr_should_poll = False
 
-    def __init__(self, entry_id: str, name: str, client: DHEClient, poll_interval: int) -> None:
+    def __init__(self, entry_id: str, name: str, client: DHEClient) -> None:
         """Initialize the entity."""
         self._attr_name = name
         self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_setpoint"
@@ -59,7 +58,6 @@ class StiebelDHEClimate(ClimateEntity):
             "name": name,
         }
         self._client = client
-        self._poll_interval = max(60, int(poll_interval))
         self._attr_target_temperature: float | None = None
         self._attr_available = False
         self._connection_state = "starting"
@@ -68,15 +66,14 @@ class StiebelDHEClimate(ClimateEntity):
     def _update_extra_state_attributes(self) -> None:
         """Update diagnostic attributes without doing I/O in properties."""
         self._attr_extra_state_attributes = {
-            "communication_model": "persistent_socketio_polling",
+            "communication_model": "persistent_socketio_long_polling",
             "connection_state": self._connection_state,
             "readback_id": 0,
             "write_id": 66,
-            "poll_interval_seconds": self._poll_interval,
         }
 
     async def async_added_to_hass(self) -> None:
-        """Start persistent DHE connection and value polling."""
+        """Start persistent DHE connection and subscribe to value updates."""
         self.async_on_remove(
             self._client.add_setpoint_callback(self._handle_setpoint_update)
         )
@@ -88,7 +85,7 @@ class StiebelDHEClimate(ClimateEntity):
             self._attr_available = True
             self._connection_state = "connected" if self._client.available else "reconnecting"
             self._update_extra_state_attributes()
-        await self._client.start(poll_interval=self._poll_interval)
+        await self._client.start()
 
     @callback
     def _handle_setpoint_update(self, value: float) -> None:

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.8
+
+- Remove the configurable 600-second value polling interval.
+- Request ODB values once after session startup and rely on incoming DHE messages afterward.
+- Remove value polling from the config and options flow.
+- Mark the integration as `local_push`.
+
 ## 0.4.7
 
 - Read configured DHE power from ODB ID `20` once after session startup.
