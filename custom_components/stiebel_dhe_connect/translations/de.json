@@ -7,17 +7,14 @@
         "data": {
           "host": "IP-Adresse oder Hostname",
           "port": "Port",
-          "name": "Gerätename",
-          "poll_interval": "Werte-Polling in Sekunden"
+          "name": "Gerätename"
         }
       }
     },
     "error": {
       "cannot_connect": "Verbindung zum DHE nicht möglich. IP-Adresse und Port prüfen.",
-      "poll_interval_too_low": "Das Werte-Polling muss mindestens 60 Sekunden betragen.",
       "invalid_host": "Ungültiger Host. Bitte nur IP-Adresse oder Hostname ohne Pfad, Benutzername oder Port eingeben.",
-      "invalid_port": "Ungültiger Port. Der Port muss zwischen 1 und 65535 liegen.",
-      "poll_interval_too_high": "Das Werte-Polling darf höchstens 86400 Sekunden betragen."
+      "invalid_port": "Ungültiger Port. Der Port muss zwischen 1 und 65535 liegen."
     },
     "abort": {
       "already_configured": "Stiebel DHE Connect ist bereits konfiguriert."
@@ -27,21 +24,18 @@
     "step": {
       "init": {
         "title": "Stiebel DHE Connect konfigurieren",
-        "description": "IP-Adresse, Port, Gerätename und Werte-Polling ändern.",
+        "description": "IP-Adresse, Port und Gerätename ändern.",
         "data": {
           "host": "IP-Adresse oder Hostname",
           "port": "Port",
-          "name": "Gerätename",
-          "poll_interval": "Werte-Polling in Sekunden"
+          "name": "Gerätename"
         }
       }
     },
     "error": {
       "cannot_connect": "Verbindung zum DHE nicht möglich. IP-Adresse und Port prüfen.",
-      "poll_interval_too_low": "Das Werte-Polling muss mindestens 60 Sekunden betragen.",
       "invalid_host": "Ungültiger Host. Bitte nur IP-Adresse oder Hostname ohne Pfad, Benutzername oder Port eingeben.",
-      "invalid_port": "Ungültiger Port. Der Port muss zwischen 1 und 65535 liegen.",
-      "poll_interval_too_high": "Das Werte-Polling darf höchstens 86400 Sekunden betragen."
+      "invalid_port": "Ungültiger Port. Der Port muss zwischen 1 und 65535 liegen."
     }
   },
   "entity": {

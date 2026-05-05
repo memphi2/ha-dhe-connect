@@ -3,9 +3,9 @@
 Design for this integration version:
 - A single Engine.IO/Socket.IO long-polling session is kept open while Home Assistant runs.
 - The client continuously long-polls the DHE and handles Engine.IO ping/pong frames.
-- The configured power is read once after session startup. Setpoint, water flow and
-  live power usage values are polled through ODB ids at the configured interval,
-  default 600 seconds.
+- The configured power is read once after integration startup. Setpoint, water flow and
+  live power usage values are requested when a session starts and then updated from
+  incoming DHE events.
 - Writes use the same open session whenever possible: ODB id 66 is written, then ODB id 0
   is requested as readback.
 - If the DHE closes the session, the client marks the entity unavailable and reconnects.
@@ -39,8 +39,7 @@ ID_POWER = 16
 ID_CONFIGURED_POWER = 20
 ID_SET_REQ = 66
 DEFAULT_CONFIGURED_POWER_KW = 24.0
-STARTUP_VALUE_IDS = (ID_CONFIGURED_POWER,)
-POLL_VALUE_IDS = (ID_SETPOINT, ID_WATER_FLOW, ID_POWER)
+INITIAL_VALUE_IDS = (ID_SETPOINT, ID_WATER_FLOW, ID_POWER, ID_CONFIGURED_POWER)
 
 SetpointCallback = Callable[[float], None]
 AvailabilityCallback = Callable[[bool], None]
@@ -119,7 +118,6 @@ class DHEClient:
         self._ready = asyncio.Event()
         self._command_lock = asyncio.Lock()
 
-        self._poll_interval = 600
         self._setpoint_callbacks: list[SetpointCallback] = []
         self._availability_callbacks: list[AvailabilityCallback] = []
         self._measurement_callbacks: list[MeasurementCallback] = []
@@ -130,7 +128,6 @@ class DHEClient:
         self._last_power_fraction: float | None = None
         self._pending_setpoint_future: asyncio.Future[float] | None = None
         self._pending_expected_setpoint: float | None = None
-        self._last_poll_request = 0.0
 
     @property
     def last_setpoint(self) -> float | None:
@@ -174,10 +171,8 @@ class DHEClient:
 
         return _remove_callback
 
-    async def start(self, poll_interval: int) -> None:
-        """Start persistent DHE session and polling loop."""
-        self._poll_interval = max(60, int(poll_interval))
-
+    async def start(self) -> None:
+        """Start persistent DHE session and event loop."""
         if self._runner and not self._runner.done():
             return
 
@@ -192,16 +187,16 @@ class DHEClient:
         if create_background_task is not None:
             self._runner = create_background_task(
                 self._run_loop(),
-                "stiebel_dhe_connect_poll_loop",
+                "stiebel_dhe_connect_session_loop",
             )
         else:
             self._runner = self.hass.async_create_task(
                 self._run_loop(),
-                name="stiebel_dhe_connect_poll_loop",
+                name="stiebel_dhe_connect_session_loop",
             )
 
     async def stop(self) -> None:
-        """Stop persistent polling loop and close the DHE namespace session."""
+        """Stop persistent session loop and close the DHE namespace session."""
         self._stopped.set()
         runner = self._runner
         self._runner = None
@@ -219,13 +214,6 @@ class DHEClient:
         if ctx is not None:
             await self._close_session(ctx)
         self._set_available(False)
-
-    async def request_setpoint_poll(self) -> None:
-        """Request setpoint on the persistent session."""
-        ctx = self._ctx
-        if ctx is None:
-            raise DHEError("DHE session is not connected")
-        await self._request_setpoint(ctx)
 
     async def set_temperature(self, temperature: float) -> float:
         """Set setpoint via ODB id 66 and verify by reading ODB id 0 on the open session."""
@@ -274,21 +262,15 @@ class DHEClient:
         raise DHEError("Could not set DHE setpoint")
 
     async def _run_loop(self) -> None:
-        """Persistent reconnecting Engine.IO long-poll loop."""
+        """Persistent reconnecting Engine.IO event loop."""
         while not self._stopped.is_set():
             try:
                 self._ctx = await self._open_authenticated_session()
                 self._ready.set()
                 self._set_available(True)
-                self._last_poll_request = 0.0
-                await self._request_startup_values(self._ctx)
-                await self._request_polled_values(self._ctx)
+                await self._request_initial_values(self._ctx)
 
                 while not self._stopped.is_set() and self._ctx is not None:
-                    now = time.monotonic()
-                    if now - self._last_poll_request >= self._poll_interval:
-                        await self._request_polled_values(self._ctx)
-
                     events = await self._read_events_once(self._ctx)
                     for event in events:
                         await self._handle_runtime_event(event)
@@ -487,19 +469,12 @@ class DHEClient:
 
     async def _request_setpoint(self, ctx: DHESession) -> None:
         """Request ODB id 0 setpoint on the persistent session."""
-        self._last_poll_request = time.monotonic()
         await self._request_odb_value(ctx, ID_SETPOINT)
 
-    async def _request_polled_values(self, ctx: DHESession) -> None:
-        """Request all ODB values exposed by this integration."""
-        self._last_poll_request = time.monotonic()
-        for odb_id in POLL_VALUE_IDS:
-            await self._request_odb_value(ctx, odb_id)
-
-    async def _request_startup_values(self, ctx: DHESession) -> None:
-        """Request ODB values that only need to be read after session startup."""
-        for odb_id in STARTUP_VALUE_IDS:
-            if odb_id not in self._last_measurements:
+    async def _request_initial_values(self, ctx: DHESession) -> None:
+        """Request ODB values needed to seed entity state after session startup."""
+        for odb_id in INITIAL_VALUE_IDS:
+            if odb_id != ID_CONFIGURED_POWER or odb_id not in self._last_measurements:
                 await self._request_odb_value(ctx, odb_id)
 
     async def _request_odb_value(self, ctx: DHESession, odb_id: int) -> None:

@@ -66,7 +66,6 @@ async def async_setup_entry(
                 entry_id=entry.entry_id,
                 name=runtime.name,
                 client=runtime.client,
-                poll_interval=runtime.poll_interval,
                 description=description,
             )
             for description in SENSOR_DESCRIPTIONS
@@ -86,7 +85,6 @@ class StiebelDHESensor(SensorEntity):
         entry_id: str,
         name: str,
         client: DHEClient,
-        poll_interval: int,
         description: StiebelDHESensorEntityDescription,
     ) -> None:
         """Initialize the sensor."""
@@ -101,7 +99,6 @@ class StiebelDHESensor(SensorEntity):
         }
         self._attr_extra_state_attributes = {"odb_id": description.odb_id}
         self._client = client
-        self._poll_interval = max(60, int(poll_interval))
         self._attr_available = False
         self._attr_native_value: float | None = None
 
@@ -119,7 +116,7 @@ class StiebelDHESensor(SensorEntity):
             self._attr_native_value = last_value
             self._attr_available = True
 
-        await self._client.start(poll_interval=self._poll_interval)
+        await self._client.start()
 
     @callback
     def _handle_measurement_update(self, odb_id: int, value: float) -> None:

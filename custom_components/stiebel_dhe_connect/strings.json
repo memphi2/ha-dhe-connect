@@ -7,17 +7,14 @@
         "data": {
           "host": "IP address or hostname",
           "port": "Port",
-          "name": "Device name",
-          "poll_interval": "Value polling in seconds"
+          "name": "Device name"
         }
       }
     },
     "error": {
       "cannot_connect": "Could not connect to the DHE. Check the IP address and port.",
-      "poll_interval_too_low": "Value polling must be at least 60 seconds.",
       "invalid_host": "Invalid host. Enter only an IP address or hostname, without path, username or port.",
-      "invalid_port": "Invalid port. The port must be between 1 and 65535.",
-      "poll_interval_too_high": "Value polling must be at most 86400 seconds."
+      "invalid_port": "Invalid port. The port must be between 1 and 65535."
     },
     "abort": {
       "already_configured": "Stiebel DHE Connect is already configured."
@@ -27,21 +24,18 @@
     "step": {
       "init": {
         "title": "Configure Stiebel DHE Connect",
-        "description": "Change IP address, port, device name and value polling.",
+        "description": "Change IP address, port and device name.",
         "data": {
           "host": "IP address or hostname",
           "port": "Port",
-          "name": "Device name",
-          "poll_interval": "Value polling in seconds"
+          "name": "Device name"
         }
       }
     },
     "error": {
       "cannot_connect": "Could not connect to the DHE. Check the IP address and port.",
-      "poll_interval_too_low": "Value polling must be at least 60 seconds.",
       "invalid_host": "Invalid host. Enter only an IP address or hostname, without path, username or port.",
-      "invalid_port": "Invalid port. The port must be between 1 and 65535.",
-      "poll_interval_too_high": "Value polling must be at most 86400 seconds."
+      "invalid_port": "Invalid port. The port must be between 1 and 65535."
     }
   },
   "entity": {

@@ -16,10 +16,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
-    CONF_PING_INTERVAL,
-    CONF_POLL_INTERVAL,
     DEFAULT_NAME,
-    DEFAULT_POLL_INTERVAL,
     DEFAULT_PORT,
     DOMAIN,
 )
@@ -76,28 +73,11 @@ def _validate_port(port: int) -> int:
     return port
 
 
-def _validate_poll_interval(seconds: int) -> int:
-    """Validate setpoint polling interval."""
-    seconds = int(seconds)
-    if seconds < 60:
-        raise ValueError("poll_interval_too_low")
-    if seconds > 86400:
-        raise ValueError("poll_interval_too_high")
-    return seconds
-
-
-def _current_poll_interval(defaults: dict[str, Any]) -> int:
-    """Return poll interval with backward compatibility for v0.2/v0.3 entries."""
-    return int(defaults.get(CONF_POLL_INTERVAL, defaults.get(CONF_PING_INTERVAL, DEFAULT_POLL_INTERVAL)))
-
-
 def _apply_validation_error(errors: dict[str, str], err: ValueError) -> None:
     """Map validation exceptions to form fields."""
     code = str(err) or "invalid_host"
     if code == "invalid_port":
         errors[CONF_PORT] = code
-    elif code.startswith("poll_interval"):
-        errors[CONF_POLL_INTERVAL] = code
     else:
         errors[CONF_HOST] = "invalid_host"
 
@@ -110,9 +90,9 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
             vol.Required(CONF_HOST, default=defaults.get(CONF_HOST, "")): str,
             vol.Optional(CONF_PORT, default=defaults.get(CONF_PORT, DEFAULT_PORT)): int,
             vol.Optional(CONF_NAME, default=defaults.get(CONF_NAME, DEFAULT_NAME)): str,
-            vol.Optional(CONF_POLL_INTERVAL, default=_current_poll_interval(defaults)): int,
         }
     )
+
 
 async def _can_connect(hass: HomeAssistant, host: str, port: int) -> bool:
     """Check if the DHE web endpoint is reachable before creating the config entry."""
@@ -144,7 +124,6 @@ class StiebelDHEConnectConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             try:
                 host = _normalize_host(user_input[CONF_HOST])
                 port = _validate_port(user_input.get(CONF_PORT, DEFAULT_PORT))
-                poll_interval = _validate_poll_interval(user_input.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL))
             except ValueError as err:
                 _apply_validation_error(errors, err)
             else:
@@ -159,7 +138,6 @@ class StiebelDHEConnectConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             CONF_HOST: host,
                             CONF_PORT: port,
                             CONF_NAME: name,
-                            CONF_POLL_INTERVAL: poll_interval,
                         },
                     )
 
@@ -192,7 +170,6 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
             try:
                 host = _normalize_host(user_input[CONF_HOST])
                 port = _validate_port(user_input.get(CONF_PORT, DEFAULT_PORT))
-                poll_interval = _validate_poll_interval(user_input.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL))
             except ValueError as err:
                 _apply_validation_error(errors, err)
             else:
@@ -207,7 +184,6 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
                             CONF_HOST: host,
                             CONF_PORT: port,
                             CONF_NAME: name,
-                            CONF_POLL_INTERVAL: poll_interval,
                         },
                     )
 

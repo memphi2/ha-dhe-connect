@@ -11,13 +11,13 @@ Experimental custom integration. Tested against a locally reachable DHE Connect 
 ## Features
 
 - UI-based Home Assistant config flow, no YAML required.
-- Configurable IP address or hostname, port, device name and value polling interval.
+- Configurable IP address or hostname, port and device name.
 - Local operation without cloud access.
 - Token is stored locally in Home Assistant.
 - Keeps one Socket.IO / Engine.IO long-polling session open after Home Assistant starts.
 - Responds to Engine.IO pings and reconnects automatically if the DHE closes the session.
 - Reads configured device power from ODB ID `20` once after the integration session starts.
-- Polls ODB IDs `0`, `15` and `16` at the configured interval, default `600` seconds.
+- Requests ODB IDs `0`, `15` and `16` after session startup and then updates from incoming DHE events.
 - Writes temperature changes through ODB ID `66` and reads back ODB ID `0` on the existing session.
 - Sensor `Current water consumption`: ODB ID `15` / `10` in `L/min`.
 - Sensor `Configured power`: ODB ID `20` in `kW`.
@@ -73,9 +73,8 @@ The Home Assistant UI asks for:
 | IP address or hostname | DHE address on the local network | `172.16.2.124` |
 | Port | HTTP / Socket.IO port | `8443` |
 | Device name | Name shown in Home Assistant | `DHE Connect` |
-| Value polling | Read interval for ODB IDs `0`, `15` and `16` in seconds | `600` |
 
-Input is validated: host must be an IP address or hostname only; paths, usernames, query strings and embedded ports are rejected. The port must be between `1` and `65535`. Value polling must be between `60` and `86400` seconds.
+Input is validated: host must be an IP address or hostname only; paths, usernames, query strings and embedded ports are rejected. The port must be between `1` and `65535`.
 
 ## Pairing and Token
 
@@ -95,8 +94,8 @@ Since v0.4.0 the integration keeps one Socket.IO / Engine.IO v3 long-polling ses
 
 - Startup: open session, check or refresh token, authenticate.
 - Runtime: keep long-polling GETs open and answer Engine.IO pings.
-- After startup: read configured power from ODB ID `20`.
-- Every configured `poll_interval` seconds: read ODB IDs `0`, `15` and `16`.
+- After startup: request ODB IDs `0`, `15`, `16` and `20` once to seed entity state.
+- Runtime updates: process incoming DHE ODB messages from the open session.
 - Temperature change: write ODB ID `66` through the same session and read back ODB ID `0`.
 - Session close: entity becomes temporarily unavailable or reconnecting, then reconnects automatically.
 
@@ -128,4 +127,4 @@ Common issues:
 
 ## Startup Behavior
 
-Since v0.4.2 the persistent DHE polling loop is scheduled as a Home Assistant background task. This avoids keeping Home Assistant in the startup phase while the long-polling connection is active.
+The persistent DHE session runs as a Home Assistant background task and should not block Home Assistant startup.
