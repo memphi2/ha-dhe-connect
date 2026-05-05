@@ -303,39 +303,43 @@ class DHEClient:
                 raise DHEError("No token received. Pairing may be required on the DHE.")
 
         ctx = await self._open_session(token)
-        await self._post_packet(ctx, self._event_packet("token_request", {"token": token, "name": self.name}))
+        try:
+            await self._post_packet(ctx, self._event_packet("token_request", {"token": token, "name": self.name}))
 
-        deadline = time.monotonic() + 45.0
-        last_nudge = 0.0
+            deadline = time.monotonic() + 45.0
+            last_nudge = 0.0
 
-        while time.monotonic() < deadline and not self._stopped.is_set():
-            for event in await self._read_events_once(ctx):
-                if event.name == "__closed":
-                    raise DHESessionClosed("DHE closed Socket.IO session during authentication")
+            while time.monotonic() < deadline and not self._stopped.is_set():
+                for event in await self._read_events_once(ctx):
+                    if event.name == "__closed":
+                        raise DHESessionClosed("DHE closed Socket.IO session during authentication")
 
-                if event.name == "token_response" and isinstance(event.data, str) and len(event.data) > 20:
-                    token = event.data
-                    await self._save_token(token)
-                    await self._post_packet(ctx, self._event_packet("authenticate", {"token": token}))
+                    if event.name == "token_response" and isinstance(event.data, str) and len(event.data) > 20:
+                        token = event.data
+                        await self._save_token(token)
+                        await self._post_packet(ctx, self._event_packet("authenticate", {"token": token}))
 
-                elif event.name == "authenticated":
-                    _LOGGER.debug("DHE authenticated")
-                    return ctx
+                    elif event.name == "authenticated":
+                        _LOGGER.debug("DHE authenticated")
+                        return ctx
 
-                elif event.name == "pairing_request":
-                    _LOGGER.info("DHE pairing requested. Confirm on the DHE if prompted.")
+                    elif event.name == "pairing_request":
+                        _LOGGER.info("DHE pairing requested. Confirm on the DHE if prompted.")
 
-                elif event.name == "pairing_result":
-                    # Some devices return result=false,response=true with a valid authenticated session.
-                    _LOGGER.debug("DHE pairing_result received: %s", event.data)
+                    elif event.name == "pairing_result":
+                        # Some devices return result=false,response=true with a valid authenticated session.
+                        _LOGGER.debug("DHE pairing_result received: %s", event.data)
 
-            if time.monotonic() - last_nudge > 0.9:
-                await self._post_packet(ctx, self._event_packet("token_request", {"token": token, "name": self.name}))
-                last_nudge = time.monotonic()
+                if time.monotonic() - last_nudge > 0.9:
+                    await self._post_packet(ctx, self._event_packet("token_request", {"token": token, "name": self.name}))
+                    last_nudge = time.monotonic()
 
-            await asyncio.sleep(0.25)
+                await asyncio.sleep(0.25)
 
-        raise DHEError("Auth timeout: no authenticated event received")
+            raise DHEError("Auth timeout: no authenticated event received")
+        except (asyncio.CancelledError, Exception):
+            await self._close_session(ctx)
+            raise
 
     async def _request_initial_token(self) -> str:
         """Open a blank-token session and request a token."""
@@ -521,6 +525,8 @@ class DHEClient:
         app_packets: list[str] = []
         for packet in packets:
             stripped = packet.strip("\x00\x1e\ufffd")
+            if stripped == "1" or stripped == "41" or stripped.startswith("41/"):
+                return [DHEEvent("__closed", None)]
             if stripped == "2":
                 # Engine.IO ping. The client must pong to keep long-polling sessions alive.
                 await self._post_packet(ctx, "3")
