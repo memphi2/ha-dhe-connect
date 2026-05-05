@@ -279,15 +279,16 @@ class DHEClient:
         return float(await self.write_odb_value(ID_BATH_FILL_TARGET_VOLUME, requested))
 
     async def set_maximum_temperature(self, temperature: float) -> float:
-        requested = _round_to_half_c(_clamp(float(temperature), 20.0, 60.0))
+        requested = _round_to_half_c(_clamp(float(temperature), 30.0, 50.0))
         return float(await self.write_odb_value(ID_MAX_TEMPERATURE, requested))
 
     async def set_eco_mode(self, enabled: bool) -> bool:
         return bool(await self.write_odb_value(ID_ECO_MODE, bool(enabled)))
 
     async def set_eco_flow_limit(self, liters_per_minute: float) -> float:
-        requested = _round_to_half_c(_clamp(float(liters_per_minute), 1.0, 20.0))
-        return float(await self.write_odb_value(ID_ECO_FLOW_LIMIT, requested))
+        requested_l_min = int(round(_clamp(float(liters_per_minute), 6.0, 8.0)))
+        raw_value = requested_l_min * 10
+        return float(await self.write_odb_value(ID_ECO_FLOW_LIMIT, raw_value))
 
     async def _run_loop(self) -> None:
         while not self._stopped.is_set():
@@ -470,6 +471,8 @@ class DHEClient:
     def _convert_odb_value(odb_id: int, raw_value: Any) -> ODBValue:
         if odb_id in {ID_BATH_FILL_ACTIVE, ID_ECO_MODE}:
             return _raw_to_bool(raw_value)
+        if odb_id == ID_ECO_FLOW_LIMIT:
+            return float(raw_value) / 10.0
         return float(raw_value)
 
     @staticmethod
