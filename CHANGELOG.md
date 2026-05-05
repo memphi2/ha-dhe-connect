@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.8
+## 0.5.2
 
 - Remove the configurable 600-second value polling interval.
 - Request ODB values once after session startup and rely on incoming DHE messages afterward.

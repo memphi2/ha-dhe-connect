@@ -1,4 +1,4 @@
-# Release v0.4.8
+# Release v0.5.2
 
 ## Contents
 
