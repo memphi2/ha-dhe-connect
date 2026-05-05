@@ -16,10 +16,12 @@ Experimental custom integration. Tested against a locally reachable DHE Connect 
 - Token is stored locally in Home Assistant.
 - Keeps one Socket.IO / Engine.IO long-polling session open after Home Assistant starts.
 - Responds to Engine.IO pings and reconnects automatically if the DHE closes the session.
+- Reads configured device power from ODB ID `20` once after the integration session starts.
 - Polls ODB IDs `0`, `15` and `16` at the configured interval, default `600` seconds.
 - Writes temperature changes through ODB ID `66` and reads back ODB ID `0` on the existing session.
 - Sensor `Current water consumption`: ODB ID `15` / `10` in `L/min`.
-- Sensor `Current power consumption`: ODB ID `16` / `100` * `24` in `kW`.
+- Sensor `Configured power`: ODB ID `20` in `kW`.
+- Sensor `Current power consumption`: ODB ID `16` / `100` * configured power in `kW`.
 - Keeps entities visible; availability is based on the persistent DHE session instead of a separate HTTP ping.
 - Home Assistant UI strings are available in English and German.
 
@@ -30,9 +32,10 @@ Experimental custom integration. Tested against a locally reachable DHE Connect 
 | Read displayed target temperature | `get:ste.common.odb:value` | `0` |
 | Read current water consumption | `get:ste.common.odb:value` | `15` |
 | Read current power consumption | `get:ste.common.odb:value` | `16` |
+| Read configured power | `get:ste.common.odb:value` | `20` |
 | Set displayed target temperature | `assign:ste.common.odb:value` | `66` |
 
-Temperature values are transferred in tenths of a degree, for example `345` for `34.5 degrees C`. Current water consumption is calculated as `ODB ID 15 / 10` in `L/min`. Current power consumption is calculated as `ODB ID 16 / 100 * 24` in `kW`. Writes through ID `66` also use the request addressing known from the DHE web UI in the upper bits.
+Temperature values are transferred in tenths of a degree, for example `345` for `34.5 degrees C`. Current water consumption is calculated as `ODB ID 15 / 10` in `L/min`. Configured power is read from ODB ID `20` once after startup and is expected to be `18` through `24 kW`. Current power consumption is calculated as `ODB ID 16 / 100 * configured power` in `kW`. Writes through ID `66` also use the request addressing known from the DHE web UI in the upper bits.
 
 ## HACS Installation
 
@@ -92,6 +95,7 @@ Since v0.4.0 the integration keeps one Socket.IO / Engine.IO v3 long-polling ses
 
 - Startup: open session, check or refresh token, authenticate.
 - Runtime: keep long-polling GETs open and answer Engine.IO pings.
+- After startup: read configured power from ODB ID `20`.
 - Every configured `poll_interval` seconds: read ODB IDs `0`, `15` and `16`.
 - Temperature change: write ODB ID `66` through the same session and read back ODB ID `0`.
 - Session close: entity becomes temporarily unavailable or reconnecting, then reconnects automatically.

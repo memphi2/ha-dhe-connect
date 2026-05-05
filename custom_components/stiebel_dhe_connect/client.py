@@ -3,8 +3,9 @@
 Design for this integration version:
 - A single Engine.IO/Socket.IO long-polling session is kept open while Home Assistant runs.
 - The client continuously long-polls the DHE and handles Engine.IO ping/pong frames.
-- The setpoint, water flow and power values are polled through ODB ids at the configured
-  interval, default 600 seconds.
+- The configured power is read once after session startup. Setpoint, water flow and
+  live power usage values are polled through ODB ids at the configured interval,
+  default 600 seconds.
 - Writes use the same open session whenever possible: ODB id 66 is written, then ODB id 0
   is requested as readback.
 - If the DHE closes the session, the client marks the entity unavailable and reconnects.
@@ -35,7 +36,10 @@ NS = "1.0.0"
 ID_SETPOINT = 0
 ID_WATER_FLOW = 15
 ID_POWER = 16
+ID_CONFIGURED_POWER = 20
 ID_SET_REQ = 66
+DEFAULT_CONFIGURED_POWER_KW = 24.0
+STARTUP_VALUE_IDS = (ID_CONFIGURED_POWER,)
 POLL_VALUE_IDS = (ID_SETPOINT, ID_WATER_FLOW, ID_POWER)
 
 SetpointCallback = Callable[[float], None]
@@ -122,6 +126,8 @@ class DHEClient:
         self._available = False
         self._last_setpoint: float | None = None
         self._last_measurements: dict[int, float] = {}
+        self._configured_power_kw = DEFAULT_CONFIGURED_POWER_KW
+        self._last_power_fraction: float | None = None
         self._pending_setpoint_future: asyncio.Future[float] | None = None
         self._pending_expected_setpoint: float | None = None
         self._last_poll_request = 0.0
@@ -275,6 +281,7 @@ class DHEClient:
                 self._ready.set()
                 self._set_available(True)
                 self._last_poll_request = 0.0
+                await self._request_startup_values(self._ctx)
                 await self._request_polled_values(self._ctx)
 
                 while not self._stopped.is_set() and self._ctx is not None:
@@ -426,7 +433,19 @@ class DHEClient:
         elif odb_id == ID_WATER_FLOW:
             self._handle_measurement(odb_id, raw / 10.0)
         elif odb_id == ID_POWER:
-            self._handle_measurement(odb_id, raw / 100.0 * 24.0)
+            self._last_power_fraction = raw / 100.0
+            self._handle_measurement(
+                odb_id,
+                self._last_power_fraction * self._configured_power_kw,
+            )
+        elif odb_id == ID_CONFIGURED_POWER:
+            self._configured_power_kw = self._raw_configured_power_to_kw(raw)
+            self._handle_measurement(odb_id, self._configured_power_kw)
+            if self._last_power_fraction is not None:
+                self._handle_measurement(
+                    ID_POWER,
+                    self._last_power_fraction * self._configured_power_kw,
+                )
 
     def _handle_setpoint(self, value: float) -> None:
         previous = self._last_setpoint
@@ -450,6 +469,22 @@ class DHEClient:
         for callback in tuple(self._measurement_callbacks):
             callback(odb_id, value)
 
+    @staticmethod
+    def _raw_configured_power_to_kw(raw: int | float) -> float:
+        """Convert ODB id 20 to configured DHE power in kW."""
+        value = float(raw)
+        if 18.0 <= value <= 24.0:
+            return value
+        if 180.0 <= value <= 240.0:
+            return value / 10.0
+        if 1800.0 <= value <= 2400.0:
+            return value / 100.0
+        _LOGGER.warning(
+            "Ignoring unexpected configured DHE power value from ODB id 20: %s",
+            raw,
+        )
+        return DEFAULT_CONFIGURED_POWER_KW
+
     async def _request_setpoint(self, ctx: DHESession) -> None:
         """Request ODB id 0 setpoint on the persistent session."""
         self._last_poll_request = time.monotonic()
@@ -460,6 +495,12 @@ class DHEClient:
         self._last_poll_request = time.monotonic()
         for odb_id in POLL_VALUE_IDS:
             await self._request_odb_value(ctx, odb_id)
+
+    async def _request_startup_values(self, ctx: DHESession) -> None:
+        """Request ODB values that only need to be read after session startup."""
+        for odb_id in STARTUP_VALUE_IDS:
+            if odb_id not in self._last_measurements:
+                await self._request_odb_value(ctx, odb_id)
 
     async def _request_odb_value(self, ctx: DHESession, odb_id: int) -> None:
         """Request one ODB value on the persistent session."""
