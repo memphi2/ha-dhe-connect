@@ -8,11 +8,14 @@ The integration is intended for use on a trusted local network. It exposes a `cl
 
 Experimental custom integration. Tested against a locally reachable DHE Connect on port `8443`.
 
-## Version 0.6.7 focus
+## Version 0.6.8 focus
 
-- Brush timer and shower timer activation switches are normal Home Assistant device controls, not configuration entities.
-- Brush timer and shower timer remaining sensors stay available and continue to display `remainingMilliseconds` as minutes.
-- Timer reset buttons use stable, timer-specific icons.
+- Adds explicit start and stop button entities for the brush timer.
+- Adds explicit start and stop button entities for the shower timer.
+- Limits brush and shower timer duration numbers to a maximum of 20 minutes.
+- Displays brush and shower timer remaining time as `M:SS`.
+- Keeps the existing timer activation switches, duration numbers, remaining sensors and reset buttons.
+- Adds English and German translations for the new timer start/stop buttons.
 
 ## Features
 
@@ -52,8 +55,8 @@ Experimental custom integration. Tested against a locally reachable DHE Connect 
 | Energy consumption week | `set:ste.app.consumption:energyWeek`, chart sum in `kWh`, EUR sum as `cost_eur` |
 | Energy consumption year | `set:ste.app.consumption:energyYear`, chart sum in `kWh`, EUR sum as `cost_eur` |
 | Energy consumption years | `set:ste.app.consumption:energyYears`, chart sum in `kWh`, EUR sum as `cost_eur` |
-| Brush timer remaining | `set:ste.app.brushTimer:remainingMilliseconds`, displayed in minutes |
-| Shower timer remaining | `set:ste.app.showerTimer:remainingMilliseconds`, displayed in minutes |
+| Brush timer remaining | `set:ste.app.brushTimer:remainingMilliseconds`, displayed as `M:SS` |
+| Shower timer remaining | `set:ste.app.showerTimer:remainingMilliseconds`, displayed as `M:SS` |
 
 ### Controls
 
@@ -65,10 +68,14 @@ Experimental custom integration. Tested against a locally reachable DHE Connect 
 | Eco flow limit | Number | ODB ID `7`, raw `/ 10`, selectable as `6`, `7` or `8 L/min` |
 | Maximum temperature | Number | ODB ID `5`, selectable from `30` to `50 degrees C` |
 | Bath fill target volume | Number | ODB ID `3` in `L` |
-| Brush timer duration | Number | `assign:ste.app.brushTimer:durationMilliseconds`, displayed in minutes |
-| Shower timer duration | Number | `assign:ste.app.showerTimer:durationMilliseconds`, displayed in minutes |
+| Brush timer duration | Number | `assign:ste.app.brushTimer:durationMilliseconds`, displayed in minutes, maximum `20 min` |
+| Shower timer duration | Number | `assign:ste.app.showerTimer:durationMilliseconds`, displayed in minutes, maximum `20 min` |
 | Start bath fill | Button | ODB ID `1` with `true` |
 | Stop bath fill | Button | ODB ID `1` with `false` |
+| Start brush timer | Button | `assign:ste.app.brushTimer:activation` with `true` |
+| Stop brush timer | Button | `assign:ste.app.brushTimer:activation` with `false` |
+| Start shower timer | Button | `assign:ste.app.showerTimer:activation` with `true` |
+| Stop shower timer | Button | `assign:ste.app.showerTimer:activation` with `false` |
 | Reset brush timer | Button | `assign:ste.app.brushTimer:reset` |
 | Reset shower timer | Button | `assign:ste.app.showerTimer:reset` |
 
@@ -98,12 +105,12 @@ The DHE exposes both app timer paths below. The integration keeps them as separa
 | Purpose | Command | Scaling / value |
 |---|---|---|
 | Enable / disable brush timer | `assign:ste.app.brushTimer:activation` | `true` / `false` |
-| Set brush timer duration | `assign:ste.app.brushTimer:durationMilliseconds` | milliseconds, displayed as minutes |
-| Read brush timer remaining time | `set:ste.app.brushTimer:remainingMilliseconds` | milliseconds, displayed as minutes |
+| Set brush timer duration | `assign:ste.app.brushTimer:durationMilliseconds` | milliseconds, displayed as minutes, maximum `20 min` |
+| Read brush timer remaining time | `set:ste.app.brushTimer:remainingMilliseconds` | milliseconds, displayed as `M:SS` |
 | Reset brush timer | `assign:ste.app.brushTimer:reset` | `true`, clears remaining time locally |
 | Enable / disable shower timer | `assign:ste.app.showerTimer:activation` | `true` / `false` |
-| Set shower timer duration | `assign:ste.app.showerTimer:durationMilliseconds` | milliseconds, displayed as minutes |
-| Read shower timer remaining time | `set:ste.app.showerTimer:remainingMilliseconds` | milliseconds, displayed as minutes |
+| Set shower timer duration | `assign:ste.app.showerTimer:durationMilliseconds` | milliseconds, displayed as minutes, maximum `20 min` |
+| Read shower timer remaining time | `set:ste.app.showerTimer:remainingMilliseconds` | milliseconds, displayed as `M:SS` |
 | Reset shower timer | `assign:ste.app.showerTimer:reset` | `true`, clears remaining time locally |
 
 The observed Socket.IO wire format for the app timers is documented in [`APP_TIMER_PROTOCOL.md`](../../APP_TIMER_PROTOCOL.md).
@@ -212,7 +219,7 @@ Common issues:
 | Pairing keeps repeating | Delete the token file and pair once again |
 | Writing fails | Check whether the DHE is locally reachable on port `8443` |
 | Temperature does not change | Check DHE limits, locks or device mode |
-| Timer switch missing in device controls | Update to `0.6.7` or newer and reload the integration |
+| Timer start/stop buttons missing in device controls | Update to `0.6.8` or newer and reload the integration |
 | Timer reset does not change immediately | Check whether the DHE accepts the matching `brushTimer` or `showerTimer` reset command |
 
 ## Startup behavior

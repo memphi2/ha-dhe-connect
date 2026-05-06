@@ -4,11 +4,11 @@ Local Home Assistant integration for Stiebel Eltron DHE Connect devices.
 
 Repository: `memphi2/ha-dhe-connect`.
 
-## 0.6.7
+## 0.6.8
 
-This version shows the brush timer and shower timer activation switches as normal Home Assistant device controls. The timer remaining sensors stay available and continue to display the DHE app timer `remainingMilliseconds` values in minutes.
+This version adds explicit start and stop button entities for the brush timer and shower timer. The timer activation switches remain available.
 
-Timer reset buttons use stable timer-specific icons. The shower timer activation switch uses `mdi:shower-head`.
+Brush and shower timer duration numbers are limited to a maximum of `20 min`. Brush and shower timer remaining sensors display their value as `M:SS`.
 
 ## Functionality
 
@@ -16,6 +16,6 @@ The integration keeps one Socket.IO / Engine.IO v3 long-polling connection open,
 
 Temperature writes use ODB ID `66` with readback through ODB ID `0`. Eco mode, Eco flow limit, maximum temperature and bath-fill controls use the corresponding writable ODB IDs, request readback after assignment and wait for DHE confirmation.
 
-The integration handles both DHE app timer paths, `ste.app.brushTimer` and `ste.app.showerTimer`, as separate Home Assistant entities for activation, duration, reset and remaining time. Timer durations and remaining times are transferred in milliseconds and displayed in minutes.
+The integration handles both DHE app timer paths, `ste.app.brushTimer` and `ste.app.showerTimer`, as separate Home Assistant entities for activation, duration, reset and remaining time.
 
 Water and energy consumption messages from `ste.app.consumption` are requested after startup and exposed as week, year and multi-year sensors. The DHE chart values are summed as the sensor state, while the EUR total sent as `sum` is exposed as the `cost_eur` attribute.

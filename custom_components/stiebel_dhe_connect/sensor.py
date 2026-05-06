@@ -141,9 +141,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
     StiebelDHESensorEntityDescription(
         key="brush_timer_remaining",
         translation_key="brush_timer_remaining",
-        native_unit_of_measurement=UnitOfTime.MINUTES,
         icon="mdi:toothbrush",
-        state_class=SensorStateClass.MEASUREMENT,
         odb_id=ID_BRUSH_TIMER_REMAINING,
         timer_path=BRUSH_TIMER_PATH,
         timer_property="remainingMilliseconds",
@@ -151,9 +149,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
     StiebelDHESensorEntityDescription(
         key="shower_timer_remaining",
         translation_key="shower_timer_remaining",
-        native_unit_of_measurement=UnitOfTime.MINUTES,
         icon="mdi:timer-sand",
-        state_class=SensorStateClass.MEASUREMENT,
         odb_id=ID_SHOWER_TIMER_REMAINING,
         timer_path=SHOWER_TIMER_PATH,
         timer_property="remainingMilliseconds",
@@ -220,7 +216,7 @@ class StiebelDHESensor(SensorEntity):
         self._attr_extra_state_attributes = dict(self._base_extra_state_attributes)
         self._client = client
         self._attr_available = False
-        self._attr_native_value: float | None = None
+        self._attr_native_value: float | str | None = None
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE measurements and start the persistent session."""
@@ -233,11 +229,20 @@ class StiebelDHESensor(SensorEntity):
 
         last_value = self._client.last_measurements.get(self.entity_description.odb_id)
         if last_value is not None:
-            self._attr_native_value = last_value
+            self._attr_native_value = self._convert_value(last_value)
             self._attr_available = True
             self._update_extra_state_attributes()
 
         await self._client.start()
+
+    def _convert_value(self, value: float) -> float | str:
+        """Convert the raw client value for display."""
+        if not self.entity_description.timer_path:
+            return value
+
+        total_seconds = max(0, int(round(float(value) * 60)))
+        minutes, seconds = divmod(total_seconds, 60)
+        return f"{minutes}:{seconds:02d}"
 
     def _update_extra_state_attributes(self) -> None:
         """Update static and dynamic sensor attributes."""
@@ -251,7 +256,7 @@ class StiebelDHESensor(SensorEntity):
         if odb_id != self.entity_description.odb_id:
             return
 
-        self._attr_native_value = value
+        self._attr_native_value = self._convert_value(value)
         self._attr_available = True
         self._update_extra_state_attributes()
         self.async_write_ha_state()

@@ -4,6 +4,8 @@
 
 - Add explicit start and stop button entities for the brush timer.
 - Add explicit start and stop button entities for the shower timer.
+- Limit brush and shower timer duration numbers to a maximum of 20 minutes.
+- Display brush and shower timer remaining time as `M:SS` instead of numeric minutes.
 - Keep the existing timer activation switches, duration numbers, remaining sensors and reset buttons.
 - Add English and German translations for the new timer start/stop buttons.
 
