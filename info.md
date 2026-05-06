@@ -4,9 +4,9 @@ Local Home Assistant integration for Stiebel Eltron DHE Connect instantaneous wa
 
 Repository: `memphi2/ha-dhe-connect`.
 
-## Version 0.7.0
+## Version 0.7.3
 
-This release cleans up the repository documentation and keeps the current feature set documented consistently.
+This release removes obsolete separate stop button entities for the app timers. The brush timer and shower timer switches start and stop the timers.
 
 ## Functionality
 
@@ -14,7 +14,7 @@ This release cleans up the repository documentation and keeps the current featur
 - Target-temperature climate control.
 - Sensors for current water flow, current power, configured power and DHE app consumption charts.
 - Controls for Eco mode, Eco flow limit, maximum temperature and bath fill.
-- Brush timer and shower timer switches, duration numbers, remaining sensors and start/stop/reset buttons.
+- Brush timer and shower timer switches, duration numbers, remaining sensors and start/reset buttons.
 - Timer durations are limited to `20 min`.
 - Timer remaining sensors are displayed as `M:SS`.
 - English and German Home Assistant translations.
