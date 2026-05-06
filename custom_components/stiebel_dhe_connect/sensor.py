@@ -11,7 +11,13 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfPower, UnitOfTime, UnitOfVolumeFlowRate
+from homeassistant.const import (
+    UnitOfEnergy,
+    UnitOfPower,
+    UnitOfTime,
+    UnitOfVolume,
+    UnitOfVolumeFlowRate,
+)
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -20,8 +26,14 @@ from .client import (
     DHEClient,
     ID_BRUSH_TIMER_REMAINING,
     ID_CONFIGURED_POWER,
+    ID_ENERGY_CONSUMPTION_WEEK,
+    ID_ENERGY_CONSUMPTION_YEAR,
+    ID_ENERGY_CONSUMPTION_YEARS,
     ID_POWER,
     ID_SHOWER_TIMER_REMAINING,
+    ID_WATER_CONSUMPTION_WEEK,
+    ID_WATER_CONSUMPTION_YEAR,
+    ID_WATER_CONSUMPTION_YEARS,
     ID_WATER_FLOW,
     SHOWER_TIMER_PATH,
 )
@@ -35,6 +47,8 @@ class StiebelDHESensorEntityDescription(SensorEntityDescription):
     odb_id: int
     timer_path: str | None = None
     timer_property: str | None = None
+    source_command: str | None = None
+    period: str | None = None
 
 
 SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
@@ -60,6 +74,69 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         device_class=SensorDeviceClass.POWER,
         odb_id=ID_CONFIGURED_POWER,
+    ),
+    StiebelDHESensorEntityDescription(
+        key="water_consumption_week",
+        translation_key="water_consumption_week",
+        native_unit_of_measurement=UnitOfVolume.LITERS,
+        device_class=SensorDeviceClass.VOLUME,
+        state_class=SensorStateClass.TOTAL,
+        icon="mdi:water",
+        odb_id=ID_WATER_CONSUMPTION_WEEK,
+        source_command="set:ste.app.consumption:waterWeek",
+        period="week",
+    ),
+    StiebelDHESensorEntityDescription(
+        key="water_consumption_year",
+        translation_key="water_consumption_year",
+        native_unit_of_measurement=UnitOfVolume.CUBIC_METERS,
+        device_class=SensorDeviceClass.VOLUME,
+        state_class=SensorStateClass.TOTAL,
+        icon="mdi:water",
+        odb_id=ID_WATER_CONSUMPTION_YEAR,
+        source_command="set:ste.app.consumption:waterYear",
+        period="year",
+    ),
+    StiebelDHESensorEntityDescription(
+        key="water_consumption_years",
+        translation_key="water_consumption_years",
+        native_unit_of_measurement=UnitOfVolume.CUBIC_METERS,
+        device_class=SensorDeviceClass.VOLUME,
+        state_class=SensorStateClass.TOTAL,
+        icon="mdi:water",
+        odb_id=ID_WATER_CONSUMPTION_YEARS,
+        source_command="set:ste.app.consumption:waterYears",
+        period="years",
+    ),
+    StiebelDHESensorEntityDescription(
+        key="energy_consumption_week",
+        translation_key="energy_consumption_week",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        odb_id=ID_ENERGY_CONSUMPTION_WEEK,
+        source_command="set:ste.app.consumption:energyWeek",
+        period="week",
+    ),
+    StiebelDHESensorEntityDescription(
+        key="energy_consumption_year",
+        translation_key="energy_consumption_year",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        odb_id=ID_ENERGY_CONSUMPTION_YEAR,
+        source_command="set:ste.app.consumption:energyYear",
+        period="year",
+    ),
+    StiebelDHESensorEntityDescription(
+        key="energy_consumption_years",
+        translation_key="energy_consumption_years",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        odb_id=ID_ENERGY_CONSUMPTION_YEARS,
+        source_command="set:ste.app.consumption:energyYears",
+        period="years",
     ),
     StiebelDHESensorEntityDescription(
         key="brush_timer_remaining",
@@ -129,12 +206,18 @@ class StiebelDHESensor(SensorEntity):
             "name": name,
         }
         if description.timer_path:
-            self._attr_extra_state_attributes = {
+            self._base_extra_state_attributes = {
                 "timer_path": description.timer_path,
                 "timer_property": description.timer_property,
             }
+        elif description.source_command:
+            self._base_extra_state_attributes = {
+                "source_command": description.source_command,
+                "period": description.period,
+            }
         else:
-            self._attr_extra_state_attributes = {"odb_id": description.odb_id}
+            self._base_extra_state_attributes = {"odb_id": description.odb_id}
+        self._attr_extra_state_attributes = dict(self._base_extra_state_attributes)
         self._client = client
         self._attr_available = False
         self._attr_native_value: float | None = None
@@ -152,8 +235,15 @@ class StiebelDHESensor(SensorEntity):
         if last_value is not None:
             self._attr_native_value = last_value
             self._attr_available = True
+            self._update_extra_state_attributes()
 
         await self._client.start()
+
+    def _update_extra_state_attributes(self) -> None:
+        """Update static and dynamic sensor attributes."""
+        attributes = dict(self._base_extra_state_attributes)
+        attributes.update(self._client.last_measurement_attributes.get(self.entity_description.odb_id, {}))
+        self._attr_extra_state_attributes = attributes
 
     @callback
     def _handle_measurement_update(self, odb_id: int, value: float) -> None:
@@ -163,6 +253,7 @@ class StiebelDHESensor(SensorEntity):
 
         self._attr_native_value = value
         self._attr_available = True
+        self._update_extra_state_attributes()
         self.async_write_ha_state()
 
     @callback

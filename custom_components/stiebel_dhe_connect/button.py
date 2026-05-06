@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from homeassistant.components.button import ButtonEntity, ButtonEntityDescription
@@ -11,7 +10,16 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .client import DHEClient, DHEError, ID_BATH_FILL_ACTIVE, ODBValue
+from .client import (
+    BRUSH_TIMER_PATH,
+    DHEClient,
+    DHEError,
+    ID_BATH_FILL_ACTIVE,
+    ID_BRUSH_TIMER_ACTIVATION,
+    ID_SHOWER_TIMER_ACTIVATION,
+    ODBValue,
+    SHOWER_TIMER_PATH,
+)
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -21,22 +29,45 @@ _LOGGER = logging.getLogger(__name__)
 class StiebelDHEButtonEntityDescription(ButtonEntityDescription):
     """Describe a DHE action button."""
 
-    action: str
+    method: str
     icon: str
+    availability_measurement_id: int | None = None
+    timer_path: str | None = None
+    timer_property: str | None = None
 
 
 BUTTON_DESCRIPTIONS: tuple[StiebelDHEButtonEntityDescription, ...] = (
     StiebelDHEButtonEntityDescription(
         key="start_bath_fill",
         translation_key="start_bath_fill",
-        action="start",
+        method="start_bath_fill",
         icon="mdi:bathtub",
+        availability_measurement_id=ID_BATH_FILL_ACTIVE,
     ),
     StiebelDHEButtonEntityDescription(
         key="stop_bath_fill",
         translation_key="stop_bath_fill",
-        action="stop",
+        method="stop_bath_fill",
         icon="mdi:stop-circle-outline",
+        availability_measurement_id=ID_BATH_FILL_ACTIVE,
+    ),
+    StiebelDHEButtonEntityDescription(
+        key="reset_brush_timer",
+        translation_key="reset_brush_timer",
+        method="reset_brush_timer",
+        icon="mdi:toothbrush-off",
+        availability_measurement_id=ID_BRUSH_TIMER_ACTIVATION,
+        timer_path=BRUSH_TIMER_PATH,
+        timer_property="reset",
+    ),
+    StiebelDHEButtonEntityDescription(
+        key="reset_shower_timer",
+        translation_key="reset_shower_timer",
+        method="reset_shower_timer",
+        icon="mdi:timer-remove-outline",
+        availability_measurement_id=ID_SHOWER_TIMER_ACTIVATION,
+        timer_path=SHOWER_TIMER_PATH,
+        timer_property="reset",
     ),
 )
 
@@ -86,10 +117,16 @@ class StiebelDHEButton(ButtonEntity):
             "model": "DHE Connect",
             "name": name,
         }
-        self._attr_extra_state_attributes = {"odb_id": ID_BATH_FILL_ACTIVE}
+        if description.timer_path:
+            self._attr_extra_state_attributes = {
+                "timer_path": description.timer_path,
+                "timer_property": description.timer_property,
+            }
+        else:
+            self._attr_extra_state_attributes = {"odb_id": ID_BATH_FILL_ACTIVE}
         self._client = client
         self._attr_available = False
-        self._has_seen_bath_fill_state = False
+        self._has_seen_availability_state = False
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to availability updates and start the persistent session."""
@@ -99,8 +136,12 @@ class StiebelDHEButton(ButtonEntity):
         self.async_on_remove(
             self._client.add_availability_callback(self._handle_availability_update)
         )
-        if self._client.last_measurements.get(ID_BATH_FILL_ACTIVE) is not None:
-            self._has_seen_bath_fill_state = True
+        availability_measurement_id = self.entity_description.availability_measurement_id
+        if (
+            availability_measurement_id is not None
+            and self._client.last_measurements.get(availability_measurement_id) is not None
+        ):
+            self._has_seen_availability_state = True
             self._attr_available = True
         else:
             self._attr_available = self._client.available
@@ -108,22 +149,18 @@ class StiebelDHEButton(ButtonEntity):
 
     @callback
     def _handle_measurement_update(self, odb_id: int, value: ODBValue) -> None:
-        """Track whether the heater has delivered any bath-fill state."""
-        if odb_id != ID_BATH_FILL_ACTIVE:
+        """Track whether the heater has delivered a related state."""
+        if odb_id != self.entity_description.availability_measurement_id:
             return
-        self._has_seen_bath_fill_state = True
+        self._has_seen_availability_state = True
         self._attr_available = True
         self.async_write_ha_state()
 
     async def async_press(self) -> None:
         """Execute the DHE button action."""
         try:
-            action: Callable[[], Awaitable[bool]]
-            if self.entity_description.action == "start":
-                action = self._client.start_bath_fill
-            else:
-                action = self._client.stop_bath_fill
-            await action()
+            method = getattr(self._client, self.entity_description.method)
+            await method()
         except DHEError as err:
             _LOGGER.error("Could not execute DHE button %s: %s", self.entity_description.key, err)
             raise
@@ -131,5 +168,5 @@ class StiebelDHEButton(ButtonEntity):
     @callback
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
-        self._attr_available = available or self._has_seen_bath_fill_state
+        self._attr_available = available or self._has_seen_availability_state
         self.async_write_ha_state()

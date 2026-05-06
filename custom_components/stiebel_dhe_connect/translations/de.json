@@ -45,6 +45,12 @@
       },
       "stop_bath_fill": {
         "name": "Wannenfüllung stoppen"
+      },
+      "reset_brush_timer": {
+        "name": "Zahnputz-Timer zurücksetzen"
+      },
+      "reset_shower_timer": {
+        "name": "Duschtimer zurücksetzen"
       }
     },
     "number": {
@@ -73,6 +79,24 @@
       },
       "configured_power": {
         "name": "Eingestellte Leistung"
+      },
+      "water_consumption_week": {
+        "name": "Wasserverbrauch Woche"
+      },
+      "water_consumption_year": {
+        "name": "Wasserverbrauch Jahr"
+      },
+      "water_consumption_years": {
+        "name": "Wasserverbrauch Jahre"
+      },
+      "energy_consumption_week": {
+        "name": "Energieverbrauch Woche"
+      },
+      "energy_consumption_year": {
+        "name": "Energieverbrauch Jahr"
+      },
+      "energy_consumption_years": {
+        "name": "Energieverbrauch Jahre"
       },
       "brush_timer_remaining": {
         "name": "Zahnputz-Timer Restzeit"

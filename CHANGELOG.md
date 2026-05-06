@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.5
+
+- Add week, year and multi-year water consumption sensors from DHE app consumption messages.
+- Add week, year and multi-year energy consumption sensors from DHE app consumption messages.
+- Request the DHE app consumption values once after session startup.
+- Store the DHE chart values and EUR sum as sensor attributes for the consumption entities.
+- Document the `ste.app.consumption` message commands and their units.
+- Request app timer activation, duration and remaining-time values once after session startup.
+- Add reset buttons for brush timer and shower timer.
+- Send DHE app timer messages with Socket.IO message ids matching the web UI format.
+- Keep app timer setting entities on the requested value if the DHE performs the command but does not send a matching app confirmation event.
+
 ## 0.6.4
 
 - Support optional DHE `websocketSid` values in polling URLs.
