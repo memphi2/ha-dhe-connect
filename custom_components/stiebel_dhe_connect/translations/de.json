@@ -49,14 +49,8 @@
       "start_brush_timer": {
         "name": "Zahnputz-Timer starten"
       },
-      "stop_brush_timer": {
-        "name": "Zahnputz-Timer stoppen"
-      },
       "start_shower_timer": {
         "name": "Duschtimer starten"
-      },
-      "stop_shower_timer": {
-        "name": "Duschtimer stoppen"
       },
       "reset_brush_timer": {
         "name": "Zahnputz-Timer zurücksetzen"
