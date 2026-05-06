@@ -1,14 +1,14 @@
-# Release v0.7.1
+# Release v0.7.2
 
 ## Summary
 
-Bugfix release for Home Assistant startup with app timer switch entities.
+HACS/Home Assistant guideline cleanup release.
 
 ## Changes
 
-- Fix `AttributeError: 'StiebelDHEAppTimerSwitchDescription' object has no attribute 'device_class'` during switch entity setup.
-- Make the app timer switch description extend Home Assistant's `SwitchEntityDescription`.
-- Keep the `0.7.0` documentation cleanup and current timer behavior unchanged.
+- Remove `custom_components/stiebel_dhe_connect/strings.json` because custom integrations should use `translations/*.json` for UI translations.
+- Keep the existing complete English and German translation files.
+- Bump integration version to `0.7.2`.
 
 ## Installation via HACS custom repository
 
