@@ -56,6 +56,9 @@
       },
       "eco_flow_limit": {
         "name": "Eco-Durchflussbegrenzung"
+      },
+      "shower_timer_duration": {
+        "name": "Duschtimer-Dauer"
       }
     },
     "sensor": {
@@ -67,11 +70,17 @@
       },
       "configured_power": {
         "name": "Eingestellte Leistung"
+      },
+      "shower_timer_remaining": {
+        "name": "Duschtimer Restzeit"
       }
     },
     "switch": {
       "eco_mode": {
         "name": "Eco-Modus"
+      },
+      "shower_timer_activation": {
+        "name": "Duschtimer"
       }
     }
   }

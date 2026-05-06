@@ -56,6 +56,9 @@
       },
       "eco_flow_limit": {
         "name": "Eco flow limit"
+      },
+      "shower_timer_duration": {
+        "name": "Shower timer duration"
       }
     },
     "sensor": {
@@ -67,11 +70,17 @@
       },
       "configured_power": {
         "name": "Configured power"
+      },
+      "shower_timer_remaining": {
+        "name": "Shower timer remaining"
       }
     },
     "switch": {
       "eco_mode": {
         "name": "Eco mode"
+      },
+      "shower_timer_activation": {
+        "name": "Shower timer"
       }
     }
   }

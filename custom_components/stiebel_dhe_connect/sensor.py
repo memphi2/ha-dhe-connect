@@ -11,11 +11,11 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfPower, UnitOfVolumeFlowRate
+from homeassistant.const import UnitOfPower, UnitOfTime, UnitOfVolumeFlowRate
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .client import DHEClient, ID_CONFIGURED_POWER, ID_POWER, ID_WATER_FLOW
+from .client import DHEClient, ID_CONFIGURED_POWER, ID_POWER, ID_SHOWER_TIMER_REMAINING_MS, ID_WATER_FLOW
 from .const import DOMAIN
 
 
@@ -49,6 +49,14 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         device_class=SensorDeviceClass.POWER,
         odb_id=ID_CONFIGURED_POWER,
+    ),
+    StiebelDHESensorEntityDescription(
+        key="shower_timer_remaining",
+        translation_key="shower_timer_remaining",
+        native_unit_of_measurement=UnitOfTime.MINUTES,
+        icon="mdi:timer-sand",
+        state_class=SensorStateClass.MEASUREMENT,
+        odb_id=ID_SHOWER_TIMER_REMAINING_MS,
     ),
 )
 
