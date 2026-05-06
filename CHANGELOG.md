@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.6
+
+- Document the observed DHE app timer Socket.IO wire format.
+- Keep brush and shower timer remaining sensors in scope.
+- Clarify app timer activation start/stop commands and `set:` confirmation messages.
+- Use a shower-specific icon for the shower timer activation switch.
+
 ## 0.6.5
 
 - Add week, year and multi-year water consumption sensors from DHE app consumption messages.
