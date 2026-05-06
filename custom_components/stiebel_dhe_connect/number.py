@@ -11,7 +11,7 @@ from homeassistant.components.number import (
     RestoreNumber,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfTemperature, UnitOfVolume, UnitOfVolumeFlowRate
+from homeassistant.const import UnitOfTemperature, UnitOfTime, UnitOfVolume, UnitOfVolumeFlowRate
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -22,6 +22,7 @@ from .client import (
     ID_BATH_FILL_TARGET_VOLUME,
     ID_ECO_FLOW_LIMIT,
     ID_MAX_TEMPERATURE,
+    ID_SHOWER_TIMER_DURATION_MS,
     ODBValue,
 )
 from .const import DOMAIN
@@ -69,6 +70,16 @@ NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         native_max_value=8.0,
         native_step=1.0,
         odb_id=ID_ECO_FLOW_LIMIT,
+    ),
+    StiebelDHENumberEntityDescription(
+        key="shower_timer_duration",
+        translation_key="shower_timer_duration",
+        native_unit_of_measurement=UnitOfTime.MINUTES,
+        icon="mdi:timer-edit",
+        native_min_value=1.0,
+        native_max_value=30.0,
+        native_step=1.0,
+        odb_id=ID_SHOWER_TIMER_DURATION_MS,
     ),
 )
 
@@ -153,6 +164,8 @@ class StiebelDHENumber(RestoreNumber):
                 confirmed = await self._client.set_maximum_temperature(value)
             elif self.entity_description.odb_id == ID_ECO_FLOW_LIMIT:
                 confirmed = await self._client.set_eco_flow_limit(value)
+            elif self.entity_description.odb_id == ID_SHOWER_TIMER_DURATION_MS:
+                confirmed = await self._client.set_shower_timer_duration_minutes(value)
             else:
                 confirmed = await self._client.write_odb_value(
                     self.entity_description.odb_id,

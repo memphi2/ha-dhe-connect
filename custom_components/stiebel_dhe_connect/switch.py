@@ -12,7 +12,7 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .client import DHEClient, DHEError, ID_ECO_MODE, ODBValue
+from .client import DHEClient, DHEError, ID_ECO_MODE, ID_SHOWER_TIMER_ACTIVATION, ODBValue
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -30,7 +30,12 @@ async def async_setup_entry(
             entry_id=entry.entry_id,
             name=runtime.name,
             client=runtime.client,
-        )
+        ),
+        StiebelDHEShowerTimerSwitch(
+            entry_id=entry.entry_id,
+            name=runtime.name,
+            client=runtime.client,
+        ),
     ])
 
 
@@ -116,4 +121,43 @@ class StiebelDHEEcoModeSwitch(SwitchEntity, RestoreEntity):
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
         self._attr_available = available or self._attr_is_on is not None
+        self.async_write_ha_state()
+
+
+class StiebelDHEShowerTimerSwitch(StiebelDHEEcoModeSwitch):
+    """Shower timer activation switch."""
+
+    _attr_translation_key = "shower_timer_activation"
+    _attr_icon = "mdi:timer-play"
+
+    def __init__(self, entry_id: str, name: str, client: DHEClient) -> None:
+        super().__init__(entry_id, name, client)
+        self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_shower_timer_activation"
+        self._attr_extra_state_attributes = {"command": "ste.app.showerTimer:activation"}
+
+    async def async_added_to_hass(self) -> None:
+        self.async_on_remove(self._client.add_measurement_callback(self._handle_measurement_update))
+        self.async_on_remove(self._client.add_availability_callback(self._handle_availability_update))
+        last_value = self._client.last_measurements.get(ID_SHOWER_TIMER_ACTIVATION)
+        if last_value is not None:
+            self._attr_is_on = bool(last_value)
+            self._attr_available = True
+        await self._client.start()
+
+    async def async_turn_on(self, **kwargs) -> None:  # noqa: ANN003
+        self._attr_is_on = await self._client.set_shower_timer_activation(True)
+        self._attr_available = True
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs) -> None:  # noqa: ANN003
+        self._attr_is_on = await self._client.set_shower_timer_activation(False)
+        self._attr_available = True
+        self.async_write_ha_state()
+
+    @callback
+    def _handle_measurement_update(self, odb_id: int, value: ODBValue) -> None:
+        if odb_id != ID_SHOWER_TIMER_ACTIVATION:
+            return
+        self._attr_is_on = bool(value)
+        self._attr_available = True
         self.async_write_ha_state()

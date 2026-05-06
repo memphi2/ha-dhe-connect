@@ -35,6 +35,9 @@ ID_WATER_FLOW = 15
 ID_POWER = 16
 ID_CONFIGURED_POWER = 20
 ID_SET_REQ = 66
+ID_SHOWER_TIMER_ACTIVATION = 1001
+ID_SHOWER_TIMER_DURATION_MS = 1002
+ID_SHOWER_TIMER_REMAINING_MS = 1003
 DEFAULT_CONFIGURED_POWER_KW = 24.0
 COMMAND_CONFIRMATION_TIMEOUT = 12.0
 COMMAND_READBACK_INTERVAL = 1.0
@@ -50,6 +53,17 @@ INITIAL_VALUE_IDS = (
     ID_POWER,
     ID_CONFIGURED_POWER,
 )
+
+SHOWER_TIMER_SET_COMMANDS = {
+    "set:ste.app.showerTimer:activation",
+    "set:ste.app.showerTimer:durationMilliseconds",
+    "set:ste.app.showerTimer:remainingMilliseconds",
+}
+SHOWER_TIMER_ASSIGN_COMMANDS = {
+    "assign:ste.app.showerTimer:activation",
+    "assign:ste.app.showerTimer:durationMilliseconds",
+}
+
 
 ODBValue = bool | float
 SetpointCallback = Callable[[float], None]
@@ -299,6 +313,45 @@ class DHEClient:
         raw_value = requested_l_min * 10
         return float(await self.write_odb_value(ID_ECO_FLOW_LIMIT, raw_value))
 
+    async def set_shower_timer_duration_minutes(self, minutes: float) -> float:
+        requested_minutes = int(round(_clamp(float(minutes), 1.0, 30.0)))
+        milliseconds = requested_minutes * 60000
+        confirmed = await self._write_app_value(
+            "assign:ste.app.showerTimer:durationMilliseconds",
+            milliseconds,
+            ID_SHOWER_TIMER_DURATION_MS,
+        )
+        return float(confirmed) / 60000.0
+
+    async def set_shower_timer_activation(self, enabled: bool) -> bool:
+        confirmed = await self._write_app_value(
+            "assign:ste.app.showerTimer:activation",
+            bool(enabled),
+            ID_SHOWER_TIMER_ACTIVATION,
+        )
+        return bool(confirmed)
+
+    async def _write_app_value(self, command: str, value: Any, measurement_id: int) -> ODBValue:
+        async with self._command_lock:
+            for attempt in range(2):
+                try:
+                    await self._ensure_ready(timeout=45)
+                    ctx = self._ctx
+                    if ctx is None:
+                        raise DHEError("DHE session is not connected")
+                    expected = bool(value) if isinstance(value, bool) else float(value)
+                    future = self._new_write_future(measurement_id, expected)
+                    await self._post_packet(ctx, self._message_packet({"command": command, "value": value}))
+                    return await self._wait_for_write_confirmation(ctx, future, measurement_id)
+                except Exception as err:  # noqa: BLE001
+                    self._clear_pending_write_future(None)
+                    if attempt == 0:
+                        await self._force_reconnect()
+                        await asyncio.sleep(1)
+                        continue
+                    raise DHEError(f"Could not write DHE app command {command}: {err}") from err
+        raise DHEError(f"Could not write DHE app command {command}")
+
     async def _run_loop(self) -> None:
         while not self._stopped.is_set():
             try:
@@ -415,14 +468,29 @@ class DHEClient:
         if event.name != "message" or not isinstance(event.data, dict):
             return
         data = event.data
+        command = data.get("command")
         value = data.get("value")
-        if data.get("command") not in {ODB_SET_COMMAND, ODB_ASSIGN_COMMAND} or not isinstance(value, dict):
+        if command in SHOWER_TIMER_SET_COMMANDS | SHOWER_TIMER_ASSIGN_COMMANDS:
+            self._handle_shower_timer_value(command, value)
+            return
+        if command not in {ODB_SET_COMMAND, ODB_ASSIGN_COMMAND} or not isinstance(value, dict):
             return
         try:
             odb_id = int(value.get("id", -1))
         except (TypeError, ValueError):
             return
         self._handle_odb_value(odb_id, value.get("value"))
+
+    def _handle_shower_timer_value(self, command: str, raw_value: Any) -> None:
+        try:
+            if command.endswith(":activation"):
+                self._handle_measurement(ID_SHOWER_TIMER_ACTIVATION, _raw_to_bool(raw_value))
+            elif command.endswith(":durationMilliseconds"):
+                self._handle_measurement(ID_SHOWER_TIMER_DURATION_MS, _raw_to_float(raw_value) / 60000.0)
+            elif command.endswith(":remainingMilliseconds"):
+                self._handle_measurement(ID_SHOWER_TIMER_REMAINING_MS, _raw_to_float(raw_value) / 60000.0)
+        except (TypeError, ValueError) as err:
+            _LOGGER.debug("Ignoring invalid shower timer value command=%s value=%r: %s", command, raw_value, err)
 
     def _handle_odb_value(self, odb_id: int, raw_value: Any) -> None:
         try:
