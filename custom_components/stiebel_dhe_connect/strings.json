@@ -45,6 +45,12 @@
       },
       "stop_bath_fill": {
         "name": "Stop bath fill"
+      },
+      "reset_brush_timer": {
+        "name": "Reset brush timer"
+      },
+      "reset_shower_timer": {
+        "name": "Reset shower timer"
       }
     },
     "number": {
@@ -73,6 +79,24 @@
       },
       "configured_power": {
         "name": "Configured power"
+      },
+      "water_consumption_week": {
+        "name": "Water consumption week"
+      },
+      "water_consumption_year": {
+        "name": "Water consumption year"
+      },
+      "water_consumption_years": {
+        "name": "Water consumption years"
+      },
+      "energy_consumption_week": {
+        "name": "Energy consumption week"
+      },
+      "energy_consumption_year": {
+        "name": "Energy consumption year"
+      },
+      "energy_consumption_years": {
+        "name": "Energy consumption years"
       },
       "brush_timer_remaining": {
         "name": "Brush timer remaining"

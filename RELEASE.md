@@ -1,4 +1,4 @@
-# Release v0.6.4
+# Release v0.6.5
 
 ## Contents
 
@@ -9,6 +9,10 @@
 - Current water flow sensor from ODB ID `15` with `flow_l_min = ODB_ID_15 / 10`.
 - Configured power sensor from ODB ID `20`.
 - Current power consumption sensor from ODB ID `16` with `power_kw = ODB_ID_16 / 100 * configured_power_kw`.
+- Water consumption sensors for week, year and multi-year DHE app consumption charts.
+- Energy consumption sensors for week, year and multi-year DHE app consumption charts.
+- Consumption values are requested once after session startup through `get:ste.app.consumption:*`.
+- Consumption sensor attributes include the raw chart values, the DHE EUR sum as `cost_eur`, and the source command.
 - Eco mode switch from ODB ID `6`.
 - Eco flow limit number from ODB ID `7`.
 - Maximum temperature number from ODB ID `5`, written as raw tenths of a degree.
@@ -22,7 +26,10 @@
 - Separate brush timer and shower timer activation switches.
 - Separate brush timer and shower timer duration numbers, displayed in minutes and written as app timer milliseconds.
 - Separate brush timer and shower timer remaining-time sensors, displayed in minutes.
-- App timer writes use matching `ste.app.brushTimer` / `ste.app.showerTimer` confirmation events instead of ODB readbacks.
+- Brush timer and shower timer reset buttons through the app timer `reset` command.
+- App timer values are requested once after startup.
+- App timer writes use Socket.IO message ids matching the DHE web UI format.
+- App timer writes use matching `ste.app.brushTimer` / `ste.app.showerTimer` confirmation events when available and keep the requested value if the DHE does not echo a matching app event.
 - UI configuration through the Home Assistant config flow.
 - English and German Home Assistant UI translations.
 - Repository metadata for `memphi2/ha-dhe-connect`.

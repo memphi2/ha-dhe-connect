@@ -41,9 +41,16 @@ ID_BRUSH_TIMER_REMAINING = 1003
 ID_SHOWER_TIMER_ACTIVATION = 1011
 ID_SHOWER_TIMER_DURATION = 1012
 ID_SHOWER_TIMER_REMAINING = 1013
+ID_WATER_CONSUMPTION_WEEK = 1021
+ID_WATER_CONSUMPTION_YEAR = 1022
+ID_WATER_CONSUMPTION_YEARS = 1023
+ID_ENERGY_CONSUMPTION_WEEK = 1031
+ID_ENERGY_CONSUMPTION_YEAR = 1032
+ID_ENERGY_CONSUMPTION_YEARS = 1033
 DEFAULT_CONFIGURED_POWER_KW = 24.0
 COMMAND_CONFIRMATION_TIMEOUT = 12.0
 COMMAND_READBACK_INTERVAL = 1.0
+APP_COMMAND_CONFIRMATION_TIMEOUT = 3.0
 AVAILABILITY_DROP_GRACE_SECONDS = 20.0
 INITIAL_VALUE_IDS = (
     ID_SETPOINT,
@@ -82,6 +89,27 @@ APP_TIMER_ASSIGN_COMMANDS = {
     for property_name in property_ids
     if property_name != "remainingMilliseconds"
 }
+APP_TIMER_RESET_COMMANDS = {
+    f"{action}:{path}:reset"
+    for action in ("set", "assign")
+    for path in TIMER_PATH_IDS
+}
+APP_TIMER_REQUEST_COMMANDS = tuple(
+    f"get:{path}:{property_name}"
+    for path, property_ids in TIMER_PATH_IDS.items()
+    for property_name in property_ids
+)
+CONSUMPTION_COMMAND_IDS = {
+    "set:ste.app.consumption:waterWeek": ID_WATER_CONSUMPTION_WEEK,
+    "set:ste.app.consumption:waterYear": ID_WATER_CONSUMPTION_YEAR,
+    "set:ste.app.consumption:waterYears": ID_WATER_CONSUMPTION_YEARS,
+    "set:ste.app.consumption:energyWeek": ID_ENERGY_CONSUMPTION_WEEK,
+    "set:ste.app.consumption:energyYear": ID_ENERGY_CONSUMPTION_YEAR,
+    "set:ste.app.consumption:energyYears": ID_ENERGY_CONSUMPTION_YEARS,
+}
+CONSUMPTION_REQUEST_COMMANDS = tuple(
+    command.replace("set:", "get:", 1) for command in CONSUMPTION_COMMAND_IDS
+)
 
 
 ODBValue = bool | float
@@ -187,6 +215,7 @@ class DHEClient:
         self._availability_drop_task: asyncio.Task[None] | None = None
         self._last_setpoint: float | None = None
         self._last_measurements: dict[int, ODBValue] = {}
+        self._last_measurement_attributes: dict[int, dict[str, Any]] = {}
         self._configured_power_kw = DEFAULT_CONFIGURED_POWER_KW
         self._last_power_fraction: float | None = None
         self._pending_setpoint_future: asyncio.Future[float] | None = None
@@ -194,6 +223,7 @@ class DHEClient:
         self._pending_write_future: asyncio.Future[ODBValue] | None = None
         self._pending_write_id: int | None = None
         self._pending_write_expected: ODBValue | None = None
+        self._socketio_message_id = random.randint(1, 99)
 
     @property
     def last_setpoint(self) -> float | None:
@@ -206,6 +236,16 @@ class DHEClient:
     @property
     def last_measurements(self) -> dict[int, ODBValue]:
         return dict(self._last_measurements)
+
+    @property
+    def last_measurement_attributes(self) -> dict[int, dict[str, Any]]:
+        return {
+            key: {
+                attr_key: list(attr_value) if isinstance(attr_value, list) else attr_value
+                for attr_key, attr_value in value.items()
+            }
+            for key, value in self._last_measurement_attributes.items()
+        }
 
     def add_setpoint_callback(self, callback: SetpointCallback) -> CallbackRemover:
         return self._add_callback(self._setpoint_callbacks, callback)
@@ -361,6 +401,20 @@ class DHEClient:
             enabled,
         )
 
+    async def reset_brush_timer(self) -> bool:
+        return await self._reset_app_timer(
+            BRUSH_TIMER_PATH,
+            ID_BRUSH_TIMER_ACTIVATION,
+            ID_BRUSH_TIMER_REMAINING,
+        )
+
+    async def reset_shower_timer(self) -> bool:
+        return await self._reset_app_timer(
+            SHOWER_TIMER_PATH,
+            ID_SHOWER_TIMER_ACTIVATION,
+            ID_SHOWER_TIMER_REMAINING,
+        )
+
     async def _set_app_timer_duration_minutes(self, path: str, measurement_id: int, minutes: float) -> float:
         requested_minutes = int(round(_clamp(float(minutes), 1.0, 30.0)))
         milliseconds = requested_minutes * 60000
@@ -381,6 +435,17 @@ class DHEClient:
         )
         return bool(confirmed)
 
+    async def _reset_app_timer(self, path: str, activation_id: int, remaining_id: int) -> bool:
+        await self._write_app_value(
+            f"assign:{path}:reset",
+            True,
+            remaining_id,
+            0.0,
+        )
+        self._handle_measurement(remaining_id, 0.0, force_update=True)
+        self._handle_measurement(activation_id, False, force_update=True)
+        return True
+
     async def _write_app_value(self, command: str, value: Any, measurement_id: int, expected: ODBValue) -> ODBValue:
         async with self._command_lock:
             for attempt in range(2):
@@ -391,7 +456,18 @@ class DHEClient:
                         raise DHEError("DHE session is not connected")
                     future = self._new_write_future(measurement_id, expected)
                     await self._post_packet(ctx, self._message_packet({"command": command, "value": value}))
-                    return await self._wait_for_app_write_confirmation(future, command)
+                    try:
+                        return await self._wait_for_app_write_confirmation(future)
+                    except TimeoutError:
+                        self._clear_pending_write_future(None)
+                        _LOGGER.debug(
+                            "No DHE app confirmation for %s within %.1fs; using requested value %r",
+                            command,
+                            APP_COMMAND_CONFIRMATION_TIMEOUT,
+                            expected,
+                        )
+                        self._handle_measurement(measurement_id, expected, force_update=True)
+                        return expected
                 except Exception as err:  # noqa: BLE001
                     self._clear_pending_write_future(None)
                     if attempt == 0:
@@ -524,8 +600,14 @@ class DHEClient:
         data = event.data
         command = data.get("command")
         value = data.get("value")
+        if command in APP_TIMER_RESET_COMMANDS:
+            self._handle_app_timer_reset(command)
+            return
         if command in APP_TIMER_SET_COMMANDS | APP_TIMER_ASSIGN_COMMANDS:
             self._handle_app_timer_value(command, value)
+            return
+        if command in CONSUMPTION_COMMAND_IDS:
+            self._handle_consumption_value(command, value)
             return
         if command not in {ODB_SET_COMMAND, ODB_ASSIGN_COMMAND} or not isinstance(value, dict):
             return
@@ -548,6 +630,46 @@ class DHEClient:
         except (TypeError, ValueError) as err:
             _LOGGER.debug("Ignoring invalid app timer value command=%s value=%r: %s", command, raw_value, err)
 
+    def _handle_app_timer_reset(self, command: str) -> None:
+        try:
+            _action, path, _property_name = command.split(":", 2)
+        except ValueError:
+            return
+        if path == BRUSH_TIMER_PATH:
+            self._handle_measurement(ID_BRUSH_TIMER_REMAINING, 0.0, force_update=True)
+            self._handle_measurement(ID_BRUSH_TIMER_ACTIVATION, False, force_update=True)
+        elif path == SHOWER_TIMER_PATH:
+            self._handle_measurement(ID_SHOWER_TIMER_REMAINING, 0.0, force_update=True)
+            self._handle_measurement(ID_SHOWER_TIMER_ACTIVATION, False, force_update=True)
+
+    def _handle_consumption_value(self, command: str, raw_value: Any) -> None:
+        if not isinstance(raw_value, dict):
+            return
+        measurement_id = CONSUMPTION_COMMAND_IDS[command]
+        raw_chart = raw_value.get("chart", [])
+        if not isinstance(raw_chart, list):
+            _LOGGER.debug("Ignoring invalid consumption chart command=%s value=%r", command, raw_value)
+            return
+        try:
+            chart = [_raw_to_float(value) for value in raw_chart]
+            cost_eur = _raw_to_float(raw_value["sum"]) if raw_value.get("sum") is not None else None
+        except (TypeError, ValueError) as err:
+            _LOGGER.debug("Ignoring invalid consumption value command=%s value=%r: %s", command, raw_value, err)
+            return
+
+        attributes = {
+            "chart": chart,
+            "cost_eur": cost_eur,
+            "source_command": command,
+        }
+        previous_attributes = self._last_measurement_attributes.get(measurement_id)
+        self._last_measurement_attributes[measurement_id] = attributes
+        self._handle_measurement(
+            measurement_id,
+            sum(chart),
+            force_update=previous_attributes != attributes,
+        )
+
     def _handle_odb_value(self, odb_id: int, raw_value: Any) -> None:
         try:
             if odb_id == ID_SETPOINT:
@@ -562,7 +684,13 @@ class DHEClient:
                 self._handle_measurement(odb_id, self._configured_power_kw)
                 if self._last_power_fraction is not None:
                     self._handle_measurement(ID_POWER, self._last_power_fraction * self._configured_power_kw)
-            elif odb_id in {ID_BATH_FILL_ACTIVE, ID_BATH_FILL_TARGET_VOLUME, ID_MAX_TEMPERATURE, ID_ECO_MODE, ID_ECO_FLOW_LIMIT}:
+            elif odb_id in {
+                ID_BATH_FILL_ACTIVE,
+                ID_BATH_FILL_TARGET_VOLUME,
+                ID_MAX_TEMPERATURE,
+                ID_ECO_MODE,
+                ID_ECO_FLOW_LIMIT,
+            }:
                 self._handle_measurement(odb_id, self._convert_odb_value(odb_id, raw_value))
         except (TypeError, ValueError) as err:
             _LOGGER.debug("Ignoring invalid DHE ODB value id=%s value=%r: %s", odb_id, raw_value, err)
@@ -580,11 +708,11 @@ class DHEClient:
             self._pending_setpoint_future = None
             self._pending_expected_setpoint = None
 
-    def _handle_measurement(self, odb_id: int, value: ODBValue) -> None:
+    def _handle_measurement(self, odb_id: int, value: ODBValue, *, force_update: bool = False) -> None:
         previous = self._last_measurements.get(odb_id)
         self._last_measurements[odb_id] = value
         self._maybe_complete_write_future(odb_id, value)
-        if previous is not None and _values_equal(previous, value):
+        if not force_update and previous is not None and _values_equal(previous, value):
             return
         for callback in tuple(self._measurement_callbacks):
             callback(odb_id, value)
@@ -650,15 +778,11 @@ class DHEClient:
     async def _wait_for_app_write_confirmation(
         self,
         future: asyncio.Future[ODBValue],
-        command: str,
     ) -> ODBValue:
-        try:
-            return await asyncio.wait_for(
-                asyncio.shield(future),
-                timeout=COMMAND_CONFIRMATION_TIMEOUT,
-            )
-        except TimeoutError as err:
-            raise DHEError(f"write confirmation timed out for DHE app command {command}") from err
+        return await asyncio.wait_for(
+            asyncio.shield(future),
+            timeout=APP_COMMAND_CONFIRMATION_TIMEOUT,
+        )
 
     @staticmethod
     def _convert_odb_value(odb_id: int, raw_value: Any) -> ODBValue:
@@ -695,9 +819,19 @@ class DHEClient:
         for odb_id in INITIAL_VALUE_IDS:
             if odb_id != ID_CONFIGURED_POWER or odb_id not in self._last_measurements:
                 await self._request_odb_value(ctx, odb_id)
+        for command in APP_TIMER_REQUEST_COMMANDS:
+            await self._request_app_value(ctx, command)
+        for command in CONSUMPTION_REQUEST_COMMANDS:
+            await self._request_app_value(ctx, command)
 
     async def _request_odb_value(self, ctx: DHESession, odb_id: int) -> None:
-        await self._post_packet(ctx, self._message_packet({"command": ODB_GET_COMMAND, "value": {"id": odb_id, "value": ""}}))
+        await self._post_packet(
+            ctx,
+            self._message_packet({"command": ODB_GET_COMMAND, "value": {"id": odb_id, "value": ""}}),
+        )
+
+    async def _request_app_value(self, ctx: DHESession, command: str) -> None:
+        await self._post_packet(ctx, self._message_packet({"command": command, "value": ""}))
 
     def _new_setpoint_future(self, expected: float | None = None) -> asyncio.Future[float]:
         self._clear_pending_future(None)
@@ -834,7 +968,13 @@ class DHEClient:
         return f"42/{NS},{json.dumps([event, data], separators=(',', ':'))}"
 
     def _message_packet(self, payload: dict[str, Any]) -> str:
-        return self._event_packet("message", payload)
+        message_id = self._next_socketio_message_id()
+        return f"42/{NS},{message_id}{json.dumps(['message', payload], separators=(',', ':'))}"
+
+    def _next_socketio_message_id(self) -> int:
+        message_id = self._socketio_message_id
+        self._socketio_message_id = 1 if message_id >= 999 else message_id + 1
+        return message_id
 
     @staticmethod
     def _decode_engineio_payload(text: str) -> list[str]:
