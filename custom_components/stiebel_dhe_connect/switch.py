@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from homeassistant.components.switch import SwitchEntity
+from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_OFF, STATE_ON
 from homeassistant.core import HomeAssistant, callback
@@ -29,12 +29,9 @@ _LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, kw_only=True)
-class StiebelDHEAppTimerSwitchDescription:
+class StiebelDHEAppTimerSwitchDescription(SwitchEntityDescription):
     """Describe an app timer activation switch."""
 
-    key: str
-    translation_key: str
-    icon: str
     timer_path: str
     measurement_id: int
     setter: str
@@ -173,6 +170,7 @@ class StiebelDHEEcoModeSwitch(SwitchEntity, RestoreEntity):
 class StiebelDHEAppTimerSwitch(SwitchEntity, RestoreEntity):
     """App timer activation switch."""
 
+    entity_description: StiebelDHEAppTimerSwitchDescription
     _attr_has_entity_name = True
     _attr_should_poll = False
 
