@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.1
+
+- Fix Home Assistant startup failure for app timer switch entities.
+- Make `StiebelDHEAppTimerSwitchDescription` extend `SwitchEntityDescription` so Home Assistant can access the expected switch entity description attributes.
+
 ## 0.7.0
 
 - Bump integration version to `0.7.0`.
