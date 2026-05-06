@@ -11,7 +11,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .client import DHEClient, DHEError, ID_BATH_FILL_ACTIVE
+from .client import DHEClient, DHEError, ID_BATH_FILL_ACTIVE, ODBValue
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -89,14 +89,31 @@ class StiebelDHEButton(ButtonEntity):
         self._attr_extra_state_attributes = {"odb_id": ID_BATH_FILL_ACTIVE}
         self._client = client
         self._attr_available = False
+        self._has_seen_bath_fill_state = False
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to availability updates and start the persistent session."""
         self.async_on_remove(
+            self._client.add_measurement_callback(self._handle_measurement_update)
+        )
+        self.async_on_remove(
             self._client.add_availability_callback(self._handle_availability_update)
         )
-        self._attr_available = self._client.available
+        if self._client.last_measurements.get(ID_BATH_FILL_ACTIVE) is not None:
+            self._has_seen_bath_fill_state = True
+            self._attr_available = True
+        else:
+            self._attr_available = self._client.available
         await self._client.start()
+
+    @callback
+    def _handle_measurement_update(self, odb_id: int, value: ODBValue) -> None:
+        """Track whether the heater has delivered any bath-fill state."""
+        if odb_id != ID_BATH_FILL_ACTIVE:
+            return
+        self._has_seen_bath_fill_state = True
+        self._attr_available = True
+        self.async_write_ha_state()
 
     async def async_press(self) -> None:
         """Execute the DHE button action."""
@@ -114,5 +131,5 @@ class StiebelDHEButton(ButtonEntity):
     @callback
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
-        self._attr_available = available
+        self._attr_available = available or self._has_seen_bath_fill_state
         self.async_write_ha_state()
