@@ -94,6 +94,7 @@ class DHESession:
 
     sid: str
     url_token: str
+    websocket_sid: str | None = None
 
 
 def _round_to_half_c(value: float) -> float:
@@ -434,11 +435,16 @@ class DHEClient:
             await self._close_session(ctx)
 
     async def _open_session(self, token_for_url: str) -> DHESession:
-        open_payload = await self._get_text(self._poll_url(token_for_url, None))
+        open_payload = await self._get_text(self._poll_url(token_for_url, None, None))
         sid_match = re.search(r'"sid":"([^"]+)"', open_payload)
         if not sid_match:
             raise DHEError(f"Could not extract sid from open payload: {open_payload!r}")
-        ctx = DHESession(sid=sid_match.group(1), url_token=token_for_url)
+        websocket_sid_match = re.search(r'"websocketSid":"([^"]+)"', open_payload)
+        ctx = DHESession(
+            sid=sid_match.group(1),
+            url_token=token_for_url,
+            websocket_sid=websocket_sid_match.group(1) if websocket_sid_match else None,
+        )
         await self._post_packet(ctx, "40")
         await self._post_packet(ctx, f"40/{NS},")
         return ctx
@@ -708,7 +714,7 @@ class DHEClient:
             self._availability_drop_task = None
 
     async def _read_events_once(self, ctx: DHESession) -> list[DHEEvent]:
-        raw = await self._get_text(self._poll_url(ctx.url_token, ctx.sid))
+        raw = await self._get_text(self._poll_url(ctx.url_token, ctx.sid, ctx.websocket_sid))
         if not raw:
             return []
         if re.search(r"(^|[\ufffd\x1e])41(?:/1\.0\.0)?", raw):
@@ -727,12 +733,15 @@ class DHEClient:
             app_packets.append(packet)
         return self._parse_socketio_events(app_packets)
 
-    def _poll_url(self, token: str, sid: str | None) -> str:
+    def _poll_url(self, token: str, sid: str | None, websocket_sid: str | None = None) -> str:
         token_q = quote(token or "", safe="")
         t = format(int(time.time() * 1000), "x")
+        websocket_part = ""
+        if websocket_sid:
+            websocket_part = f"&websocketSid={quote(websocket_sid, safe='')}"
         if sid:
-            return f"{self.base_url}/socket.io/?EIO=3&transport=polling&sid={quote(sid, safe='')}&token={token_q}&t={t}"
-        return f"{self.base_url}/socket.io/?EIO=3&transport=polling&token={token_q}&t={t}"
+            return f"{self.base_url}/socket.io/?EIO=3&transport=polling&sid={quote(sid, safe='')}{websocket_part}&token={token_q}&t={t}"
+        return f"{self.base_url}/socket.io/?EIO=3&transport=polling{websocket_part}&token={token_q}&t={t}"
 
     async def _get_text(self, url: str) -> str:
         timeout = aiohttp.ClientTimeout(total=70)
@@ -747,7 +756,7 @@ class DHEClient:
         body = f"{len(packet)}:{packet}"
         timeout = aiohttp.ClientTimeout(total=40)
         async with self._session.post(
-            self._poll_url(ctx.url_token, ctx.sid),
+            self._poll_url(ctx.url_token, ctx.sid, ctx.websocket_sid),
             data=body.encode("utf-8"),
             headers={"Content-Type": "text/plain;charset=UTF-8"},
             timeout=timeout,
