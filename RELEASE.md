@@ -1,23 +1,14 @@
-# Release v0.7.0
+# Release v0.7.1
 
 ## Summary
 
-Documentation cleanup and version bump for the current DHE Connect feature set.
+Bugfix release for Home Assistant startup with app timer switch entities.
 
 ## Changes
 
-- Bump integration version to `0.7.0`.
-- Clean up root README, component README, HACS info and timer protocol notes.
-- Remove outdated release-focus sections and duplicated documentation blocks.
-- Keep documentation focused on the current entity set and local protocol behavior.
-- Keep brand icons in `brand/icon.png` and `brand/dark_icon.png`.
-
-## Current timer behavior
-
-- Brush and shower timers have activation switches.
-- Brush and shower timers have explicit start, stop and reset buttons.
-- Timer duration numbers are limited to `20 min`.
-- Timer remaining sensors display their value as `M:SS`.
+- Fix `AttributeError: 'StiebelDHEAppTimerSwitchDescription' object has no attribute 'device_class'` during switch entity setup.
+- Make the app timer switch description extend Home Assistant's `SwitchEntityDescription`.
+- Keep the `0.7.0` documentation cleanup and current timer behavior unchanged.
 
 ## Installation via HACS custom repository
 
