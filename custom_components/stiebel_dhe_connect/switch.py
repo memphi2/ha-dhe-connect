@@ -52,7 +52,7 @@ APP_TIMER_SWITCHES: tuple[StiebelDHEAppTimerSwitchDescription, ...] = (
     StiebelDHEAppTimerSwitchDescription(
         key="shower_timer_activation",
         translation_key="shower_timer_activation",
-        icon="mdi:timer-play",
+        icon="mdi:shower-head",
         timer_path=SHOWER_TIMER_PATH,
         measurement_id=ID_SHOWER_TIMER_ACTIVATION,
         setter="set_shower_timer_activation",
