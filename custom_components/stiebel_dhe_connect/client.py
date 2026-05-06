@@ -54,14 +54,18 @@ INITIAL_VALUE_IDS = (
     ID_CONFIGURED_POWER,
 )
 
+TIMER_PATHS = ("ste.app.brushTimer", "ste.app.showerTimer")
 SHOWER_TIMER_SET_COMMANDS = {
-    "set:ste.app.showerTimer:activation",
-    "set:ste.app.showerTimer:durationMilliseconds",
-    "set:ste.app.showerTimer:remainingMilliseconds",
+    f"set:{path}:activation" for path in TIMER_PATHS
+} | {
+    f"set:{path}:durationMilliseconds" for path in TIMER_PATHS
+} | {
+    f"set:{path}:remainingMilliseconds" for path in TIMER_PATHS
 }
 SHOWER_TIMER_ASSIGN_COMMANDS = {
-    "assign:ste.app.showerTimer:activation",
-    "assign:ste.app.showerTimer:durationMilliseconds",
+    f"assign:{path}:activation" for path in TIMER_PATHS
+} | {
+    f"assign:{path}:durationMilliseconds" for path in TIMER_PATHS
 }
 
 
@@ -318,7 +322,7 @@ class DHEClient:
         requested_minutes = int(round(_clamp(float(minutes), 1.0, 30.0)))
         milliseconds = requested_minutes * 60000
         confirmed = await self._write_app_value(
-            "assign:ste.app.showerTimer:durationMilliseconds",
+            "assign:ste.app.brushTimer:durationMilliseconds",
             milliseconds,
             ID_SHOWER_TIMER_DURATION_MS,
         )
@@ -326,7 +330,7 @@ class DHEClient:
 
     async def set_shower_timer_activation(self, enabled: bool) -> bool:
         confirmed = await self._write_app_value(
-            "assign:ste.app.showerTimer:activation",
+            "assign:ste.app.brushTimer:activation",
             bool(enabled),
             ID_SHOWER_TIMER_ACTIVATION,
         )

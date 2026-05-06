@@ -133,7 +133,7 @@ class StiebelDHEShowerTimerSwitch(StiebelDHEEcoModeSwitch):
     def __init__(self, entry_id: str, name: str, client: DHEClient) -> None:
         super().__init__(entry_id, name, client)
         self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_shower_timer_activation"
-        self._attr_extra_state_attributes = {"command": "ste.app.showerTimer:activation"}
+        self._attr_extra_state_attributes = {"command": "ste.app.brushTimer:activation"}
 
     async def async_added_to_hass(self) -> None:
         self.async_on_remove(self._client.add_measurement_callback(self._handle_measurement_update))
