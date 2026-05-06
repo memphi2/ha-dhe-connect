@@ -1,21 +1,21 @@
 # Stiebel DHE Connect
 
-Local Home Assistant integration for Stiebel Eltron DHE Connect devices.
+Local Home Assistant integration for Stiebel Eltron DHE Connect instantaneous water heaters.
 
 Repository: `memphi2/ha-dhe-connect`.
 
-## 0.6.8
+## Version 0.7.0
 
-This version adds explicit start and stop button entities for the brush timer and shower timer. The timer activation switches remain available.
-
-Brush and shower timer duration numbers are limited to a maximum of `20 min`. Brush and shower timer remaining sensors display their value as `M:SS`.
+This release cleans up the repository documentation and keeps the current feature set documented consistently.
 
 ## Functionality
 
-The integration keeps one Socket.IO / Engine.IO v3 long-polling connection open, answers Engine.IO pings, requests ODB IDs `0`, `1`, `3`, `5`, `6`, `7`, `15`, `16` and `20` plus DHE app timer and consumption values once after session startup, and then updates values from incoming DHE messages.
-
-Temperature writes use ODB ID `66` with readback through ODB ID `0`. Eco mode, Eco flow limit, maximum temperature and bath-fill controls use the corresponding writable ODB IDs, request readback after assignment and wait for DHE confirmation.
-
-The integration handles both DHE app timer paths, `ste.app.brushTimer` and `ste.app.showerTimer`, as separate Home Assistant entities for activation, duration, reset and remaining time.
-
-Water and energy consumption messages from `ste.app.consumption` are requested after startup and exposed as week, year and multi-year sensors. The DHE chart values are summed as the sensor state, while the EUR total sent as `sum` is exposed as the `cost_eur` attribute.
+- Local Socket.IO / Engine.IO v3 long-polling connection to the DHE.
+- Target-temperature climate control.
+- Sensors for current water flow, current power, configured power and DHE app consumption charts.
+- Controls for Eco mode, Eco flow limit, maximum temperature and bath fill.
+- Brush timer and shower timer switches, duration numbers, remaining sensors and start/stop/reset buttons.
+- Timer durations are limited to `20 min`.
+- Timer remaining sensors are displayed as `M:SS`.
+- English and German Home Assistant translations.
+- Brand icons in `brand/icon.png` and `brand/dark_icon.png`.
