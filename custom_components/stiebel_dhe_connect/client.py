@@ -38,6 +38,7 @@ ID_SET_REQ = 66
 DEFAULT_CONFIGURED_POWER_KW = 24.0
 COMMAND_CONFIRMATION_TIMEOUT = 12.0
 COMMAND_READBACK_INTERVAL = 1.0
+AVAILABILITY_DROP_GRACE_SECONDS = 20.0
 INITIAL_VALUE_IDS = (
     ID_SETPOINT,
     ID_BATH_FILL_ACTIVE,
@@ -149,6 +150,7 @@ class DHEClient:
         self._availability_callbacks: list[AvailabilityCallback] = []
         self._measurement_callbacks: list[MeasurementCallback] = []
         self._available = False
+        self._availability_drop_task: asyncio.Task[None] | None = None
         self._last_setpoint: float | None = None
         self._last_measurements: dict[int, ODBValue] = {}
         self._configured_power_kw = DEFAULT_CONFIGURED_POWER_KW
@@ -217,7 +219,7 @@ class DHEClient:
         self._ready.clear()
         if ctx is not None:
             await self._close_session(ctx)
-        self._set_available(False)
+        self._set_available(False, immediate=True)
 
     async def set_temperature(self, temperature: float) -> float:
         requested = _round_to_half_c(_clamp(float(temperature), 20.0, 60.0))
@@ -596,12 +598,46 @@ class DHEClient:
             else:
                 future.cancel()
 
-    def _set_available(self, available: bool) -> None:
+    def _set_available(self, available: bool, *, immediate: bool = False) -> None:
+        if available:
+            self._cancel_delayed_unavailable()
+            self._emit_availability(True)
+            return
+
+        if immediate:
+            self._cancel_delayed_unavailable()
+            self._emit_availability(False)
+            return
+
+        if self._availability_drop_task is not None and not self._availability_drop_task.done():
+            return
+        self._availability_drop_task = self.hass.async_create_task(
+            self._delayed_set_unavailable(),
+            name="stiebel_dhe_connect_delayed_unavailable",
+        )
+
+    def _emit_availability(self, available: bool) -> None:
         if self._available == available:
             return
         self._available = available
         for callback in tuple(self._availability_callbacks):
             callback(available)
+
+    def _cancel_delayed_unavailable(self) -> None:
+        task = self._availability_drop_task
+        self._availability_drop_task = None
+        if task is not None and not task.done():
+            task.cancel()
+
+    async def _delayed_set_unavailable(self) -> None:
+        try:
+            await asyncio.sleep(AVAILABILITY_DROP_GRACE_SECONDS)
+            if self._ctx is None and not self._ready.is_set() and not self._stopped.is_set():
+                self._emit_availability(False)
+        except asyncio.CancelledError:
+            return
+        finally:
+            self._availability_drop_task = None
 
     async def _read_events_once(self, ctx: DHESession) -> list[DHEEvent]:
         raw = await self._get_text(self._poll_url(ctx.url_token, ctx.sid))
