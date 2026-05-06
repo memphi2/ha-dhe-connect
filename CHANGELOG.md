@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.7
+
+- Show brush and shower timer activation switches as normal device controls instead of configuration entities.
+- Keep the brush and shower timer remaining sensors unchanged.
+- Use stable timer icons for brush and shower reset buttons.
+
 ## 0.6.6
 
 - Document the observed DHE app timer Socket.IO wire format.
