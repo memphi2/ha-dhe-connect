@@ -46,6 +46,18 @@
       "stop_bath_fill": {
         "name": "Stop bath fill"
       },
+      "start_brush_timer": {
+        "name": "Start brush timer"
+      },
+      "stop_brush_timer": {
+        "name": "Stop brush timer"
+      },
+      "start_shower_timer": {
+        "name": "Start shower timer"
+      },
+      "stop_shower_timer": {
+        "name": "Stop shower timer"
+      },
       "reset_brush_timer": {
         "name": "Reset brush timer"
       },

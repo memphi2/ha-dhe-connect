@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.8
+
+- Add explicit start and stop button entities for the brush timer.
+- Add explicit start and stop button entities for the shower timer.
+- Keep the existing timer activation switches, duration numbers, remaining sensors and reset buttons.
+- Add English and German translations for the new timer start/stop buttons.
+
 ## 0.6.7
 
 - Show brush and shower timer activation switches as normal device controls instead of configuration entities.
