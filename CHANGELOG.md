@@ -2,8 +2,11 @@
 
 ## 0.6.4
 
-- Bump integration release metadata for version `0.6.4`.
-- Refresh release notes for the `v0.6.4` tag.
+- Support optional DHE `websocketSid` values in polling URLs.
+- Add separate brush timer and shower timer activation, duration and remaining-time entities.
+- Handle both `ste.app.brushTimer` and `ste.app.showerTimer` app timer message paths.
+- Confirm app timer writes from matching timer events instead of synthetic ODB readbacks.
+- Refresh README, HACS info text and release notes for `v0.6.4`.
 
 ## 0.6.3
 

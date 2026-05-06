@@ -57,6 +57,9 @@
       "eco_flow_limit": {
         "name": "Eco-Durchflussbegrenzung"
       },
+      "brush_timer_duration": {
+        "name": "Zahnputz-Timer Dauer"
+      },
       "shower_timer_duration": {
         "name": "Duschtimer-Dauer"
       }
@@ -71,6 +74,9 @@
       "configured_power": {
         "name": "Eingestellte Leistung"
       },
+      "brush_timer_remaining": {
+        "name": "Zahnputz-Timer Restzeit"
+      },
       "shower_timer_remaining": {
         "name": "Duschtimer Restzeit"
       }
@@ -78,6 +84,9 @@
     "switch": {
       "eco_mode": {
         "name": "Eco-Modus"
+      },
+      "brush_timer_activation": {
+        "name": "Zahnputz-Timer"
       },
       "shower_timer_activation": {
         "name": "Duschtimer"

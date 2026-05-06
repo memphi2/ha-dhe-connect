@@ -15,15 +15,26 @@ from homeassistant.const import UnitOfPower, UnitOfTime, UnitOfVolumeFlowRate
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .client import DHEClient, ID_CONFIGURED_POWER, ID_POWER, ID_SHOWER_TIMER_REMAINING_MS, ID_WATER_FLOW
+from .client import (
+    BRUSH_TIMER_PATH,
+    DHEClient,
+    ID_BRUSH_TIMER_REMAINING,
+    ID_CONFIGURED_POWER,
+    ID_POWER,
+    ID_SHOWER_TIMER_REMAINING,
+    ID_WATER_FLOW,
+    SHOWER_TIMER_PATH,
+)
 from .const import DOMAIN
 
 
 @dataclass(frozen=True, kw_only=True)
 class StiebelDHESensorEntityDescription(SensorEntityDescription):
-    """Describe a converted DHE ODB sensor."""
+    """Describe a converted DHE sensor."""
 
     odb_id: int
+    timer_path: str | None = None
+    timer_property: str | None = None
 
 
 SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
@@ -51,12 +62,24 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         odb_id=ID_CONFIGURED_POWER,
     ),
     StiebelDHESensorEntityDescription(
+        key="brush_timer_remaining",
+        translation_key="brush_timer_remaining",
+        native_unit_of_measurement=UnitOfTime.MINUTES,
+        icon="mdi:toothbrush",
+        state_class=SensorStateClass.MEASUREMENT,
+        odb_id=ID_BRUSH_TIMER_REMAINING,
+        timer_path=BRUSH_TIMER_PATH,
+        timer_property="remainingMilliseconds",
+    ),
+    StiebelDHESensorEntityDescription(
         key="shower_timer_remaining",
         translation_key="shower_timer_remaining",
         native_unit_of_measurement=UnitOfTime.MINUTES,
         icon="mdi:timer-sand",
         state_class=SensorStateClass.MEASUREMENT,
-        odb_id=ID_SHOWER_TIMER_REMAINING_MS,
+        odb_id=ID_SHOWER_TIMER_REMAINING,
+        timer_path=SHOWER_TIMER_PATH,
+        timer_property="remainingMilliseconds",
     ),
 )
 
@@ -82,7 +105,7 @@ async def async_setup_entry(
 
 
 class StiebelDHESensor(SensorEntity):
-    """Converted DHE ODB value sensor."""
+    """Converted DHE value sensor."""
 
     entity_description: StiebelDHESensorEntityDescription
     _attr_has_entity_name = True
@@ -105,7 +128,13 @@ class StiebelDHESensor(SensorEntity):
             "model": "DHE Connect",
             "name": name,
         }
-        self._attr_extra_state_attributes = {"odb_id": description.odb_id}
+        if description.timer_path:
+            self._attr_extra_state_attributes = {
+                "timer_path": description.timer_path,
+                "timer_property": description.timer_property,
+            }
+        else:
+            self._attr_extra_state_attributes = {"odb_id": description.odb_id}
         self._client = client
         self._attr_available = False
         self._attr_native_value: float | None = None
