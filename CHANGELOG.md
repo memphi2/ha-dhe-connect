@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.3
+
+- Remove obsolete separate stop button entities for brush timer and shower timer.
+- Keep timer start buttons as convenience actions.
+- Keep timer reset buttons.
+- Use the brush and shower timer switches for start and stop behavior.
+- Remove obsolete English and German timer stop button translation keys.
+- Update documentation and HACS info for the simplified timer controls.
+
 ## 0.7.2
 
 - Remove `custom_components/stiebel_dhe_connect/strings.json`; custom integrations should provide translations through `translations/*.json`.
