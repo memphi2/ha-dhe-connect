@@ -7,3 +7,5 @@ Repository: `memphi2/ha-dhe-connect`.
 This version keeps one Socket.IO / Engine.IO v3 long-polling connection open, answers Engine.IO pings, requests ODB IDs `0`, `1`, `3`, `5`, `6`, `7`, `15`, `16` and `20` once after session startup, and then updates values from incoming DHE messages.
 
 Temperature writes use ODB ID `66` with readback through ODB ID `0`. Eco mode, Eco flow limit, maximum temperature and bath-fill controls use the corresponding writable ODB IDs, request readback after assignment and wait for DHE confirmation.
+
+The integration also handles both DHE app timer paths, `ste.app.brushTimer` and `ste.app.showerTimer`, as separate Home Assistant entities for activation, duration and remaining time. Timer durations and remaining times are transferred in milliseconds and displayed in minutes.

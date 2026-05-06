@@ -17,12 +17,15 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .client import (
+    BRUSH_TIMER_PATH,
     DHEClient,
     DHEError,
     ID_BATH_FILL_TARGET_VOLUME,
+    ID_BRUSH_TIMER_DURATION,
     ID_ECO_FLOW_LIMIT,
     ID_MAX_TEMPERATURE,
-    ID_SHOWER_TIMER_DURATION_MS,
+    ID_SHOWER_TIMER_DURATION,
+    SHOWER_TIMER_PATH,
     ODBValue,
 )
 from .const import DOMAIN
@@ -32,9 +35,11 @@ _LOGGER = logging.getLogger(__name__)
 
 @dataclass(frozen=True, kw_only=True)
 class StiebelDHENumberEntityDescription(NumberEntityDescription):
-    """Describe a writable DHE ODB number."""
+    """Describe a writable DHE number."""
 
     odb_id: int
+    timer_path: str | None = None
+    timer_property: str | None = None
 
 
 NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
@@ -72,6 +77,18 @@ NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         odb_id=ID_ECO_FLOW_LIMIT,
     ),
     StiebelDHENumberEntityDescription(
+        key="brush_timer_duration",
+        translation_key="brush_timer_duration",
+        native_unit_of_measurement=UnitOfTime.MINUTES,
+        icon="mdi:toothbrush",
+        native_min_value=1.0,
+        native_max_value=30.0,
+        native_step=1.0,
+        odb_id=ID_BRUSH_TIMER_DURATION,
+        timer_path=BRUSH_TIMER_PATH,
+        timer_property="durationMilliseconds",
+    ),
+    StiebelDHENumberEntityDescription(
         key="shower_timer_duration",
         translation_key="shower_timer_duration",
         native_unit_of_measurement=UnitOfTime.MINUTES,
@@ -79,7 +96,9 @@ NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         native_min_value=1.0,
         native_max_value=30.0,
         native_step=1.0,
-        odb_id=ID_SHOWER_TIMER_DURATION_MS,
+        odb_id=ID_SHOWER_TIMER_DURATION,
+        timer_path=SHOWER_TIMER_PATH,
+        timer_property="durationMilliseconds",
     ),
 )
 
@@ -105,7 +124,7 @@ async def async_setup_entry(
 
 
 class StiebelDHENumber(RestoreNumber):
-    """Writable DHE ODB setting represented as a Home Assistant number."""
+    """Writable DHE setting represented as a Home Assistant number."""
 
     entity_description: StiebelDHENumberEntityDescription
     _attr_entity_category = EntityCategory.CONFIG
@@ -129,7 +148,13 @@ class StiebelDHENumber(RestoreNumber):
             "model": "DHE Connect",
             "name": name,
         }
-        self._attr_extra_state_attributes = {"odb_id": description.odb_id}
+        if description.timer_path:
+            self._attr_extra_state_attributes = {
+                "timer_path": description.timer_path,
+                "timer_property": description.timer_property,
+            }
+        else:
+            self._attr_extra_state_attributes = {"odb_id": description.odb_id}
         self._client = client
         self._attr_available = False
         self._attr_native_value: float | None = None
@@ -164,7 +189,9 @@ class StiebelDHENumber(RestoreNumber):
                 confirmed = await self._client.set_maximum_temperature(value)
             elif self.entity_description.odb_id == ID_ECO_FLOW_LIMIT:
                 confirmed = await self._client.set_eco_flow_limit(value)
-            elif self.entity_description.odb_id == ID_SHOWER_TIMER_DURATION_MS:
+            elif self.entity_description.odb_id == ID_BRUSH_TIMER_DURATION:
+                confirmed = await self._client.set_brush_timer_duration_minutes(value)
+            elif self.entity_description.odb_id == ID_SHOWER_TIMER_DURATION:
                 confirmed = await self._client.set_shower_timer_duration_minutes(value)
             else:
                 confirmed = await self._client.write_odb_value(

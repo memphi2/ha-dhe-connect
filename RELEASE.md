@@ -16,8 +16,13 @@
 - Bath fill start and stop buttons through ODB ID `1`.
 - Temperature writes through ODB ID `66` with readback through ODB ID `0`.
 - Writable setting changes request ODB readback after assignment and wait for DHE confirmation.
+- Optional DHE `websocketSid` values are included in polling URLs when the device provides them.
 - Target-temperature and writable-setting confirmations repeat readback without cancelling pending confirmations too early.
 - Writable configuration entities restore their last known state after reloads and tolerate raw or scaled readback values.
+- Separate brush timer and shower timer activation switches.
+- Separate brush timer and shower timer duration numbers, displayed in minutes and written as app timer milliseconds.
+- Separate brush timer and shower timer remaining-time sensors, displayed in minutes.
+- App timer writes use matching `ste.app.brushTimer` / `ste.app.showerTimer` confirmation events instead of ODB readbacks.
 - UI configuration through the Home Assistant config flow.
 - English and German Home Assistant UI translations.
 - Repository metadata for `memphi2/ha-dhe-connect`.

@@ -35,9 +35,12 @@ ID_WATER_FLOW = 15
 ID_POWER = 16
 ID_CONFIGURED_POWER = 20
 ID_SET_REQ = 66
-ID_SHOWER_TIMER_ACTIVATION = 1001
-ID_SHOWER_TIMER_DURATION_MS = 1002
-ID_SHOWER_TIMER_REMAINING_MS = 1003
+ID_BRUSH_TIMER_ACTIVATION = 1001
+ID_BRUSH_TIMER_DURATION = 1002
+ID_BRUSH_TIMER_REMAINING = 1003
+ID_SHOWER_TIMER_ACTIVATION = 1011
+ID_SHOWER_TIMER_DURATION = 1012
+ID_SHOWER_TIMER_REMAINING = 1013
 DEFAULT_CONFIGURED_POWER_KW = 24.0
 COMMAND_CONFIRMATION_TIMEOUT = 12.0
 COMMAND_READBACK_INTERVAL = 1.0
@@ -54,18 +57,30 @@ INITIAL_VALUE_IDS = (
     ID_CONFIGURED_POWER,
 )
 
-TIMER_PATHS = ("ste.app.brushTimer", "ste.app.showerTimer")
-SHOWER_TIMER_SET_COMMANDS = {
-    f"set:{path}:activation" for path in TIMER_PATHS
-} | {
-    f"set:{path}:durationMilliseconds" for path in TIMER_PATHS
-} | {
-    f"set:{path}:remainingMilliseconds" for path in TIMER_PATHS
+BRUSH_TIMER_PATH = "ste.app.brushTimer"
+SHOWER_TIMER_PATH = "ste.app.showerTimer"
+TIMER_PATH_IDS = {
+    BRUSH_TIMER_PATH: {
+        "activation": ID_BRUSH_TIMER_ACTIVATION,
+        "durationMilliseconds": ID_BRUSH_TIMER_DURATION,
+        "remainingMilliseconds": ID_BRUSH_TIMER_REMAINING,
+    },
+    SHOWER_TIMER_PATH: {
+        "activation": ID_SHOWER_TIMER_ACTIVATION,
+        "durationMilliseconds": ID_SHOWER_TIMER_DURATION,
+        "remainingMilliseconds": ID_SHOWER_TIMER_REMAINING,
+    },
 }
-SHOWER_TIMER_ASSIGN_COMMANDS = {
-    f"assign:{path}:activation" for path in TIMER_PATHS
-} | {
-    f"assign:{path}:durationMilliseconds" for path in TIMER_PATHS
+APP_TIMER_SET_COMMANDS = {
+    f"set:{path}:{property_name}"
+    for path, property_ids in TIMER_PATH_IDS.items()
+    for property_name in property_ids
+}
+APP_TIMER_ASSIGN_COMMANDS = {
+    f"assign:{path}:{property_name}"
+    for path, property_ids in TIMER_PATH_IDS.items()
+    for property_name in property_ids
+    if property_name != "remainingMilliseconds"
 }
 
 
@@ -318,25 +333,55 @@ class DHEClient:
         raw_value = requested_l_min * 10
         return float(await self.write_odb_value(ID_ECO_FLOW_LIMIT, raw_value))
 
+    async def set_brush_timer_duration_minutes(self, minutes: float) -> float:
+        return await self._set_app_timer_duration_minutes(
+            BRUSH_TIMER_PATH,
+            ID_BRUSH_TIMER_DURATION,
+            minutes,
+        )
+
+    async def set_brush_timer_activation(self, enabled: bool) -> bool:
+        return await self._set_app_timer_activation(
+            BRUSH_TIMER_PATH,
+            ID_BRUSH_TIMER_ACTIVATION,
+            enabled,
+        )
+
     async def set_shower_timer_duration_minutes(self, minutes: float) -> float:
+        return await self._set_app_timer_duration_minutes(
+            SHOWER_TIMER_PATH,
+            ID_SHOWER_TIMER_DURATION,
+            minutes,
+        )
+
+    async def set_shower_timer_activation(self, enabled: bool) -> bool:
+        return await self._set_app_timer_activation(
+            SHOWER_TIMER_PATH,
+            ID_SHOWER_TIMER_ACTIVATION,
+            enabled,
+        )
+
+    async def _set_app_timer_duration_minutes(self, path: str, measurement_id: int, minutes: float) -> float:
         requested_minutes = int(round(_clamp(float(minutes), 1.0, 30.0)))
         milliseconds = requested_minutes * 60000
         confirmed = await self._write_app_value(
-            "assign:ste.app.brushTimer:durationMilliseconds",
+            f"assign:{path}:durationMilliseconds",
             milliseconds,
-            ID_SHOWER_TIMER_DURATION_MS,
+            measurement_id,
+            float(requested_minutes),
         )
-        return float(confirmed) / 60000.0
+        return float(confirmed)
 
-    async def set_shower_timer_activation(self, enabled: bool) -> bool:
+    async def _set_app_timer_activation(self, path: str, measurement_id: int, enabled: bool) -> bool:
         confirmed = await self._write_app_value(
-            "assign:ste.app.brushTimer:activation",
+            f"assign:{path}:activation",
             bool(enabled),
-            ID_SHOWER_TIMER_ACTIVATION,
+            measurement_id,
+            bool(enabled),
         )
         return bool(confirmed)
 
-    async def _write_app_value(self, command: str, value: Any, measurement_id: int) -> ODBValue:
+    async def _write_app_value(self, command: str, value: Any, measurement_id: int, expected: ODBValue) -> ODBValue:
         async with self._command_lock:
             for attempt in range(2):
                 try:
@@ -344,10 +389,9 @@ class DHEClient:
                     ctx = self._ctx
                     if ctx is None:
                         raise DHEError("DHE session is not connected")
-                    expected = bool(value) if isinstance(value, bool) else float(value)
                     future = self._new_write_future(measurement_id, expected)
                     await self._post_packet(ctx, self._message_packet({"command": command, "value": value}))
-                    return await self._wait_for_write_confirmation(ctx, future, measurement_id)
+                    return await self._wait_for_app_write_confirmation(future, command)
                 except Exception as err:  # noqa: BLE001
                     self._clear_pending_write_future(None)
                     if attempt == 0:
@@ -480,8 +524,8 @@ class DHEClient:
         data = event.data
         command = data.get("command")
         value = data.get("value")
-        if command in SHOWER_TIMER_SET_COMMANDS | SHOWER_TIMER_ASSIGN_COMMANDS:
-            self._handle_shower_timer_value(command, value)
+        if command in APP_TIMER_SET_COMMANDS | APP_TIMER_ASSIGN_COMMANDS:
+            self._handle_app_timer_value(command, value)
             return
         if command not in {ODB_SET_COMMAND, ODB_ASSIGN_COMMAND} or not isinstance(value, dict):
             return
@@ -491,16 +535,18 @@ class DHEClient:
             return
         self._handle_odb_value(odb_id, value.get("value"))
 
-    def _handle_shower_timer_value(self, command: str, raw_value: Any) -> None:
+    def _handle_app_timer_value(self, command: str, raw_value: Any) -> None:
         try:
-            if command.endswith(":activation"):
-                self._handle_measurement(ID_SHOWER_TIMER_ACTIVATION, _raw_to_bool(raw_value))
-            elif command.endswith(":durationMilliseconds"):
-                self._handle_measurement(ID_SHOWER_TIMER_DURATION_MS, _raw_to_float(raw_value) / 60000.0)
-            elif command.endswith(":remainingMilliseconds"):
-                self._handle_measurement(ID_SHOWER_TIMER_REMAINING_MS, _raw_to_float(raw_value) / 60000.0)
+            _action, path, property_name = command.split(":", 2)
+            measurement_id = TIMER_PATH_IDS.get(path, {}).get(property_name)
+            if measurement_id is None:
+                return
+            if property_name == "activation":
+                self._handle_measurement(measurement_id, _raw_to_bool(raw_value))
+            elif property_name in {"durationMilliseconds", "remainingMilliseconds"}:
+                self._handle_measurement(measurement_id, _raw_to_float(raw_value) / 60000.0)
         except (TypeError, ValueError) as err:
-            _LOGGER.debug("Ignoring invalid shower timer value command=%s value=%r: %s", command, raw_value, err)
+            _LOGGER.debug("Ignoring invalid app timer value command=%s value=%r: %s", command, raw_value, err)
 
     def _handle_odb_value(self, odb_id: int, raw_value: Any) -> None:
         try:
@@ -600,6 +646,19 @@ class DHEClient:
         if future.done():
             return future.result()
         raise DHEError(f"write confirmation timed out for DHE ODB id {odb_id}")
+
+    async def _wait_for_app_write_confirmation(
+        self,
+        future: asyncio.Future[ODBValue],
+        command: str,
+    ) -> ODBValue:
+        try:
+            return await asyncio.wait_for(
+                asyncio.shield(future),
+                timeout=COMMAND_CONFIRMATION_TIMEOUT,
+            )
+        except TimeoutError as err:
+            raise DHEError(f"write confirmation timed out for DHE app command {command}") from err
 
     @staticmethod
     def _convert_odb_value(odb_id: int, raw_value: Any) -> ODBValue:
