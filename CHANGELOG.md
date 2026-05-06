@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0
+
+- Bump integration version to `0.7.0`.
+- Clean up root README, component README, HACS info and app timer protocol notes.
+- Remove outdated release-focus text and duplicated documentation blocks.
+- Keep documentation focused on the current entity set, local protocol behavior and HACS installation.
+- Keep brand icons documented as part of the repository layout.
+
 ## 0.6.8
 
 - Add explicit start and stop button entities for the brush timer.
