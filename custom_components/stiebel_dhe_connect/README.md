@@ -2,11 +2,17 @@
 
 Custom Home Assistant integration for Stiebel Eltron DHE Connect instantaneous water heaters through the local Socket.IO / Engine.IO v3 long-polling interface.
 
-The integration is intended for use on a trusted local network. It exposes a `climate` entity for reading and setting the displayed target temperature, sensors for current water flow, current power consumption and DHE app consumption charts, plus controls for Eco mode, maximum temperature, bath-fill settings, and the DHE app timers.
+The integration is intended for use on a trusted local network. It exposes a `climate` entity for the displayed target temperature, sensors for current values and DHE app consumption charts, and controls for Eco mode, maximum temperature, bath filling and the DHE app timers.
 
 ## Status
 
 Experimental custom integration. Tested against a locally reachable DHE Connect on port `8443`.
+
+## Version 0.6.7 focus
+
+- Brush timer and shower timer activation switches are normal Home Assistant device controls, not configuration entities.
+- Brush timer and shower timer remaining sensors stay available and continue to display `remainingMilliseconds` as minutes.
+- Timer reset buttons use stable, timer-specific icons.
 
 ## Features
 
@@ -20,26 +26,51 @@ Experimental custom integration. Tested against a locally reachable DHE Connect 
 - Requests DHE app timer activation, duration and remaining-time values after session startup.
 - Requests DHE app consumption week/year/year-series values after session startup.
 - Processes app timer messages from both `ste.app.brushTimer` and `ste.app.showerTimer`.
-- Writes temperature changes through ODB ID `66` and reads back ODB ID `0` on the existing session.
-- Writes Eco mode, Eco flow limit, maximum temperature and bath-fill settings through `assign:ste.common.odb:value` and waits for the DHE to confirm the written id/value pair.
-- Writes brush timer and shower timer activation/duration through the DHE app timer commands and accepts matching app timer confirmation events when the DHE sends them.
+- Writes app timer activation and duration commands with Socket.IO message IDs matching the DHE web UI format.
 - Processes consumption messages from `ste.app.consumption` for water and energy week/year/year-series charts.
-- Sensor `Current water flow`: ODB ID `15` / `10` in `L/min`.
-- Sensor `Configured power`: ODB ID `20` in `kW`.
-- Sensor `Current power consumption`: ODB ID `16` / `100` * configured power in `kW`.
-- Sensors `Water consumption week`, `Water consumption year` and `Water consumption years`: DHE app consumption chart totals, with the EUR sum as `cost_eur`.
-- Sensors `Energy consumption week`, `Energy consumption year` and `Energy consumption years`: DHE app consumption chart totals, with the EUR sum as `cost_eur`.
-- Sensors `Brush timer remaining` and `Shower timer remaining`: app timer `remainingMilliseconds` displayed in minutes.
-- Switch `Eco mode`: ODB ID `6`.
-- Switches `Brush timer` and `Shower timer`: app timer `activation`.
-- Number `Eco flow limit`: ODB ID `7`, displayed as raw `/ 10` in `L/min`, selectable as `6`, `7` or `8 L/min`.
-- Number `Maximum temperature`: ODB ID `5`, selectable from `30` to `50 degrees C`.
-- Number `Bath fill target volume`: ODB ID `3` in `L`.
-- Numbers `Brush timer duration` and `Shower timer duration`: app timer `durationMilliseconds`, selectable as `1` to `30 min`.
-- Buttons `Start bath fill` and `Stop bath fill`: ODB ID `1` with `true` / `false`.
-- Buttons `Reset brush timer` and `Reset shower timer`: app timer `reset`.
 - Keeps entities visible; availability is based on the persistent DHE session instead of a separate HTTP ping.
 - Home Assistant UI strings are available in English and German.
+
+## Home Assistant entities
+
+### Climate
+
+| Entity | Source / behavior |
+|---|---|
+| Displayed target temperature | ODB ID `0`, written through ODB ID `66` with readback confirmation |
+
+### Sensors
+
+| Entity | Source / scaling |
+|---|---|
+| Current water flow | ODB ID `15` / `10` in `L/min` |
+| Current power consumption | ODB ID `16` / `100 * configured_power_kw` in `kW` |
+| Configured power | ODB ID `20` in `kW` |
+| Water consumption week | `set:ste.app.consumption:waterWeek`, chart sum in `L`, EUR sum as `cost_eur` |
+| Water consumption year | `set:ste.app.consumption:waterYear`, chart sum in `m3`, EUR sum as `cost_eur` |
+| Water consumption years | `set:ste.app.consumption:waterYears`, chart sum in `m3`, EUR sum as `cost_eur` |
+| Energy consumption week | `set:ste.app.consumption:energyWeek`, chart sum in `kWh`, EUR sum as `cost_eur` |
+| Energy consumption year | `set:ste.app.consumption:energyYear`, chart sum in `kWh`, EUR sum as `cost_eur` |
+| Energy consumption years | `set:ste.app.consumption:energyYears`, chart sum in `kWh`, EUR sum as `cost_eur` |
+| Brush timer remaining | `set:ste.app.brushTimer:remainingMilliseconds`, displayed in minutes |
+| Shower timer remaining | `set:ste.app.showerTimer:remainingMilliseconds`, displayed in minutes |
+
+### Controls
+
+| Entity | Type | Source / behavior |
+|---|---|---|
+| Eco mode | Switch | ODB ID `6` |
+| Brush timer | Switch | `assign:ste.app.brushTimer:activation`, `true` starts and `false` stops |
+| Shower timer | Switch | `assign:ste.app.showerTimer:activation`, `true` starts and `false` stops |
+| Eco flow limit | Number | ODB ID `7`, raw `/ 10`, selectable as `6`, `7` or `8 L/min` |
+| Maximum temperature | Number | ODB ID `5`, selectable from `30` to `50 degrees C` |
+| Bath fill target volume | Number | ODB ID `3` in `L` |
+| Brush timer duration | Number | `assign:ste.app.brushTimer:durationMilliseconds`, displayed in minutes |
+| Shower timer duration | Number | `assign:ste.app.showerTimer:durationMilliseconds`, displayed in minutes |
+| Start bath fill | Button | ODB ID `1` with `true` |
+| Stop bath fill | Button | ODB ID `1` with `false` |
+| Reset brush timer | Button | `assign:ste.app.brushTimer:reset` |
+| Reset shower timer | Button | `assign:ste.app.showerTimer:reset` |
 
 ## ODB IDs
 
@@ -56,13 +87,13 @@ Experimental custom integration. Tested against a locally reachable DHE Connect 
 | Read configured power | `get:ste.common.odb:value` | `20` | `kW` |
 | Set displayed target temperature | `assign:ste.common.odb:value` | `66` | raw request value with UI addressing bits |
 
-Temperature values for ODB IDs `0` and `5` are transferred in tenths of a degree, for example `345` for `34.5 degrees C`. Current water flow is calculated as `ODB ID 15 / 10` in `L/min`. Eco flow limit values on ODB ID `7` are also transferred as tenths, for example `60` for `6 L/min`. Configured power is read from ODB ID `20` once after startup and is expected to be `18` through `24 kW`. Current power consumption is calculated as `ODB ID 16 / 100 * configured power` in `kW`. Writes through ID `66` also use the request addressing known from the DHE web UI in the upper bits.
+Temperature values for ODB IDs `0` and `5` are transferred in tenths of a degree, for example `345` for `34.5 degrees C`. Current water flow is calculated as `ODB ID 15 / 10` in `L/min`. Eco flow limit values on ODB ID `7` are also transferred as tenths, for example `60` for `6 L/min`. Configured power is read from ODB ID `20` once after startup and is expected to be `18` through `24 kW`. Current power consumption is calculated as `ODB ID 16 / 100 * configured power` in `kW`.
 
 The writable setting IDs use the generic Socket.IO message command `assign:ste.common.odb:value`. The integration waits until the DHE sends back the same ODB id and confirmed value before updating the Home Assistant entity state.
 
-## App Timer Commands
+## App timer commands
 
-The DHE exposes both app timer paths listed below. The integration keeps them as separate Home Assistant entities and updates them from both `set:` and `assign:` messages.
+The DHE exposes both app timer paths below. The integration keeps them as separate Home Assistant entities and updates them from both `set:` and `assign:` messages.
 
 | Purpose | Command | Scaling / value |
 |---|---|---|
@@ -75,7 +106,9 @@ The DHE exposes both app timer paths listed below. The integration keeps them as
 | Read shower timer remaining time | `set:ste.app.showerTimer:remainingMilliseconds` | milliseconds, displayed as minutes |
 | Reset shower timer | `assign:ste.app.showerTimer:reset` | `true`, clears remaining time locally |
 
-## Consumption Commands
+The observed Socket.IO wire format for the app timers is documented in [`APP_TIMER_PROTOCOL.md`](../../APP_TIMER_PROTOCOL.md).
+
+## Consumption commands
 
 The DHE sends consumption data as app messages. The `chart` array contains the consumption values shown in the DHE UI. The `sum` value matches the EUR total shown by the DHE and is exposed as the `cost_eur` attribute.
 
@@ -88,7 +121,7 @@ The DHE sends consumption data as app messages. The `chart` array contains the c
 | Energy consumption year | `set:ste.app.consumption:energyYear` | `kWh` |
 | Energy consumption years | `set:ste.app.consumption:energyYears` | `kWh` |
 
-## HACS Installation
+## Installation via HACS custom repository
 
 1. Open HACS:
 
@@ -105,7 +138,7 @@ HACS -> Integrations -> Three dots -> Custom repositories
 Settings -> Devices & services -> Add integration -> Stiebel DHE Connect
 ```
 
-## Manual Installation
+## Manual installation
 
 Copy the integration folder to:
 
@@ -127,7 +160,7 @@ The Home Assistant UI asks for:
 
 Input is validated: host must be an IP address or hostname only; paths, usernames, query strings and embedded ports are rejected. The port must be between `1` and `65535`.
 
-## Pairing and Token
+## Pairing and token
 
 On first connection the DHE may request pairing. Confirm pairing on the DHE when prompted.
 
@@ -139,7 +172,7 @@ The token is stored locally at:
 
 To pair again, delete this file and restart Home Assistant or reload the integration.
 
-## Connection Behavior
+## Connection behavior
 
 - Startup: open session, check or refresh token, authenticate.
 - Runtime: keep long-polling GETs open and answer Engine.IO pings.
@@ -149,12 +182,11 @@ To pair again, delete this file and restart Home Assistant or reload the integra
 - Runtime updates: process incoming DHE ODB messages from the open session.
 - Temperature change: write ODB ID `66` through the same session and read back ODB ID `0`.
 - Setting changes: write the respective ODB id through `assign:ste.common.odb:value` and wait for the id/value confirmation from the DHE.
-- App timer updates: process `brushTimer` and `showerTimer` app messages from the open session and keep both timer states separate.
 - App timer changes: write the respective app timer command with a Socket.IO message id, use matching timer confirmation events when the DHE sends them, and otherwise keep Home Assistant on the requested value while later push events can still correct the state.
 - Consumption updates: process `ste.app.consumption` chart messages from the open session and publish chart totals plus `cost_eur` attributes.
 - Session close: entity becomes temporarily unavailable or reconnecting, then reconnects automatically.
 
-## Security Notes
+## Security notes
 
 - Use this integration only on a trusted local network.
 - Do not expose DHE port `8443` to the internet.
@@ -180,8 +212,9 @@ Common issues:
 | Pairing keeps repeating | Delete the token file and pair once again |
 | Writing fails | Check whether the DHE is locally reachable on port `8443` |
 | Temperature does not change | Check DHE limits, locks or device mode |
+| Timer switch missing in device controls | Update to `0.6.7` or newer and reload the integration |
 | Timer reset does not change immediately | Check whether the DHE accepts the matching `brushTimer` or `showerTimer` reset command |
 
-## Startup Behavior
+## Startup behavior
 
 The persistent DHE session runs as a Home Assistant background task and should not block Home Assistant startup.
