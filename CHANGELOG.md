@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.4
+
+- Bump integration release metadata for version `0.6.4`.
+- Refresh release notes for the `v0.6.4` tag.
+
 ## 0.6.3
 
 - Harden writable configuration entities against temporary readback delays.
