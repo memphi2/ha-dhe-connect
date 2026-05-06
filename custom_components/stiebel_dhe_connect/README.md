@@ -6,7 +6,7 @@ This component uses the local DHE Socket.IO / Engine.IO v3 long-polling interfac
 
 ## Version
 
-Current version: `0.7.0`.
+Current version: `0.7.3`.
 
 ## Entities
 
@@ -17,9 +17,9 @@ The integration provides:
 - water and energy consumption sensors from DHE app chart messages
 - Eco mode, Eco flow limit and maximum-temperature controls
 - bath-fill start/stop and target-volume controls
-- brush timer and shower timer switches, duration numbers, remaining sensors and start/stop/reset buttons
+- brush timer and shower timer switches, duration numbers, remaining sensors and start/reset buttons
 
-Timer durations are limited to `20 min`. Timer remaining sensors are displayed as `M:SS`.
+Timer switches start and stop the timers. Timer durations are limited to `20 min`. Timer remaining sensors are displayed as `M:SS`.
 
 ## Installation
 
