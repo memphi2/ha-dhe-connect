@@ -8,7 +8,7 @@ The integration talks to the local DHE web interface through the device's Socket
 
 Experimental custom integration. Tested with a locally reachable DHE Connect on port `8443`.
 
-Current version: `0.7.2`.
+Current version: `0.7.3`.
 
 ## Features
 
@@ -20,7 +20,8 @@ Current version: `0.7.2`.
 - Current water flow, current power, configured power and app consumption sensors.
 - Eco mode, Eco flow limit, maximum temperature and bath-fill controls.
 - Separate brush timer and shower timer controls.
-- Explicit timer start, stop and reset buttons.
+- Timer start and reset buttons.
+- Timer stop via the timer switches.
 - Timer duration numbers limited to `20 min`.
 - Timer remaining sensors displayed as `M:SS`.
 - English and German Home Assistant translations.
@@ -62,15 +63,13 @@ Consumption sensors expose the raw chart values as attributes and the EUR total 
 | Bath fill target volume | Number | ODB ID `3`, unit `L` |
 | Start bath fill | Button | ODB ID `1 = true` |
 | Stop bath fill | Button | ODB ID `1 = false` |
-| Brush timer | Switch | `assign:ste.app.brushTimer:activation` |
-| Shower timer | Switch | `assign:ste.app.showerTimer:activation` |
+| Brush timer | Switch | `assign:ste.app.brushTimer:activation`; on starts, off stops |
+| Shower timer | Switch | `assign:ste.app.showerTimer:activation`; on starts, off stops |
 | Brush timer duration | Number | `assign:ste.app.brushTimer:durationMilliseconds`, max. `20 min` |
 | Shower timer duration | Number | `assign:ste.app.showerTimer:durationMilliseconds`, max. `20 min` |
 | Start brush timer | Button | `assign:ste.app.brushTimer:activation = true` |
-| Stop brush timer | Button | `assign:ste.app.brushTimer:activation = false` |
 | Reset brush timer | Button | `assign:ste.app.brushTimer:reset` |
 | Start shower timer | Button | `assign:ste.app.showerTimer:activation = true` |
-| Stop shower timer | Button | `assign:ste.app.showerTimer:activation = false` |
 | Reset shower timer | Button | `assign:ste.app.showerTimer:reset` |
 
 ## DHE protocol notes
@@ -141,5 +140,5 @@ To pair again, delete this file and reload or restart Home Assistant.
 | Pairing repeats | Delete the token file and pair again |
 | Writing fails | Verify that the DHE is locally reachable on port `8443` |
 | Temperature does not change | Check DHE limits, locks or device mode |
-| Timer buttons missing | Update to `0.7.0` or newer, restart Home Assistant and reload the integration |
+| Timer buttons missing | Update to `0.7.3` or newer, restart Home Assistant and reload the integration |
 | Timer reset does not update immediately | Check whether the DHE accepts the matching `brushTimer` or `showerTimer` reset command |
