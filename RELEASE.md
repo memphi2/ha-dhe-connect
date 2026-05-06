@@ -1,19 +1,23 @@
-# Release v0.6.8
+# Release v0.7.0
 
 ## Summary
 
-This release adds explicit start and stop button entities for the DHE brush and shower timers and refines timer display limits.
+Documentation cleanup and version bump for the current DHE Connect feature set.
 
 ## Changes
 
-- Added explicit `Start brush timer` and `Stop brush timer` button entities.
-- Added explicit `Start shower timer` and `Stop shower timer` button entities.
-- Timer start buttons send `assign:ste.app.*Timer:activation` with `true`.
-- Timer stop buttons send `assign:ste.app.*Timer:activation` with `false`.
-- Brush and shower timer duration numbers are limited to a maximum of `20 min`.
-- Brush and shower timer remaining sensors display their value as `M:SS`.
-- Existing timer activation switches, duration numbers, remaining sensors and reset buttons remain available.
-- English and German translations are updated for the new timer buttons.
+- Bump integration version to `0.7.0`.
+- Clean up root README, component README, HACS info and timer protocol notes.
+- Remove outdated release-focus sections and duplicated documentation blocks.
+- Keep documentation focused on the current entity set and local protocol behavior.
+- Keep brand icons in `brand/icon.png` and `brand/dark_icon.png`.
+
+## Current timer behavior
+
+- Brush and shower timers have activation switches.
+- Brush and shower timers have explicit start, stop and reset buttons.
+- Timer duration numbers are limited to `20 min`.
+- Timer remaining sensors display their value as `M:SS`.
 
 ## Installation via HACS custom repository
 
