@@ -1,4 +1,4 @@
-# Release v0.6.5
+# Release v0.6.6
 
 ## Contents
 
@@ -30,6 +30,9 @@
 - App timer values are requested once after startup.
 - App timer writes use Socket.IO message ids matching the DHE web UI format.
 - App timer writes use matching `ste.app.brushTimer` / `ste.app.showerTimer` confirmation events when available and keep the requested value if the DHE does not echo a matching app event.
+- DHE app timer Socket.IO wire format is documented in `APP_TIMER_PROTOCOL.md`.
+- Brush and shower timer remaining sensors are explicitly kept in scope.
+- Shower timer activation uses the Home Assistant icon `mdi:shower-head`.
 - UI configuration through the Home Assistant config flow.
 - English and German Home Assistant UI translations.
 - Repository metadata for `memphi2/ha-dhe-connect`.
