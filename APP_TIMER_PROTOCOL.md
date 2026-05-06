@@ -1,28 +1,22 @@
 # DHE App Timer Protocol
 
-This note documents the observed local Socket.IO / Engine.IO message format for the DHE app timers.
+This document records the observed local Socket.IO / Engine.IO message format for the DHE app timers.
 
-## Scope
+## Timer paths
 
-The timer remaining sensors stay part of the integration:
+| Timer | Path |
+|---|---|
+| Brush timer | `ste.app.brushTimer` |
+| Shower timer | `ste.app.showerTimer` |
 
-- `Brush timer remaining`
-- `Shower timer remaining`
-
-They are fed by the DHE app timer `remainingMilliseconds` values and are displayed in Home Assistant as minutes.
-
-## Timer activation
-
-The brush timer and shower timer are started and stopped through the `activation` property.
+## Activation commands
 
 | Purpose | Outbound command | Value |
 |---|---|---|
-| Start shower timer | `assign:ste.app.showerTimer:activation` | `true` |
-| Stop shower timer | `assign:ste.app.showerTimer:activation` | `false` |
 | Start brush timer | `assign:ste.app.brushTimer:activation` | `true` |
 | Stop brush timer | `assign:ste.app.brushTimer:activation` | `false` |
-
-## Wire format
+| Start shower timer | `assign:ste.app.showerTimer:activation` | `true` |
+| Stop shower timer | `assign:ste.app.showerTimer:activation` | `false` |
 
 Outbound app timer write messages use the same Socket.IO message-id prefix as the DHE web UI:
 
@@ -30,39 +24,28 @@ Outbound app timer write messages use the same Socket.IO message-id prefix as th
 42/1.0.0,<message_id>["message",{"command":"assign:ste.app.showerTimer:activation","value":true}]
 ```
 
-Example shower timer start:
+Example:
 
 ```text
 42/1.0.0,79["message",{"command":"assign:ste.app.showerTimer:activation","value":true}]
 ```
 
-Example brush timer start:
+## Confirmation messages
 
-```text
-42/1.0.0,80["message",{"command":"assign:ste.app.brushTimer:activation","value":true}]
-```
-
-The DHE confirmation is observed as a `set:` message without a message id:
+The DHE can confirm activation changes as `set:` messages without a message id:
 
 ```text
 42/1.0.0,["message",{"command":"set:ste.app.showerTimer:activation","value":true}]
 ```
 
-```text
-42/1.0.0,["message",{"command":"set:ste.app.brushTimer:activation","value":true}]
-```
+The same structure is used for brush timer confirmations and for `false` values.
 
-The same structure applies to `false` confirmations when a timer is stopped.
+## Home Assistant entities
 
-## Home Assistant representation
+The integration exposes the app timers as:
 
-The integration keeps the following Home Assistant timer entities:
-
-- Brush timer activation switch, icon `mdi:toothbrush`
-- Shower timer activation switch, icon `mdi:shower-head`
-- Brush timer duration number
-- Shower timer duration number
-- Brush timer remaining sensor
-- Shower timer remaining sensor
-- Brush timer reset button
-- Shower timer reset button
+- activation switches
+- duration number entities, maximum `20 min`
+- explicit start and stop buttons
+- reset buttons
+- remaining-time sensors displayed as `M:SS`
