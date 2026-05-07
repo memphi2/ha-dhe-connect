@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.9
+
+- Fix temperature memory writes so `assign:ste.common.temperature:memory` object responses update the matching number entities.
+- Stop temperature memory preset buttons from waiting on generic ODB ID `66` readback, avoiding blocked commands after pressing a memory button.
+- Keep additional web UI startup reads best-effort so optional requests cannot abort session initialization.
+- Bump integration version to `0.7.9`.
+
 ## 0.7.8
 
 - Add temperature memory preset buttons for DHE memory slots 1 and 2.

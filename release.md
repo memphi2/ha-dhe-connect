@@ -1,21 +1,20 @@
-# Release [0.7.8] - 2026-05-07
+# Release [0.7.9] - 2026-05-07
 
 ## Included
-- Bump integration version to `0.7.8`.
-- Add DHE temperature memory preset buttons for memory slots 1 and 2.
-- Add configurable temperature memory number entities.
-- Request temperature memory values and additional known web UI startup values during session initialization.
-- Refresh root and component README notes plus translations for the new controls.
+- Bump integration version to `0.7.9`.
+- Fix DHE temperature memory number writes for single-object `assign:ste.common.temperature:memory` responses.
+- Stop temperature memory preset buttons from blocking on generic ODB ID `66` write confirmation.
+- Keep optional web UI startup reads best-effort so runtime updates and writes can continue.
 
 ## Summary
 
-Temperature memory control release with broader startup value initialization.
+Runtime hotfix for the temperature memory control release.
 
 ## Changes
 
-- Temperature memory buttons use ODB ID `66` values `10620` and `10650`.
-- Temperature memory numbers write through `assign:ste.common.temperature:memory` with `operation: add_change`.
-- Additional startup reads cover temperature memory, volume format, last usage, wellness programs, max override and time formats.
+- Temperature memory buttons still use ODB ID `66` values `10620` and `10650`, but no longer wait for a generic ID `66` readback before returning.
+- Temperature memory numbers write through `assign:ste.common.temperature:memory` with `operation: add_change` and update from both list and object responses.
+- Additional startup reads cover temperature memory, volume format, last usage, wellness programs, max override and time formats without aborting startup if an optional request fails.
 
 ## Installation via HACS custom repository
 

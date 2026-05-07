@@ -4,9 +4,9 @@ Local Home Assistant integration for Stiebel Eltron DHE Connect instantaneous wa
 
 Repository: `memphi2/ha-dhe-connect`.
 
-## Version 0.7.8
+## Version 0.7.9
 
-This release adds temperature memory controls and expands startup reads for known DHE web UI values.
+This release fixes temperature memory runtime handling after the 0.7.8 control release.
 
 ## Functionality
 
@@ -16,6 +16,8 @@ This release adds temperature memory controls and expands startup reads for know
 - Controls for Eco mode, Eco flow limit, maximum temperature and bath fill.
 - Brush timer and shower timer switches, duration numbers, remaining sensors and reset buttons.
 - Temperature memory preset buttons and configurable memory temperatures.
+- Temperature memory writes handle both list and single-object memory responses.
+- Optional web UI startup reads stay best-effort so the live DHE session can continue.
 - Wellness program switches for cold prevention,winter refresh, summer fitness and circulation support.
 - English and German Home Assistant translations.
 

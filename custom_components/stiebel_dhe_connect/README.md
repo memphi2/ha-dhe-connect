@@ -6,7 +6,7 @@ This component uses the local DHE Socket.IO / Engine.IO v3 long-polling interfac
 
 ## Version
 
-Current version: `0.7.8` (adds temperature memory controls and extended startup value reads).
+Current version: `0.7.9` (temperature memory runtime hotfix).
 
 ## Entities
 
@@ -21,7 +21,7 @@ The integration provides:
 - temperature memory preset buttons and configurable temperature memory numbers
 - wellness cold prevention switch and wellness program switches (winter refresh, summer fitness, circulation support)
 
-Bath fill and timer switches start and stop the respective function. Timer durations are limited to `20 min`. Timer remaining sensors are displayed as `M:SS`. Temperature memory buttons trigger DHE memory slots 1 and 2, and the matching number entities configure the stored temperatures.
+Bath fill and timer switches start and stop the respective function. Timer durations are limited to `20 min`. Timer remaining sensors are displayed as `M:SS`. Temperature memory buttons trigger DHE memory slots 1 and 2, and the matching number entities configure the stored temperatures. Temperature memory writes accept the DHE web UI's single-object `assign` response and refresh the stored memory values afterward.
 
 ## Installation
 

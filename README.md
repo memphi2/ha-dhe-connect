@@ -8,7 +8,7 @@ The integration talks to the local DHE web interface through the device's Socket
 
 Experimental custom integration. Tested with a locally reachable DHE Connect on port `8443`.
 
-Current version: `0.7.8` (temperature memory controls and extended startup value reads).
+Current version: `0.7.9` (temperature memory runtime hotfix).
 
 ## Features
 
@@ -78,9 +78,9 @@ Consumption sensors expose the raw chart values as attributes and the EUR total 
 
 ## DHE protocol notes
 
-The integration keeps one long-polling session open, answers Engine.IO pings and processes incoming DHE messages from that session. At startup it requests the known ODB IDs, temperature memory values, DHE app timer values, consumption values and the additional web UI startup values for volume format, last usage, wellness programs, max override and time formats once to seed Home Assistant state.
+The integration keeps one long-polling session open, answers Engine.IO pings and processes incoming DHE messages from that session. At startup it requests the known ODB IDs, temperature memory values, DHE app timer values, consumption values and the additional web UI startup values for volume format, last usage, wellness programs, max override and time formats once to seed Home Assistant state. Optional web UI startup reads are best-effort so unsupported or transient responses do not stop the runtime session.
 
-Writable ODB settings are sent through `assign:ste.common.odb:value`. Temperature memory temperatures use `assign:ste.common.temperature:memory` with `operation: add_change`. App timer commands are sent through `assign:ste.app.brushTimer:*` and `assign:ste.app.showerTimer:*` with Socket.IO message IDs matching the DHE web UI format.
+Writable ODB settings are sent through `assign:ste.common.odb:value`. Temperature memory preset buttons send ODB ID `66` values `10620` and `10650` without waiting for a generic ID `66` readback. Temperature memory temperatures use `assign:ste.common.temperature:memory` with `operation: add_change` and accept both list and single-object memory responses. App timer commands are sent through `assign:ste.app.brushTimer:*` and `assign:ste.app.showerTimer:*` with Socket.IO message IDs matching the DHE web UI format.
 
 More timer protocol details are documented in [`APP_TIMER_PROTOCOL.md`](APP_TIMER_PROTOCOL.md).
 
