@@ -40,18 +40,6 @@
   },
   "entity": {
     "button": {
-      "start_bath_fill": {
-        "name": "Start bath fill"
-      },
-      "stop_bath_fill": {
-        "name": "Stop bath fill"
-      },
-      "start_brush_timer": {
-        "name": "Start brush timer"
-      },
-      "start_shower_timer": {
-        "name": "Start shower timer"
-      },
       "reset_brush_timer": {
         "name": "Reset brush timer"
       },
@@ -114,6 +102,9 @@
     "switch": {
       "eco_mode": {
         "name": "Eco mode"
+      },
+      "bath_fill": {
+        "name": "Bath fill"
       },
       "brush_timer_activation": {
         "name": "Brush timer"
