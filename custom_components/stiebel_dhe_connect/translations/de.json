@@ -48,6 +48,9 @@
       },
       "wellness_shower_program_winter_refresh": {
         "name": "Wellness-Duschprogramm Wintererfrischung"
+      },
+      "wellness_shower_program_summer_fitness": {
+        "name": "Wellness-Duschprogramm Sommerfitness"
       }
     },
     "number": {
