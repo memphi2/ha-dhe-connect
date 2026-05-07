@@ -61,7 +61,7 @@ APP_TIMER_SWITCHES: tuple[StiebelDHEAppTimerSwitchDescription, ...] = (
 
 
 @dataclass(frozen=True, kw_only=True)
-class StiebelDHEWellnessProgramSwitchDescription(SwitchEntityDescription):
+class StiebelDHEWellnessShowerProgramSwitchDescription(SwitchEntityDescription):
     """Describe a wellness program switch."""
 
     program_id: int
@@ -85,32 +85,33 @@ async def async_setup_entry(
             name=runtime.name,
             client=runtime.client,
         ),
-        StiebelDHEWellnessColdPreventionSwitch(
-            entry_id=entry.entry_id,
-            name=runtime.name,
-            client=runtime.client,
-        ),
         *[
-            StiebelDHEWellnessProgramSwitch(
+            StiebelDHEWellnessShowerProgramSwitch(
                 entry_id=entry.entry_id,
                 name=runtime.name,
                 client=runtime.client,
                 description=description,
             )
             for description in (
-                StiebelDHEWellnessProgramSwitchDescription(
+                StiebelDHEWellnessShowerProgramSwitchDescription(
+                    key="wellness_cold_prevention",
+                    translation_key="wellness_cold_prevention",
+                    icon="mdi:shower",
+                    program_id=1,
+                ),
+                StiebelDHEWellnessShowerProgramSwitchDescription(
                     key="winter_refresh",
                     translation_key="winter_refresh",
                     icon="mdi:snowflake-thermometer",
                     program_id=2,
                 ),
-                StiebelDHEWellnessProgramSwitchDescription(
+                StiebelDHEWellnessShowerProgramSwitchDescription(
                     key="summer_fitness",
                     translation_key="summer_fitness",
                     icon="mdi:weather-sunny",
                     program_id=3,
                 ),
-                StiebelDHEWellnessProgramSwitchDescription(
+                StiebelDHEWellnessShowerProgramSwitchDescription(
                     key="circulation_support",
                     translation_key="circulation_support",
                     icon="mdi:heart-pulse",
@@ -290,89 +291,6 @@ class StiebelDHEBathFillSwitch(SwitchEntity, RestoreEntity):
         self.async_write_ha_state()
 
 
-class StiebelDHEWellnessColdPreventionSwitch(SwitchEntity, RestoreEntity):
-    """Wellness shower program cold prevention switch backed by DHE ODB id 2."""
-
-    _attr_has_entity_name = True
-    _attr_should_poll = False
-    _attr_translation_key = "wellness_cold_prevention"
-    _attr_icon = "mdi:shower"
-
-    def __init__(self, entry_id: str, name: str, client: DHEClient) -> None:
-        self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_wellness_cold_prevention"
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, client.host)},
-            "manufacturer": "STIEBEL ELTRON",
-            "model": "DHE Connect",
-            "name": name,
-        }
-        self._attr_extra_state_attributes = {"odb_id": ID_WELLNESS_SHOWER_PROGRAM, "program_value": 1}
-        self._client = client
-        self._attr_available = False
-        self._attr_is_on: bool | None = None
-        self._last_program_value: float | None = None
-        self._program_active: bool | None = None
-
-    async def async_added_to_hass(self) -> None:
-        self.async_on_remove(self._client.add_measurement_callback(self._handle_measurement_update))
-        self.async_on_remove(self._client.add_availability_callback(self._handle_availability_update))
-
-        last_value = self._client.last_measurements.get(ID_WELLNESS_SHOWER_PROGRAM)
-        last_stop_value = self._client.last_measurements.get(ID_STOP_PROGRAM)
-        if last_stop_value is not None:
-            self._program_active = bool(last_stop_value)
-        if last_value is not None:
-            self._last_program_value = float(last_value)
-            self._attr_is_on = self._program_active is not False and self._last_program_value == 1.0
-            self._attr_available = True
-        else:
-            last_state = await self.async_get_last_state()
-            if last_state and last_state.state in {STATE_ON, STATE_OFF}:
-                self._attr_is_on = last_state.state == STATE_ON
-                self._attr_available = True
-
-        await self._client.start()
-
-    async def async_turn_on(self, **kwargs) -> None:  # noqa: ANN003
-        try:
-            self._attr_is_on = await self._client.set_wellness_cold_prevention(True)
-        except DHEError as err:
-            self._attr_available = self._attr_is_on is not None
-            self.async_write_ha_state()
-            _LOGGER.error("Could not start DHE wellness cold prevention program: %s", err)
-            raise
-        self._attr_available = True
-        self.async_write_ha_state()
-
-    async def async_turn_off(self, **kwargs) -> None:  # noqa: ANN003
-        try:
-            self._attr_is_on = await self._client.set_wellness_cold_prevention(False)
-        except DHEError as err:
-            self._attr_available = self._attr_is_on is not None
-            self.async_write_ha_state()
-            _LOGGER.error("Could not stop DHE wellness cold prevention program: %s", err)
-            raise
-        self._attr_available = True
-        self.async_write_ha_state()
-
-    @callback
-    def _handle_measurement_update(self, odb_id: int, value: ODBValue) -> None:
-        if odb_id == ID_WELLNESS_SHOWER_PROGRAM:
-            self._last_program_value = float(value)
-        elif odb_id == ID_STOP_PROGRAM:
-            self._program_active = bool(value)
-        else:
-            return
-
-        self._attr_is_on = self._program_active is not False and self._last_program_value == 1.0
-        self._attr_available = True
-        self.async_write_ha_state()
-
-    @callback
-    def _handle_availability_update(self, available: bool) -> None:
-        self._attr_available = available or self._attr_is_on is not None
-        self.async_write_ha_state()
-
 
 class StiebelDHEAppTimerSwitch(SwitchEntity, RestoreEntity):
     """App timer activation switch."""
@@ -452,10 +370,10 @@ class StiebelDHEAppTimerSwitch(SwitchEntity, RestoreEntity):
         self.async_write_ha_state()
 
 
-class StiebelDHEWellnessProgramSwitch(SwitchEntity, RestoreEntity):
+class StiebelDHEWellnessShowerProgramSwitch(SwitchEntity, RestoreEntity):
     """Wellness program switch based on ODB id 2."""
 
-    entity_description: StiebelDHEWellnessProgramSwitchDescription
+    entity_description: StiebelDHEWellnessShowerProgramSwitchDescription
     _attr_has_entity_name = True
     _attr_should_poll = False
 
@@ -464,7 +382,7 @@ class StiebelDHEWellnessProgramSwitch(SwitchEntity, RestoreEntity):
         entry_id: str,
         name: str,
         client: DHEClient,
-        description: StiebelDHEWellnessProgramSwitchDescription,
+        description: StiebelDHEWellnessShowerProgramSwitchDescription,
     ) -> None:
         self.entity_description = description
         self._attr_translation_key = description.translation_key
