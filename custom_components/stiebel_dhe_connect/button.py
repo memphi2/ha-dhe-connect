@@ -14,7 +14,6 @@ from .client import (
     BRUSH_TIMER_PATH,
     DHEClient,
     DHEError,
-    ID_BATH_FILL_ACTIVE,
     ID_BRUSH_TIMER_ACTIVATION,
     ID_SHOWER_TIMER_ACTIVATION,
     ODBValue,
@@ -30,48 +29,12 @@ class StiebelDHEButtonEntityDescription(ButtonEntityDescription):
     """Describe a DHE action button."""
 
     method: str
-    icon: str
-    method_arg: bool | None = None
-    availability_measurement_id: int | None = None
-    timer_path: str | None = None
-    timer_property: str | None = None
+    availability_measurement_id: int
+    timer_path: str
+    timer_property: str
 
 
 BUTTON_DESCRIPTIONS: tuple[StiebelDHEButtonEntityDescription, ...] = (
-    StiebelDHEButtonEntityDescription(
-        key="start_bath_fill",
-        translation_key="start_bath_fill",
-        method="start_bath_fill",
-        icon="mdi:bathtub",
-        availability_measurement_id=ID_BATH_FILL_ACTIVE,
-    ),
-    StiebelDHEButtonEntityDescription(
-        key="stop_bath_fill",
-        translation_key="stop_bath_fill",
-        method="stop_bath_fill",
-        icon="mdi:stop-circle-outline",
-        availability_measurement_id=ID_BATH_FILL_ACTIVE,
-    ),
-    StiebelDHEButtonEntityDescription(
-        key="start_brush_timer",
-        translation_key="start_brush_timer",
-        method="set_brush_timer_activation",
-        method_arg=True,
-        icon="mdi:toothbrush",
-        availability_measurement_id=ID_BRUSH_TIMER_ACTIVATION,
-        timer_path=BRUSH_TIMER_PATH,
-        timer_property="activation",
-    ),
-    StiebelDHEButtonEntityDescription(
-        key="start_shower_timer",
-        translation_key="start_shower_timer",
-        method="set_shower_timer_activation",
-        method_arg=True,
-        icon="mdi:shower-head",
-        availability_measurement_id=ID_SHOWER_TIMER_ACTIVATION,
-        timer_path=SHOWER_TIMER_PATH,
-        timer_property="activation",
-    ),
     StiebelDHEButtonEntityDescription(
         key="reset_brush_timer",
         translation_key="reset_brush_timer",
@@ -138,13 +101,10 @@ class StiebelDHEButton(ButtonEntity):
             "model": "DHE Connect",
             "name": name,
         }
-        if description.timer_path:
-            self._attr_extra_state_attributes = {
-                "timer_path": description.timer_path,
-                "timer_property": description.timer_property,
-            }
-        else:
-            self._attr_extra_state_attributes = {"odb_id": ID_BATH_FILL_ACTIVE}
+        self._attr_extra_state_attributes = {
+            "timer_path": description.timer_path,
+            "timer_property": description.timer_property,
+        }
         self._client = client
         self._attr_available = False
         self._has_seen_availability_state = False
@@ -157,11 +117,7 @@ class StiebelDHEButton(ButtonEntity):
         self.async_on_remove(
             self._client.add_availability_callback(self._handle_availability_update)
         )
-        availability_measurement_id = self.entity_description.availability_measurement_id
-        if (
-            availability_measurement_id is not None
-            and self._client.last_measurements.get(availability_measurement_id) is not None
-        ):
+        if self._client.last_measurements.get(self.entity_description.availability_measurement_id) is not None:
             self._has_seen_availability_state = True
             self._attr_available = True
         else:
@@ -181,10 +137,7 @@ class StiebelDHEButton(ButtonEntity):
         """Execute the DHE button action."""
         try:
             method = getattr(self._client, self.entity_description.method)
-            if self.entity_description.method_arg is None:
-                await method()
-            else:
-                await method(self.entity_description.method_arg)
+            await method()
         except DHEError as err:
             _LOGGER.error("Could not execute DHE button %s: %s", self.entity_description.key, err)
             raise
