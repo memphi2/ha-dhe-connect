@@ -45,6 +45,9 @@
       },
       "reset_shower_timer": {
         "name": "Reset shower timer"
+      },
+      "wellness_shower_program_winter_refresh": {
+        "name": "Wellness shower program winter refresh"
       }
     },
     "number": {
