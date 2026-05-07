@@ -1,24 +1,21 @@
-# Release [0.7.6] - 2026-05-07
+# Release [0.7.7] - 2026-05-07
 
 ## Included
-- Bump integration version to `0.7.6`.
-- Refresh and align repository docs with the current entity set and installation flow.
-- Remove redundant release artifact notes from the repository root.
+- Bump integration version to `0.7.7`.
+- Optimize runtime callback dispatching by storing listeners as sets to avoid duplicate registrations and reduce list-copy overhead during frequent updates.
+- Replace repeated inline writable-option ID sets with a single shared constant for clearer and cheaper membership checks.
+- Refresh root and component README notes to document the maintenance/performance cleanup.
 
 ## Summary
 
-Adds dedicated wellness program switches while keeping switch-based controls for stateful functions.
+Performance and maintenance cleanup release with no entity model changes.
 
 ## Changes
 
-- Add wellness program switch entities for winter refresh, summer fitness and circulation support.
-- Keep wellness cold prevention as switch-based control.
-- Add matching English and German translation keys for the wellness shower program buttons.
-- Bump integration version to `0.7.5`.
+- Bump integration version to `0.7.7`.
+- Keep the current Home Assistant entity set and protocol behavior unchanged.
 
 ## Installation via HACS custom repository
 
 Repository URL: `https://github.com/memphi2/ha-dhe-connect`
 Category: `Integration`
-
-
