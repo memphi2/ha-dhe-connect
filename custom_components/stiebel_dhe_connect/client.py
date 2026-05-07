@@ -416,7 +416,7 @@ class DHEClient:
         )
 
     async def _set_app_timer_duration_minutes(self, path: str, measurement_id: int, minutes: float) -> float:
-        requested_minutes = int(round(_clamp(float(minutes), 1.0, 30.0)))
+        requested_minutes = int(round(_clamp(float(minutes), 1.0, 20.0)))
         milliseconds = requested_minutes * 60000
         confirmed = await self._write_app_value(
             f"assign:{path}:durationMilliseconds",
@@ -458,16 +458,12 @@ class DHEClient:
                     await self._post_packet(ctx, self._message_packet({"command": command, "value": value}))
                     try:
                         return await self._wait_for_app_write_confirmation(future)
-                    except TimeoutError:
+                    except TimeoutError as err:
                         self._clear_pending_write_future(None)
-                        _LOGGER.debug(
-                            "No DHE app confirmation for %s within %.1fs; using requested value %r",
-                            command,
-                            APP_COMMAND_CONFIRMATION_TIMEOUT,
-                            expected,
-                        )
-                        self._handle_measurement(measurement_id, expected, force_update=True)
-                        return expected
+                        raise DHEError(
+                            f"No DHE app confirmation for {command} within "
+                            f"{APP_COMMAND_CONFIRMATION_TIMEOUT:.1f}s"
+                        ) from err
                 except Exception as err:  # noqa: BLE001
                     self._clear_pending_write_future(None)
                     if attempt == 0:
