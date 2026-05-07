@@ -40,18 +40,6 @@
   },
   "entity": {
     "button": {
-      "start_bath_fill": {
-        "name": "Wannenfüllung starten"
-      },
-      "stop_bath_fill": {
-        "name": "Wannenfüllung stoppen"
-      },
-      "start_brush_timer": {
-        "name": "Zahnputz-Timer starten"
-      },
-      "start_shower_timer": {
-        "name": "Duschtimer starten"
-      },
       "reset_brush_timer": {
         "name": "Zahnputz-Timer zurücksetzen"
       },
@@ -114,6 +102,9 @@
     "switch": {
       "eco_mode": {
         "name": "Eco-Modus"
+      },
+      "bath_fill": {
+        "name": "Wannenfüllung"
       },
       "brush_timer_activation": {
         "name": "Zahnputz-Timer"
