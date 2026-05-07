@@ -386,7 +386,9 @@ class DHEClient:
         if enabled:
             await self.write_odb_value(ID_WELLNESS_SHOWER_PROGRAM, 1)
             return True
+
         await self.write_odb_value(ID_STOP_PROGRAM, True)
+        self._handle_measurement(ID_WELLNESS_SHOWER_PROGRAM, 0.0, force_update=True)
         return False
 
     async def set_wellness_shower_program(self, program_id: int) -> bool:
@@ -396,6 +398,7 @@ class DHEClient:
 
     async def stop_wellness_shower_program(self) -> bool:
         await self.write_odb_value(ID_STOP_PROGRAM, True)
+        self._handle_measurement(ID_WELLNESS_SHOWER_PROGRAM, 0.0, force_update=True)
         return False
 
     async def set_brush_timer_duration_minutes(self, minutes: float) -> float:
