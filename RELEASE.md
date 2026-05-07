@@ -1,16 +1,15 @@
-# Release v0.7.3
+# Release v0.7.5
 
 ## Summary
 
-Simplifies stateful controls by using switches for all true/false actions.
+Adds dedicated wellness program switches while keeping switch-based controls for stateful functions.
 
 ## Changes
 
-- Remove redundant timer start and stop button entities for brush timer and shower timer.
-- Keep timer reset buttons.
-- Use the brush and shower timer switches for start and stop behavior.
-- Replace bath fill start/stop buttons with a bath fill switch.
-- Remove obsolete English and German translation keys for removed button entities.
+- Add wellness program switch entities for winter refresh, summer fitness and circulation support.
+- Keep wellness cold prevention as switch-based control.
+- Add matching English and German translation keys for the wellness shower program buttons.
+- Bump integration version to `0.7.5`.
 
 ## Installation via HACS custom repository
 

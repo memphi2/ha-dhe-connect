@@ -8,7 +8,7 @@ The integration talks to the local DHE web interface through the device's Socket
 
 Experimental custom integration. Tested with a locally reachable DHE Connect on port `8443`.
 
-Current version: `0.7.4`.
+Current version: `0.7.5`.
 
 ## Features
 
@@ -21,6 +21,8 @@ Current version: `0.7.4`.
 - Eco mode, Eco flow limit, maximum temperature and bath-fill controls.
 - Separate brush timer and shower timer controls.
 - Timer reset buttons.
+- Wellness cold prevention switch.
+- Wellness program switches (winter refresh, summer fitness, circulation support).
 - Bath fill and timer start/stop via switches.
 - Timer duration numbers limited to `20 min`.
 - Timer remaining sensors displayed as `M:SS`.
@@ -68,6 +70,10 @@ Consumption sensors expose the raw chart values as attributes and the EUR total 
 | Shower timer duration | Number | `assign:ste.app.showerTimer:durationMilliseconds`, max. `20 min` |
 | Reset brush timer | Button | `assign:ste.app.brushTimer:reset` |
 | Reset shower timer | Button | `assign:ste.app.showerTimer:reset` |
+| Wellness cold prevention | Switch | ODB ID `2`; on sets value `1`, off sends stop trigger |
+| Winter refresh | Switch | ODB ID `2` value `2` + ODB ID `10` trigger; off sends stop |
+| Summer fitness | Switch | ODB ID `2` value `3` + ODB ID `10` trigger; off sends stop |
+| Circulation support | Switch | ODB ID `2` value `4` + ODB ID `10` trigger; off sends stop |
 
 ## DHE protocol notes
 
@@ -137,5 +143,5 @@ To pair again, delete this file and reload or restart Home Assistant.
 | Pairing repeats | Delete the token file and pair again |
 | Writing fails | Verify that the DHE is locally reachable on port `8443` |
 | Temperature does not change | Check DHE limits, locks or device mode |
-| Switches missing | Update to `0.7.4` or newer, restart Home Assistant and reload the integration |
+| Switches missing | Update to `0.7.5` or newer, restart Home Assistant and reload the integration |
 | Timer reset does not update immediately | Check whether the DHE accepts the matching `brushTimer` or `showerTimer` reset command |
