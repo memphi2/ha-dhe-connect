@@ -46,8 +46,7 @@ The integration exposes the app timers as:
 
 - activation switches for start and stop
 - duration number entities, maximum `20 min`
-- explicit start buttons
 - reset buttons
 - remaining-time sensors displayed as `M:SS`
 
-Separate stop button entities are intentionally not exposed because the activation switches already cover stop behavior.
+Separate start and stop button entities are intentionally not exposed because the activation switches already cover the complete start/stop behavior.
