@@ -387,7 +387,8 @@ class DHEClient:
             await self.write_odb_value(ID_WELLNESS_SHOWER_PROGRAM, 1)
             return True
 
-        await self.write_odb_value(ID_STOP_PROGRAM, True)
+        await self.write_odb_value(ID_STOP_PROGRAM, False)
+        self._handle_measurement(ID_STOP_PROGRAM, False, force_update=True)
         self._handle_measurement(ID_WELLNESS_SHOWER_PROGRAM, 0.0, force_update=True)
         return False
 
@@ -397,7 +398,8 @@ class DHEClient:
         return True
 
     async def stop_wellness_shower_program(self) -> bool:
-        await self.write_odb_value(ID_STOP_PROGRAM, True)
+        await self.write_odb_value(ID_STOP_PROGRAM, False)
+        self._handle_measurement(ID_STOP_PROGRAM, False, force_update=True)
         self._handle_measurement(ID_WELLNESS_SHOWER_PROGRAM, 0.0, force_update=True)
         return False
 
@@ -833,7 +835,7 @@ class DHEClient:
 
     @staticmethod
     def _convert_odb_value(odb_id: int, raw_value: Any) -> ODBValue:
-        if odb_id in {ID_BATH_FILL_ACTIVE, ID_ECO_MODE}:
+        if odb_id in {ID_BATH_FILL_ACTIVE, ID_ECO_MODE, ID_STOP_PROGRAM}:
             return _raw_to_bool(raw_value)
         if odb_id == ID_MAX_TEMPERATURE:
             value = _raw_to_float(raw_value)
