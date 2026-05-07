@@ -8,7 +8,7 @@ The integration talks to the local DHE web interface through the device's Socket
 
 Experimental custom integration. Tested with a locally reachable DHE Connect on port `8443`.
 
-Current version: `0.7.3`.
+Current version: `0.7.4`.
 
 ## Features
 
@@ -137,5 +137,5 @@ To pair again, delete this file and reload or restart Home Assistant.
 | Pairing repeats | Delete the token file and pair again |
 | Writing fails | Verify that the DHE is locally reachable on port `8443` |
 | Temperature does not change | Check DHE limits, locks or device mode |
-| Switches missing | Update to `0.7.3` or newer, restart Home Assistant and reload the integration |
+| Switches missing | Update to `0.7.4` or newer, restart Home Assistant and reload the integration |
 | Timer reset does not update immediately | Check whether the DHE accepts the matching `brushTimer` or `showerTimer` reset command |
