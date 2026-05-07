@@ -111,6 +111,9 @@
       },
       "shower_timer_activation": {
         "name": "Shower timer"
+      },
+      "wellness_cold_prevention": {
+        "name": "Cold prevention"
       }
     }
   }
