@@ -4,13 +4,14 @@ Local Home Assistant integration for Stiebel Eltron DHE Connect instantaneous wa
 
 Repository: `memphi2/ha-dhe-connect`.
 
-## Version 0.7.9
+## Version 0.7.10
 
-This release adds box-style temperature memory configuration and changes timer durations to box inputs.
+This release optimizes the runtime client and requests all currently known web UI startup values best-effort.
 
 ## Functionality
 
 - Local Socket.IO / Engine.IO v3 long-polling connection to the DHE.
+- Best-effort startup reads for currently known DHE web UI values without extra entities.
 - Target-temperature climate control.
 - Sensors for current water flow, current power, configured power and DHE app consumption charts.
 - Controls for Eco mode, Eco flow limit, maximum temperature and bath fill.

@@ -8,7 +8,7 @@ The integration talks to the local DHE web interface through the device's Socket
 
 Experimental custom integration. Tested with a locally reachable DHE Connect on port `8443`.
 
-Current version: `0.7.9` (temperature memory box inputs).
+Current version: `0.7.10` (optimized startup value reads).
 
 ## Features
 
@@ -16,6 +16,7 @@ Current version: `0.7.9` (temperature memory box inputs).
 - Local connection by IP address or hostname.
 - Persistent Socket.IO / Engine.IO v3 long-polling session with lightweight callback dispatching.
 - Automatic reconnect if the DHE closes the session.
+- Best-effort startup reads for all currently known DHE web UI values.
 - Target-temperature control through the existing DHE ODB interface.
 - Current water flow, current power, configured power and app consumption sensors.
 - Eco mode, Eco flow limit, maximum temperature and bath-fill controls.
@@ -79,7 +80,7 @@ Consumption sensors expose the raw chart values as attributes and the EUR total 
 
 ## DHE protocol notes
 
-The integration keeps one long-polling session open, answers Engine.IO pings and processes incoming DHE messages from that session. At startup it requests the known ODB IDs and the DHE app timer and consumption values once to seed Home Assistant state. Temperature memory values are requested best-effort so a failed optional response cannot stop the runtime session.
+The integration keeps one long-polling session open, answers Engine.IO pings and processes incoming DHE messages from that session. At startup it first requests the required entity seed values, then requests all currently known additional DHE web UI values best-effort. Optional reads cover remaining readable ODB ID `4`, temperature memory values, consumption volume format and last usage, wellness programs and maximum override. ODB ID `66` is command-only and is not read at startup. Optional responses are cached internally and do not create extra Home Assistant entities.
 
 Writable ODB settings are sent through `assign:ste.common.odb:value`. Temperature memory preset buttons send the DHE web UI's ODB ID `66` command values `10620` and `10650`. Temperature memory number boxes use `assign:ste.common.temperature:memory` with `operation: add_change` and accept both list and single-object memory responses. App timer commands are sent through `assign:ste.app.brushTimer:*` and `assign:ste.app.showerTimer:*` with Socket.IO message IDs matching the DHE web UI format.
 
