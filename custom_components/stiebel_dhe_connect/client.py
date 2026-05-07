@@ -27,10 +27,13 @@ ODB_ASSIGN_COMMAND = "assign:ste.common.odb:value"
 
 ID_SETPOINT = 0
 ID_BATH_FILL_ACTIVE = 1
+ID_WELLNESS_SHOWER_PROGRAM = 2
 ID_BATH_FILL_TARGET_VOLUME = 3
 ID_MAX_TEMPERATURE = 5
 ID_ECO_MODE = 6
 ID_ECO_FLOW_LIMIT = 7
+ID_WELLNESS_SHOWER_TRIGGER = 10
+WINTER_REFRESH_PROGRAM_ID = 2
 ID_WATER_FLOW = 15
 ID_POWER = 16
 ID_CONFIGURED_POWER = 20
@@ -414,6 +417,13 @@ class DHEClient:
             ID_SHOWER_TIMER_ACTIVATION,
             ID_SHOWER_TIMER_REMAINING,
         )
+
+    async def run_wellness_shower_program_winter_refresh(self) -> bool:
+        """Trigger the wellness shower program 'Winter refresh'."""
+        for _ in range(2):
+            await self.write_odb_value(ID_WELLNESS_SHOWER_PROGRAM, WINTER_REFRESH_PROGRAM_ID)
+            await self.write_odb_value(ID_WELLNESS_SHOWER_TRIGGER, True)
+        return True
 
     async def _set_app_timer_duration_minutes(self, path: str, measurement_id: int, minutes: float) -> float:
         requested_minutes = int(round(_clamp(float(minutes), 1.0, 20.0)))
