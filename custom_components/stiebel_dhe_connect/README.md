@@ -6,7 +6,7 @@ This component uses the local DHE Socket.IO / Engine.IO v3 long-polling interfac
 
 ## Version
 
-Current version: `0.7.5`.
+Current version: `0.7.6`.
 
 ## Entities
 
