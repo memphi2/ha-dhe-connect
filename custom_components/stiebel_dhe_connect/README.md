@@ -6,7 +6,7 @@ This component uses the local DHE Socket.IO / Engine.IO v3 long-polling interfac
 
 ## Version
 
-Current version: `0.7.3`.
+Current version: `0.7.5`.
 
 ## Entities
 
@@ -18,6 +18,7 @@ The integration provides:
 - Eco mode, Eco flow limit and maximum-temperature controls
 - bath-fill switch and target-volume control
 - brush timer and shower timer switches, duration numbers, remaining sensors and reset buttons
+- wellness cold prevention switch and wellness shower program buttons (winter refresh, summer fitness, circulation support)
 
 Bath fill and timer switches start and stop the respective function. Timer durations are limited to `20 min`. Timer remaining sensors are displayed as `M:SS`.
 
