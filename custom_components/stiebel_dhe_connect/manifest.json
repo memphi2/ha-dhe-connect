@@ -1,7 +1,7 @@
 {
   "domain": "stiebel_dhe_connect",
   "name": "Stiebel DHE Connect",
-  "version": "0.7.8",
+  "version": "0.7.7",
   "documentation": "https://github.com/memphi2/ha-dhe-connect",
   "requirements": [],
   "codeowners": [
