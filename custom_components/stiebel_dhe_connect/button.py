@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import Any
 
 from homeassistant.components.button import ButtonEntity, ButtonEntityDescription
 from homeassistant.config_entries import ConfigEntry
@@ -29,9 +30,11 @@ class StiebelDHEButtonEntityDescription(ButtonEntityDescription):
     """Describe a DHE action button."""
 
     method: str
-    availability_measurement_id: int
-    timer_path: str
-    timer_property: str
+    method_args: tuple[Any, ...] = ()
+    availability_measurement_id: int | None = None
+    timer_path: str | None = None
+    timer_property: str | None = None
+    extra_state_attributes: dict[str, Any] | None = None
 
 
 BUTTON_DESCRIPTIONS: tuple[StiebelDHEButtonEntityDescription, ...] = (
@@ -52,6 +55,30 @@ BUTTON_DESCRIPTIONS: tuple[StiebelDHEButtonEntityDescription, ...] = (
         availability_measurement_id=ID_SHOWER_TIMER_ACTIVATION,
         timer_path=SHOWER_TIMER_PATH,
         timer_property="reset",
+    ),
+    StiebelDHEButtonEntityDescription(
+        key="temperature_memory_1",
+        translation_key="temperature_memory_1",
+        method="press_temperature_memory",
+        method_args=(1,),
+        icon="mdi:numeric-1-box-outline",
+        extra_state_attributes={
+            "temperature_memory_slot": 1,
+            "odb_id": 66,
+            "odb_value": 10620,
+        },
+    ),
+    StiebelDHEButtonEntityDescription(
+        key="temperature_memory_2",
+        translation_key="temperature_memory_2",
+        method="press_temperature_memory",
+        method_args=(2,),
+        icon="mdi:numeric-2-box-outline",
+        extra_state_attributes={
+            "temperature_memory_slot": 2,
+            "odb_id": 66,
+            "odb_value": 10650,
+        },
     ),
 )
 
@@ -101,10 +128,12 @@ class StiebelDHEButton(ButtonEntity):
             "model": "DHE Connect",
             "name": name,
         }
-        self._attr_extra_state_attributes = {
-            "timer_path": description.timer_path,
-            "timer_property": description.timer_property,
-        }
+        extra_state_attributes = dict(description.extra_state_attributes or {})
+        if description.timer_path is not None:
+            extra_state_attributes["timer_path"] = description.timer_path
+        if description.timer_property is not None:
+            extra_state_attributes["timer_property"] = description.timer_property
+        self._attr_extra_state_attributes = extra_state_attributes or None
         self._client = client
         self._attr_available = False
         self._has_seen_availability_state = False
@@ -117,7 +146,11 @@ class StiebelDHEButton(ButtonEntity):
         self.async_on_remove(
             self._client.add_availability_callback(self._handle_availability_update)
         )
-        if self._client.last_measurements.get(self.entity_description.availability_measurement_id) is not None:
+        availability_measurement_id = self.entity_description.availability_measurement_id
+        if (
+            availability_measurement_id is not None
+            and self._client.last_measurements.get(availability_measurement_id) is not None
+        ):
             self._has_seen_availability_state = True
             self._attr_available = True
         else:
@@ -127,7 +160,8 @@ class StiebelDHEButton(ButtonEntity):
     @callback
     def _handle_measurement_update(self, odb_id: int, value: ODBValue) -> None:
         """Track whether the heater has delivered a related state."""
-        if odb_id != self.entity_description.availability_measurement_id:
+        availability_measurement_id = self.entity_description.availability_measurement_id
+        if availability_measurement_id is None or odb_id != availability_measurement_id:
             return
         self._has_seen_availability_state = True
         self._attr_available = True
@@ -137,7 +171,7 @@ class StiebelDHEButton(ButtonEntity):
         """Execute the DHE button action."""
         try:
             method = getattr(self._client, self.entity_description.method)
-            await method()
+            await method(*self.entity_description.method_args)
         except DHEError as err:
             _LOGGER.error("Could not execute DHE button %s: %s", self.entity_description.key, err)
             raise

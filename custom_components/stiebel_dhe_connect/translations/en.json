@@ -45,6 +45,12 @@
       },
       "reset_shower_timer": {
         "name": "Reset shower timer"
+      },
+      "temperature_memory_1": {
+        "name": "Temperature memory 1"
+      },
+      "temperature_memory_2": {
+        "name": "Temperature memory 2"
       }
     },
     "number": {

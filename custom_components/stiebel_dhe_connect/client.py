@@ -59,6 +59,10 @@ COMMAND_CONFIRMATION_TIMEOUT = 12.0
 COMMAND_READBACK_INTERVAL = 1.0
 APP_COMMAND_CONFIRMATION_TIMEOUT = 3.0
 AVAILABILITY_DROP_GRACE_SECONDS = 20.0
+TEMPERATURE_MEMORY_BUTTON_VALUES = {
+    1: 10620,
+    2: 10650,
+}
 INITIAL_VALUE_IDS = (
     ID_SETPOINT,
     ID_BATH_FILL_ACTIVE,
@@ -391,6 +395,39 @@ class DHEClient:
         raw_value = requested_l_min * 10
         return float(await self.write_odb_value(ID_ECO_FLOW_LIMIT, raw_value))
 
+    async def press_temperature_memory(self, memory_slot: int) -> bool:
+        try:
+            request_value = TEMPERATURE_MEMORY_BUTTON_VALUES[int(memory_slot)]
+        except KeyError as err:
+            raise DHEError(f"Unsupported temperature memory slot: {memory_slot}") from err
+
+        async with self._command_lock:
+            for attempt in range(2):
+                try:
+                    await self._ensure_ready(timeout=45)
+                    ctx = self._ctx
+                    if ctx is None:
+                        raise DHEError("DHE session is not connected")
+                    await self._post_packet(ctx, self._message_packet({
+                        "command": ODB_ASSIGN_COMMAND,
+                        "value": {"id": ID_SET_REQ, "value": request_value},
+                    }))
+                    try:
+                        await self._request_setpoint(ctx)
+                    except Exception as err:  # noqa: BLE001
+                        _LOGGER.debug(
+                            "Could not refresh setpoint after DHE temperature memory %s: %s",
+                            memory_slot,
+                            err,
+                        )
+                    return True
+                except Exception as err:  # noqa: BLE001
+                    if attempt == 0:
+                        await self._force_reconnect()
+                        await asyncio.sleep(1)
+                        continue
+                    raise DHEError(f"Could not press DHE temperature memory {memory_slot}: {err}") from err
+        raise DHEError(f"Could not press DHE temperature memory {memory_slot}")
 
     async def set_wellness_cold_prevention(self, enabled: bool) -> bool:
         if enabled:

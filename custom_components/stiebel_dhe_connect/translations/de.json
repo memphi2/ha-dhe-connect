@@ -45,6 +45,12 @@
       },
       "reset_shower_timer": {
         "name": "Duschtimer zurücksetzen"
+      },
+      "temperature_memory_1": {
+        "name": "Temperaturspeicher 1"
+      },
+      "temperature_memory_2": {
+        "name": "Temperaturspeicher 2"
       }
     },
     "number": {

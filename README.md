@@ -8,7 +8,7 @@ The integration talks to the local DHE web interface through the device's Socket
 
 Experimental custom integration. Tested with a locally reachable DHE Connect on port `8443`.
 
-Current version: `0.7.7` (runtime callback and writable-option handling optimization applied).
+Current version: `0.7.8` (temperature memory preset buttons).
 
 ## Features
 
@@ -21,6 +21,7 @@ Current version: `0.7.7` (runtime callback and writable-option handling optimiza
 - Eco mode, Eco flow limit, maximum temperature and bath-fill controls.
 - Separate brush timer and shower timer controls.
 - Timer reset buttons.
+- Temperature memory preset buttons for DHE memory slots 1 and 2.
 - Wellness program switches (winter refresh, summer fitness, circulation support,cold prevention).
 - Bath fill and timer start/stop via switches.
 
@@ -66,6 +67,8 @@ Consumption sensors expose the raw chart values as attributes and the EUR total 
 | Shower timer duration | Number | `assign:ste.app.showerTimer:durationMilliseconds`, max. `20 min` |
 | Reset brush timer | Button | `assign:ste.app.brushTimer:reset` |
 | Reset shower timer | Button | `assign:ste.app.showerTimer:reset` |
+| Temperature memory 1 | Button | ODB ID `66` value `10620` |
+| Temperature memory 2 | Button | ODB ID `66` value `10650` |
 | Cold prevention | Switch | ODB ID `2`; on sets value `1` + ODB ID `10` trigger; off sends stop |
 | Winter refresh | Switch | ODB ID `2` value `2` + ODB ID `10` trigger; off sends stop |
 | Summer fitness | Switch | ODB ID `2` value `3` + ODB ID `10` trigger; off sends stop |
@@ -75,7 +78,7 @@ Consumption sensors expose the raw chart values as attributes and the EUR total 
 
 The integration keeps one long-polling session open, answers Engine.IO pings and processes incoming DHE messages from that session. At startup it requests the known ODB IDs and the DHE app timer and consumption values once to seed Home Assistant state.
 
-Writable ODB settings are sent through `assign:ste.common.odb:value`. App timer commands are sent through `assign:ste.app.brushTimer:*` and `assign:ste.app.showerTimer:*` with Socket.IO message IDs matching the DHE web UI format.
+Writable ODB settings are sent through `assign:ste.common.odb:value`. Temperature memory preset buttons send the DHE web UI's ODB ID `66` command values `10620` and `10650`. App timer commands are sent through `assign:ste.app.brushTimer:*` and `assign:ste.app.showerTimer:*` with Socket.IO message IDs matching the DHE web UI format.
 
 More timer protocol details are documented in [`APP_TIMER_PROTOCOL.md`](APP_TIMER_PROTOCOL.md).
 
