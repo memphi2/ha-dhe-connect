@@ -385,6 +385,7 @@ class DHEClient:
     async def set_wellness_cold_prevention(self, enabled: bool) -> bool:
         if enabled:
             await self.write_odb_value(ID_WELLNESS_SHOWER_PROGRAM, 1)
+            await self.write_odb_value(ID_WELLNESS_SHOWER_TRIGGER, True)
             return True
 
         await self.write_odb_value(ID_STOP_PROGRAM, False)
