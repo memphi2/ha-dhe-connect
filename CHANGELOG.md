@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.9
+
+- Add box-mode number entities for configuring temperature memory slots 1 and 2.
+- Request `ste.common.temperature:memory` values best-effort at startup and after memory writes.
+- Handle both list and single-object temperature memory responses from the DHE web UI.
+- Show brush and shower timer duration numbers as box inputs instead of sliders.
+- Bump integration version to `0.7.9`.
+
 ## 0.7.8
 
 - Add temperature memory preset buttons for DHE memory slots 1 and 2.

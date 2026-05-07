@@ -1,21 +1,22 @@
-# Release [0.7.8] - 2026-05-07
+# Release [0.7.9] - 2026-05-07
 
 ## Included
-- Bump integration version to `0.7.8`.
-- Add DHE temperature memory preset buttons for memory slots 1 and 2.
-- Add English and German translations for the preset buttons.
-- Refresh root README, component README and HACS info notes for the new buttons.
+- Bump integration version to `0.7.9`.
+- Add box-mode number entities for DHE temperature memory slots 1 and 2.
+- Change brush and shower timer duration numbers to box mode.
+- Add best-effort temperature memory value reads.
+- Refresh docs and translations for the new number entities.
 
 ## Summary
 
-Temperature memory preset button release.
+Temperature memory configuration and timer duration box-input release.
 
 ## Changes
 
-- Memory slot 1 sends ODB ID `66` value `10620`.
-- Memory slot 2 sends ODB ID `66` value `10650`.
-- No temperature memory number/configuration entities are added in this release.
-- No additional startup reads are added in this release.
+- Temperature memory slot 1 writes through `assign:ste.common.temperature:memory` with memory ID `0`.
+- Temperature memory slot 2 writes through `assign:ste.common.temperature:memory` with memory ID `1`.
+- Temperature memory values are requested best-effort at startup and after memory writes.
+- Brush and shower timer duration controls use Home Assistant number box mode instead of slider mode.
 
 ## Installation via HACS custom repository
 

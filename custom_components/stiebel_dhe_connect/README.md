@@ -6,7 +6,7 @@ This component uses the local DHE Socket.IO / Engine.IO v3 long-polling interfac
 
 ## Version
 
-Current version: `0.7.8` (temperature memory preset buttons).
+Current version: `0.7.9` (temperature memory box inputs).
 
 ## Entities
 
@@ -19,9 +19,10 @@ The integration provides:
 - bath-fill switch and target-volume control
 - brush timer and shower timer switches, duration numbers, remaining sensors and reset buttons
 - temperature memory preset buttons for DHE memory slots 1 and 2
+- box-style number inputs for temperature memory values and timer durations
 - wellness cold prevention switch and wellness program switches (winter refresh, summer fitness, circulation support)
 
-Bath fill and timer switches start and stop the respective function. Timer durations are limited to `20 min`. Timer remaining sensors are displayed as `M:SS`.
+Bath fill and timer switches start and stop the respective function. Timer durations are limited to `20 min` and are shown as box inputs. Timer remaining sensors are displayed as `M:SS`. Temperature memory values are configurable through box inputs.
 
 ## Installation
 
