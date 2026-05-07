@@ -72,6 +72,15 @@ INITIAL_VALUE_IDS = (
     ID_POWER,
     ID_CONFIGURED_POWER,
 )
+WRITABLE_OPTION_IDS = {
+    ID_BATH_FILL_ACTIVE,
+    ID_BATH_FILL_TARGET_VOLUME,
+    ID_WELLNESS_SHOWER_PROGRAM,
+    ID_MAX_TEMPERATURE,
+    ID_ECO_MODE,
+    ID_ECO_FLOW_LIMIT,
+    ID_STOP_PROGRAM,
+}
 
 BRUSH_TIMER_PATH = "ste.app.brushTimer"
 SHOWER_TIMER_PATH = "ste.app.showerTimer"
@@ -217,9 +226,9 @@ class DHEClient:
         self._stopped = asyncio.Event()
         self._ready = asyncio.Event()
         self._command_lock = asyncio.Lock()
-        self._setpoint_callbacks: list[SetpointCallback] = []
-        self._availability_callbacks: list[AvailabilityCallback] = []
-        self._measurement_callbacks: list[MeasurementCallback] = []
+        self._setpoint_callbacks: set[SetpointCallback] = set()
+        self._availability_callbacks: set[AvailabilityCallback] = set()
+        self._measurement_callbacks: set[MeasurementCallback] = set()
         self._available = False
         self._availability_drop_task: asyncio.Task[None] | None = None
         self._last_setpoint: float | None = None
@@ -266,13 +275,13 @@ class DHEClient:
         return self._add_callback(self._measurement_callbacks, callback)
 
     @staticmethod
-    def _add_callback(callbacks: list[Callable[..., None]], callback: Callable[..., None]) -> CallbackRemover:
-        callbacks.append(callback)
+    def _add_callback(callbacks: set[Callable[..., None]], callback: Callable[..., None]) -> CallbackRemover:
+        callbacks.add(callback)
 
         def _remove_callback() -> None:
             try:
                 callbacks.remove(callback)
-            except ValueError:
+            except KeyError:
                 pass
 
         return _remove_callback
@@ -733,15 +742,7 @@ class DHEClient:
                 self._handle_measurement(odb_id, self._configured_power_kw)
                 if self._last_power_fraction is not None:
                     self._handle_measurement(ID_POWER, self._last_power_fraction * self._configured_power_kw)
-            elif odb_id in {
-                ID_BATH_FILL_ACTIVE,
-                ID_BATH_FILL_TARGET_VOLUME,
-    ID_WELLNESS_SHOWER_PROGRAM,
-                ID_MAX_TEMPERATURE,
-                ID_ECO_MODE,
-                ID_ECO_FLOW_LIMIT,
-    ID_STOP_PROGRAM,
-            }:
+            elif odb_id in WRITABLE_OPTION_IDS:
                 self._handle_measurement(odb_id, self._convert_odb_value(odb_id, raw_value))
         except (TypeError, ValueError) as err:
             _LOGGER.debug("Ignoring invalid DHE ODB value id=%s value=%r: %s", odb_id, raw_value, err)
