@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.5
+
+- Bump integration version to `0.7.5`.
+- Add wellness shower program buttons for winter refresh, summer fitness and circulation support.
+- Keep wellness cold prevention available as switch-based control.
+- Refresh root README, component README, HACS info and release notes for `0.7.5`.
+
 ## 0.7.4
 
 - Bump integration version to `0.7.4`.
