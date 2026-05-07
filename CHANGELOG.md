@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.4
+
+- Bump integration version to `0.7.4`.
+- Refresh README and manifest-aligned release metadata for `0.7.4`.
+
 ## 0.7.3
 
 - Remove redundant timer start and stop button entities for brush timer and shower timer.

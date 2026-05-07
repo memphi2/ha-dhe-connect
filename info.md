@@ -4,7 +4,7 @@ Local Home Assistant integration for Stiebel Eltron DHE Connect instantaneous wa
 
 Repository: `memphi2/ha-dhe-connect`.
 
-## Version 0.7.3
+## Version 0.7.4
 
 This release simplifies stateful controls by using switches for true/false actions. The bath fill, brush timer and shower timer switches start and stop the respective function.
 
