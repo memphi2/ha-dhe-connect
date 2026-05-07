@@ -45,6 +45,9 @@
       },
       "reset_shower_timer": {
         "name": "Duschtimer zurücksetzen"
+      },
+      "wellness_shower_program_winter_refresh": {
+        "name": "Wellness-Duschprogramm Wintererfrischung"
       }
     },
     "number": {
