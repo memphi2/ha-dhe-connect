@@ -27,10 +27,12 @@ ODB_ASSIGN_COMMAND = "assign:ste.common.odb:value"
 
 ID_SETPOINT = 0
 ID_BATH_FILL_ACTIVE = 1
+ID_WELLNESS_SHOWER_PROGRAM = 2
 ID_BATH_FILL_TARGET_VOLUME = 3
 ID_MAX_TEMPERATURE = 5
 ID_ECO_MODE = 6
 ID_ECO_FLOW_LIMIT = 7
+ID_WELLNESS_SHOWER_ACTIVE = 10
 ID_WATER_FLOW = 15
 ID_POWER = 16
 ID_CONFIGURED_POWER = 20
@@ -59,6 +61,8 @@ INITIAL_VALUE_IDS = (
     ID_MAX_TEMPERATURE,
     ID_ECO_MODE,
     ID_ECO_FLOW_LIMIT,
+    ID_WELLNESS_SHOWER_PROGRAM,
+    ID_WELLNESS_SHOWER_ACTIVE,
     ID_WATER_FLOW,
     ID_POWER,
     ID_CONFIGURED_POWER,
@@ -372,6 +376,12 @@ class DHEClient:
         requested_l_min = int(round(_clamp(float(liters_per_minute), 6.0, 8.0)))
         raw_value = requested_l_min * 10
         return float(await self.write_odb_value(ID_ECO_FLOW_LIMIT, raw_value))
+
+    async def set_summer_fitness_enabled(self, enabled: bool) -> bool:
+        if enabled:
+            await self.write_odb_value(ID_WELLNESS_SHOWER_PROGRAM, 3)
+            return bool(await self.write_odb_value(ID_WELLNESS_SHOWER_ACTIVE, True))
+        return bool(await self.write_odb_value(ID_WELLNESS_SHOWER_ACTIVE, False))
 
     async def set_brush_timer_duration_minutes(self, minutes: float) -> float:
         return await self._set_app_timer_duration_minutes(
@@ -782,7 +792,7 @@ class DHEClient:
 
     @staticmethod
     def _convert_odb_value(odb_id: int, raw_value: Any) -> ODBValue:
-        if odb_id in {ID_BATH_FILL_ACTIVE, ID_ECO_MODE}:
+        if odb_id in {ID_BATH_FILL_ACTIVE, ID_ECO_MODE, ID_WELLNESS_SHOWER_ACTIVE}:
             return _raw_to_bool(raw_value)
         if odb_id == ID_MAX_TEMPERATURE:
             value = _raw_to_float(raw_value)

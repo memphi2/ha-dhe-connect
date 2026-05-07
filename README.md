@@ -62,6 +62,7 @@ Consumption sensors expose the raw chart values as attributes and the EUR total 
 | Eco flow limit | Number | ODB ID `7`, values `6`, `7` or `8 L/min` |
 | Maximum temperature | Number | ODB ID `5`, range `30` to `50 °C` |
 | Bath fill target volume | Number | ODB ID `3`, unit `L` |
+| Wellness shower program Sommer-Fitness | Switch | writes ODB ID `2` to `3`, then ODB ID `10` to `true`; off writes ODB ID `10` to `false` |
 | Brush timer | Switch | `assign:ste.app.brushTimer:activation`; on starts, off stops |
 | Shower timer | Switch | `assign:ste.app.showerTimer:activation`; on starts, off stops |
 | Brush timer duration | Number | `assign:ste.app.brushTimer:durationMilliseconds`, max. `20 min` |
