@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.8
+
+- Add temperature memory preset buttons for DHE memory slots 1 and 2.
+- Send memory slot 1 through ODB ID `66` value `10620` and memory slot 2 through ODB ID `66` value `10650`.
+- Keep temperature memory configuration and additional startup reads out of this release.
+- Refresh documentation and translations for the new preset buttons.
+
 ## 0.7.7
 
 - Optimize runtime callback dispatching by storing listeners as sets to avoid duplicate registrations and reduce list-copy overhead during frequent updates.
