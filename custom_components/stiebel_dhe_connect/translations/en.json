@@ -51,6 +51,9 @@
       },
       "wellness_shower_program_summer_fitness": {
         "name": "Wellness shower program summer fitness"
+      },
+      "wellness_shower_program_circulation_support": {
+        "name": "Wellness shower program circulation support"
       }
     },
     "number": {

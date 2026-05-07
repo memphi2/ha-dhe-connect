@@ -71,6 +71,15 @@ BUTTON_DESCRIPTIONS: tuple[StiebelDHEButtonEntityDescription, ...] = (
         timer_path="ste.common.odb",
         timer_property="id:2 + id:10",
     ),
+    StiebelDHEButtonEntityDescription(
+        key="wellness_shower_program_circulation_support",
+        translation_key="wellness_shower_program_circulation_support",
+        method="run_wellness_shower_program_circulation_support",
+        icon="mdi:heart-pulse",
+        availability_measurement_id=ID_SHOWER_TIMER_ACTIVATION,
+        timer_path="ste.common.odb",
+        timer_property="id:2 + id:10",
+    ),
 )
 
 

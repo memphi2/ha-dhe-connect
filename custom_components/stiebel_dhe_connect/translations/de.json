@@ -51,6 +51,9 @@
       },
       "wellness_shower_program_summer_fitness": {
         "name": "Wellness-Duschprogramm Sommerfitness"
+      },
+      "wellness_shower_program_circulation_support": {
+        "name": "Wellness-Duschprogramm Durchblutungsförderung"
       }
     },
     "number": {
