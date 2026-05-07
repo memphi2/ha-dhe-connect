@@ -2,11 +2,7 @@
   "name": "Stiebel DHE Connect",
   "render_readme": true,
   "domains": [
-    "button",
-    "climate",
-    "number",
-    "sensor",
-    "switch"
+    "stiebel_dhe_connect"
   ],
   "country": [
     "DE"
