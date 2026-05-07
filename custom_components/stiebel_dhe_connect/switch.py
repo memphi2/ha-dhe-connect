@@ -20,6 +20,7 @@ from .client import (
     ID_BATH_FILL_ACTIVE,
     ID_BRUSH_TIMER_ACTIVATION,
     ID_ECO_MODE,
+    ID_STOP_PROGRAM,
     ID_WELLNESS_SHOWER_PROGRAM,
     ID_SHOWER_TIMER_ACTIVATION,
     ODBValue,
@@ -162,10 +163,10 @@ class StiebelDHEEcoModeSwitch(SwitchEntity, RestoreEntity):
             self._attr_is_on = bool(last_value)
             self._attr_available = True
         else:
-            last_state = await self.async_get_last_state()
-            if last_state and last_state.state in {STATE_ON, STATE_OFF}:
-                self._attr_is_on = last_state.state == STATE_ON
-                self._attr_available = True
+            # Do not restore previous Home Assistant state here: ODB id 2 reflects
+            # dynamic device runtime and a restored ON state can be stale after
+            # restart, showing an active wellness program although none is running.
+            self._attr_is_on = False
 
         await self._client.start()
 
@@ -242,10 +243,10 @@ class StiebelDHEBathFillSwitch(SwitchEntity, RestoreEntity):
             self._attr_is_on = bool(last_value)
             self._attr_available = True
         else:
-            last_state = await self.async_get_last_state()
-            if last_state and last_state.state in {STATE_ON, STATE_OFF}:
-                self._attr_is_on = last_state.state == STATE_ON
-                self._attr_available = True
+            # Do not restore previous Home Assistant state here: ODB id 2 reflects
+            # dynamic device runtime and a restored ON state can be stale after
+            # restart, showing an active wellness program although none is running.
+            self._attr_is_on = False
 
         await self._client.start()
 
@@ -309,20 +310,26 @@ class StiebelDHEWellnessColdPreventionSwitch(SwitchEntity, RestoreEntity):
         self._client = client
         self._attr_available = False
         self._attr_is_on: bool | None = None
+        self._last_program_value: float | None = None
+        self._program_active: bool | None = None
 
     async def async_added_to_hass(self) -> None:
         self.async_on_remove(self._client.add_measurement_callback(self._handle_measurement_update))
         self.async_on_remove(self._client.add_availability_callback(self._handle_availability_update))
 
         last_value = self._client.last_measurements.get(ID_WELLNESS_SHOWER_PROGRAM)
+        last_stop_value = self._client.last_measurements.get(ID_STOP_PROGRAM)
+        if last_stop_value is not None:
+            self._program_active = bool(last_stop_value)
         if last_value is not None:
-            self._attr_is_on = float(last_value) == 1.0
+            self._last_program_value = float(last_value)
+            self._attr_is_on = self._program_active is not False and self._last_program_value == 1.0
             self._attr_available = True
         else:
-            last_state = await self.async_get_last_state()
-            if last_state and last_state.state in {STATE_ON, STATE_OFF}:
-                self._attr_is_on = last_state.state == STATE_ON
-                self._attr_available = True
+            # Do not restore previous Home Assistant state here: ODB id 2 reflects
+            # dynamic device runtime and a restored ON state can be stale after
+            # restart, showing an active wellness program although none is running.
+            self._attr_is_on = False
 
         await self._client.start()
 
@@ -350,10 +357,14 @@ class StiebelDHEWellnessColdPreventionSwitch(SwitchEntity, RestoreEntity):
 
     @callback
     def _handle_measurement_update(self, odb_id: int, value: ODBValue) -> None:
-        if odb_id != ID_WELLNESS_SHOWER_PROGRAM:
+        if odb_id == ID_WELLNESS_SHOWER_PROGRAM:
+            self._last_program_value = float(value)
+        elif odb_id == ID_STOP_PROGRAM:
+            self._program_active = bool(value)
+        else:
             return
 
-        self._attr_is_on = float(value) == 1.0
+        self._attr_is_on = self._program_active is not False and self._last_program_value == 1.0
         self._attr_available = True
         self.async_write_ha_state()
 
@@ -469,14 +480,24 @@ class StiebelDHEWellnessProgramSwitch(SwitchEntity, RestoreEntity):
         self._client = client
         self._attr_available = False
         self._attr_is_on: bool | None = None
+        self._last_program_value: float | None = None
+        self._program_active: bool | None = None
 
     async def async_added_to_hass(self) -> None:
         self.async_on_remove(self._client.add_measurement_callback(self._handle_measurement_update))
         self.async_on_remove(self._client.add_availability_callback(self._handle_availability_update))
         last_value = self._client.last_measurements.get(ID_WELLNESS_SHOWER_PROGRAM)
+        last_stop_value = self._client.last_measurements.get(ID_STOP_PROGRAM)
+        if last_stop_value is not None:
+            self._program_active = bool(last_stop_value)
         if last_value is not None:
-            self._attr_is_on = float(last_value) == float(self.entity_description.program_id)
+            self._last_program_value = float(last_value)
+            self._attr_is_on = self._program_active is not False and self._last_program_value == float(self.entity_description.program_id)
             self._attr_available = True
+        else:
+            # Do not infer ON from previously restored state; wait for live value.
+            self._attr_is_on = False
+
         await self._client.start()
 
     async def async_turn_on(self, **kwargs) -> None:  # noqa: ANN003
@@ -505,9 +526,16 @@ class StiebelDHEWellnessProgramSwitch(SwitchEntity, RestoreEntity):
 
     @callback
     def _handle_measurement_update(self, odb_id: int, value: ODBValue) -> None:
-        if odb_id != ID_WELLNESS_SHOWER_PROGRAM:
+        if odb_id == ID_WELLNESS_SHOWER_PROGRAM:
+            self._last_program_value = float(value)
+        elif odb_id == ID_STOP_PROGRAM:
+            self._program_active = bool(value)
+        else:
             return
-        self._attr_is_on = float(value) == float(self.entity_description.program_id)
+        self._attr_is_on = (
+            self._program_active is not False
+            and self._last_program_value == float(self.entity_description.program_id)
+        )
         self._attr_available = True
         self.async_write_ha_state()
 
