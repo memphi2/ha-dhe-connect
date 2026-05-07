@@ -75,6 +75,13 @@ The integration keeps one long-polling session open, answers Engine.IO pings and
 
 Writable ODB settings are sent through `assign:ste.common.odb:value`. App timer commands are sent through `assign:ste.app.brushTimer:*` and `assign:ste.app.showerTimer:*` with Socket.IO message IDs matching the DHE web UI format.
 
+For the wellness shower program `Sommer-Fitness`, the DHE web UI sends ODB writes with `assign:ste.common.odb:value` (not `set:...`) for IDs `2` and `10`, for example:
+
+```text
+42/1.0.0,80["message",{"command":"assign:ste.common.odb:value","value":{"id":2,"value":3}}]
+42/1.0.0,81["message",{"command":"assign:ste.common.odb:value","value":{"id":10,"value":true}}]
+```
+
 More timer protocol details are documented in [`APP_TIMER_PROTOCOL.md`](APP_TIMER_PROTOCOL.md).
 
 ## Installation via HACS custom repository
