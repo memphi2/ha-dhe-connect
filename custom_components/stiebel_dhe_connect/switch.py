@@ -163,10 +163,10 @@ class StiebelDHEEcoModeSwitch(SwitchEntity, RestoreEntity):
             self._attr_is_on = bool(last_value)
             self._attr_available = True
         else:
-            # Do not restore previous Home Assistant state here: ODB id 2 reflects
-            # dynamic device runtime and a restored ON state can be stale after
-            # restart, showing an active wellness program although none is running.
-            self._attr_is_on = False
+            last_state = await self.async_get_last_state()
+            if last_state and last_state.state in {STATE_ON, STATE_OFF}:
+                self._attr_is_on = last_state.state == STATE_ON
+                self._attr_available = True
 
         await self._client.start()
 
@@ -243,10 +243,10 @@ class StiebelDHEBathFillSwitch(SwitchEntity, RestoreEntity):
             self._attr_is_on = bool(last_value)
             self._attr_available = True
         else:
-            # Do not restore previous Home Assistant state here: ODB id 2 reflects
-            # dynamic device runtime and a restored ON state can be stale after
-            # restart, showing an active wellness program although none is running.
-            self._attr_is_on = False
+            last_state = await self.async_get_last_state()
+            if last_state and last_state.state in {STATE_ON, STATE_OFF}:
+                self._attr_is_on = last_state.state == STATE_ON
+                self._attr_available = True
 
         await self._client.start()
 
@@ -326,10 +326,10 @@ class StiebelDHEWellnessColdPreventionSwitch(SwitchEntity, RestoreEntity):
             self._attr_is_on = self._program_active is not False and self._last_program_value == 1.0
             self._attr_available = True
         else:
-            # Do not restore previous Home Assistant state here: ODB id 2 reflects
-            # dynamic device runtime and a restored ON state can be stale after
-            # restart, showing an active wellness program although none is running.
-            self._attr_is_on = False
+            last_state = await self.async_get_last_state()
+            if last_state and last_state.state in {STATE_ON, STATE_OFF}:
+                self._attr_is_on = last_state.state == STATE_ON
+                self._attr_available = True
 
         await self._client.start()
 
@@ -495,8 +495,10 @@ class StiebelDHEWellnessProgramSwitch(SwitchEntity, RestoreEntity):
             self._attr_is_on = self._program_active is not False and self._last_program_value == float(self.entity_description.program_id)
             self._attr_available = True
         else:
-            # Do not infer ON from previously restored state; wait for live value.
-            self._attr_is_on = False
+            last_state = await self.async_get_last_state()
+            if last_state and last_state.state in {STATE_ON, STATE_OFF}:
+                self._attr_is_on = last_state.state == STATE_ON
+                self._attr_available = True
 
         await self._client.start()
 
