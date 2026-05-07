@@ -16,10 +16,10 @@ The integration provides:
 - current water flow, current power and configured power sensors
 - water and energy consumption sensors from DHE app chart messages
 - Eco mode, Eco flow limit and maximum-temperature controls
-- bath-fill start/stop and target-volume controls
-- brush timer and shower timer switches, duration numbers, remaining sensors and start/reset buttons
+- bath-fill switch and target-volume control
+- brush timer and shower timer switches, duration numbers, remaining sensors and reset buttons
 
-Timer switches start and stop the timers. Timer durations are limited to `20 min`. Timer remaining sensors are displayed as `M:SS`.
+Bath fill and timer switches start and stop the respective function. Timer durations are limited to `20 min`. Timer remaining sensors are displayed as `M:SS`.
 
 ## Installation
 
