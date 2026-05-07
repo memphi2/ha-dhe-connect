@@ -20,8 +20,8 @@ Current version: `0.7.3`.
 - Current water flow, current power, configured power and app consumption sensors.
 - Eco mode, Eco flow limit, maximum temperature and bath-fill controls.
 - Separate brush timer and shower timer controls.
-- Timer start and reset buttons.
-- Timer stop via the timer switches.
+- Timer reset buttons.
+- Bath fill and timer start/stop via switches.
 - Timer duration numbers limited to `20 min`.
 - Timer remaining sensors displayed as `M:SS`.
 - English and German Home Assistant translations.
@@ -58,18 +58,15 @@ Consumption sensors expose the raw chart values as attributes and the EUR total 
 | Entity | Type | Source / behavior |
 |---|---|---|
 | Eco mode | Switch | ODB ID `6` |
+| Wannenfüllung / Bath fill | Switch | ODB ID `1`; on starts, off stops |
 | Eco flow limit | Number | ODB ID `7`, values `6`, `7` or `8 L/min` |
 | Maximum temperature | Number | ODB ID `5`, range `30` to `50 °C` |
 | Bath fill target volume | Number | ODB ID `3`, unit `L` |
-| Start bath fill | Button | ODB ID `1 = true` |
-| Stop bath fill | Button | ODB ID `1 = false` |
 | Brush timer | Switch | `assign:ste.app.brushTimer:activation`; on starts, off stops |
 | Shower timer | Switch | `assign:ste.app.showerTimer:activation`; on starts, off stops |
 | Brush timer duration | Number | `assign:ste.app.brushTimer:durationMilliseconds`, max. `20 min` |
 | Shower timer duration | Number | `assign:ste.app.showerTimer:durationMilliseconds`, max. `20 min` |
-| Start brush timer | Button | `assign:ste.app.brushTimer:activation = true` |
 | Reset brush timer | Button | `assign:ste.app.brushTimer:reset` |
-| Start shower timer | Button | `assign:ste.app.showerTimer:activation = true` |
 | Reset shower timer | Button | `assign:ste.app.showerTimer:reset` |
 
 ## DHE protocol notes
@@ -140,5 +137,5 @@ To pair again, delete this file and reload or restart Home Assistant.
 | Pairing repeats | Delete the token file and pair again |
 | Writing fails | Verify that the DHE is locally reachable on port `8443` |
 | Temperature does not change | Check DHE limits, locks or device mode |
-| Timer buttons missing | Update to `0.7.3` or newer, restart Home Assistant and reload the integration |
+| Switches missing | Update to `0.7.3` or newer, restart Home Assistant and reload the integration |
 | Timer reset does not update immediately | Check whether the DHE accepts the matching `brushTimer` or `showerTimer` reset command |
