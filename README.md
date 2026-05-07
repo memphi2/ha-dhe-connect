@@ -8,13 +8,13 @@ The integration talks to the local DHE web interface through the device's Socket
 
 Experimental custom integration. Tested with a locally reachable DHE Connect on port `8443`.
 
-Current version: `0.7.6`.
+Current version: `0.7.6` (documentation and internal performance cleanup applied).
 
 ## Features
 
 - UI-based Home Assistant config flow.
 - Local connection by IP address or hostname.
-- Persistent Socket.IO / Engine.IO v3 long-polling session.
+- Persistent Socket.IO / Engine.IO v3 long-polling session with lightweight callback dispatching.
 - Automatic reconnect if the DHE closes the session.
 - Target-temperature control through the existing DHE ODB interface.
 - Current water flow, current power, configured power and app consumption sensors.
