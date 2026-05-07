@@ -45,12 +45,6 @@
       },
       "reset_shower_timer": {
         "name": "Reset shower timer"
-      },
-      "temperature_memory_1": {
-        "name": "Temperature memory 1"
-      },
-      "temperature_memory_2": {
-        "name": "Temperature memory 2"
       }
     },
     "number": {
@@ -68,12 +62,6 @@
       },
       "shower_timer_duration": {
         "name": "Shower timer duration"
-      },
-      "temperature_memory_1_temperature": {
-        "name": "Temperature memory 1 temperature"
-      },
-      "temperature_memory_2_temperature": {
-        "name": "Temperature memory 2 temperature"
       }
     },
     "sensor": {

@@ -8,7 +8,7 @@ The integration talks to the local DHE web interface through the device's Socket
 
 Experimental custom integration. Tested with a locally reachable DHE Connect on port `8443`.
 
-Current version: `0.7.8` (temperature memory controls and extended startup value reads).
+Current version: `0.7.7` (runtime callback and writable-option handling optimization applied).
 
 ## Features
 
@@ -21,7 +21,6 @@ Current version: `0.7.8` (temperature memory controls and extended startup value
 - Eco mode, Eco flow limit, maximum temperature and bath-fill controls.
 - Separate brush timer and shower timer controls.
 - Timer reset buttons.
-- Temperature memory preset buttons and configurable memory temperatures.
 - Wellness program switches (winter refresh, summer fitness, circulation support,cold prevention).
 - Bath fill and timer start/stop via switches.
 
@@ -67,10 +66,6 @@ Consumption sensors expose the raw chart values as attributes and the EUR total 
 | Shower timer duration | Number | `assign:ste.app.showerTimer:durationMilliseconds`, max. `20 min` |
 | Reset brush timer | Button | `assign:ste.app.brushTimer:reset` |
 | Reset shower timer | Button | `assign:ste.app.showerTimer:reset` |
-| Temperature memory 1 | Button | ODB ID `66` value `10620` |
-| Temperature memory 2 | Button | ODB ID `66` value `10650` |
-| Temperature memory 1 temperature | Number | `assign:ste.common.temperature:memory`, memory ID `0` |
-| Temperature memory 2 temperature | Number | `assign:ste.common.temperature:memory`, memory ID `1` |
 | Cold prevention | Switch | ODB ID `2`; on sets value `1` + ODB ID `10` trigger; off sends stop |
 | Winter refresh | Switch | ODB ID `2` value `2` + ODB ID `10` trigger; off sends stop |
 | Summer fitness | Switch | ODB ID `2` value `3` + ODB ID `10` trigger; off sends stop |
@@ -78,9 +73,9 @@ Consumption sensors expose the raw chart values as attributes and the EUR total 
 
 ## DHE protocol notes
 
-The integration keeps one long-polling session open, answers Engine.IO pings and processes incoming DHE messages from that session. At startup it requests the known ODB IDs, temperature memory values, DHE app timer values, consumption values and the additional web UI startup values for volume format, last usage, wellness programs, max override and time formats once to seed Home Assistant state.
+The integration keeps one long-polling session open, answers Engine.IO pings and processes incoming DHE messages from that session. At startup it requests the known ODB IDs and the DHE app timer and consumption values once to seed Home Assistant state.
 
-Writable ODB settings are sent through `assign:ste.common.odb:value`. Temperature memory temperatures use `assign:ste.common.temperature:memory` with `operation: add_change`. App timer commands are sent through `assign:ste.app.brushTimer:*` and `assign:ste.app.showerTimer:*` with Socket.IO message IDs matching the DHE web UI format.
+Writable ODB settings are sent through `assign:ste.common.odb:value`. App timer commands are sent through `assign:ste.app.brushTimer:*` and `assign:ste.app.showerTimer:*` with Socket.IO message IDs matching the DHE web UI format.
 
 More timer protocol details are documented in [`APP_TIMER_PROTOCOL.md`](APP_TIMER_PROTOCOL.md).
 

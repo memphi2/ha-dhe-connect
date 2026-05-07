@@ -25,8 +25,6 @@ from .client import (
     ID_ECO_FLOW_LIMIT,
     ID_MAX_TEMPERATURE,
     ID_SHOWER_TIMER_DURATION,
-    ID_TEMPERATURE_MEMORY_1,
-    ID_TEMPERATURE_MEMORY_2,
     SHOWER_TIMER_PATH,
     ODBValue,
 )
@@ -42,7 +40,6 @@ class StiebelDHENumberEntityDescription(NumberEntityDescription):
     odb_id: int
     timer_path: str | None = None
     timer_property: str | None = None
-    temperature_memory_slot: int | None = None
 
 
 NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
@@ -103,30 +100,6 @@ NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         timer_path=SHOWER_TIMER_PATH,
         timer_property="durationMilliseconds",
     ),
-    StiebelDHENumberEntityDescription(
-        key="temperature_memory_1_temperature",
-        translation_key="temperature_memory_1_temperature",
-        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-        device_class=NumberDeviceClass.TEMPERATURE,
-        icon="mdi:memory",
-        native_min_value=20.0,
-        native_max_value=60.0,
-        native_step=0.5,
-        odb_id=ID_TEMPERATURE_MEMORY_1,
-        temperature_memory_slot=1,
-    ),
-    StiebelDHENumberEntityDescription(
-        key="temperature_memory_2_temperature",
-        translation_key="temperature_memory_2_temperature",
-        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-        device_class=NumberDeviceClass.TEMPERATURE,
-        icon="mdi:memory",
-        native_min_value=20.0,
-        native_max_value=60.0,
-        native_step=0.5,
-        odb_id=ID_TEMPERATURE_MEMORY_2,
-        temperature_memory_slot=2,
-    ),
 )
 
 
@@ -175,11 +148,7 @@ class StiebelDHENumber(RestoreNumber):
             "model": "DHE Connect",
             "name": name,
         }
-        if description.temperature_memory_slot is not None:
-            self._attr_extra_state_attributes = {
-                "temperature_memory_slot": description.temperature_memory_slot,
-            }
-        elif description.timer_path:
+        if description.timer_path:
             self._attr_extra_state_attributes = {
                 "timer_path": description.timer_path,
                 "timer_property": description.timer_property,
@@ -214,12 +183,7 @@ class StiebelDHENumber(RestoreNumber):
     async def async_set_native_value(self, value: float) -> None:
         """Set the DHE ODB value and update state from confirmed writeback."""
         try:
-            if self.entity_description.temperature_memory_slot is not None:
-                confirmed = await self._client.set_temperature_memory(
-                    self.entity_description.temperature_memory_slot,
-                    value,
-                )
-            elif self.entity_description.odb_id == ID_BATH_FILL_TARGET_VOLUME:
+            if self.entity_description.odb_id == ID_BATH_FILL_TARGET_VOLUME:
                 confirmed = await self._client.set_bath_fill_target_volume(value)
             elif self.entity_description.odb_id == ID_MAX_TEMPERATURE:
                 confirmed = await self._client.set_maximum_temperature(value)
