@@ -1,19 +1,21 @@
-# Release [0.7.7] - 2026-05-07
+# Release [0.7.8] - 2026-05-07
 
 ## Included
-- Bump integration version to `0.7.7`.
-- Optimize runtime callback dispatching by storing listeners as sets to avoid duplicate registrations and reduce list-copy overhead during frequent updates.
-- Replace repeated inline writable-option ID sets with a single shared constant for clearer and cheaper membership checks.
-- Refresh root and component README notes to document the maintenance/performance cleanup.
+- Bump integration version to `0.7.8`.
+- Add DHE temperature memory preset buttons for memory slots 1 and 2.
+- Add configurable temperature memory number entities.
+- Request temperature memory values and additional known web UI startup values during session initialization.
+- Refresh root and component README notes plus translations for the new controls.
 
 ## Summary
 
-Performance and maintenance cleanup release with no entity model changes.
+Temperature memory control release with broader startup value initialization.
 
 ## Changes
 
-- Bump integration version to `0.7.7`.
-- Keep the current Home Assistant entity set and protocol behavior unchanged.
+- Temperature memory buttons use ODB ID `66` values `10620` and `10650`.
+- Temperature memory numbers write through `assign:ste.common.temperature:memory` with `operation: add_change`.
+- Additional startup reads cover temperature memory, volume format, last usage, wellness programs, max override and time formats.
 
 ## Installation via HACS custom repository
 

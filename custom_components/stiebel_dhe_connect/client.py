@@ -24,11 +24,15 @@ NS = "1.0.0"
 ODB_GET_COMMAND = "get:ste.common.odb:value"
 ODB_SET_COMMAND = "set:ste.common.odb:value"
 ODB_ASSIGN_COMMAND = "assign:ste.common.odb:value"
+TEMP_MEMORY_GET_COMMAND = "get:ste.common.temperature:memory"
+TEMP_MEMORY_SET_COMMAND = "set:ste.common.temperature:memory"
+TEMP_MEMORY_ASSIGN_COMMAND = "assign:ste.common.temperature:memory"
 
 ID_SETPOINT = 0
 ID_BATH_FILL_ACTIVE = 1
 ID_WELLNESS_SHOWER_PROGRAM = 2
 ID_BATH_FILL_TARGET_VOLUME = 3
+ID_STARTUP_ODB_4 = 4
 ID_MAX_TEMPERATURE = 5
 ID_ECO_MODE = 6
 ID_ECO_FLOW_LIMIT = 7
@@ -54,6 +58,8 @@ ID_WATER_CONSUMPTION_YEARS = 1023
 ID_ENERGY_CONSUMPTION_WEEK = 1031
 ID_ENERGY_CONSUMPTION_YEAR = 1032
 ID_ENERGY_CONSUMPTION_YEARS = 1033
+ID_TEMPERATURE_MEMORY_1 = 1041
+ID_TEMPERATURE_MEMORY_2 = 1042
 DEFAULT_CONFIGURED_POWER_KW = 24.0
 COMMAND_CONFIRMATION_TIMEOUT = 12.0
 COMMAND_READBACK_INTERVAL = 1.0
@@ -64,6 +70,7 @@ INITIAL_VALUE_IDS = (
     ID_BATH_FILL_ACTIVE,
     ID_BATH_FILL_TARGET_VOLUME,
     ID_WELLNESS_SHOWER_PROGRAM,
+    ID_STARTUP_ODB_4,
     ID_MAX_TEMPERATURE,
     ID_ECO_MODE,
     ID_ECO_FLOW_LIMIT,
@@ -80,6 +87,7 @@ WRITABLE_OPTION_IDS = {
     ID_ECO_MODE,
     ID_ECO_FLOW_LIMIT,
     ID_STOP_PROGRAM,
+    ID_SET_REQ,
 }
 
 BRUSH_TIMER_PATH = "ste.app.brushTimer"
@@ -128,6 +136,33 @@ CONSUMPTION_COMMAND_IDS = {
 CONSUMPTION_REQUEST_COMMANDS = tuple(
     command.replace("set:", "get:", 1) for command in CONSUMPTION_COMMAND_IDS
 )
+APP_STARTUP_REQUEST_COMMANDS = (
+    "get:ste.app.consumption:volumeFormat",
+    "get:ste.app.consumption:lastUsage",
+    "get:ste.app.wellness:programs",
+    "get:ste.common.temperature:maxOverride",
+    "get:ste.common.time:format_date",
+    "get:ste.common.time:format_clock",
+)
+APP_STARTUP_SET_COMMANDS = {
+    command.replace("get:", "set:", 1) for command in APP_STARTUP_REQUEST_COMMANDS
+}
+TEMPERATURE_MEMORY_BUTTON_VALUES = {
+    1: 10620,
+    2: 10650,
+}
+TEMPERATURE_MEMORY_SLOT_IDS = {
+    1: 0,
+    2: 1,
+}
+TEMPERATURE_MEMORY_ID_TO_MEASUREMENT = {
+    0: ID_TEMPERATURE_MEMORY_1,
+    1: ID_TEMPERATURE_MEMORY_2,
+}
+DEFAULT_TEMPERATURE_MEMORY_NAMES = {
+    0: "%1 1",
+    1: "%1 2",
+}
 
 
 ODBValue = bool | float
@@ -234,6 +269,7 @@ class DHEClient:
         self._last_setpoint: float | None = None
         self._last_measurements: dict[int, ODBValue] = {}
         self._last_measurement_attributes: dict[int, dict[str, Any]] = {}
+        self._last_app_values: dict[str, Any] = {}
         self._configured_power_kw = DEFAULT_CONFIGURED_POWER_KW
         self._last_power_fraction: float | None = None
         self._pending_setpoint_future: asyncio.Future[float] | None = None
@@ -264,6 +300,10 @@ class DHEClient:
             }
             for key, value in self._last_measurement_attributes.items()
         }
+
+    @property
+    def last_app_values(self) -> dict[str, Any]:
+        return dict(self._last_app_values)
 
     def add_setpoint_callback(self, callback: SetpointCallback) -> CallbackRemover:
         return self._add_callback(self._setpoint_callbacks, callback)
@@ -390,6 +430,43 @@ class DHEClient:
         requested_l_min = int(round(_clamp(float(liters_per_minute), 6.0, 8.0)))
         raw_value = requested_l_min * 10
         return float(await self.write_odb_value(ID_ECO_FLOW_LIMIT, raw_value))
+
+    async def press_temperature_memory(self, memory_slot: int) -> float:
+        try:
+            request_value = TEMPERATURE_MEMORY_BUTTON_VALUES[int(memory_slot)]
+        except KeyError as err:
+            raise DHEError(f"Unsupported temperature memory slot: {memory_slot}") from err
+
+        confirmed = await self.write_odb_value(ID_SET_REQ, request_value)
+        ctx = self._ctx
+        if ctx is not None:
+            await self._request_setpoint(ctx)
+            await self._request_temperature_memory(ctx)
+        return float(confirmed)
+
+    async def set_temperature_memory(self, memory_slot: int, temperature: float) -> float:
+        try:
+            memory_id = TEMPERATURE_MEMORY_SLOT_IDS[int(memory_slot)]
+            measurement_id = TEMPERATURE_MEMORY_ID_TO_MEASUREMENT[memory_id]
+        except KeyError as err:
+            raise DHEError(f"Unsupported temperature memory slot: {memory_slot}") from err
+
+        requested = _round_to_half_c(_clamp(float(temperature), 20.0, 60.0))
+        attributes = self._last_measurement_attributes.get(measurement_id, {})
+        name = str(attributes.get("name", DEFAULT_TEMPERATURE_MEMORY_NAMES.get(memory_id, f"%1 {memory_slot}")))
+        payload = {
+            "id": memory_id,
+            "name": name,
+            "temperature": requested,
+            "operation": "add_change",
+        }
+        confirmed = await self._write_app_value(
+            TEMP_MEMORY_ASSIGN_COMMAND,
+            payload,
+            measurement_id,
+            requested,
+        )
+        return float(confirmed)
 
 
     async def set_wellness_cold_prevention(self, enabled: bool) -> bool:
@@ -667,6 +744,12 @@ class DHEClient:
         if command in CONSUMPTION_COMMAND_IDS:
             self._handle_consumption_value(command, value)
             return
+        if command == TEMP_MEMORY_SET_COMMAND:
+            self._handle_temperature_memory_value(value)
+            return
+        if command in APP_STARTUP_SET_COMMANDS:
+            self._last_app_values[command] = value
+            return
         if command not in {ODB_SET_COMMAND, ODB_ASSIGN_COMMAND} or not isinstance(value, dict):
             return
         try:
@@ -727,6 +810,36 @@ class DHEClient:
             sum(chart),
             force_update=previous_attributes != attributes,
         )
+
+    def _handle_temperature_memory_value(self, raw_value: Any) -> None:
+        if not isinstance(raw_value, list):
+            _LOGGER.debug("Ignoring invalid temperature memory value: %r", raw_value)
+            return
+
+        for item in raw_value:
+            if not isinstance(item, dict):
+                continue
+            memory_id = item.get("id")
+            measurement_id = TEMPERATURE_MEMORY_ID_TO_MEASUREMENT.get(memory_id)
+            if measurement_id is None:
+                continue
+            try:
+                temperature = _raw_to_float(item.get("temperature"))
+            except (TypeError, ValueError) as err:
+                _LOGGER.debug("Ignoring invalid temperature memory item=%r: %s", item, err)
+                continue
+            attributes = {
+                "memory_id": memory_id,
+                "name": str(item.get("name", DEFAULT_TEMPERATURE_MEMORY_NAMES.get(memory_id, ""))),
+                "source_command": TEMP_MEMORY_SET_COMMAND,
+            }
+            previous_attributes = self._last_measurement_attributes.get(measurement_id)
+            self._last_measurement_attributes[measurement_id] = attributes
+            self._handle_measurement(
+                measurement_id,
+                temperature,
+                force_update=previous_attributes != attributes,
+            )
 
     def _handle_odb_value(self, odb_id: int, raw_value: Any) -> None:
         try:
@@ -871,9 +984,12 @@ class DHEClient:
         for odb_id in INITIAL_VALUE_IDS:
             if odb_id != ID_CONFIGURED_POWER or odb_id not in self._last_measurements:
                 await self._request_odb_value(ctx, odb_id)
+        await self._request_temperature_memory(ctx)
         for command in APP_TIMER_REQUEST_COMMANDS:
             await self._request_app_value(ctx, command)
         for command in CONSUMPTION_REQUEST_COMMANDS:
+            await self._request_app_value(ctx, command)
+        for command in APP_STARTUP_REQUEST_COMMANDS:
             await self._request_app_value(ctx, command)
 
     async def _request_odb_value(self, ctx: DHESession, odb_id: int) -> None:
@@ -884,6 +1000,9 @@ class DHEClient:
 
     async def _request_app_value(self, ctx: DHESession, command: str) -> None:
         await self._post_packet(ctx, self._message_packet({"command": command, "value": ""}))
+
+    async def _request_temperature_memory(self, ctx: DHESession) -> None:
+        await self._request_app_value(ctx, TEMP_MEMORY_GET_COMMAND)
 
     def _new_setpoint_future(self, expected: float | None = None) -> asyncio.Future[float]:
         self._clear_pending_future(None)

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.8
+
+- Add temperature memory preset buttons for DHE memory slots 1 and 2.
+- Add configurable temperature memory number entities backed by `ste.common.temperature:memory`.
+- Request temperature memory values and additional known web UI startup values during session initialization.
+- Store non-entity startup app values internally without adding new Home Assistant sensors.
+- Refresh documentation and translations for the new controls.
+
 ## 0.7.7
 
 - Optimize runtime callback dispatching by storing listeners as sets to avoid duplicate registrations and reduce list-copy overhead during frequent updates.
