@@ -16,7 +16,7 @@
 
 ## 0.7.2
 
-- Remove `custom_components/stiebel_dhe_connect/strings.json`; custom integrations should provide translations through `translations/*.json`.
+- Remove `custom_components > stiebel_dhe_connect/strings.json`; custom integrations should provide translations through `translations/*.json`.
 - Keep the existing complete English and German translation files.
 - Bump integration version to `0.7.2`.
 

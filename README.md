@@ -92,7 +92,7 @@ More timer protocol details are documented in [`APP_TIMER_PROTOCOL.md`](APP_TIME
 Copy the integration folder to:
 
 ```text
-/config/custom_components/stiebel_dhe_connect/
+/config/custom_components > stiebel_dhe_connect/
 ```
 
 Restart Home Assistant and add the integration through the UI.
