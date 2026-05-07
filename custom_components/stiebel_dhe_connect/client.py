@@ -33,7 +33,8 @@ ID_MAX_TEMPERATURE = 5
 ID_ECO_MODE = 6
 ID_ECO_FLOW_LIMIT = 7
 ID_WELLNESS_SHOWER_TRIGGER = 10
-WINTER_REFRESH_PROGRAM_ID = 1
+WINTER_REFRESH_PROGRAM_ID = 2
+WELLNESS_COLD_PREVENTION_PROGRAM_ID = 1
 SUMMER_FITNESS_PROGRAM_ID = 3
 CIRCULATION_SUPPORT_PROGRAM_ID = 4
 ID_STOP_PROGRAM = 10
@@ -384,7 +385,7 @@ class DHEClient:
 
     async def set_wellness_cold_prevention(self, enabled: bool) -> bool:
         if enabled:
-            await self.write_odb_value(ID_WELLNESS_SHOWER_PROGRAM, 1)
+            await self.write_odb_value(ID_WELLNESS_SHOWER_PROGRAM, WELLNESS_COLD_PREVENTION_PROGRAM_ID)
             await self.write_odb_value(ID_WELLNESS_SHOWER_TRIGGER, True)
             return True
 
