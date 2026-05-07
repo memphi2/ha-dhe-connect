@@ -6,10 +6,6 @@
 - Replace repeated inline writable-option ID sets with a single shared constant for clearer and cheaper membership checks.
 - Refresh root and component README notes to document the maintenance/performance cleanup.
 
-## 0.7.8 (unreleased)
-
-- No changes yet.
-
 ## 0.7.6
 
 - Bump integration version to `0.7.6`.
