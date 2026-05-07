@@ -27,10 +27,12 @@ ODB_ASSIGN_COMMAND = "assign:ste.common.odb:value"
 
 ID_SETPOINT = 0
 ID_BATH_FILL_ACTIVE = 1
+ID_WELLNESS_SHOWER_PROGRAM = 2
 ID_BATH_FILL_TARGET_VOLUME = 3
 ID_MAX_TEMPERATURE = 5
 ID_ECO_MODE = 6
 ID_ECO_FLOW_LIMIT = 7
+ID_STOP_PROGRAM = 10
 ID_WATER_FLOW = 15
 ID_POWER = 16
 ID_CONFIGURED_POWER = 20
@@ -56,9 +58,11 @@ INITIAL_VALUE_IDS = (
     ID_SETPOINT,
     ID_BATH_FILL_ACTIVE,
     ID_BATH_FILL_TARGET_VOLUME,
+    ID_WELLNESS_SHOWER_PROGRAM,
     ID_MAX_TEMPERATURE,
     ID_ECO_MODE,
     ID_ECO_FLOW_LIMIT,
+    ID_STOP_PROGRAM,
     ID_WATER_FLOW,
     ID_POWER,
     ID_CONFIGURED_POWER,
@@ -373,6 +377,14 @@ class DHEClient:
         raw_value = requested_l_min * 10
         return float(await self.write_odb_value(ID_ECO_FLOW_LIMIT, raw_value))
 
+
+    async def set_wellness_cold_prevention(self, enabled: bool) -> bool:
+        if enabled:
+            await self.write_odb_value(ID_WELLNESS_SHOWER_PROGRAM, 1)
+            return True
+        await self.write_odb_value(ID_STOP_PROGRAM, True)
+        return False
+
     async def set_brush_timer_duration_minutes(self, minutes: float) -> float:
         return await self._set_app_timer_duration_minutes(
             BRUSH_TIMER_PATH,
@@ -683,9 +695,11 @@ class DHEClient:
             elif odb_id in {
                 ID_BATH_FILL_ACTIVE,
                 ID_BATH_FILL_TARGET_VOLUME,
+    ID_WELLNESS_SHOWER_PROGRAM,
                 ID_MAX_TEMPERATURE,
                 ID_ECO_MODE,
                 ID_ECO_FLOW_LIMIT,
+    ID_STOP_PROGRAM,
             }:
                 self._handle_measurement(odb_id, self._convert_odb_value(odb_id, raw_value))
         except (TypeError, ValueError) as err:
