@@ -4,7 +4,7 @@ Local Home Assistant integration for Stiebel Eltron DHE Connect instantaneous wa
 
 Repository: `memphi2/ha-dhe-connect`.
 
-## Version 0.7.5
+## Version 0.7.6
 
 This release keeps switch-based controls and adds dedicated wellness program switches with on/off behavior.
 

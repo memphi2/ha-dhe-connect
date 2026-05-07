@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.6
+
+- Bump integration version to `0.7.6`.
+- Refresh and align repository docs with the current entity set and installation flow.
+- Remove redundant release artifact notes from the repository root.
+
 ## 0.7.5
 
 - Bump integration version to `0.7.5`.
