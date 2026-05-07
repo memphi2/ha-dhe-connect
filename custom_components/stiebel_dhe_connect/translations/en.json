@@ -48,6 +48,9 @@
       },
       "wellness_shower_program_winter_refresh": {
         "name": "Wellness shower program winter refresh"
+      },
+      "wellness_shower_program_summer_fitness": {
+        "name": "Wellness shower program summer fitness"
       }
     },
     "number": {
