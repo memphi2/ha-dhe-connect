@@ -8,7 +8,7 @@ The integration talks to the local DHE web interface through the device's Socket
 
 Experimental custom integration. Tested with a locally reachable DHE Connect on port `8443`.
 
-Current version: `0.7.6` (documentation and internal performance cleanup applied).
+Current version: `0.7.7` (runtime callback and writable-option handling optimization applied).
 
 ## Features
 

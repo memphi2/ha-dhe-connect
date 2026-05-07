@@ -1,10 +1,14 @@
 # Changelog
 
-## 0.7.7 (unreleased)
+## 0.7.7
 
 - Optimize runtime callback dispatching by storing listeners as sets to avoid duplicate registrations and reduce list-copy overhead during frequent updates.
 - Replace repeated inline writable-option ID sets with a single shared constant for clearer and cheaper membership checks.
 - Refresh root and component README notes to document the maintenance/performance cleanup.
+
+## 0.7.8 (unreleased)
+
+- No changes yet.
 
 ## 0.7.6
 
