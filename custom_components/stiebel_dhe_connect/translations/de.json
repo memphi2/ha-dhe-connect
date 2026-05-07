@@ -45,15 +45,6 @@
       },
       "reset_shower_timer": {
         "name": "Duschtimer zurücksetzen"
-      },
-      "wellness_shower_program_winter_refresh": {
-        "name": "Wellness-Duschprogramm Wintererfrischung"
-      },
-      "wellness_shower_program_summer_fitness": {
-        "name": "Wellness-Duschprogramm Sommerfitness"
-      },
-      "wellness_shower_program_circulation_support": {
-        "name": "Wellness-Duschprogramm Durchblutungsförderung"
       }
     },
     "number": {
@@ -123,6 +114,15 @@
       },
       "wellness_cold_prevention": {
         "name": "Erkältungsvorbeugung"
+      },
+      "winter_refresh": {
+        "name": "Wintererfrischung"
+      },
+      "summer_fitness": {
+        "name": "Sommerfitness"
+      },
+      "circulation_support": {
+        "name": "Durchblutungsförderung"
       }
     }
   }

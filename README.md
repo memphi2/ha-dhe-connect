@@ -22,7 +22,7 @@ Current version: `0.7.5`.
 - Separate brush timer and shower timer controls.
 - Timer reset buttons.
 - Wellness cold prevention switch.
-- Wellness shower program buttons (winter refresh, summer fitness, circulation support).
+- Wellness program switches (winter refresh, summer fitness, circulation support).
 - Bath fill and timer start/stop via switches.
 - Timer duration numbers limited to `20 min`.
 - Timer remaining sensors displayed as `M:SS`.
@@ -71,9 +71,9 @@ Consumption sensors expose the raw chart values as attributes and the EUR total 
 | Reset brush timer | Button | `assign:ste.app.brushTimer:reset` |
 | Reset shower timer | Button | `assign:ste.app.showerTimer:reset` |
 | Wellness cold prevention | Switch | ODB ID `2`; on sets value `1`, off sends stop trigger |
-| Wellness shower program winter refresh | Button | ODB ID `2` value `2` + ODB ID `10` trigger |
-| Wellness shower program summer fitness | Button | ODB ID `2` value `3` + ODB ID `10` trigger |
-| Wellness shower program circulation support | Button | ODB ID `2` value `4` + ODB ID `10` trigger |
+| Winter refresh | Switch | ODB ID `2` value `2` + ODB ID `10` trigger; off sends stop |
+| Summer fitness | Switch | ODB ID `2` value `3` + ODB ID `10` trigger; off sends stop |
+| Circulation support | Switch | ODB ID `2` value `4` + ODB ID `10` trigger; off sends stop |
 
 ## DHE protocol notes
 

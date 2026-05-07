@@ -53,33 +53,6 @@ BUTTON_DESCRIPTIONS: tuple[StiebelDHEButtonEntityDescription, ...] = (
         timer_path=SHOWER_TIMER_PATH,
         timer_property="reset",
     ),
-    StiebelDHEButtonEntityDescription(
-        key="wellness_shower_program_winter_refresh",
-        translation_key="wellness_shower_program_winter_refresh",
-        method="run_wellness_shower_program_winter_refresh",
-        icon="mdi:snowflake-thermometer",
-        availability_measurement_id=ID_SHOWER_TIMER_ACTIVATION,
-        timer_path="ste.common.odb",
-        timer_property="id:2 + id:10",
-    ),
-    StiebelDHEButtonEntityDescription(
-        key="wellness_shower_program_summer_fitness",
-        translation_key="wellness_shower_program_summer_fitness",
-        method="run_wellness_shower_program_summer_fitness",
-        icon="mdi:weather-sunny",
-        availability_measurement_id=ID_SHOWER_TIMER_ACTIVATION,
-        timer_path="ste.common.odb",
-        timer_property="id:2 + id:10",
-    ),
-    StiebelDHEButtonEntityDescription(
-        key="wellness_shower_program_circulation_support",
-        translation_key="wellness_shower_program_circulation_support",
-        method="run_wellness_shower_program_circulation_support",
-        icon="mdi:heart-pulse",
-        availability_measurement_id=ID_SHOWER_TIMER_ACTIVATION,
-        timer_path="ste.common.odb",
-        timer_property="id:2 + id:10",
-    ),
 )
 
 

@@ -2,11 +2,11 @@
 
 ## Summary
 
-Adds dedicated wellness shower program buttons while keeping switch-based controls for stateful functions.
+Adds dedicated wellness program switches while keeping switch-based controls for stateful functions.
 
 ## Changes
 
-- Add wellness shower program button entities for winter refresh, summer fitness and circulation support.
+- Add wellness program switch entities for winter refresh, summer fitness and circulation support.
 - Keep wellness cold prevention as switch-based control.
 - Add matching English and German translation keys for the wellness shower program buttons.
 - Bump integration version to `0.7.5`.
