@@ -2,15 +2,15 @@
 
 ## Summary
 
-Simplifies app timer controls.
+Simplifies stateful controls by using switches for all true/false actions.
 
 ## Changes
 
-- Remove obsolete separate stop button entities for brush timer and shower timer.
-- Keep timer start buttons as convenience actions.
+- Remove redundant timer start and stop button entities for brush timer and shower timer.
 - Keep timer reset buttons.
 - Use the brush and shower timer switches for start and stop behavior.
-- Remove obsolete English and German timer stop button translation keys.
+- Replace bath fill start/stop buttons with a bath fill switch.
+- Remove obsolete English and German translation keys for removed button entities.
 
 ## Installation via HACS custom repository
 
