@@ -102,7 +102,7 @@ async def async_setup_entry(
                     key="winter_refresh",
                     translation_key="winter_refresh",
                     icon="mdi:snowflake-thermometer",
-                    program_id=2,
+                    program_id=1,
                 ),
                 StiebelDHEWellnessProgramSwitchDescription(
                     key="summer_fitness",
