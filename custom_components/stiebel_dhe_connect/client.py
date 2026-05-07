@@ -24,6 +24,9 @@ NS = "1.0.0"
 ODB_GET_COMMAND = "get:ste.common.odb:value"
 ODB_SET_COMMAND = "set:ste.common.odb:value"
 ODB_ASSIGN_COMMAND = "assign:ste.common.odb:value"
+TEMP_MEMORY_GET_COMMAND = "get:ste.common.temperature:memory"
+TEMP_MEMORY_SET_COMMAND = "set:ste.common.temperature:memory"
+TEMP_MEMORY_ASSIGN_COMMAND = "assign:ste.common.temperature:memory"
 
 ID_SETPOINT = 0
 ID_BATH_FILL_ACTIVE = 1
@@ -54,6 +57,8 @@ ID_WATER_CONSUMPTION_YEARS = 1023
 ID_ENERGY_CONSUMPTION_WEEK = 1031
 ID_ENERGY_CONSUMPTION_YEAR = 1032
 ID_ENERGY_CONSUMPTION_YEARS = 1033
+ID_TEMPERATURE_MEMORY_1 = 1041
+ID_TEMPERATURE_MEMORY_2 = 1042
 DEFAULT_CONFIGURED_POWER_KW = 24.0
 COMMAND_CONFIRMATION_TIMEOUT = 12.0
 COMMAND_READBACK_INTERVAL = 1.0
@@ -62,6 +67,18 @@ AVAILABILITY_DROP_GRACE_SECONDS = 20.0
 TEMPERATURE_MEMORY_BUTTON_VALUES = {
     1: 10620,
     2: 10650,
+}
+TEMPERATURE_MEMORY_SLOT_IDS = {
+    1: 0,
+    2: 1,
+}
+TEMPERATURE_MEMORY_ID_TO_MEASUREMENT = {
+    0: ID_TEMPERATURE_MEMORY_1,
+    1: ID_TEMPERATURE_MEMORY_2,
+}
+DEFAULT_TEMPERATURE_MEMORY_NAMES = {
+    0: "%1 1",
+    1: "%1 2",
 }
 INITIAL_VALUE_IDS = (
     ID_SETPOINT,
@@ -429,6 +446,45 @@ class DHEClient:
                     raise DHEError(f"Could not press DHE temperature memory {memory_slot}: {err}") from err
         raise DHEError(f"Could not press DHE temperature memory {memory_slot}")
 
+    async def set_temperature_memory(self, memory_slot: int, temperature: float) -> float:
+        try:
+            memory_id = TEMPERATURE_MEMORY_SLOT_IDS[int(memory_slot)]
+            measurement_id = TEMPERATURE_MEMORY_ID_TO_MEASUREMENT[memory_id]
+        except KeyError as err:
+            raise DHEError(f"Unsupported temperature memory slot: {memory_slot}") from err
+
+        requested = _round_to_half_c(_clamp(float(temperature), 20.0, 60.0))
+        attributes = self._last_measurement_attributes.get(measurement_id, {})
+        name = str(attributes.get("name", DEFAULT_TEMPERATURE_MEMORY_NAMES.get(memory_id, f"%1 {memory_slot}")))
+        payload = {
+            "id": memory_id,
+            "name": name,
+            "temperature": requested,
+            "operation": "add_change",
+        }
+
+        async with self._command_lock:
+            for attempt in range(2):
+                try:
+                    await self._ensure_ready(timeout=45)
+                    ctx = self._ctx
+                    if ctx is None:
+                        raise DHEError("DHE session is not connected")
+                    await self._post_packet(ctx, self._message_packet({
+                        "command": TEMP_MEMORY_ASSIGN_COMMAND,
+                        "value": payload,
+                    }))
+                    self._handle_temperature_memory_item(payload, source_command=TEMP_MEMORY_ASSIGN_COMMAND)
+                    await self._request_optional_app_value(ctx, TEMP_MEMORY_GET_COMMAND)
+                    return requested
+                except Exception as err:  # noqa: BLE001
+                    if attempt == 0:
+                        await self._force_reconnect()
+                        await asyncio.sleep(1)
+                        continue
+                    raise DHEError(f"Could not set DHE temperature memory {memory_slot}: {err}") from err
+        raise DHEError(f"Could not set DHE temperature memory {memory_slot}")
+
     async def set_wellness_cold_prevention(self, enabled: bool) -> bool:
         if enabled:
             await self.write_odb_value(ID_WELLNESS_SHOWER_PROGRAM, WELLNESS_COLD_PREVENTION_PROGRAM_ID)
@@ -704,6 +760,9 @@ class DHEClient:
         if command in CONSUMPTION_COMMAND_IDS:
             self._handle_consumption_value(command, value)
             return
+        if command in {TEMP_MEMORY_SET_COMMAND, TEMP_MEMORY_ASSIGN_COMMAND}:
+            self._handle_temperature_memory_value(value, source_command=command)
+            return
         if command not in {ODB_SET_COMMAND, ODB_ASSIGN_COMMAND} or not isinstance(value, dict):
             return
         try:
@@ -762,6 +821,42 @@ class DHEClient:
         self._handle_measurement(
             measurement_id,
             sum(chart),
+            force_update=previous_attributes != attributes,
+        )
+
+    def _handle_temperature_memory_value(self, raw_value: Any, *, source_command: str) -> None:
+        if isinstance(raw_value, dict):
+            self._handle_temperature_memory_item(raw_value, source_command=source_command)
+            return
+        if not isinstance(raw_value, list):
+            _LOGGER.debug("Ignoring invalid temperature memory value: %r", raw_value)
+            return
+
+        for item in raw_value:
+            self._handle_temperature_memory_item(item, source_command=source_command)
+
+    def _handle_temperature_memory_item(self, item: Any, *, source_command: str) -> None:
+        if not isinstance(item, dict):
+            return
+        try:
+            memory_id = int(item.get("id"))
+            temperature = _raw_to_float(item.get("temperature"))
+        except (TypeError, ValueError) as err:
+            _LOGGER.debug("Ignoring invalid temperature memory item=%r: %s", item, err)
+            return
+        measurement_id = TEMPERATURE_MEMORY_ID_TO_MEASUREMENT.get(memory_id)
+        if measurement_id is None:
+            return
+        attributes = {
+            "memory_id": memory_id,
+            "name": str(item.get("name", DEFAULT_TEMPERATURE_MEMORY_NAMES.get(memory_id, ""))),
+            "source_command": source_command,
+        }
+        previous_attributes = self._last_measurement_attributes.get(measurement_id)
+        self._last_measurement_attributes[measurement_id] = attributes
+        self._handle_measurement(
+            measurement_id,
+            temperature,
             force_update=previous_attributes != attributes,
         )
 
@@ -912,6 +1007,7 @@ class DHEClient:
             await self._request_app_value(ctx, command)
         for command in CONSUMPTION_REQUEST_COMMANDS:
             await self._request_app_value(ctx, command)
+        await self._request_optional_app_value(ctx, TEMP_MEMORY_GET_COMMAND)
 
     async def _request_odb_value(self, ctx: DHESession, odb_id: int) -> None:
         await self._post_packet(
@@ -921,6 +1017,12 @@ class DHEClient:
 
     async def _request_app_value(self, ctx: DHESession, command: str) -> None:
         await self._post_packet(ctx, self._message_packet({"command": command, "value": ""}))
+
+    async def _request_optional_app_value(self, ctx: DHESession, command: str) -> None:
+        try:
+            await self._request_app_value(ctx, command)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Ignoring optional app command %s request failure: %s", command, err)
 
     def _new_setpoint_future(self, expected: float | None = None) -> asyncio.Future[float]:
         self._clear_pending_future(None)

@@ -68,6 +68,12 @@
       },
       "shower_timer_duration": {
         "name": "Duschtimer-Dauer"
+      },
+      "temperature_memory_1_temperature": {
+        "name": "Temperaturspeicher 1 Temperatur"
+      },
+      "temperature_memory_2_temperature": {
+        "name": "Temperaturspeicher 2 Temperatur"
       }
     },
     "sensor": {
