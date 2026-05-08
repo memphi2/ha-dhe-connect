@@ -57,7 +57,6 @@ from .client import (
     ID_SHOWER_TIMER_REMAINING,
     ID_TEMPERATURE_MAX_OVERRIDE,
     ID_TIME_CLOCK_FORMAT,
-    ID_TIME_DATE_FORMAT,
     ID_UNHANDLED_ODB_VALUES,
     ID_WATER_CONSUMPTION_WEEK,
     ID_WATER_CONSUMPTION_YEAR,
@@ -375,14 +374,6 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         odb_id=ID_TEMPERATURE_MAX_OVERRIDE,
         source_command="set:ste.common.temperature:maxOverride",
-    ),
-    StiebelDHESensorEntityDescription(
-        key="time_date_format",
-        translation_key="time_date_format",
-        icon="mdi:calendar-text",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        odb_id=ID_TIME_DATE_FORMAT,
-        source_command="set:ste.common.time:format_date",
     ),
     StiebelDHESensorEntityDescription(
         key="time_clock_format",

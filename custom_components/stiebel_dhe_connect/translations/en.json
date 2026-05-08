@@ -326,9 +326,6 @@
       "temperature_max_override": {
         "name": "Maximum temperature override"
       },
-      "time_date_format": {
-        "name": "Date format"
-      },
       "time_clock_format": {
         "name": "Clock format"
       },
