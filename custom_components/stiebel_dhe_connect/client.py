@@ -422,6 +422,7 @@ class DHEClient:
         self._last_device_info: dict[str, Any] = {}
         self._temperature_memory_ids_seen: set[int] = set()
         self._temperature_memory_generation = 0
+        self._temperature_memory_full_list_seen = False
         self._configured_power_kw = DEFAULT_CONFIGURED_POWER_KW
         self._last_power_fraction: float | None = None
         self._pending_setpoint_future: asyncio.Future[float] | None = None
@@ -501,6 +502,18 @@ class DHEClient:
                 callback(odb_id, value)
             except Exception as err:  # noqa: BLE001
                 _LOGGER.debug("Could not initialize measurement callback for %s: %s", odb_id, err)
+        if self._temperature_memory_full_list_seen:
+            for measurement_id in TEMPERATURE_MEMORY_SLOT_MEASUREMENTS.values():
+                if measurement_id in self._last_measurements:
+                    continue
+                try:
+                    callback(measurement_id, None)
+                except Exception as err:  # noqa: BLE001
+                    _LOGGER.debug(
+                        "Could not initialize missing temperature memory callback for %s: %s",
+                        measurement_id,
+                        err,
+                    )
         return remove
 
     def add_reconnect_callback(self, callback: ReconnectCallback) -> CallbackRemover:
@@ -1544,9 +1557,13 @@ class DHEClient:
             memory_id = self._handle_temperature_memory_item(item, source_command=source_command)
             if memory_id is not None:
                 memory_ids.add(memory_id)
-        for stale_memory_id in self._temperature_memory_ids_seen - memory_ids:
+        stale_memory_ids = self._temperature_memory_ids_seen - memory_ids
+        if not self._temperature_memory_full_list_seen:
+            stale_memory_ids = set(TEMPERATURE_MEMORY_ID_TO_MEASUREMENT) - memory_ids
+        for stale_memory_id in stale_memory_ids:
             self._clear_temperature_memory(stale_memory_id, source_command=source_command)
         self._temperature_memory_ids_seen = memory_ids
+        self._temperature_memory_full_list_seen = True
         self._temperature_memory_generation += 1
 
     def _handle_temperature_memory_delete_item(self, item: dict[str, Any], *, source_command: str) -> None:

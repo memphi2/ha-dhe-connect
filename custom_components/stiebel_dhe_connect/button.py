@@ -9,6 +9,7 @@ from typing import Any
 from homeassistant.components.button import ButtonEntity, ButtonEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .client import (
@@ -38,7 +39,7 @@ class StiebelDHEButtonEntityDescription(ButtonEntityDescription):
     extra_state_attributes: dict[str, Any] | None = None
 
 
-BUTTON_DESCRIPTIONS: tuple[StiebelDHEButtonEntityDescription, ...] = (
+STATIC_BUTTON_DESCRIPTIONS: tuple[StiebelDHEButtonEntityDescription, ...] = (
     StiebelDHEButtonEntityDescription(
         key="reset_brush_timer",
         translation_key="reset_brush_timer",
@@ -57,23 +58,32 @@ BUTTON_DESCRIPTIONS: tuple[StiebelDHEButtonEntityDescription, ...] = (
         timer_path=SHOWER_TIMER_PATH,
         timer_property="reset",
     ),
-    *(
+)
+
+TEMPERATURE_MEMORY_MEASUREMENT_SLOTS = {
+    measurement_id: slot for slot, measurement_id in TEMPERATURE_MEMORY_SLOT_MEASUREMENTS.items()
+}
+
+
+def _temperature_memory_button_descriptions(
+    slot: int,
+    measurement_id: int,
+) -> tuple[StiebelDHEButtonEntityDescription, StiebelDHEButtonEntityDescription]:
+    icon = f"mdi:numeric-{slot}-box-outline" if slot < 10 else "mdi:counter"
+    return (
         StiebelDHEButtonEntityDescription(
             key=f"temperature_memory_{slot}",
             translation_key=f"temperature_memory_{slot}",
             method="press_temperature_memory",
             method_args=(slot,),
-            icon=f"mdi:numeric-{slot}-box-outline" if slot < 10 else "mdi:counter",
+            icon=icon,
             availability_measurement_id=measurement_id,
             extra_state_attributes={
                 "temperature_memory_slot": slot,
                 "temperature_memory_id": slot - 1,
                 "odb_id": 66,
             },
-        )
-        for slot, measurement_id in TEMPERATURE_MEMORY_SLOT_MEASUREMENTS.items()
-    ),
-    *(
+        ),
         StiebelDHEButtonEntityDescription(
             key=f"delete_temperature_memory_{slot}",
             translation_key=f"delete_temperature_memory_{slot}",
@@ -86,10 +96,8 @@ BUTTON_DESCRIPTIONS: tuple[StiebelDHEButtonEntityDescription, ...] = (
                 "temperature_memory_id": slot - 1,
                 "temperature_memory_operation": "delete",
             },
-        )
-        for slot, measurement_id in TEMPERATURE_MEMORY_SLOT_MEASUREMENTS.items()
-    ),
-)
+        ),
+    )
 
 
 async def async_setup_entry(
@@ -99,17 +107,65 @@ async def async_setup_entry(
 ) -> None:
     """Set up DHE buttons from a config entry."""
     runtime = hass.data[DOMAIN][entry.entry_id]
+    client: DHEClient = runtime.client
+    added_memory_buttons: dict[int, tuple[StiebelDHEButton, StiebelDHEButton]] = {}
+
+    def add_memory_buttons(measurement_id: int) -> None:
+        if measurement_id in added_memory_buttons:
+            return
+        slot = TEMPERATURE_MEMORY_MEASUREMENT_SLOTS.get(measurement_id)
+        if slot is None:
+            return
+        entities = tuple(
+            StiebelDHEButton(
+                entry_id=entry.entry_id,
+                name=runtime.name,
+                client=client,
+                description=description,
+            )
+            for description in _temperature_memory_button_descriptions(slot, measurement_id)
+        )
+        added_memory_buttons[measurement_id] = entities
+        async_add_entities(list(entities))
+
+    async def remove_memory_buttons(measurement_id: int) -> None:
+        entities = added_memory_buttons.pop(measurement_id, ())
+        for entity in entities:
+            await entity.async_remove()
+        slot = TEMPERATURE_MEMORY_MEASUREMENT_SLOTS.get(measurement_id)
+        if slot is None:
+            return
+        registry = er.async_get(hass)
+        for description in _temperature_memory_button_descriptions(slot, measurement_id):
+            entity_id = registry.async_get_entity_id(
+                "button",
+                DOMAIN,
+                f"stiebel_dhe_connect_{entry.entry_id}_{description.key}",
+            )
+            if entity_id is not None:
+                registry.async_remove(entity_id)
+
+    @callback
+    def handle_temperature_memory_update(odb_id: int, value: MeasurementValue) -> None:
+        if odb_id not in TEMPERATURE_MEMORY_MEASUREMENT_SLOTS:
+            return
+        if value is None:
+            hass.async_create_task(remove_memory_buttons(odb_id))
+            return
+        add_memory_buttons(odb_id)
+
     async_add_entities(
         [
             StiebelDHEButton(
                 entry_id=entry.entry_id,
                 name=runtime.name,
-                client=runtime.client,
+                client=client,
                 description=description,
             )
-            for description in BUTTON_DESCRIPTIONS
+            for description in STATIC_BUTTON_DESCRIPTIONS
         ]
     )
+    entry.async_on_unload(client.add_measurement_callback(handle_temperature_memory_update))
 
 
 class StiebelDHEButton(ButtonEntity):
