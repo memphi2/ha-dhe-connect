@@ -143,7 +143,6 @@ The climate entity keeps the last valid target temperature during short reconnec
 | Reconnects | count | none | `total_increasing` | Successful reconnect count after the initial connection |
 | App currency | text | diagnostic | none | `set:ste.common.currency:value` |
 | Maximum temperature override | text | diagnostic | none | `set:ste.common.temperature:maxOverride` |
-| Clock format | text | diagnostic | none | `set:ste.common.time:format_clock` |
 | Device info | text | diagnostic | none | DHE version and device information commands |
 | Unhandled ODB values | count | diagnostic | none | Unknown valid ODB values and invalid ODB readbacks |
 
@@ -365,7 +364,6 @@ Best-effort startup reads collect additional values:
 | `get:ste.app.consumption:lastUsage` | Last usage payload |
 | `get:ste.common.currency:value` | DHE app currency |
 | `get:ste.common.temperature:maxOverride` | Maximum override metadata |
-| `get:ste.common.time:format_clock` | DHE app clock format |
 | `get:ste.app.savingMonitor:ActivationRate` | Saving monitor activation rate |
 | `get:ste.app.savingMonitor:possible` | Saving monitor possible payload |
 | `get:ste.app.savingMonitor:real` | Saving monitor real payload |

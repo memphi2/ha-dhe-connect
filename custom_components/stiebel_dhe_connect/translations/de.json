@@ -326,9 +326,6 @@
       "temperature_max_override": {
         "name": "Maximaltemperatur-Override"
       },
-      "time_clock_format": {
-        "name": "Uhrzeitformat"
-      },
       "device_info": {
         "name": "Geräteinfo"
       },
