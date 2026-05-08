@@ -240,10 +240,10 @@
         "name": "Configured power"
       },
       "internal_temperature_1": {
-        "name": "Internal temperature 1"
+        "name": "Inlet temperature"
       },
       "internal_temperature_2": {
-        "name": "Internal temperature 2"
+        "name": "Outlet temperature"
       },
       "water_consumption_week": {
         "name": "Water consumption week"

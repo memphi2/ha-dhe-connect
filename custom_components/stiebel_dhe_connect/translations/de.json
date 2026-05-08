@@ -240,10 +240,10 @@
         "name": "Eingestellte Leistung"
       },
       "internal_temperature_1": {
-        "name": "Interne Temperatur 1"
+        "name": "Eingangstemperatur"
       },
       "internal_temperature_2": {
-        "name": "Interne Temperatur 2"
+        "name": "Ausgangstemperatur"
       },
       "water_consumption_week": {
         "name": "Wasserverbrauch Woche"

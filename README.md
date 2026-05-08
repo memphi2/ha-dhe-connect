@@ -114,8 +114,8 @@ The climate entity keeps the last valid target temperature during short reconnec
 | Current water flow | `L/min` | `volume_flow_rate` | `measurement` | ODB ID `15 / 10` |
 | Current power consumption | `kW` | `power` | `measurement` | ODB ID `16 / 100 * configured_power_kw` |
 | Configured power | `kW` | `power` | none | ODB ID `20` |
-| Internal temperature 1 | `C` | `temperature`, diagnostic | `measurement` | ODB ID `13 / 10` |
-| Internal temperature 2 | `C` | `temperature`, diagnostic | `measurement` | ODB ID `14 / 10` |
+| Inlet temperature | `C` | `temperature`, diagnostic | `measurement` | ODB ID `13 / 10` |
+| Outlet temperature | `C` | `temperature`, diagnostic | `measurement` | ODB ID `14 / 10` |
 | Water consumption week | `L` | `water` | `total_increasing` | `set:ste.app.consumption:waterWeek` |
 | Water consumption year | `m3` | `water` | `total_increasing` | `set:ste.app.consumption:waterYear` |
 | Water consumption years | `m3` | `water` | `total_increasing` | `set:ste.app.consumption:waterYears` |
@@ -342,8 +342,8 @@ Required startup reads seed the interactive entities:
 | `6` | Eco mode |
 | `7` | Eco flow limit |
 | `10` | Program stop/trigger state |
-| `13` | Internal temperature 1 |
-| `14` | Internal temperature 2 |
+| `13` | Inlet temperature |
+| `14` | Outlet temperature |
 | `15` | Water flow |
 | `16` | Current power fraction |
 | `20` | Configured power |
