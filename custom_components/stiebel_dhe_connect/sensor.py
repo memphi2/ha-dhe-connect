@@ -185,7 +185,6 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         translation_key="last_usage_cost",
         native_unit_of_measurement="EUR",
         device_class=SensorDeviceClass.MONETARY,
-        state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:cash",
         odb_id=ID_LAST_USAGE_COST,
         source_command="set:ste.app.consumption:lastUsage",

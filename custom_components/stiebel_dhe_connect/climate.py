@@ -35,7 +35,7 @@ async def async_setup_entry(
 
 
 class StiebelDHEClimate(ClimateEntity):
-    """Stiebel DHE setpoint entity with persistent local long-polling session."""
+    """Stiebel DHE setpoint entity with persistent local WebSocket session."""
 
     _attr_has_entity_name = True
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
@@ -99,7 +99,7 @@ class StiebelDHEClimate(ClimateEntity):
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates.
 
-        The DHE may close and reopen long-polling sessions during normal operation.
+        The DHE may close and reopen sessions during normal operation.
         Once a valid setpoint has been read, keep the entity available during short
         reconnect phases to avoid Home Assistant UI flapping between available and
         unavailable. The diagnostic connection_state attribute still shows the

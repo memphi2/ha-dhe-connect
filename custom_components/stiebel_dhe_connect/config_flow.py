@@ -149,17 +149,13 @@ class StiebelDHEConnectConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry: config_entries.ConfigEntry):
+    def async_get_options_flow(_config_entry: config_entries.ConfigEntry):
         """Return the options flow handler."""
-        return StiebelDHEConnectOptionsFlow(config_entry)
+        return StiebelDHEConnectOptionsFlow()
 
 
 class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
     """Options flow for Stiebel DHE Connect."""
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize options flow."""
-        self.config_entry = config_entry
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
         """Manage options."""

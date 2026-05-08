@@ -9,7 +9,11 @@
 - Keep last usage and saving monitor point-in-time sensors out of Home Assistant long-term statistics device classes.
 - Ignore DHE ODB readbacks marked as invalid instead of publishing them as normal entity state.
 - Add diagnostic entities for online status and reconnect count.
+- Expose water consumption sensors as Home Assistant water meters for the water dashboard.
+- Align entity metadata and cached startup callbacks with the WebSocket protocol.
+- Update the options flow for current Home Assistant `config_entry` handling.
 - Send temperature memory preset buttons with the temperature currently stored in the selected memory slot instead of fixed ODB ID `66` values.
+- Bump integration version to `0.8.0`.
 
 ## 0.7.10
 

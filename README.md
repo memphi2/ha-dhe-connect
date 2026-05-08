@@ -2,19 +2,19 @@
 
 Custom Home Assistant integration for Stiebel Eltron DHE Connect instantaneous water heaters.
 
-The integration talks to the local DHE web interface through the device's Socket.IO / Engine.IO v3 long-polling endpoint. It is intended for trusted local networks and does not use a cloud service.
+The integration talks to the local DHE web interface through the device's Socket.IO / Engine.IO v3 endpoint, authenticates through polling and then upgrades to the same WebSocket transport used by the DHE web UI. It is intended for trusted local networks and does not use a cloud service.
 
 ## Status
 
 Experimental custom integration. Tested with a locally reachable DHE Connect on port `8443`.
 
-Current version: `0.7.10` (optimized startup value reads).
+Current version: `0.8.0` (WebSocket protocol alignment and diagnostics).
 
 ## Features
 
 - UI-based Home Assistant config flow.
 - Local connection by IP address or hostname.
-- Persistent Socket.IO / Engine.IO v3 long-polling session with lightweight callback dispatching.
+- Persistent Socket.IO / Engine.IO v3 WebSocket session with lightweight callback dispatching.
 - Automatic reconnect if the DHE closes the session.
 - Best-effort startup reads for all currently known DHE web UI values.
 - Target-temperature control through the existing DHE ODB interface.

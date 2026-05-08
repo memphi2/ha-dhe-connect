@@ -295,7 +295,7 @@ def _values_equal(a: ODBValue | None, b: ODBValue | None) -> bool:
 
 
 class DHEClient:
-    """Persistent Engine.IO v3 long-polling client for DHE Connect."""
+    """Persistent Engine.IO v3 WebSocket client for DHE Connect."""
 
     def __init__(self, hass: HomeAssistant, host: str, port: int, token_file: str, name: str) -> None:
         self.hass = hass
