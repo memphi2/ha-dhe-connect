@@ -69,8 +69,8 @@ Consumption sensors expose the raw chart values as attributes and the EUR total 
 | Shower timer duration | Number box | `assign:ste.app.showerTimer:durationMilliseconds`, max. `20 min` |
 | Reset brush timer | Button | `assign:ste.app.brushTimer:reset` |
 | Reset shower timer | Button | `assign:ste.app.showerTimer:reset` |
-| Temperature memory 1 | Button | ODB ID `66` value `10620` |
-| Temperature memory 2 | Button | ODB ID `66` value `10650` |
+| Temperature memory 1 | Button | ODB ID `66` command built from stored memory 1 temperature |
+| Temperature memory 2 | Button | ODB ID `66` command built from stored memory 2 temperature |
 | Temperature memory 1 temperature | Number box | `assign:ste.common.temperature:memory`, memory ID `0` |
 | Temperature memory 2 temperature | Number box | `assign:ste.common.temperature:memory`, memory ID `1` |
 | Cold prevention | Switch | ODB ID `2`; on sets value `1` + ODB ID `10` trigger; off sends stop |
@@ -82,7 +82,7 @@ Consumption sensors expose the raw chart values as attributes and the EUR total 
 
 The integration keeps one long-polling session open, answers Engine.IO pings and processes incoming DHE messages from that session. At startup it first requests the required entity seed values, then requests all currently known additional DHE web UI values best-effort. Optional reads cover remaining readable ODB ID `4`, temperature memory values, consumption volume format and last usage, wellness programs and maximum override. ODB ID `66` is command-only and is not read at startup. Optional responses are cached internally and do not create extra Home Assistant entities.
 
-Writable ODB settings are sent through `assign:ste.common.odb:value`. Temperature memory preset buttons send the DHE web UI's ODB ID `66` command values `10620` and `10650`. Temperature memory number boxes use `assign:ste.common.temperature:memory` with `operation: add_change` and accept both list and single-object memory responses. App timer commands are sent through `assign:ste.app.brushTimer:*` and `assign:ste.app.showerTimer:*` with Socket.IO message IDs matching the DHE web UI format.
+Writable ODB settings are sent through `assign:ste.common.odb:value`. Temperature memory preset buttons send ODB ID `66` commands built from the currently stored temperature memory values. Temperature memory number boxes use `assign:ste.common.temperature:memory` with `operation: add_change` and accept both list and single-object memory responses. App timer commands are sent through `assign:ste.app.brushTimer:*` and `assign:ste.app.showerTimer:*` with Socket.IO message IDs matching the DHE web UI format.
 
 More timer protocol details are documented in [`APP_TIMER_PROTOCOL.md`](APP_TIMER_PROTOCOL.md).
 
