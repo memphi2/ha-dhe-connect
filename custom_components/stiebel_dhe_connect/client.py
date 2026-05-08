@@ -60,6 +60,16 @@ ID_ENERGY_CONSUMPTION_YEAR = 1032
 ID_ENERGY_CONSUMPTION_YEARS = 1033
 ID_TEMPERATURE_MEMORY_1 = 1041
 ID_TEMPERATURE_MEMORY_2 = 1042
+ID_LAST_USAGE_WATER = 1051
+ID_LAST_USAGE_ENERGY = 1052
+ID_LAST_USAGE_TIME = 1053
+ID_LAST_USAGE_COST = 1054
+ID_SAVING_MONITOR_WATER = 1061
+ID_SAVING_MONITOR_ENERGY = 1062
+ID_SAVING_MONITOR_CO2 = 1063
+ID_SAVING_MONITOR_ACTIVATION_RATE = 1064
+ID_DEVICE_INFO = 1071
+ID_UNHANDLED_ODB_VALUES = 1081
 DEFAULT_CONFIGURED_POWER_KW = 24.0
 COMMAND_CONFIRMATION_TIMEOUT = 12.0
 COMMAND_READBACK_INTERVAL = 1.0
@@ -149,11 +159,36 @@ CONSUMPTION_COMMAND_IDS = {
 CONSUMPTION_REQUEST_COMMANDS = tuple(
     command.replace("set:", "get:", 1) for command in CONSUMPTION_COMMAND_IDS
 )
+LAST_USAGE_SET_COMMAND = "set:ste.app.consumption:lastUsage"
+LAST_USAGE_GET_COMMAND = "get:ste.app.consumption:lastUsage"
+SAVING_MONITOR_SET_COMMANDS = (
+    "set:ste.app.savingMonitor:ActivationRate",
+    "set:ste.app.savingMonitor:possible",
+    "set:ste.app.savingMonitor:real",
+    "set:ste.app.savingMonitor:consumption",
+)
+SAVING_MONITOR_COMMAND_IDS = set(SAVING_MONITOR_SET_COMMANDS)
+SAVING_MONITOR_REQUEST_COMMANDS = tuple(
+    command.replace("set:", "get:", 1) for command in SAVING_MONITOR_SET_COMMANDS
+)
+DEVICE_INFO_SET_COMMANDS = (
+    "set:ste.common.version:contactData",
+    "set:ste.common.version:orderNumber",
+    "set:ste.common.version:gadgetData",
+    "set:ste.common.version:gadgetDataValid",
+    "set:ste.common.version:controlunitName",
+)
+DEVICE_INFO_COMMAND_IDS = set(DEVICE_INFO_SET_COMMANDS)
+DEVICE_INFO_REQUEST_COMMANDS = tuple(
+    command.replace("set:", "get:", 1) for command in DEVICE_INFO_SET_COMMANDS
+)
 APP_STARTUP_REQUEST_COMMANDS = (
     "get:ste.app.consumption:volumeFormat",
-    "get:ste.app.consumption:lastUsage",
+    LAST_USAGE_GET_COMMAND,
     "get:ste.app.wellness:programs",
     "get:ste.common.temperature:maxOverride",
+    *SAVING_MONITOR_REQUEST_COMMANDS,
+    *DEVICE_INFO_REQUEST_COMMANDS,
 )
 APP_STARTUP_SET_COMMANDS = {
     command.replace("get:", "set:", 1) for command in APP_STARTUP_REQUEST_COMMANDS
@@ -168,10 +203,11 @@ OPTIONAL_STARTUP_ODB_IDS = (
 
 
 ODBValue = bool | float
+MeasurementValue = bool | float | str
 SetpointCallback = Callable[[float], None]
 AvailabilityCallback = Callable[[bool], None]
 OnlineCallback = Callable[[bool], None]
-MeasurementCallback = Callable[[int, ODBValue], None]
+MeasurementCallback = Callable[[int, MeasurementValue], None]
 ReconnectCallback = Callable[[int], None]
 CallbackRemover = Callable[[], None]
 
@@ -280,10 +316,12 @@ class DHEClient:
         self._reconnect_count = 0
         self._availability_drop_task: asyncio.Task[None] | None = None
         self._last_setpoint: float | None = None
-        self._last_measurements: dict[int, ODBValue] = {}
+        self._last_measurements: dict[int, MeasurementValue] = {}
         self._last_measurement_attributes: dict[int, dict[str, Any]] = {}
         self._last_app_values: dict[str, Any] = {}
         self._last_unhandled_odb_values: dict[int, Any] = {}
+        self._last_saving_monitor_values: dict[str, Any] = {}
+        self._last_device_info: dict[str, Any] = {}
         self._configured_power_kw = DEFAULT_CONFIGURED_POWER_KW
         self._last_power_fraction: float | None = None
         self._pending_setpoint_future: asyncio.Future[float] | None = None
@@ -310,7 +348,7 @@ class DHEClient:
         return self._reconnect_count
 
     @property
-    def last_measurements(self) -> dict[int, ODBValue]:
+    def last_measurements(self) -> dict[int, MeasurementValue]:
         return dict(self._last_measurements)
 
     @property
@@ -854,8 +892,17 @@ class DHEClient:
         if command in CONSUMPTION_COMMAND_IDS:
             self._handle_consumption_value(command, value)
             return
+        if command == LAST_USAGE_SET_COMMAND:
+            self._handle_last_usage_value(value)
+            return
+        if command in SAVING_MONITOR_COMMAND_IDS:
+            self._handle_saving_monitor_value(command, value)
+            return
         if command in {TEMP_MEMORY_SET_COMMAND, TEMP_MEMORY_ASSIGN_COMMAND}:
             self._handle_temperature_memory_value(value, source_command=command)
+            return
+        if command in DEVICE_INFO_COMMAND_IDS:
+            self._handle_device_info_value(command, value)
             return
         if command in APP_STARTUP_SET_COMMANDS:
             self._last_app_values[command] = value
@@ -866,7 +913,11 @@ class DHEClient:
             odb_id = int(value.get("id", -1))
         except (TypeError, ValueError):
             return
-        self._handle_odb_value(odb_id, value.get("value"))
+        self._handle_odb_value(
+            odb_id,
+            value.get("value"),
+            is_valid=value.get("isValid"),
+        )
 
     def _handle_app_timer_value(self, command: str, raw_value: Any) -> None:
         try:
@@ -921,6 +972,176 @@ class DHEClient:
             force_update=previous_attributes != attributes,
         )
 
+    def _handle_last_usage_value(self, raw_value: Any) -> None:
+        if not isinstance(raw_value, dict):
+            return
+
+        fields = {
+            "water": ID_LAST_USAGE_WATER,
+            "energy": ID_LAST_USAGE_ENERGY,
+            "time": ID_LAST_USAGE_TIME,
+            "costs": ID_LAST_USAGE_COST,
+        }
+        for field, measurement_id in fields.items():
+            item = raw_value.get(field)
+            if not isinstance(item, dict):
+                continue
+            try:
+                value = _raw_to_float(item.get("value"))
+            except (TypeError, ValueError) as err:
+                _LOGGER.debug("Ignoring invalid last usage %s value=%r: %s", field, item, err)
+                continue
+
+            attributes = {
+                "source_command": LAST_USAGE_SET_COMMAND,
+                "last_usage_field": field,
+            }
+            for key in ("min", "max"):
+                if item.get(key) is None:
+                    continue
+                try:
+                    attributes[key] = _raw_to_float(item[key])
+                except (TypeError, ValueError):
+                    attributes[key] = item[key]
+
+            previous_attributes = self._last_measurement_attributes.get(measurement_id)
+            self._last_measurement_attributes[measurement_id] = attributes
+            self._handle_measurement(
+                measurement_id,
+                value,
+                force_update=previous_attributes != attributes,
+            )
+
+    def _handle_saving_monitor_value(self, command: str, raw_value: Any) -> None:
+        key = command.rsplit(":", 1)[-1]
+        if key == "ActivationRate":
+            try:
+                activation_rate = _raw_to_float(raw_value)
+            except (TypeError, ValueError) as err:
+                _LOGGER.debug("Ignoring invalid saving monitor activation value=%r: %s", raw_value, err)
+                return
+            self._last_saving_monitor_values["activation_rate"] = activation_rate
+            self._update_saving_monitor_sensor(
+                ID_SAVING_MONITOR_ACTIVATION_RATE,
+                activation_rate,
+                "activation_rate",
+            )
+            self._refresh_saving_monitor_consumption_sensors()
+            return
+
+        if not isinstance(raw_value, dict):
+            return
+        try:
+            values = {
+                "water_l": _raw_to_float(raw_value["water_l"]),
+                "energy_kwh": _raw_to_float(raw_value["energy_Wh"]) / 1000.0,
+                "co2_kg": _raw_to_float(raw_value["emission_Co2Kg"]),
+            }
+            if raw_value.get("value_E") is not None:
+                values["value_eur"] = _raw_to_float(raw_value["value_E"])
+        except (KeyError, TypeError, ValueError) as err:
+            _LOGGER.debug("Ignoring invalid saving monitor %s value=%r: %s", key, raw_value, err)
+            return
+
+        self._last_saving_monitor_values[key.lower()] = values
+        self._refresh_saving_monitor_consumption_sensors()
+
+    def _refresh_saving_monitor_consumption_sensors(self) -> None:
+        consumption = self._last_saving_monitor_values.get("consumption")
+        if not isinstance(consumption, dict):
+            return
+        self._update_saving_monitor_sensor(
+            ID_SAVING_MONITOR_WATER,
+            consumption["water_l"],
+            "water_l",
+        )
+        self._update_saving_monitor_sensor(
+            ID_SAVING_MONITOR_ENERGY,
+            consumption["energy_kwh"],
+            "energy_kwh",
+        )
+        self._update_saving_monitor_sensor(
+            ID_SAVING_MONITOR_CO2,
+            consumption["co2_kg"],
+            "co2_kg",
+        )
+
+    def _update_saving_monitor_sensor(self, measurement_id: int, value: float, field: str) -> None:
+        source_command = (
+            "set:ste.app.savingMonitor:ActivationRate"
+            if field == "activation_rate"
+            else "set:ste.app.savingMonitor:consumption"
+        )
+        attributes: dict[str, Any] = {
+            "source_command": source_command,
+            "saving_monitor_field": field,
+        }
+        for key in ("activation_rate", "possible", "real", "consumption"):
+            stored_value = self._last_saving_monitor_values.get(key)
+            if stored_value is not None:
+                attributes[key] = stored_value
+
+        previous_attributes = self._last_measurement_attributes.get(measurement_id)
+        self._last_measurement_attributes[measurement_id] = attributes
+        self._handle_measurement(
+            measurement_id,
+            value,
+            force_update=previous_attributes != attributes,
+        )
+
+    def _handle_device_info_value(self, command: str, raw_value: Any) -> None:
+        self._last_app_values[command] = raw_value
+        key = command.rsplit(":", 1)[-1]
+        if key == "gadgetData" and isinstance(raw_value, dict):
+            self._last_device_info.update({
+                "device_type": self._nested_value(raw_value, "type"),
+                "device_id": self._nested_value(raw_value, "id"),
+                "wlan_mac": self._nested_value(raw_value, "wlan"),
+                "bluetooth_mac": self._nested_value(raw_value, "bluetooth"),
+            })
+        elif key == "controlunitName":
+            self._last_device_info["controlunit_name"] = str(raw_value)
+        elif key == "gadgetDataValid":
+            try:
+                self._last_device_info["gadget_data_valid"] = _raw_to_bool(raw_value)
+            except (TypeError, ValueError):
+                self._last_device_info["gadget_data_valid"] = bool(raw_value)
+        elif key == "orderNumber":
+            self._last_device_info["order_number"] = str(raw_value)
+        elif key == "contactData" and isinstance(raw_value, dict):
+            self._last_device_info["service_contact"] = {
+                contact_key: self._nested_value(raw_value, contact_key)
+                for contact_key in ("company", "mail", "phone")
+            }
+        else:
+            self._last_device_info[key] = raw_value
+
+        state = str(
+            self._last_device_info.get("device_type")
+            or self._last_device_info.get("controlunit_name")
+            or "DHE Connect"
+        )
+        attributes = {
+            key: value
+            for key, value in self._last_device_info.items()
+            if value not in (None, "")
+        }
+        attributes["source_commands"] = list(DEVICE_INFO_SET_COMMANDS)
+        previous_attributes = self._last_measurement_attributes.get(ID_DEVICE_INFO)
+        self._last_measurement_attributes[ID_DEVICE_INFO] = attributes
+        self._handle_measurement(
+            ID_DEVICE_INFO,
+            state,
+            force_update=previous_attributes != attributes,
+        )
+
+    @staticmethod
+    def _nested_value(raw_value: dict[str, Any], key: str) -> Any:
+        value = raw_value.get(key)
+        if isinstance(value, dict) and "value" in value:
+            return value["value"]
+        return value
+
     def _handle_temperature_memory_value(self, raw_value: Any, *, source_command: str) -> None:
         if isinstance(raw_value, dict):
             self._handle_temperature_memory_item(raw_value, source_command=source_command)
@@ -957,7 +1178,11 @@ class DHEClient:
             force_update=previous_attributes != attributes,
         )
 
-    def _handle_odb_value(self, odb_id: int, raw_value: Any) -> None:
+    def _handle_odb_value(self, odb_id: int, raw_value: Any, *, is_valid: Any = None) -> None:
+        if is_valid is False:
+            self._store_unhandled_odb_value(odb_id, raw_value, is_valid=False)
+            _LOGGER.debug("Ignoring invalid DHE ODB value id=%s value=%r", odb_id, raw_value)
+            return
         try:
             if odb_id == ID_SETPOINT:
                 self._handle_setpoint(_raw_tenths_to_c(_raw_to_float(raw_value)))
@@ -974,9 +1199,29 @@ class DHEClient:
             elif odb_id in WRITABLE_OPTION_IDS:
                 self._handle_measurement(odb_id, self._convert_odb_value(odb_id, raw_value))
             else:
-                self._last_unhandled_odb_values[odb_id] = raw_value
+                self._store_unhandled_odb_value(odb_id, raw_value, is_valid=is_valid)
         except (TypeError, ValueError) as err:
             _LOGGER.debug("Ignoring invalid DHE ODB value id=%s value=%r: %s", odb_id, raw_value, err)
+
+    def _store_unhandled_odb_value(self, odb_id: int, raw_value: Any, *, is_valid: Any = None) -> None:
+        self._last_unhandled_odb_values[int(odb_id)] = {
+            "value": raw_value,
+            "is_valid": is_valid,
+        }
+        attributes = {
+            "values": {
+                str(key): value
+                for key, value in sorted(self._last_unhandled_odb_values.items())
+            },
+            "source": "ste.common.odb:value",
+        }
+        previous_attributes = self._last_measurement_attributes.get(ID_UNHANDLED_ODB_VALUES)
+        self._last_measurement_attributes[ID_UNHANDLED_ODB_VALUES] = attributes
+        self._handle_measurement(
+            ID_UNHANDLED_ODB_VALUES,
+            float(len(self._last_unhandled_odb_values)),
+            force_update=previous_attributes != attributes,
+        )
 
     def _handle_setpoint(self, value: float) -> None:
         previous = self._last_setpoint
@@ -991,12 +1236,17 @@ class DHEClient:
             self._pending_setpoint_future = None
             self._pending_expected_setpoint = None
 
-    def _handle_measurement(self, odb_id: int, value: ODBValue, *, force_update: bool = False) -> None:
+    def _handle_measurement(self, odb_id: int, value: MeasurementValue, *, force_update: bool = False) -> None:
         previous = self._last_measurements.get(odb_id)
         self._last_measurements[odb_id] = value
-        self._maybe_complete_write_future(odb_id, value)
-        if not force_update and previous is not None and _values_equal(previous, value):
-            return
+        if not isinstance(value, str):
+            self._maybe_complete_write_future(odb_id, value)
+        if not force_update and previous is not None:
+            if isinstance(previous, str) or isinstance(value, str):
+                if previous == value:
+                    return
+            elif _values_equal(previous, value):
+                return
         for callback in tuple(self._measurement_callbacks):
             callback(odb_id, value)
 

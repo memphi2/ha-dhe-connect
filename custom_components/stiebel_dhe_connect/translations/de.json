@@ -109,6 +109,30 @@
       "energy_consumption_years": {
         "name": "Gesamtenergieverbrauch"
       },
+      "last_usage_water": {
+        "name": "Letzter Wasserverbrauch"
+      },
+      "last_usage_energy": {
+        "name": "Letzter Energieverbrauch"
+      },
+      "last_usage_time": {
+        "name": "Letzte Nutzungsdauer"
+      },
+      "last_usage_cost": {
+        "name": "Letzte Nutzungskosten"
+      },
+      "saving_monitor_water": {
+        "name": "Sparmonitor Wasser"
+      },
+      "saving_monitor_energy": {
+        "name": "Sparmonitor Energie"
+      },
+      "saving_monitor_co2": {
+        "name": "Sparmonitor CO2"
+      },
+      "saving_monitor_activation_rate": {
+        "name": "Sparmonitor Aktivierungsrate"
+      },
       "brush_timer_remaining": {
         "name": "Zahnputz-Timer Restzeit"
       },
@@ -117,6 +141,12 @@
       },
       "reconnect_count": {
         "name": "Reconnects"
+      },
+      "device_info": {
+        "name": "Geräteinfo"
+      },
+      "unhandled_odb_values": {
+        "name": "Unzugeordnete ODB-Werte"
       }
     },
     "switch": {

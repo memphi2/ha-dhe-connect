@@ -18,7 +18,7 @@ Current version: `0.7.10` (optimized startup value reads).
 - Automatic reconnect if the DHE closes the session.
 - Best-effort startup reads for all currently known DHE web UI values.
 - Target-temperature control through the existing DHE ODB interface.
-- Current water flow, current power, configured power and app consumption sensors.
+- Current water flow, current power, configured power, app consumption, last usage and saving monitor sensors.
 - Diagnostic online status and reconnect count entities.
 - Eco mode, Eco flow limit, maximum temperature and bath-fill controls.
 - Separate brush timer and shower timer controls.
@@ -50,10 +50,18 @@ Current version: `0.7.10` (optimized startup value reads).
 | Energy consumption week | `set:ste.app.consumption:energyWeek`, unit `kWh` |
 | Energy consumption year | `set:ste.app.consumption:energyYear`, unit `kWh` |
 | Energy consumption years | `set:ste.app.consumption:energyYears`, unit `kWh` |
+| Last usage water | `set:ste.app.consumption:lastUsage`, unit `L` |
+| Last usage energy | `set:ste.app.consumption:lastUsage`, unit `kWh` |
+| Last usage duration | `set:ste.app.consumption:lastUsage`, unit `min` |
+| Last usage cost | `set:ste.app.consumption:lastUsage`, unit `EUR` |
+| Saving monitor water | `set:ste.app.savingMonitor:consumption`, unit `L` |
+| Saving monitor energy | `set:ste.app.savingMonitor:consumption`, unit `kWh` |
+| Saving monitor CO2 | `set:ste.app.savingMonitor:consumption`, unit `kg` |
+| Saving monitor activation rate | `set:ste.app.savingMonitor:ActivationRate` |
 | Brush timer remaining | `set:ste.app.brushTimer:remainingMilliseconds`, displayed as `M:SS` |
 | Shower timer remaining | `set:ste.app.showerTimer:remainingMilliseconds`, displayed as `M:SS` |
 
-Consumption sensors expose the raw chart values as attributes and the EUR total reported by the DHE as `cost_eur`.
+Consumption sensors expose the raw chart values as attributes and the EUR total reported by the DHE as `cost_eur`. Saving monitor sensors expose the latest possible, real and consumption payloads as attributes.
 
 ### Diagnostics
 
@@ -61,6 +69,8 @@ Consumption sensors expose the raw chart values as attributes and the EUR total 
 |---|---|---|
 | Online | Binary sensor | Current authenticated persistent session status |
 | Reconnects | Sensor | Number of successful reconnects after the initial connection |
+| Device info | Sensor | Device type plus version, WLAN/Bluetooth and service attributes |
+| Unhandled ODB values | Sensor | Count and attributes for valid unknown or invalid ODB readbacks |
 
 ### Controls
 
@@ -88,7 +98,7 @@ Consumption sensors expose the raw chart values as attributes and the EUR total 
 
 ## DHE protocol notes
 
-The integration keeps one long-polling session open, answers Engine.IO pings and processes incoming DHE messages from that session. At startup it first requests the required entity seed values, then requests all currently known additional DHE web UI values best-effort. Optional reads cover remaining readable ODB ID `4`, temperature memory values, consumption volume format and last usage, wellness programs and maximum override. ODB ID `66` is command-only and is not read at startup. Optional responses are cached internally and do not create extra Home Assistant entities.
+The integration keeps one long-polling session open, answers Engine.IO pings and processes incoming DHE messages from that session. At startup it first requests the required entity seed values, then requests all currently known additional DHE web UI values best-effort. Optional reads cover remaining readable ODB ID `4`, temperature memory values, consumption volume format and last usage, saving monitor values, version/device information, wellness programs and maximum override. ODB ID `66` is command-only and is not read at startup. Optional responses are cached internally and only selected diagnostics create Home Assistant entities.
 
 Writable ODB settings are sent through `assign:ste.common.odb:value`. Temperature memory preset buttons send ODB ID `66` commands built from the currently stored temperature memory values. Temperature memory number boxes use `assign:ste.common.temperature:memory` with `operation: add_change` and accept both list and single-object memory responses. App timer commands are sent through `assign:ste.app.brushTimer:*` and `assign:ste.app.showerTimer:*` with Socket.IO message IDs matching the DHE web UI format.
 

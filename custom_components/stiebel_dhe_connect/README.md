@@ -15,8 +15,9 @@ The integration provides:
 - target-temperature climate control
 - best-effort startup reads for all currently known DHE web UI values
 - current water flow, current power and configured power sensors
-- water and energy consumption sensors from DHE app chart messages
+- water, energy, last usage and saving monitor sensors from DHE app messages
 - diagnostic online status and reconnect count entities
+- diagnostic device info and unhandled ODB value entities
 - Eco mode, Eco flow limit and maximum-temperature controls
 - bath-fill switch and target-volume control
 - brush timer and shower timer switches, duration numbers, remaining sensors and reset buttons

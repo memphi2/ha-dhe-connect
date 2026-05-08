@@ -30,12 +30,23 @@ from .client import (
     ID_ENERGY_CONSUMPTION_WEEK,
     ID_ENERGY_CONSUMPTION_YEAR,
     ID_ENERGY_CONSUMPTION_YEARS,
+    ID_DEVICE_INFO,
+    ID_LAST_USAGE_COST,
+    ID_LAST_USAGE_ENERGY,
+    ID_LAST_USAGE_TIME,
+    ID_LAST_USAGE_WATER,
     ID_POWER,
+    ID_SAVING_MONITOR_ACTIVATION_RATE,
+    ID_SAVING_MONITOR_CO2,
+    ID_SAVING_MONITOR_ENERGY,
+    ID_SAVING_MONITOR_WATER,
     ID_SHOWER_TIMER_REMAINING,
+    ID_UNHANDLED_ODB_VALUES,
     ID_WATER_CONSUMPTION_WEEK,
     ID_WATER_CONSUMPTION_YEAR,
     ID_WATER_CONSUMPTION_YEARS,
     ID_WATER_FLOW,
+    MeasurementValue,
     SHOWER_TIMER_PATH,
 )
 from .const import DOMAIN
@@ -140,6 +151,82 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         period="years",
     ),
     StiebelDHESensorEntityDescription(
+        key="last_usage_water",
+        translation_key="last_usage_water",
+        native_unit_of_measurement=UnitOfVolume.LITERS,
+        device_class=SensorDeviceClass.VOLUME,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:water-check",
+        odb_id=ID_LAST_USAGE_WATER,
+        source_command="set:ste.app.consumption:lastUsage",
+    ),
+    StiebelDHESensorEntityDescription(
+        key="last_usage_energy",
+        translation_key="last_usage_energy",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:lightning-bolt",
+        odb_id=ID_LAST_USAGE_ENERGY,
+        source_command="set:ste.app.consumption:lastUsage",
+    ),
+    StiebelDHESensorEntityDescription(
+        key="last_usage_time",
+        translation_key="last_usage_time",
+        native_unit_of_measurement=UnitOfTime.MINUTES,
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:timer-outline",
+        odb_id=ID_LAST_USAGE_TIME,
+        source_command="set:ste.app.consumption:lastUsage",
+    ),
+    StiebelDHESensorEntityDescription(
+        key="last_usage_cost",
+        translation_key="last_usage_cost",
+        native_unit_of_measurement="EUR",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:cash",
+        odb_id=ID_LAST_USAGE_COST,
+        source_command="set:ste.app.consumption:lastUsage",
+    ),
+    StiebelDHESensorEntityDescription(
+        key="saving_monitor_water",
+        translation_key="saving_monitor_water",
+        native_unit_of_measurement=UnitOfVolume.LITERS,
+        device_class=SensorDeviceClass.VOLUME,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:water-percent",
+        odb_id=ID_SAVING_MONITOR_WATER,
+        source_command="set:ste.app.savingMonitor:consumption",
+    ),
+    StiebelDHESensorEntityDescription(
+        key="saving_monitor_energy",
+        translation_key="saving_monitor_energy",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:lightning-bolt-circle",
+        odb_id=ID_SAVING_MONITOR_ENERGY,
+        source_command="set:ste.app.savingMonitor:consumption",
+    ),
+    StiebelDHESensorEntityDescription(
+        key="saving_monitor_co2",
+        translation_key="saving_monitor_co2",
+        native_unit_of_measurement="kg",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:molecule-co2",
+        odb_id=ID_SAVING_MONITOR_CO2,
+        source_command="set:ste.app.savingMonitor:consumption",
+    ),
+    StiebelDHESensorEntityDescription(
+        key="saving_monitor_activation_rate",
+        translation_key="saving_monitor_activation_rate",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:leaf-circle",
+        odb_id=ID_SAVING_MONITOR_ACTIVATION_RATE,
+        source_command="set:ste.app.savingMonitor:ActivationRate",
+    ),
+    StiebelDHESensorEntityDescription(
         key="brush_timer_remaining",
         translation_key="brush_timer_remaining",
         icon="mdi:toothbrush",
@@ -154,6 +241,22 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         odb_id=ID_SHOWER_TIMER_REMAINING,
         timer_path=SHOWER_TIMER_PATH,
         timer_property="remainingMilliseconds",
+    ),
+    StiebelDHESensorEntityDescription(
+        key="device_info",
+        translation_key="device_info",
+        icon="mdi:information-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        odb_id=ID_DEVICE_INFO,
+        source_command="set:ste.common.version:*",
+    ),
+    StiebelDHESensorEntityDescription(
+        key="unhandled_odb_values",
+        translation_key="unhandled_odb_values",
+        icon="mdi:database-search",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        odb_id=ID_UNHANDLED_ODB_VALUES,
+        source_command="ste.common.odb:value",
     ),
 )
 
@@ -217,8 +320,9 @@ class StiebelDHESensor(SensorEntity):
         elif description.source_command:
             self._base_extra_state_attributes = {
                 "source_command": description.source_command,
-                "period": description.period,
             }
+            if description.period is not None:
+                self._base_extra_state_attributes["period"] = description.period
         else:
             self._base_extra_state_attributes = {"odb_id": description.odb_id}
         self._attr_extra_state_attributes = dict(self._base_extra_state_attributes)
@@ -243,7 +347,7 @@ class StiebelDHESensor(SensorEntity):
 
         await self._client.start()
 
-    def _convert_value(self, value: float) -> float | str:
+    def _convert_value(self, value: MeasurementValue) -> MeasurementValue:
         """Convert the raw client value for display."""
         if not self.entity_description.timer_path:
             return value
@@ -259,7 +363,7 @@ class StiebelDHESensor(SensorEntity):
         self._attr_extra_state_attributes = attributes
 
     @callback
-    def _handle_measurement_update(self, odb_id: int, value: float) -> None:
+    def _handle_measurement_update(self, odb_id: int, value: MeasurementValue) -> None:
         """Handle converted measurement updates from the persistent client."""
         if odb_id != self.entity_description.odb_id:
             return

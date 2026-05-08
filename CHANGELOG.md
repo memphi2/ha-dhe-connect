@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add last usage, saving monitor, device info and unhandled ODB diagnostic sensors.
+- Ignore DHE ODB readbacks marked as invalid instead of publishing them as normal entity state.
 - Add diagnostic entities for online status and reconnect count.
 - Send temperature memory preset buttons with the temperature currently stored in the selected memory slot instead of fixed ODB ID `66` values.
 

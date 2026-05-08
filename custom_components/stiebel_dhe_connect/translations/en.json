@@ -109,6 +109,30 @@
       "energy_consumption_years": {
         "name": "Energy consumption years"
       },
+      "last_usage_water": {
+        "name": "Last usage water"
+      },
+      "last_usage_energy": {
+        "name": "Last usage energy"
+      },
+      "last_usage_time": {
+        "name": "Last usage duration"
+      },
+      "last_usage_cost": {
+        "name": "Last usage cost"
+      },
+      "saving_monitor_water": {
+        "name": "Saving monitor water"
+      },
+      "saving_monitor_energy": {
+        "name": "Saving monitor energy"
+      },
+      "saving_monitor_co2": {
+        "name": "Saving monitor CO2"
+      },
+      "saving_monitor_activation_rate": {
+        "name": "Saving monitor activation rate"
+      },
       "brush_timer_remaining": {
         "name": "Brush timer remaining"
       },
@@ -117,6 +141,12 @@
       },
       "reconnect_count": {
         "name": "Reconnects"
+      },
+      "device_info": {
+        "name": "Device info"
+      },
+      "unhandled_odb_values": {
+        "name": "Unhandled ODB values"
       }
     },
     "switch": {
