@@ -153,7 +153,6 @@ class StiebelDHEButton(ButtonEntity):
             self._attr_available = True
         else:
             self._attr_available = self._client.available
-        await self._client.start()
 
     @callback
     def _handle_measurement_update(self, odb_id: int, value: ODBValue) -> None:

@@ -154,7 +154,6 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         key="last_usage_water",
         translation_key="last_usage_water",
         native_unit_of_measurement=UnitOfVolume.LITERS,
-        device_class=SensorDeviceClass.VOLUME,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:water-check",
         odb_id=ID_LAST_USAGE_WATER,
@@ -164,7 +163,6 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         key="last_usage_energy",
         translation_key="last_usage_energy",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:lightning-bolt",
         odb_id=ID_LAST_USAGE_ENERGY,
@@ -193,7 +191,6 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         key="saving_monitor_water",
         translation_key="saving_monitor_water",
         native_unit_of_measurement=UnitOfVolume.LITERS,
-        device_class=SensorDeviceClass.VOLUME,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:water-percent",
         odb_id=ID_SAVING_MONITOR_WATER,
@@ -203,7 +200,6 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         key="saving_monitor_energy",
         translation_key="saving_monitor_energy",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:lightning-bolt-circle",
         odb_id=ID_SAVING_MONITOR_ENERGY,
@@ -345,8 +341,6 @@ class StiebelDHESensor(SensorEntity):
             self._attr_available = True
             self._update_extra_state_attributes()
 
-        await self._client.start()
-
     def _convert_value(self, value: MeasurementValue) -> MeasurementValue:
         """Convert the raw client value for display."""
         if not self.entity_description.timer_path:
@@ -408,7 +402,6 @@ class StiebelDHEReconnectCountSensor(SensorEntity):
             self._client.add_reconnect_callback(self._handle_reconnect_update)
         )
         self._attr_native_value = self._client.reconnect_count
-        await self._client.start()
 
     @callback
     def _handle_reconnect_update(self, reconnect_count: int) -> None:

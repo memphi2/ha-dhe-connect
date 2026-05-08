@@ -55,6 +55,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
+    _start_client_background(hass, client)
     return True
 
 
@@ -75,3 +76,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Reload entry when options change."""
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+def _start_client_background(hass: HomeAssistant, client: DHEClient) -> None:
+    """Start the persistent DHE session without blocking entity setup."""
+    create_background_task = getattr(hass, "async_create_background_task", None)
+    if create_background_task is not None:
+        create_background_task(client.start(), "stiebel_dhe_connect_start")
+    else:
+        hass.async_create_task(client.start(), name="stiebel_dhe_connect_start")

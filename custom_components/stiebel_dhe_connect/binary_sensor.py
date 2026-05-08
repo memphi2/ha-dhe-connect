@@ -61,7 +61,6 @@ class StiebelDHEOnlineBinarySensor(BinarySensorEntity):
             self._client.add_online_callback(self._handle_online_update)
         )
         self._attr_is_on = self._client.online
-        await self._client.start()
 
     @callback
     def _handle_online_update(self, online: bool) -> None:

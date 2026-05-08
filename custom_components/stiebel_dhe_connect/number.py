@@ -214,8 +214,6 @@ class StiebelDHENumber(RestoreNumber):
                 self._attr_native_value = float(last_number_data.native_value)
                 self._attr_available = True
 
-        await self._client.start()
-
     async def async_set_native_value(self, value: float) -> None:
         """Set the DHE ODB value and update state from confirmed writeback."""
         try:

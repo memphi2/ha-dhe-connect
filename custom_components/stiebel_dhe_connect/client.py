@@ -75,6 +75,9 @@ COMMAND_CONFIRMATION_TIMEOUT = 12.0
 COMMAND_READBACK_INTERVAL = 1.0
 APP_COMMAND_CONFIRMATION_TIMEOUT = 3.0
 AVAILABILITY_DROP_GRACE_SECONDS = 20.0
+WEBSOCKET_UPGRADE_TIMEOUT = 8.0
+AUTH_POLL_TIMEOUT_SECONDS = 10.0
+DEFAULT_ENGINEIO_PING_INTERVAL_SECONDS = 25.0
 # DHE memory button payloads encode 38 C as 10620 and 41 C as 10650.
 TEMPERATURE_MEMORY_BUTTON_ADDR = 10
 TEMPERATURE_MEMORY_SLOT_IDS = {
@@ -230,11 +233,14 @@ class DHEEvent:
 
 @dataclass
 class DHESession:
-    """Open Engine.IO/Socket.IO polling session context."""
+    """Open Engine.IO/Socket.IO session context."""
 
     sid: str
     url_token: str
     websocket_sid: str | None = None
+    ping_interval: float = DEFAULT_ENGINEIO_PING_INTERVAL_SECONDS
+    websocket: Any | None = None
+    websocket_ping_task: asyncio.Task[None] | None = None
 
 
 def _round_to_half_c(value: float) -> float:
@@ -305,6 +311,7 @@ class DHEClient:
         self._stopped = asyncio.Event()
         self._ready = asyncio.Event()
         self._command_lock = asyncio.Lock()
+        self._send_lock = asyncio.Lock()
         self._setpoint_callbacks: set[SetpointCallback] = set()
         self._availability_callbacks: set[AvailabilityCallback] = set()
         self._online_callbacks: set[OnlineCallback] = set()
@@ -397,11 +404,16 @@ class DHEClient:
         if self._runner and not self._runner.done():
             return
         self._stopped.clear()
+        self._runner = self._create_background_task(
+            self._run_loop(),
+            "stiebel_dhe_connect_session_loop",
+        )
+
+    def _create_background_task(self, coro: Any, name: str) -> asyncio.Task[Any]:
         create_background_task = getattr(self.hass, "async_create_background_task", None)
         if create_background_task is not None:
-            self._runner = create_background_task(self._run_loop(), "stiebel_dhe_connect_session_loop")
-        else:
-            self._runner = self.hass.async_create_task(self._run_loop(), name="stiebel_dhe_connect_session_loop")
+            return create_background_task(coro, name)
+        return self.hass.async_create_task(coro, name=name)
 
     async def stop(self) -> None:
         self._stopped.set()
@@ -762,7 +774,7 @@ class DHEClient:
             except asyncio.CancelledError:
                 raise
             except Exception as err:  # noqa: BLE001
-                _LOGGER.debug("DHE persistent session failed: %s", err)
+                _LOGGER.debug("DHE persistent session failed: %r", err)
                 self._clear_pending_future(err)
                 self._clear_pending_write_future(err)
                 self._ready.clear()
@@ -790,7 +802,7 @@ class DHEClient:
             deadline = time.monotonic() + 45.0
             last_nudge = 0.0
             while time.monotonic() < deadline and not self._stopped.is_set():
-                for event in await self._read_events_once(ctx):
+                for event in await self._read_polling_events_once(ctx):
                     if event.name == "__closed":
                         raise DHESessionClosed("DHE closed Socket.IO session during authentication")
                     if event.name == "token_response" and isinstance(event.data, str) and len(event.data) > 20:
@@ -798,6 +810,7 @@ class DHEClient:
                         await self._save_token(token)
                         await self._post_packet(ctx, self._event_packet("authenticate", {"token": token}))
                     elif event.name == "authenticated":
+                        await self._upgrade_to_websocket(ctx)
                         return ctx
                     elif event.name == "pairing_request":
                         _LOGGER.info("DHE pairing requested. Confirm on the DHE if prompted.")
@@ -818,7 +831,7 @@ class DHEClient:
             await self._post_packet(ctx, self._event_packet("token_request", {"token": "", "name": self.name}))
             deadline = time.monotonic() + 120.0
             while time.monotonic() < deadline and not self._stopped.is_set():
-                for event in await self._read_events_once(ctx):
+                for event in await self._read_polling_events_once(ctx):
                     if event.name == "__closed":
                         raise DHESessionClosed("DHE closed Socket.IO session while requesting token")
                     if event.name == "pairing_request":
@@ -841,16 +854,28 @@ class DHEClient:
             sid=sid_match.group(1),
             url_token=token_for_url,
             websocket_sid=websocket_sid_match.group(1) if websocket_sid_match else None,
+            ping_interval=self._engineio_ping_interval(open_payload),
         )
-        await self._post_packet(ctx, "40")
-        await self._post_packet(ctx, f"40/{NS},")
+        await self._post_packet(ctx, f"40/{NS}")
         return ctx
 
     async def _close_session(self, ctx: DHESession) -> None:
+        ping_task = ctx.websocket_ping_task
+        ctx.websocket_ping_task = None
+        if ping_task is not None and not ping_task.done():
+            ping_task.cancel()
+            try:
+                await ping_task
+            except asyncio.CancelledError:
+                pass
         try:
             await self._post_packet(ctx, f"41/{NS}")
         except Exception:  # noqa: BLE001
             pass
+        websocket = ctx.websocket
+        ctx.websocket = None
+        if websocket is not None and not websocket.closed:
+            await websocket.close()
 
     async def _force_reconnect(self) -> None:
         ctx = self._ctx
@@ -1466,8 +1491,85 @@ class DHEClient:
         finally:
             self._availability_drop_task = None
 
+    async def _upgrade_to_websocket(self, ctx: DHESession) -> None:
+        websocket = None
+        try:
+            errors: list[str] = []
+            for label, sid, url in self._websocket_url_candidates(ctx):
+                websocket = None
+                try:
+                    websocket = await self._session.ws_connect(
+                        url,
+                        autoping=False,
+                        heartbeat=None,
+                        headers=self._websocket_headers(sid),
+                        timeout=WEBSOCKET_UPGRADE_TIMEOUT,
+                    )
+                    await websocket.send_str("2probe")
+                    deadline = time.monotonic() + WEBSOCKET_UPGRADE_TIMEOUT
+                    while time.monotonic() < deadline:
+                        timeout = max(0.1, deadline - time.monotonic())
+                        message = await asyncio.wait_for(websocket.receive(), timeout=timeout)
+                        packet = self._websocket_message_packet(message)
+                        if packet == "3probe":
+                            async with self._send_lock:
+                                await websocket.send_str("5")
+                            ctx.websocket = websocket
+                            ctx.websocket_ping_task = self._create_background_task(
+                                self._websocket_ping_loop(ctx),
+                                "stiebel_dhe_connect_websocket_ping",
+                            )
+                            _LOGGER.debug("DHE session upgraded to websocket transport using %s", label)
+                            return
+                        if packet == "2":
+                            await websocket.send_str("3")
+                            continue
+                        if message.type in {
+                            aiohttp.WSMsgType.CLOSE,
+                            aiohttp.WSMsgType.CLOSED,
+                            aiohttp.WSMsgType.CLOSING,
+                            aiohttp.WSMsgType.ERROR,
+                        }:
+                            break
+                        if packet == "3" or not packet:
+                            continue
+                        _LOGGER.debug("Ignoring unexpected DHE websocket probe packet: %r", packet)
+                    raise DHEError("probe timeout")
+                except Exception as err:  # noqa: BLE001
+                    errors.append(f"{label}: {type(err).__name__}")
+                    if websocket is not None and not websocket.closed:
+                        await websocket.close()
+            raise DHEError("; ".join(errors) or "probe timeout")
+        except Exception as err:  # noqa: BLE001
+            if websocket is not None and not websocket.closed:
+                await websocket.close()
+            raise DHEError(f"DHE websocket upgrade failed: {err}") from err
+
+    async def _websocket_ping_loop(self, ctx: DHESession) -> None:
+        try:
+            while not self._stopped.is_set() and ctx.websocket is not None and not ctx.websocket.closed:
+                await asyncio.sleep(ctx.ping_interval)
+                if self._stopped.is_set() or ctx.websocket is None or ctx.websocket.closed:
+                    return
+                await self._send_websocket_packet(ctx, "2")
+        except asyncio.CancelledError:
+            return
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("DHE websocket heartbeat failed: %r", err)
+
     async def _read_events_once(self, ctx: DHESession) -> list[DHEEvent]:
-        raw = await self._get_text(self._poll_url(ctx.url_token, ctx.sid, ctx.websocket_sid))
+        if ctx.websocket is None:
+            raise DHESessionClosed("DHE websocket transport is not connected")
+        return await self._read_websocket_events_once(ctx)
+
+    async def _read_polling_events_once(self, ctx: DHESession) -> list[DHEEvent]:
+        try:
+            raw = await self._get_text(
+                self._poll_url(ctx.url_token, ctx.sid, ctx.websocket_sid),
+                timeout=AUTH_POLL_TIMEOUT_SECONDS,
+            )
+        except TimeoutError:
+            return []
         if not raw:
             return []
         if re.search(r"(^|[\ufffd\x1e])41(?:/1\.0\.0)?", raw):
@@ -1486,6 +1588,36 @@ class DHEClient:
             app_packets.append(packet)
         return self._parse_socketio_events(app_packets)
 
+    async def _read_websocket_events_once(self, ctx: DHESession) -> list[DHEEvent]:
+        websocket = ctx.websocket
+        if websocket is None:
+            return []
+        message = await websocket.receive()
+        if message.type in {
+            aiohttp.WSMsgType.CLOSE,
+            aiohttp.WSMsgType.CLOSED,
+            aiohttp.WSMsgType.CLOSING,
+            aiohttp.WSMsgType.ERROR,
+        }:
+            return [DHEEvent("__closed", None)]
+        raw = self._websocket_message_packet(message)
+        if not raw:
+            return []
+
+        packets = self._decode_engineio_payload(raw)
+        app_packets: list[str] = []
+        for packet in packets:
+            stripped = packet.strip("\x00\x1e\ufffd")
+            if stripped == "1" or stripped == "41" or stripped.startswith("41/"):
+                return [DHEEvent("__closed", None)]
+            if stripped == "2":
+                await self._send_websocket_packet(ctx, "3")
+                continue
+            if stripped == "3" or not stripped:
+                continue
+            app_packets.append(packet)
+        return self._parse_socketio_events(app_packets)
+
     def _poll_url(self, token: str, sid: str | None, websocket_sid: str | None = None) -> str:
         token_q = quote(token or "", safe="")
         t = format(int(time.time() * 1000), "x")
@@ -1496,9 +1628,40 @@ class DHEClient:
             return f"{self.base_url}/socket.io/?EIO=3&transport=polling&sid={quote(sid, safe='')}{websocket_part}&token={token_q}&t={t}"
         return f"{self.base_url}/socket.io/?EIO=3&transport=polling{websocket_part}&token={token_q}&t={t}"
 
-    async def _get_text(self, url: str) -> str:
-        timeout = aiohttp.ClientTimeout(total=70)
-        async with self._session.get(url, timeout=timeout) as resp:
+    def _websocket_url_candidates(self, ctx: DHESession) -> tuple[tuple[str, str, str], ...]:
+        websocket_sid = ctx.websocket_sid or ctx.sid
+        candidates = [
+            ("websocket-sid", websocket_sid, self._websocket_url(ctx.url_token, websocket_sid)),
+        ]
+        if ctx.websocket_sid:
+            candidates.extend([
+                ("polling-sid", ctx.sid, self._websocket_url(ctx.url_token, ctx.sid)),
+            ])
+        return tuple(candidates)
+
+    def _websocket_url(self, token: str, sid: str) -> str:
+        token_q = quote(token or "", safe="")
+        sid_q = quote(sid, safe="")
+        return f"ws://{self.host}:{self.port}/socket.io/?token={token_q}&EIO=3&transport=websocket&sid={sid_q}"
+
+    def _websocket_headers(self, sid: str) -> dict[str, str]:
+        return {
+            "Cache-Control": "no-cache",
+            "Cookie": f"io={sid}",
+            "Origin": self.base_url,
+            "Pragma": "no-cache",
+        }
+
+    @staticmethod
+    def _engineio_ping_interval(open_payload: str) -> float:
+        match = re.search(r'"pingInterval"\s*:\s*(\d+(?:\.\d+)?)', open_payload)
+        if not match:
+            return DEFAULT_ENGINEIO_PING_INTERVAL_SECONDS
+        return max(1.0, float(match.group(1)) / 1000.0)
+
+    async def _get_text(self, url: str, *, timeout: float = 70.0) -> str:
+        client_timeout = aiohttp.ClientTimeout(total=timeout)
+        async with self._session.get(url, timeout=client_timeout) as resp:
             body = await resp.read()
             if resp.status < 200 or resp.status >= 300:
                 text = body.decode("utf-8", errors="replace")
@@ -1506,6 +1669,10 @@ class DHEClient:
             return body.decode("utf-8", errors="replace")
 
     async def _post_packet(self, ctx: DHESession, packet: str) -> str:
+        if ctx.websocket is not None:
+            await self._send_websocket_packet(ctx, packet)
+            return ""
+
         body = f"{len(packet)}:{packet}"
         timeout = aiohttp.ClientTimeout(total=40)
         async with self._session.post(
@@ -1519,6 +1686,21 @@ class DHEClient:
                 text = response_body.decode("utf-8", errors="replace")
                 raise DHEError(f"POST {resp.status}: {text[:200]}")
             return response_body.decode("utf-8", errors="replace")
+
+    async def _send_websocket_packet(self, ctx: DHESession, packet: str) -> None:
+        websocket = ctx.websocket
+        if websocket is None or websocket.closed:
+            raise DHESessionClosed("DHE websocket transport is closed")
+        async with self._send_lock:
+            await websocket.send_str(packet)
+
+    @staticmethod
+    def _websocket_message_packet(message: Any) -> str:
+        if message.type == aiohttp.WSMsgType.TEXT:
+            return str(message.data)
+        if message.type == aiohttp.WSMsgType.BINARY:
+            return bytes(message.data).decode("utf-8", errors="replace")
+        return ""
 
     def _event_packet(self, event: str, data: Any) -> str:
         return f"42/{NS},{json.dumps([event, data], separators=(',', ':'))}"

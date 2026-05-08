@@ -85,7 +85,6 @@ class StiebelDHEClimate(ClimateEntity):
             self._attr_available = True
             self._connection_state = "connected" if self._client.available else "reconnecting"
             self._update_extra_state_attributes()
-        await self._client.start()
 
     @callback
     def _handle_setpoint_update(self, value: float) -> None:

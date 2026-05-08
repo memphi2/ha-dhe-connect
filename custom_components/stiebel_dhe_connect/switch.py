@@ -169,8 +169,6 @@ class StiebelDHEEcoModeSwitch(SwitchEntity, RestoreEntity):
                 self._attr_is_on = last_state.state == STATE_ON
                 self._attr_available = True
 
-        await self._client.start()
-
     async def async_turn_on(self, **kwargs) -> None:  # noqa: ANN003
         """Turn Eco mode on."""
         try:
@@ -248,8 +246,6 @@ class StiebelDHEBathFillSwitch(SwitchEntity, RestoreEntity):
             if last_state and last_state.state in {STATE_ON, STATE_OFF}:
                 self._attr_is_on = last_state.state == STATE_ON
                 self._attr_available = True
-
-        await self._client.start()
 
     async def async_turn_on(self, **kwargs) -> None:  # noqa: ANN003
         """Start bath fill."""
@@ -336,8 +332,6 @@ class StiebelDHEAppTimerSwitch(SwitchEntity, RestoreEntity):
             if last_state and last_state.state in {STATE_ON, STATE_OFF}:
                 self._attr_is_on = last_state.state == STATE_ON
                 self._attr_available = True
-        await self._client.start()
-
     async def async_turn_on(self, **kwargs) -> None:  # noqa: ANN003
         await self._set_enabled(True)
 
@@ -417,8 +411,6 @@ class StiebelDHEWellnessShowerProgramSwitch(SwitchEntity, RestoreEntity):
             if last_state and last_state.state in {STATE_ON, STATE_OFF}:
                 self._attr_is_on = last_state.state == STATE_ON
                 self._attr_available = True
-
-        await self._client.start()
 
     async def async_turn_on(self, **kwargs) -> None:  # noqa: ANN003
         try:

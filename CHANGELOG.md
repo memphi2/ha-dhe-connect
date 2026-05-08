@@ -2,7 +2,11 @@
 
 ## Unreleased
 
+- Match the DHE web UI Engine.IO namespace open, require the WebSocket upgrade after polling authentication, keep it alive with browser-style heartbeat pings and avoid long blocking auth-poll reads.
+- Run the WebSocket heartbeat as a Home Assistant background task so it does not hold bootstrap open.
 - Add last usage, saving monitor, device info and unhandled ODB diagnostic sensors.
+- Start the persistent DHE session centrally as a background task after entity setup instead of from entity add hooks.
+- Keep last usage and saving monitor point-in-time sensors out of Home Assistant long-term statistics device classes.
 - Ignore DHE ODB readbacks marked as invalid instead of publishing them as normal entity state.
 - Add diagnostic entities for online status and reconnect count.
 - Send temperature memory preset buttons with the temperature currently stored in the selected memory slot instead of fixed ODB ID `66` values.
