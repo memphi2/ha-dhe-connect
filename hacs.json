@@ -1,0 +1,10 @@
+{
+  "name": "Stiebel DHE Connect",
+  "render_readme": true,
+  "domains": [
+    "stiebel_dhe_connect"
+  ],
+  "country": [
+    "DE"
+  ]
+}
