@@ -90,6 +90,11 @@
         "name": "Temperaturspeicher 2 Temperatur"
       }
     },
+    "select": {
+      "currency": {
+        "name": "Währung"
+      }
+    },
     "sensor": {
       "water_flow": {
         "name": "Aktueller Wasserdurchfluss"

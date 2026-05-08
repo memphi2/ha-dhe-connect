@@ -24,7 +24,7 @@ This is a custom integration and should be used on a trusted local network.
 - Temperature memory buttons that use the temperatures currently stored in memory slot 1 and 2.
 - Water consumption sensors exposed as Home Assistant water meters for the water dashboard.
 - Energy, water, last usage, expanded saving monitor and timer sensors.
-- Eco mode, Eco flow limit, bath fill, maximum temperature and wellness controls.
+- Eco mode, Eco flow limit, bath fill, currency, maximum temperature and wellness controls.
 - Brush timer and shower timer controls.
 - Diagnostic online status, app settings, device info and unhandled ODB value tracking.
 
@@ -167,6 +167,14 @@ Consumption sensors expose the DHE chart array as a `chart` attribute and the re
 | Temperature memory 2 temperature | `C` | `20` to `60` | box | `assign:ste.common.temperature:memory`, memory ID `1` |
 
 Temperature memory writes keep the existing memory name and send `operation: add_change`.
+
+### Selects
+
+| Entity | Options | Source / command | Behavior |
+|---|---|---|---|
+| Currency | `EUR`, `GBP`, `CZK`, `PLN`, `CNY`, `USD`, `AUD`, `HKD` | `get:ste.common.currency:value` | Sends the lower-case currency code, matching the DHE app behavior |
+
+The currency select expands its option list at runtime if the DHE reports another valid currency code.
 
 ### Switches
 
@@ -361,6 +369,12 @@ Best-effort startup reads collect additional values:
 | `get:ste.app.savingMonitor:consumption` | Saving monitor consumption payload |
 | `get:ste.common.version:*` | Device and version information |
 | `get:ste.app.wellness:programs` | Wellness program metadata |
+
+Currency changes use the same command as the DHE app:
+
+```json
+{"command": "get:ste.common.currency:value", "value": "eur"}
+```
 
 ### ODB handling
 

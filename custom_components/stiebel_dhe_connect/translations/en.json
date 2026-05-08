@@ -90,6 +90,11 @@
         "name": "Temperature memory 2 temperature"
       }
     },
+    "select": {
+      "currency": {
+        "name": "Currency"
+      }
+    },
     "sensor": {
       "water_flow": {
         "name": "Current water flow"

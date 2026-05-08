@@ -13,6 +13,7 @@ PLATFORMS = [
     Platform.BINARY_SENSOR,
     Platform.CLIMATE,
     Platform.SENSOR,
+    Platform.SELECT,
     Platform.NUMBER,
     Platform.SWITCH,
     Platform.BUTTON,

@@ -27,6 +27,8 @@ ODB_ASSIGN_COMMAND = "assign:ste.common.odb:value"
 TEMP_MEMORY_GET_COMMAND = "get:ste.common.temperature:memory"
 TEMP_MEMORY_SET_COMMAND = "set:ste.common.temperature:memory"
 TEMP_MEMORY_ASSIGN_COMMAND = "assign:ste.common.temperature:memory"
+CURRENCY_GET_COMMAND = "get:ste.common.currency:value"
+CURRENCY_SET_COMMAND = "set:ste.common.currency:value"
 
 ID_SETPOINT = 0
 ID_BATH_FILL_ACTIVE = 1
@@ -251,7 +253,7 @@ DEVICE_INFO_REQUEST_COMMANDS = tuple(
 APP_SETTING_SET_COMMAND_IDS = {
     "set:ste.app.consumption:volumeFormat": ID_APP_VOLUME_FORMAT,
     "set:ste.common.language:value": ID_APP_LANGUAGE,
-    "set:ste.common.currency:value": ID_APP_CURRENCY,
+    CURRENCY_SET_COMMAND: ID_APP_CURRENCY,
     "set:ste.common.view:value": ID_APP_VIEW,
     "set:ste.common.temperature:maxOverride": ID_TEMPERATURE_MAX_OVERRIDE,
     "set:ste.common.time:format_date": ID_TIME_DATE_FORMAT,
@@ -632,6 +634,33 @@ class DHEClient:
         raw_value = self._co2_emission_to_raw(value)
         await self.write_odb_value(ID_CO2_EMISSION_RAW, raw_value)
         return value
+
+    async def set_currency(self, currency: str) -> str:
+        requested = str(currency).strip().lower()
+        if not requested:
+            raise DHEError("Currency must not be empty")
+
+        async with self._command_lock:
+            for attempt in range(2):
+                try:
+                    await self._ensure_ready(timeout=45)
+                    ctx = self._ctx
+                    if ctx is None:
+                        raise DHEError("DHE session is not connected")
+                    await self._post_packet(ctx, self._message_packet({
+                        "command": CURRENCY_GET_COMMAND,
+                        "value": requested,
+                    }))
+                    self._handle_app_startup_value(CURRENCY_SET_COMMAND, requested)
+                    await self._request_optional_app_value(ctx, CURRENCY_GET_COMMAND)
+                    return requested.upper()
+                except Exception as err:  # noqa: BLE001
+                    if attempt == 0:
+                        await self._force_reconnect()
+                        await asyncio.sleep(1)
+                        continue
+                    raise DHEError(f"Could not set DHE currency: {err}") from err
+        raise DHEError("Could not set DHE currency")
 
     async def _set_price(self, value: float, euros_odb_id: int, cents_odb_id: int) -> float:
         total_cents = int(round(_clamp(float(value), 0.0, 9.99) * 100))
@@ -1070,6 +1099,9 @@ class DHEClient:
             return
         if command in DEVICE_INFO_COMMAND_IDS:
             self._handle_device_info_value(command, value)
+            return
+        if command == CURRENCY_GET_COMMAND and value not in (None, ""):
+            self._handle_app_startup_value(CURRENCY_SET_COMMAND, value)
             return
         if command in APP_STARTUP_SET_COMMANDS:
             self._handle_app_startup_value(command, value)
