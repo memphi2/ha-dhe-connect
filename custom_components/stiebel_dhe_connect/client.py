@@ -32,7 +32,7 @@ ID_SETPOINT = 0
 ID_BATH_FILL_ACTIVE = 1
 ID_WELLNESS_SHOWER_PROGRAM = 2
 ID_BATH_FILL_TARGET_VOLUME = 3
-ID_STARTUP_ODB_4 = 4
+ID_MAXIMUM_ACTIVE = 4
 ID_MAX_TEMPERATURE = 5
 ID_ECO_MODE = 6
 ID_ECO_FLOW_LIMIT = 7
@@ -68,8 +68,23 @@ ID_SAVING_MONITOR_WATER = 1061
 ID_SAVING_MONITOR_ENERGY = 1062
 ID_SAVING_MONITOR_CO2 = 1063
 ID_SAVING_MONITOR_ACTIVATION_RATE = 1064
+ID_SAVING_MONITOR_POSSIBLE_WATER = 1065
+ID_SAVING_MONITOR_POSSIBLE_ENERGY = 1066
+ID_SAVING_MONITOR_POSSIBLE_CO2 = 1067
+ID_SAVING_MONITOR_POSSIBLE_VALUE = 1068
+ID_SAVING_MONITOR_REAL_WATER = 1069
+ID_SAVING_MONITOR_REAL_ENERGY = 1070
 ID_DEVICE_INFO = 1071
+ID_SAVING_MONITOR_REAL_CO2 = 1072
+ID_SAVING_MONITOR_REAL_VALUE = 1073
 ID_UNHANDLED_ODB_VALUES = 1081
+ID_APP_VOLUME_FORMAT = 1091
+ID_APP_LANGUAGE = 1092
+ID_APP_CURRENCY = 1093
+ID_APP_VIEW = 1094
+ID_TEMPERATURE_MAX_OVERRIDE = 1095
+ID_TIME_DATE_FORMAT = 1096
+ID_TIME_CLOCK_FORMAT = 1097
 DEFAULT_CONFIGURED_POWER_KW = 24.0
 COMMAND_CONFIRMATION_TIMEOUT = 12.0
 COMMAND_READBACK_INTERVAL = 1.0
@@ -96,6 +111,7 @@ INITIAL_VALUE_IDS = (
     ID_SETPOINT,
     ID_BATH_FILL_ACTIVE,
     ID_BATH_FILL_TARGET_VOLUME,
+    ID_MAXIMUM_ACTIVE,
     ID_WELLNESS_SHOWER_PROGRAM,
     ID_MAX_TEMPERATURE,
     ID_ECO_MODE,
@@ -108,6 +124,7 @@ INITIAL_VALUE_IDS = (
 WRITABLE_OPTION_IDS = {
     ID_BATH_FILL_ACTIVE,
     ID_BATH_FILL_TARGET_VOLUME,
+    ID_MAXIMUM_ACTIVE,
     ID_WELLNESS_SHOWER_PROGRAM,
     ID_MAX_TEMPERATURE,
     ID_ECO_MODE,
@@ -174,6 +191,25 @@ SAVING_MONITOR_COMMAND_IDS = set(SAVING_MONITOR_SET_COMMANDS)
 SAVING_MONITOR_REQUEST_COMMANDS = tuple(
     command.replace("set:", "get:", 1) for command in SAVING_MONITOR_SET_COMMANDS
 )
+SAVING_MONITOR_SENSOR_FIELDS = {
+    "consumption": {
+        "water_l": ID_SAVING_MONITOR_WATER,
+        "energy_kwh": ID_SAVING_MONITOR_ENERGY,
+        "co2_kg": ID_SAVING_MONITOR_CO2,
+    },
+    "possible": {
+        "water_l": ID_SAVING_MONITOR_POSSIBLE_WATER,
+        "energy_kwh": ID_SAVING_MONITOR_POSSIBLE_ENERGY,
+        "co2_kg": ID_SAVING_MONITOR_POSSIBLE_CO2,
+        "value_eur": ID_SAVING_MONITOR_POSSIBLE_VALUE,
+    },
+    "real": {
+        "water_l": ID_SAVING_MONITOR_REAL_WATER,
+        "energy_kwh": ID_SAVING_MONITOR_REAL_ENERGY,
+        "co2_kg": ID_SAVING_MONITOR_REAL_CO2,
+        "value_eur": ID_SAVING_MONITOR_REAL_VALUE,
+    },
+}
 DEVICE_INFO_SET_COMMANDS = (
     "set:ste.common.version:contactData",
     "set:ste.common.version:orderNumber",
@@ -185,11 +221,22 @@ DEVICE_INFO_COMMAND_IDS = set(DEVICE_INFO_SET_COMMANDS)
 DEVICE_INFO_REQUEST_COMMANDS = tuple(
     command.replace("set:", "get:", 1) for command in DEVICE_INFO_SET_COMMANDS
 )
+APP_SETTING_SET_COMMAND_IDS = {
+    "set:ste.app.consumption:volumeFormat": ID_APP_VOLUME_FORMAT,
+    "set:ste.common.language:value": ID_APP_LANGUAGE,
+    "set:ste.common.currency:value": ID_APP_CURRENCY,
+    "set:ste.common.view:value": ID_APP_VIEW,
+    "set:ste.common.temperature:maxOverride": ID_TEMPERATURE_MAX_OVERRIDE,
+    "set:ste.common.time:format_date": ID_TIME_DATE_FORMAT,
+    "set:ste.common.time:format_clock": ID_TIME_CLOCK_FORMAT,
+}
+APP_SETTING_REQUEST_COMMANDS = tuple(
+    command.replace("set:", "get:", 1) for command in APP_SETTING_SET_COMMAND_IDS
+)
 APP_STARTUP_REQUEST_COMMANDS = (
-    "get:ste.app.consumption:volumeFormat",
+    *APP_SETTING_REQUEST_COMMANDS,
     LAST_USAGE_GET_COMMAND,
     "get:ste.app.wellness:programs",
-    "get:ste.common.temperature:maxOverride",
     *SAVING_MONITOR_REQUEST_COMMANDS,
     *DEVICE_INFO_REQUEST_COMMANDS,
 )
@@ -200,9 +247,7 @@ OPTIONAL_STARTUP_APP_REQUEST_COMMANDS = (
     TEMP_MEMORY_GET_COMMAND,
     *APP_STARTUP_REQUEST_COMMANDS,
 )
-OPTIONAL_STARTUP_ODB_IDS = (
-    ID_STARTUP_ODB_4,
-)
+OPTIONAL_STARTUP_ODB_IDS: tuple[int, ...] = ()
 
 
 ODBValue = bool | float
@@ -529,6 +574,9 @@ class DHEClient:
     async def set_maximum_temperature(self, temperature: float) -> float:
         requested = _round_to_half_c(_clamp(float(temperature), 30.0, 50.0))
         return float(await self.write_odb_value(ID_MAX_TEMPERATURE, _c_to_raw_tenths(requested)))
+
+    async def set_maximum_active(self, enabled: bool) -> bool:
+        return bool(await self.write_odb_value(ID_MAXIMUM_ACTIVE, bool(enabled)))
 
     async def set_eco_mode(self, enabled: bool) -> bool:
         return bool(await self.write_odb_value(ID_ECO_MODE, bool(enabled)))
@@ -970,7 +1018,7 @@ class DHEClient:
             self._handle_device_info_value(command, value)
             return
         if command in APP_STARTUP_SET_COMMANDS:
-            self._last_app_values[command] = value
+            self._handle_app_startup_value(command, value)
             return
         if command not in {ODB_SET_COMMAND, ODB_ASSIGN_COMMAND} or not isinstance(value, dict):
             return
@@ -1090,8 +1138,9 @@ class DHEClient:
                 ID_SAVING_MONITOR_ACTIVATION_RATE,
                 activation_rate,
                 "activation_rate",
+                "activation_rate",
             )
-            self._refresh_saving_monitor_consumption_sensors()
+            self._refresh_saving_monitor_sensors()
             return
 
         if not isinstance(raw_value, dict):
@@ -1109,36 +1158,32 @@ class DHEClient:
             return
 
         self._last_saving_monitor_values[key.lower()] = values
-        self._refresh_saving_monitor_consumption_sensors()
+        self._refresh_saving_monitor_sensors()
 
-    def _refresh_saving_monitor_consumption_sensors(self) -> None:
-        consumption = self._last_saving_monitor_values.get("consumption")
-        if not isinstance(consumption, dict):
-            return
-        self._update_saving_monitor_sensor(
-            ID_SAVING_MONITOR_WATER,
-            consumption["water_l"],
-            "water_l",
-        )
-        self._update_saving_monitor_sensor(
-            ID_SAVING_MONITOR_ENERGY,
-            consumption["energy_kwh"],
-            "energy_kwh",
-        )
-        self._update_saving_monitor_sensor(
-            ID_SAVING_MONITOR_CO2,
-            consumption["co2_kg"],
-            "co2_kg",
-        )
+    def _refresh_saving_monitor_sensors(self) -> None:
+        for category, field_ids in SAVING_MONITOR_SENSOR_FIELDS.items():
+            values = self._last_saving_monitor_values.get(category)
+            if not isinstance(values, dict):
+                continue
+            for field, measurement_id in field_ids.items():
+                value = values.get(field)
+                if value is not None:
+                    self._update_saving_monitor_sensor(measurement_id, value, category, field)
 
-    def _update_saving_monitor_sensor(self, measurement_id: int, value: float, field: str) -> None:
+    def _update_saving_monitor_sensor(
+        self,
+        measurement_id: int,
+        value: float,
+        category: str,
+        field: str,
+    ) -> None:
+        command_category = "ActivationRate" if category == "activation_rate" else category
         source_command = (
-            "set:ste.app.savingMonitor:ActivationRate"
-            if field == "activation_rate"
-            else "set:ste.app.savingMonitor:consumption"
+            f"set:ste.app.savingMonitor:{command_category}"
         )
         attributes: dict[str, Any] = {
             "source_command": source_command,
+            "saving_monitor_category": category,
             "saving_monitor_field": field,
         }
         for key in ("activation_rate", "possible", "real", "consumption"):
@@ -1153,6 +1198,34 @@ class DHEClient:
             value,
             force_update=previous_attributes != attributes,
         )
+
+    def _handle_app_startup_value(self, command: str, raw_value: Any) -> None:
+        self._last_app_values[command] = raw_value
+        measurement_id = APP_SETTING_SET_COMMAND_IDS.get(command)
+        if measurement_id is None:
+            return
+
+        attributes = {
+            "source_command": command,
+            "raw_value": raw_value,
+        }
+        previous_attributes = self._last_measurement_attributes.get(measurement_id)
+        self._last_measurement_attributes[measurement_id] = attributes
+        self._handle_measurement(
+            measurement_id,
+            self._format_app_setting_value(raw_value),
+            force_update=previous_attributes != attributes,
+        )
+
+    @staticmethod
+    def _format_app_setting_value(raw_value: Any) -> str:
+        if raw_value in (None, ""):
+            return "unset"
+        if isinstance(raw_value, bool):
+            return "on" if raw_value else "off"
+        if isinstance(raw_value, (dict, list)):
+            return json.dumps(raw_value, sort_keys=True)
+        return str(raw_value)
 
     def _handle_device_info_value(self, command: str, raw_value: Any) -> None:
         self._last_app_values[command] = raw_value
@@ -1261,6 +1334,8 @@ class DHEClient:
                 self._handle_measurement(odb_id, self._configured_power_kw)
                 if self._last_power_fraction is not None:
                     self._handle_measurement(ID_POWER, self._last_power_fraction * self._configured_power_kw)
+            elif odb_id == ID_MAXIMUM_ACTIVE:
+                self._handle_measurement(odb_id, _raw_to_bool(raw_value))
             elif odb_id in WRITABLE_OPTION_IDS:
                 self._handle_measurement(odb_id, self._convert_odb_value(odb_id, raw_value))
             else:
@@ -1384,7 +1459,7 @@ class DHEClient:
 
     @staticmethod
     def _convert_odb_value(odb_id: int, raw_value: Any) -> ODBValue:
-        if odb_id in {ID_BATH_FILL_ACTIVE, ID_ECO_MODE, ID_STOP_PROGRAM}:
+        if odb_id in {ID_BATH_FILL_ACTIVE, ID_MAXIMUM_ACTIVE, ID_ECO_MODE, ID_STOP_PROGRAM}:
             return _raw_to_bool(raw_value)
         if odb_id == ID_MAX_TEMPERATURE:
             value = _raw_to_float(raw_value)

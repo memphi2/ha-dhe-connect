@@ -6,7 +6,7 @@ The integration talks directly to the DHE web interface on your local network. I
 
 ## Status
 
-- Current version: `1.0.0`
+- Current version: `1.0.1`
 - Home Assistant setup: UI config flow
 - HACS type: custom integration
 - IoT class: local push
@@ -23,10 +23,10 @@ This is a custom integration and should be used on a trusted local network.
 - Target temperature control through the DHE ODB command interface.
 - Temperature memory buttons that use the temperatures currently stored in memory slot 1 and 2.
 - Water consumption sensors exposed as Home Assistant water meters for the water dashboard.
-- Energy, water, last usage, saving monitor and timer sensors.
+- Energy, water, last usage, expanded saving monitor and timer sensors.
 - Eco mode, Eco flow limit, bath fill, maximum temperature and wellness controls.
 - Brush timer and shower timer controls.
-- Diagnostic online status, device info and unhandled ODB value tracking.
+- Diagnostic online status, app settings, device info and unhandled ODB value tracking.
 
 ## Installation
 
@@ -124,17 +124,32 @@ The climate entity keeps the last valid target temperature during short reconnec
 | Last usage energy | `kWh` | none | `measurement` | `set:ste.app.consumption:lastUsage.energy` |
 | Last usage duration | `min` | `duration` | `measurement` | `set:ste.app.consumption:lastUsage.time` |
 | Last usage cost | `EUR` | `monetary` | none | `set:ste.app.consumption:lastUsage.costs` |
-| Saving monitor water | `L` | none | `measurement` | `set:ste.app.savingMonitor:consumption.water_l` |
-| Saving monitor energy | `kWh` | none | `measurement` | `set:ste.app.savingMonitor:consumption.energy_Wh / 1000` |
-| Saving monitor CO2 | `kg` | none | `measurement` | `set:ste.app.savingMonitor:consumption.emission_Co2Kg`, rounded to 2 decimals |
+| Saving monitor consumption water | `L` | none | `measurement` | `set:ste.app.savingMonitor:consumption.water_l` |
+| Saving monitor consumption energy | `kWh` | none | `measurement` | `set:ste.app.savingMonitor:consumption.energy_Wh / 1000` |
+| Saving monitor consumption CO2 | `kg` | none | `measurement` | `set:ste.app.savingMonitor:consumption.emission_Co2Kg`, rounded to 2 decimals |
 | Saving monitor activation rate | `%` | none | `measurement` | `set:ste.app.savingMonitor:ActivationRate` |
+| Saving monitor possible water saving | `L` | none | `measurement` | `set:ste.app.savingMonitor:possible.water_l` |
+| Saving monitor possible energy saving | `kWh` | none | `measurement` | `set:ste.app.savingMonitor:possible.energy_Wh / 1000` |
+| Saving monitor possible CO2 saving | `kg` | none | `measurement` | `set:ste.app.savingMonitor:possible.emission_Co2Kg`, rounded to 2 decimals |
+| Saving monitor possible cost saving | `EUR` | `monetary` | none | `set:ste.app.savingMonitor:possible.value_E` |
+| Saving monitor real water saving | `L` | none | `measurement` | `set:ste.app.savingMonitor:real.water_l` |
+| Saving monitor real energy saving | `kWh` | none | `measurement` | `set:ste.app.savingMonitor:real.energy_Wh / 1000` |
+| Saving monitor real CO2 saving | `kg` | none | `measurement` | `set:ste.app.savingMonitor:real.emission_Co2Kg`, rounded to 2 decimals |
+| Saving monitor real cost saving | `EUR` | `monetary` | none | `set:ste.app.savingMonitor:real.value_E` |
 | Brush timer remaining | `M:SS` | none | none | `set:ste.app.brushTimer:remainingMilliseconds` |
 | Shower timer remaining | `M:SS` | none | none | `set:ste.app.showerTimer:remainingMilliseconds` |
 | Reconnects | count | none | `total_increasing` | Successful reconnect count after the initial connection |
+| App volume format | text | diagnostic | none | `set:ste.app.consumption:volumeFormat` |
+| App language | text | diagnostic | none | `set:ste.common.language:value` |
+| App currency | text | diagnostic | none | `set:ste.common.currency:value` |
+| App view | text | diagnostic | none | `set:ste.common.view:value` |
+| Maximum temperature override | text | diagnostic | none | `set:ste.common.temperature:maxOverride` |
+| Date format | text | diagnostic | none | `set:ste.common.time:format_date` |
+| Clock format | text | diagnostic | none | `set:ste.common.time:format_clock` |
 | Device info | text | diagnostic | none | DHE version and device information commands |
 | Unhandled ODB values | count | diagnostic | none | Unknown valid ODB values and invalid ODB readbacks |
 
-Consumption sensors expose the DHE chart array as a `chart` attribute and the reported cost as `cost_eur` where available. Saving monitor sensors expose the latest `possible`, `real`, `consumption` and `activation_rate` payloads as attributes.
+Consumption sensors expose the DHE chart array as a `chart` attribute and the reported cost as `cost_eur` where available. Saving monitor sensors expose the latest `possible`, `real`, `consumption` and `activation_rate` payloads as attributes. App setting diagnostics expose the original payload as `raw_value`.
 
 ### Numbers
 
@@ -156,6 +171,7 @@ Temperature memory writes keep the existing memory name and send `operation: add
 |---|---|---|
 | Eco mode | ODB ID `6` | Turns Eco mode on or off |
 | Bath fill | ODB ID `1` | Starts or stops bath filling |
+| Maximum active | ODB ID `4` | Enables or disables the maximum temperature limit |
 | Brush timer | `assign:ste.app.brushTimer:activation` | Starts or stops the brush timer |
 | Shower timer | `assign:ste.app.showerTimer:activation` | Starts or stops the shower timer |
 | Cold prevention | ODB ID `2` value `1`, trigger ODB ID `10` | Starts wellness cold prevention, off sends stop |
@@ -301,6 +317,7 @@ Required startup reads seed the interactive entities:
 | `1` | Bath fill active |
 | `2` | Wellness shower program |
 | `3` | Bath fill target volume |
+| `4` | Maximum temperature limit active |
 | `5` | Maximum temperature |
 | `6` | Eco mode |
 | `7` | Eco flow limit |
@@ -324,15 +341,18 @@ Best-effort startup reads collect additional values:
 | `get:ste.app.consumption:energyYears` | Multi-year energy chart |
 | `get:ste.app.consumption:lastUsage` | Last usage payload |
 | `get:ste.app.consumption:volumeFormat` | DHE app volume formatting |
+| `get:ste.common.language:value` | DHE app language |
+| `get:ste.common.currency:value` | DHE app currency |
+| `get:ste.common.view:value` | DHE app view mode |
+| `get:ste.common.temperature:maxOverride` | Maximum override metadata |
+| `get:ste.common.time:format_date` | DHE app date format |
+| `get:ste.common.time:format_clock` | DHE app clock format |
 | `get:ste.app.savingMonitor:ActivationRate` | Saving monitor activation rate |
 | `get:ste.app.savingMonitor:possible` | Saving monitor possible payload |
 | `get:ste.app.savingMonitor:real` | Saving monitor real payload |
 | `get:ste.app.savingMonitor:consumption` | Saving monitor consumption payload |
 | `get:ste.common.version:*` | Device and version information |
 | `get:ste.app.wellness:programs` | Wellness program metadata |
-| `get:ste.common.temperature:maxOverride` | Maximum override metadata |
-
-ODB ID `4` is also read best-effort and stored as unhandled diagnostic data when it is not mapped to a normal entity.
 
 ### ODB handling
 
@@ -341,6 +361,7 @@ Mapped ODB values are converted before publishing to Home Assistant:
 | ODB ID | Conversion |
 |---:|---|
 | `0` | Raw tenths to Celsius |
+| `4` | Raw truthy value to the `Maximum active` switch |
 | `5` | Raw tenths to Celsius when value is `300` to `500` |
 | `7` | Raw tenths to `L/min` when value is `60` to `80` |
 | `15` | Raw value divided by `10` |

@@ -122,16 +122,40 @@
         "name": "Last usage cost"
       },
       "saving_monitor_water": {
-        "name": "Saving monitor water"
+        "name": "Saving monitor consumption water"
       },
       "saving_monitor_energy": {
-        "name": "Saving monitor energy"
+        "name": "Saving monitor consumption energy"
       },
       "saving_monitor_co2": {
-        "name": "Saving monitor CO2"
+        "name": "Saving monitor consumption CO2"
       },
       "saving_monitor_activation_rate": {
         "name": "Saving monitor activation rate"
+      },
+      "saving_monitor_possible_water": {
+        "name": "Saving monitor possible water saving"
+      },
+      "saving_monitor_possible_energy": {
+        "name": "Saving monitor possible energy saving"
+      },
+      "saving_monitor_possible_co2": {
+        "name": "Saving monitor possible CO2 saving"
+      },
+      "saving_monitor_possible_value": {
+        "name": "Saving monitor possible cost saving"
+      },
+      "saving_monitor_real_water": {
+        "name": "Saving monitor real water saving"
+      },
+      "saving_monitor_real_energy": {
+        "name": "Saving monitor real energy saving"
+      },
+      "saving_monitor_real_co2": {
+        "name": "Saving monitor real CO2 saving"
+      },
+      "saving_monitor_real_value": {
+        "name": "Saving monitor real cost saving"
       },
       "brush_timer_remaining": {
         "name": "Brush timer remaining"
@@ -141,6 +165,27 @@
       },
       "reconnect_count": {
         "name": "Reconnects"
+      },
+      "app_volume_format": {
+        "name": "App volume format"
+      },
+      "app_language": {
+        "name": "App language"
+      },
+      "app_currency": {
+        "name": "App currency"
+      },
+      "app_view": {
+        "name": "App view"
+      },
+      "temperature_max_override": {
+        "name": "Maximum temperature override"
+      },
+      "time_date_format": {
+        "name": "Date format"
+      },
+      "time_clock_format": {
+        "name": "Clock format"
       },
       "device_info": {
         "name": "Device info"
@@ -155,6 +200,9 @@
       },
       "bath_fill": {
         "name": "Bath fill"
+      },
+      "maximum_active": {
+        "name": "Maximum active"
       },
       "brush_timer_activation": {
         "name": "Brush timer"

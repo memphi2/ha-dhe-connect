@@ -122,16 +122,40 @@
         "name": "Letzte Nutzungskosten"
       },
       "saving_monitor_water": {
-        "name": "Sparmonitor Wasser"
+        "name": "Sparmonitor Verbrauch Wasser"
       },
       "saving_monitor_energy": {
-        "name": "Sparmonitor Energie"
+        "name": "Sparmonitor Verbrauch Energie"
       },
       "saving_monitor_co2": {
-        "name": "Sparmonitor CO2"
+        "name": "Sparmonitor Verbrauch CO2"
       },
       "saving_monitor_activation_rate": {
         "name": "Sparmonitor Aktivierungsrate"
+      },
+      "saving_monitor_possible_water": {
+        "name": "Sparmonitor mögliche Einsparung Wasser"
+      },
+      "saving_monitor_possible_energy": {
+        "name": "Sparmonitor mögliche Einsparung Energie"
+      },
+      "saving_monitor_possible_co2": {
+        "name": "Sparmonitor mögliche Einsparung CO2"
+      },
+      "saving_monitor_possible_value": {
+        "name": "Sparmonitor mögliche Einsparung Kosten"
+      },
+      "saving_monitor_real_water": {
+        "name": "Sparmonitor reale Einsparung Wasser"
+      },
+      "saving_monitor_real_energy": {
+        "name": "Sparmonitor reale Einsparung Energie"
+      },
+      "saving_monitor_real_co2": {
+        "name": "Sparmonitor reale Einsparung CO2"
+      },
+      "saving_monitor_real_value": {
+        "name": "Sparmonitor reale Einsparung Kosten"
       },
       "brush_timer_remaining": {
         "name": "Zahnputz-Timer Restzeit"
@@ -141,6 +165,27 @@
       },
       "reconnect_count": {
         "name": "Reconnects"
+      },
+      "app_volume_format": {
+        "name": "App-Volumenformat"
+      },
+      "app_language": {
+        "name": "App-Sprache"
+      },
+      "app_currency": {
+        "name": "App-Währung"
+      },
+      "app_view": {
+        "name": "App-Ansicht"
+      },
+      "temperature_max_override": {
+        "name": "Maximaltemperatur-Override"
+      },
+      "time_date_format": {
+        "name": "Datumsformat"
+      },
+      "time_clock_format": {
+        "name": "Uhrzeitformat"
       },
       "device_info": {
         "name": "Geräteinfo"
@@ -155,6 +200,9 @@
       },
       "bath_fill": {
         "name": "Wannenfüllung"
+      },
+      "maximum_active": {
+        "name": "Maximum aktiv"
       },
       "brush_timer_activation": {
         "name": "Zahnputz-Timer"
