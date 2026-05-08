@@ -19,6 +19,7 @@ from .client import (
     ID_SHOWER_TIMER_ACTIVATION,
     ODBValue,
     SHOWER_TIMER_PATH,
+    TEMPERATURE_MEMORY_SLOT_MEASUREMENTS,
 )
 from .const import DOMAIN
 
@@ -56,27 +57,21 @@ BUTTON_DESCRIPTIONS: tuple[StiebelDHEButtonEntityDescription, ...] = (
         timer_path=SHOWER_TIMER_PATH,
         timer_property="reset",
     ),
-    StiebelDHEButtonEntityDescription(
-        key="temperature_memory_1",
-        translation_key="temperature_memory_1",
-        method="press_temperature_memory",
-        method_args=(1,),
-        icon="mdi:numeric-1-box-outline",
-        extra_state_attributes={
-            "temperature_memory_slot": 1,
-            "odb_id": 66,
-        },
-    ),
-    StiebelDHEButtonEntityDescription(
-        key="temperature_memory_2",
-        translation_key="temperature_memory_2",
-        method="press_temperature_memory",
-        method_args=(2,),
-        icon="mdi:numeric-2-box-outline",
-        extra_state_attributes={
-            "temperature_memory_slot": 2,
-            "odb_id": 66,
-        },
+    *(
+        StiebelDHEButtonEntityDescription(
+            key=f"temperature_memory_{slot}",
+            translation_key=f"temperature_memory_{slot}",
+            method="press_temperature_memory",
+            method_args=(slot,),
+            icon=f"mdi:numeric-{slot}-box-outline" if slot < 10 else "mdi:counter",
+            availability_measurement_id=measurement_id,
+            extra_state_attributes={
+                "temperature_memory_slot": slot,
+                "temperature_memory_id": slot - 1,
+                "odb_id": 66,
+            },
+        )
+        for slot, measurement_id in TEMPERATURE_MEMORY_SLOT_MEASUREMENTS.items()
     ),
 )
 
@@ -150,9 +145,7 @@ class StiebelDHEButton(ButtonEntity):
             and self._client.last_measurements.get(availability_measurement_id) is not None
         ):
             self._has_seen_availability_state = True
-            self._attr_available = True
-        else:
-            self._attr_available = self._client.available
+        self._attr_available = self._button_available(self._client.available)
 
     @callback
     def _handle_measurement_update(self, odb_id: int, value: ODBValue) -> None:
@@ -161,7 +154,7 @@ class StiebelDHEButton(ButtonEntity):
         if availability_measurement_id is None or odb_id != availability_measurement_id:
             return
         self._has_seen_availability_state = True
-        self._attr_available = True
+        self._attr_available = self._button_available(self._client.available)
         self.async_write_ha_state()
 
     async def async_press(self) -> None:
@@ -176,5 +169,10 @@ class StiebelDHEButton(ButtonEntity):
     @callback
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
-        self._attr_available = available or self._has_seen_availability_state
+        self._attr_available = self._button_available(available)
         self.async_write_ha_state()
+
+    def _button_available(self, client_available: bool) -> bool:
+        if self.entity_description.availability_measurement_id is None:
+            return client_available
+        return client_available and self._has_seen_availability_state

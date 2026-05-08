@@ -56,6 +56,36 @@
       },
       "temperature_memory_2": {
         "name": "Temperaturspeicher 2"
+      },
+      "temperature_memory_3": {
+        "name": "Temperaturspeicher 3"
+      },
+      "temperature_memory_4": {
+        "name": "Temperaturspeicher 4"
+      },
+      "temperature_memory_5": {
+        "name": "Temperaturspeicher 5"
+      },
+      "temperature_memory_6": {
+        "name": "Temperaturspeicher 6"
+      },
+      "temperature_memory_7": {
+        "name": "Temperaturspeicher 7"
+      },
+      "temperature_memory_8": {
+        "name": "Temperaturspeicher 8"
+      },
+      "temperature_memory_9": {
+        "name": "Temperaturspeicher 9"
+      },
+      "temperature_memory_10": {
+        "name": "Temperaturspeicher 10"
+      },
+      "temperature_memory_11": {
+        "name": "Temperaturspeicher 11"
+      },
+      "temperature_memory_12": {
+        "name": "Temperaturspeicher 12"
       }
     },
     "number": {
@@ -88,6 +118,36 @@
       },
       "temperature_memory_2_temperature": {
         "name": "Temperaturspeicher 2 Temperatur"
+      },
+      "temperature_memory_3_temperature": {
+        "name": "Temperaturspeicher 3 Temperatur"
+      },
+      "temperature_memory_4_temperature": {
+        "name": "Temperaturspeicher 4 Temperatur"
+      },
+      "temperature_memory_5_temperature": {
+        "name": "Temperaturspeicher 5 Temperatur"
+      },
+      "temperature_memory_6_temperature": {
+        "name": "Temperaturspeicher 6 Temperatur"
+      },
+      "temperature_memory_7_temperature": {
+        "name": "Temperaturspeicher 7 Temperatur"
+      },
+      "temperature_memory_8_temperature": {
+        "name": "Temperaturspeicher 8 Temperatur"
+      },
+      "temperature_memory_9_temperature": {
+        "name": "Temperaturspeicher 9 Temperatur"
+      },
+      "temperature_memory_10_temperature": {
+        "name": "Temperaturspeicher 10 Temperatur"
+      },
+      "temperature_memory_11_temperature": {
+        "name": "Temperaturspeicher 11 Temperatur"
+      },
+      "temperature_memory_12_temperature": {
+        "name": "Temperaturspeicher 12 Temperatur"
       }
     },
     "select": {
@@ -101,6 +161,36 @@
       },
       "temperature_memory_2_name": {
         "name": "Temperaturspeicher 2 Name"
+      },
+      "temperature_memory_3_name": {
+        "name": "Temperaturspeicher 3 Name"
+      },
+      "temperature_memory_4_name": {
+        "name": "Temperaturspeicher 4 Name"
+      },
+      "temperature_memory_5_name": {
+        "name": "Temperaturspeicher 5 Name"
+      },
+      "temperature_memory_6_name": {
+        "name": "Temperaturspeicher 6 Name"
+      },
+      "temperature_memory_7_name": {
+        "name": "Temperaturspeicher 7 Name"
+      },
+      "temperature_memory_8_name": {
+        "name": "Temperaturspeicher 8 Name"
+      },
+      "temperature_memory_9_name": {
+        "name": "Temperaturspeicher 9 Name"
+      },
+      "temperature_memory_10_name": {
+        "name": "Temperaturspeicher 10 Name"
+      },
+      "temperature_memory_11_name": {
+        "name": "Temperaturspeicher 11 Name"
+      },
+      "temperature_memory_12_name": {
+        "name": "Temperaturspeicher 12 Name"
       }
     },
     "sensor": {

@@ -15,9 +15,8 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from .client import (
     DHEClient,
     DHEError,
-    ID_TEMPERATURE_MEMORY_1,
-    ID_TEMPERATURE_MEMORY_2,
     MeasurementValue,
+    TEMPERATURE_MEMORY_SLOT_MEASUREMENTS,
 )
 from .const import DOMAIN
 
@@ -33,19 +32,15 @@ class StiebelDHETextEntityDescription(TextEntityDescription):
 
 
 TEXT_DESCRIPTIONS: tuple[StiebelDHETextEntityDescription, ...] = (
-    StiebelDHETextEntityDescription(
-        key="temperature_memory_1_name",
-        translation_key="temperature_memory_1_name",
-        icon="mdi:numeric-1-box-outline",
-        measurement_id=ID_TEMPERATURE_MEMORY_1,
-        temperature_memory_slot=1,
-    ),
-    StiebelDHETextEntityDescription(
-        key="temperature_memory_2_name",
-        translation_key="temperature_memory_2_name",
-        icon="mdi:numeric-2-box-outline",
-        measurement_id=ID_TEMPERATURE_MEMORY_2,
-        temperature_memory_slot=2,
+    *(
+        StiebelDHETextEntityDescription(
+            key=f"temperature_memory_{slot}_name",
+            translation_key=f"temperature_memory_{slot}_name",
+            icon=f"mdi:numeric-{slot}-box-outline" if slot < 10 else "mdi:counter",
+            measurement_id=measurement_id,
+            temperature_memory_slot=slot,
+        )
+        for slot, measurement_id in TEMPERATURE_MEMORY_SLOT_MEASUREMENTS.items()
     ),
 )
 

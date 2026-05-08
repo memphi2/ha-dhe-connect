@@ -21,7 +21,7 @@ This is a custom integration and should be used on a trusted local network.
 - Browser-style Engine.IO heartbeat handling to keep the DHE session alive.
 - Automatic reconnect and diagnostic reconnect counter.
 - Target temperature control through the DHE ODB command interface.
-- Temperature memory buttons that use the temperatures currently stored in memory slot 1 and 2.
+- Temperature memory buttons that use the temperatures currently stored in up to 12 memory slots.
 - Water consumption sensors exposed as Home Assistant water meters for the water dashboard.
 - Energy, water, last usage, expanded saving monitor and timer sensors.
 - Eco mode, Eco flow limit, bath fill, currency, maximum temperature and wellness controls.
@@ -165,10 +165,9 @@ Consumption sensors expose the DHE chart array as a `chart` attribute and the re
 | CO2 emission | `kg/kWh` | `0.00` to `99.99` | box | ODB ID `69`, encoded as `kg/kWh * 1000` |
 | Brush timer duration | `min` | `1` to `20` | box | `assign:ste.app.brushTimer:durationMilliseconds` |
 | Shower timer duration | `min` | `1` to `20` | box | `assign:ste.app.showerTimer:durationMilliseconds` |
-| Temperature memory 1 temperature | `C` | `20` to `60` | box | `assign:ste.common.temperature:memory`, memory ID `0` |
-| Temperature memory 2 temperature | `C` | `20` to `60` | box | `assign:ste.common.temperature:memory`, memory ID `1` |
+| Temperature memory 1-12 temperature | `C` | `20` to `60` | box | `assign:ste.common.temperature:memory`, memory ID `0` to `11` |
 
-Temperature memory writes keep the existing memory name and send `operation: add_change`.
+Temperature memory writes keep the existing memory name and send `operation: add_change`. Existing memories are written with their `id`; creating the next free memory omits `id`, matching the DHE app protocol.
 
 ### Selects
 
@@ -182,10 +181,9 @@ The currency select expands its option list at runtime if the DHE reports anothe
 
 | Entity | Source / command | Behavior |
 |---|---|---|
-| Temperature memory 1 name | `assign:ste.common.temperature:memory`, memory ID `0` | Renames memory slot 1 and keeps the stored temperature |
-| Temperature memory 2 name | `assign:ste.common.temperature:memory`, memory ID `1` | Renames memory slot 2 and keeps the stored temperature |
+| Temperature memory 1-12 name | `assign:ste.common.temperature:memory`, memory ID `0` to `11` | Renames an existing memory slot or creates the next free slot |
 
-Temperature memory name writes use the current cached or freshly read memory temperature and send `operation: add_change`.
+Temperature memory name writes use the current cached or freshly read memory temperature and send `operation: add_change`. If a new memory is created through its name field, the default temperature is `40 C`.
 
 ### Switches
 
@@ -209,8 +207,7 @@ Wellness programs are triggered by writing the program ID and then sending the D
 |---|---|---|
 | Reset brush timer | `assign:ste.app.brushTimer:reset` | Resets brush timer remaining time and activation state |
 | Reset shower timer | `assign:ste.app.showerTimer:reset` | Resets shower timer remaining time and activation state |
-| Temperature memory 1 | ODB ID `66` command | Sends the temperature stored in memory slot 1 |
-| Temperature memory 2 | ODB ID `66` command | Sends the temperature stored in memory slot 2 |
+| Temperature memory 1-12 | ODB ID `66` command | Sends the temperature stored in the matching memory slot |
 
 The memory preset buttons do not send fixed temperatures. They read the current memory slot value from the DHE cache, refresh it if needed, build the ODB ID `66` button payload from that temperature and send it.
 
@@ -387,6 +384,12 @@ Currency changes use the same command as the DHE app:
 
 ```json
 {"command": "get:ste.common.currency:value", "value": "eur"}
+```
+
+Temperature memory changes use `assign:ste.common.temperature:memory`. Existing memory slots include the zero-based `id`; adding the next free slot omits `id` and lets the DHE assign it:
+
+```json
+{"command": "assign:ste.common.temperature:memory", "value": {"name": "%1 3", "temperature": 40, "operation": "add_change"}}
 ```
 
 ### ODB handling

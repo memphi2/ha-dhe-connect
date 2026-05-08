@@ -28,10 +28,9 @@ from .client import (
     ID_ELECTRICITY_PRICE,
     ID_MAX_TEMPERATURE,
     ID_SHOWER_TIMER_DURATION,
-    ID_TEMPERATURE_MEMORY_1,
-    ID_TEMPERATURE_MEMORY_2,
     ID_WATER_PRICE,
     SHOWER_TIMER_PATH,
+    TEMPERATURE_MEMORY_SLOT_MEASUREMENTS,
     ODBValue,
 )
 from .const import DOMAIN
@@ -142,31 +141,21 @@ NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         timer_path=SHOWER_TIMER_PATH,
         timer_property="durationMilliseconds",
     ),
-    StiebelDHENumberEntityDescription(
-        key="temperature_memory_1_temperature",
-        translation_key="temperature_memory_1_temperature",
-        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-        device_class=NumberDeviceClass.TEMPERATURE,
-        icon="mdi:numeric-1-box-outline",
-        native_min_value=20.0,
-        native_max_value=60.0,
-        native_step=0.5,
-        mode=NumberMode.BOX,
-        odb_id=ID_TEMPERATURE_MEMORY_1,
-        temperature_memory_slot=1,
-    ),
-    StiebelDHENumberEntityDescription(
-        key="temperature_memory_2_temperature",
-        translation_key="temperature_memory_2_temperature",
-        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-        device_class=NumberDeviceClass.TEMPERATURE,
-        icon="mdi:numeric-2-box-outline",
-        native_min_value=20.0,
-        native_max_value=60.0,
-        native_step=0.5,
-        mode=NumberMode.BOX,
-        odb_id=ID_TEMPERATURE_MEMORY_2,
-        temperature_memory_slot=2,
+    *(
+        StiebelDHENumberEntityDescription(
+            key=f"temperature_memory_{slot}_temperature",
+            translation_key=f"temperature_memory_{slot}_temperature",
+            native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+            device_class=NumberDeviceClass.TEMPERATURE,
+            icon=f"mdi:numeric-{slot}-box-outline" if slot < 10 else "mdi:counter",
+            native_min_value=20.0,
+            native_max_value=60.0,
+            native_step=0.5,
+            mode=NumberMode.BOX,
+            odb_id=measurement_id,
+            temperature_memory_slot=slot,
+        )
+        for slot, measurement_id in TEMPERATURE_MEMORY_SLOT_MEASUREMENTS.items()
     ),
 )
 

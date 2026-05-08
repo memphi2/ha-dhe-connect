@@ -97,6 +97,16 @@ ID_TIME_CLOCK_FORMAT = 1097
 ID_ELECTRICITY_PRICE = 1101
 ID_WATER_PRICE = 1102
 ID_CO2_EMISSION = 1103
+ID_TEMPERATURE_MEMORY_3 = 1111
+ID_TEMPERATURE_MEMORY_4 = 1112
+ID_TEMPERATURE_MEMORY_5 = 1113
+ID_TEMPERATURE_MEMORY_6 = 1114
+ID_TEMPERATURE_MEMORY_7 = 1115
+ID_TEMPERATURE_MEMORY_8 = 1116
+ID_TEMPERATURE_MEMORY_9 = 1117
+ID_TEMPERATURE_MEMORY_10 = 1118
+ID_TEMPERATURE_MEMORY_11 = 1119
+ID_TEMPERATURE_MEMORY_12 = 1120
 DEFAULT_CONFIGURED_POWER_KW = 24.0
 COMMAND_CONFIRMATION_TIMEOUT = 12.0
 COMMAND_READBACK_INTERVAL = 1.0
@@ -121,17 +131,31 @@ PRICE_COMPONENT_IDS = {
 }
 # DHE memory button payloads encode 38 C as 10620 and 41 C as 10650.
 TEMPERATURE_MEMORY_BUTTON_ADDR = 10
+TEMPERATURE_MEMORY_MAX_SLOTS = 12
+DEFAULT_NEW_TEMPERATURE_MEMORY_C = 40.0
 TEMPERATURE_MEMORY_SLOT_IDS = {
-    1: 0,
-    2: 1,
+    slot: slot - 1 for slot in range(1, TEMPERATURE_MEMORY_MAX_SLOTS + 1)
+}
+TEMPERATURE_MEMORY_SLOT_MEASUREMENTS = {
+    1: ID_TEMPERATURE_MEMORY_1,
+    2: ID_TEMPERATURE_MEMORY_2,
+    3: ID_TEMPERATURE_MEMORY_3,
+    4: ID_TEMPERATURE_MEMORY_4,
+    5: ID_TEMPERATURE_MEMORY_5,
+    6: ID_TEMPERATURE_MEMORY_6,
+    7: ID_TEMPERATURE_MEMORY_7,
+    8: ID_TEMPERATURE_MEMORY_8,
+    9: ID_TEMPERATURE_MEMORY_9,
+    10: ID_TEMPERATURE_MEMORY_10,
+    11: ID_TEMPERATURE_MEMORY_11,
+    12: ID_TEMPERATURE_MEMORY_12,
 }
 TEMPERATURE_MEMORY_ID_TO_MEASUREMENT = {
-    0: ID_TEMPERATURE_MEMORY_1,
-    1: ID_TEMPERATURE_MEMORY_2,
+    memory_id: TEMPERATURE_MEMORY_SLOT_MEASUREMENTS[slot]
+    for slot, memory_id in TEMPERATURE_MEMORY_SLOT_IDS.items()
 }
 DEFAULT_TEMPERATURE_MEMORY_NAMES = {
-    0: "%1 1",
-    1: "%1 2",
+    memory_id: f"%1 {slot}" for slot, memory_id in TEMPERATURE_MEMORY_SLOT_IDS.items()
 }
 INITIAL_VALUE_IDS = (
     ID_SETPOINT,
@@ -407,6 +431,8 @@ class DHEClient:
         self._last_unhandled_odb_values: dict[int, Any] = {}
         self._last_saving_monitor_values: dict[str, Any] = {}
         self._last_device_info: dict[str, Any] = {}
+        self._temperature_memory_ids_seen: set[int] = set()
+        self._temperature_memory_generation = 0
         self._configured_power_kw = DEFAULT_CONFIGURED_POWER_KW
         self._last_power_fraction: float | None = None
         self._pending_setpoint_future: asyncio.Future[float] | None = None
@@ -733,28 +759,64 @@ class DHEClient:
             await asyncio.sleep(0.1)
         raise DHEError(f"DHE temperature memory {memory_slot} is not available yet")
 
+    async def _refresh_temperature_memories(self, ctx: DHESession) -> None:
+        generation = self._temperature_memory_generation
+        await self._request_app_value(ctx, TEMP_MEMORY_GET_COMMAND)
+        deadline = time.monotonic() + APP_COMMAND_CONFIRMATION_TIMEOUT
+        while time.monotonic() < deadline:
+            if self._temperature_memory_generation != generation:
+                return
+            await asyncio.sleep(0.1)
+
     def _cached_temperature_memory_temperature(self, measurement_id: int) -> float | None:
         value = self._last_measurements.get(measurement_id)
         if value is None or isinstance(value, bool):
             return None
         return _round_to_half_c(_clamp(float(value), 20.0, 60.0))
 
-    async def set_temperature_memory(self, memory_slot: int, temperature: float) -> float:
+    def _temperature_memory_ids(self, memory_slot: int) -> tuple[int, int]:
         try:
-            memory_id = TEMPERATURE_MEMORY_SLOT_IDS[int(memory_slot)]
-            measurement_id = TEMPERATURE_MEMORY_ID_TO_MEASUREMENT[memory_id]
+            slot = int(memory_slot)
+            memory_id = TEMPERATURE_MEMORY_SLOT_IDS[slot]
+            measurement_id = TEMPERATURE_MEMORY_SLOT_MEASUREMENTS[slot]
         except KeyError as err:
             raise DHEError(f"Unsupported temperature memory slot: {memory_slot}") from err
+        return memory_id, measurement_id
 
-        requested = _round_to_half_c(_clamp(float(temperature), 20.0, 60.0))
-        attributes = self._last_measurement_attributes.get(measurement_id, {})
-        name = str(attributes.get("name", DEFAULT_TEMPERATURE_MEMORY_NAMES.get(memory_id, f"%1 {memory_slot}")))
-        payload = {
-            "id": memory_id,
+    def _temperature_memory_exists(self, memory_id: int, measurement_id: int) -> bool:
+        return memory_id in self._temperature_memory_ids_seen or measurement_id in self._last_measurements
+
+    def _can_create_temperature_memory(self, memory_id: int) -> bool:
+        if len(self._temperature_memory_ids_seen) >= TEMPERATURE_MEMORY_MAX_SLOTS:
+            return False
+        if not self._temperature_memory_ids_seen:
+            return memory_id == 0
+        return memory_id == max(self._temperature_memory_ids_seen) + 1
+
+    def _temperature_memory_payload(
+        self,
+        memory_id: int,
+        measurement_id: int,
+        name: str,
+        temperature: float,
+    ) -> dict[str, Any]:
+        exists = self._temperature_memory_exists(memory_id, measurement_id)
+        if not exists and not self._can_create_temperature_memory(memory_id):
+            raise DHEError("Temperature memories must be created in order")
+
+        payload: dict[str, Any] = {
             "name": name,
-            "temperature": requested,
+            "temperature": temperature,
             "operation": "add_change",
         }
+        if exists:
+            payload["id"] = memory_id
+        return payload
+
+    async def set_temperature_memory(self, memory_slot: int, temperature: float) -> float:
+        memory_id, measurement_id = self._temperature_memory_ids(memory_slot)
+
+        requested = _round_to_half_c(_clamp(float(temperature), 20.0, 60.0))
 
         async with self._command_lock:
             for attempt in range(2):
@@ -763,13 +825,23 @@ class DHEClient:
                     ctx = self._ctx
                     if ctx is None:
                         raise DHEError("DHE session is not connected")
+                    await self._refresh_temperature_memories(ctx)
+                    attributes = self._last_measurement_attributes.get(measurement_id, {})
+                    name = str(attributes.get("name", DEFAULT_TEMPERATURE_MEMORY_NAMES[memory_id]))
+                    payload = self._temperature_memory_payload(
+                        memory_id,
+                        measurement_id,
+                        name,
+                        requested,
+                    )
                     await self._post_packet(ctx, self._message_packet({
                         "command": TEMP_MEMORY_ASSIGN_COMMAND,
                         "value": payload,
                     }))
-                    self._handle_temperature_memory_item(payload, source_command=TEMP_MEMORY_ASSIGN_COMMAND)
-                    await self._request_optional_app_value(ctx, TEMP_MEMORY_GET_COMMAND)
-                    return requested
+                    if "id" in payload:
+                        self._handle_temperature_memory_item(payload, source_command=TEMP_MEMORY_ASSIGN_COMMAND)
+                    await self._refresh_temperature_memories(ctx)
+                    return self._cached_temperature_memory_temperature(measurement_id) or requested
                 except Exception as err:  # noqa: BLE001
                     if attempt == 0:
                         await self._force_reconnect()
@@ -779,11 +851,7 @@ class DHEClient:
         raise DHEError(f"Could not set DHE temperature memory {memory_slot}")
 
     async def set_temperature_memory_name(self, memory_slot: int, name: str) -> str:
-        try:
-            memory_id = TEMPERATURE_MEMORY_SLOT_IDS[int(memory_slot)]
-            measurement_id = TEMPERATURE_MEMORY_ID_TO_MEASUREMENT[memory_id]
-        except KeyError as err:
-            raise DHEError(f"Unsupported temperature memory slot: {memory_slot}") from err
+        memory_id, measurement_id = self._temperature_memory_ids(memory_slot)
 
         requested_name = str(name).strip()
         if not requested_name:
@@ -796,24 +864,26 @@ class DHEClient:
                     ctx = self._ctx
                     if ctx is None:
                         raise DHEError("DHE session is not connected")
-                    temperature = await self._get_temperature_memory_temperature(
-                        ctx,
-                        memory_slot,
-                        measurement_id,
+                    await self._refresh_temperature_memories(ctx)
+                    temperature = (
+                        self._cached_temperature_memory_temperature(measurement_id)
+                        or DEFAULT_NEW_TEMPERATURE_MEMORY_C
                     )
-                    payload = {
-                        "id": memory_id,
-                        "name": requested_name,
-                        "temperature": temperature,
-                        "operation": "add_change",
-                    }
+                    payload = self._temperature_memory_payload(
+                        memory_id,
+                        measurement_id,
+                        requested_name,
+                        temperature,
+                    )
                     await self._post_packet(ctx, self._message_packet({
                         "command": TEMP_MEMORY_ASSIGN_COMMAND,
                         "value": payload,
                     }))
-                    self._handle_temperature_memory_item(payload, source_command=TEMP_MEMORY_ASSIGN_COMMAND)
-                    await self._request_optional_app_value(ctx, TEMP_MEMORY_GET_COMMAND)
-                    return requested_name
+                    if "id" in payload:
+                        self._handle_temperature_memory_item(payload, source_command=TEMP_MEMORY_ASSIGN_COMMAND)
+                    await self._refresh_temperature_memories(ctx)
+                    attributes = self._last_measurement_attributes.get(measurement_id, {})
+                    return str(attributes.get("name", requested_name))
                 except Exception as err:  # noqa: BLE001
                     if attempt == 0:
                         await self._force_reconnect()
@@ -1416,27 +1486,35 @@ class DHEClient:
 
     def _handle_temperature_memory_value(self, raw_value: Any, *, source_command: str) -> None:
         if isinstance(raw_value, dict):
-            self._handle_temperature_memory_item(raw_value, source_command=source_command)
+            memory_id = self._handle_temperature_memory_item(raw_value, source_command=source_command)
+            if memory_id is not None:
+                self._temperature_memory_ids_seen.add(memory_id)
+                self._temperature_memory_generation += 1
             return
         if not isinstance(raw_value, list):
             _LOGGER.debug("Ignoring invalid temperature memory value: %r", raw_value)
             return
 
+        memory_ids: set[int] = set()
         for item in raw_value:
-            self._handle_temperature_memory_item(item, source_command=source_command)
+            memory_id = self._handle_temperature_memory_item(item, source_command=source_command)
+            if memory_id is not None:
+                memory_ids.add(memory_id)
+        self._temperature_memory_ids_seen = memory_ids
+        self._temperature_memory_generation += 1
 
-    def _handle_temperature_memory_item(self, item: Any, *, source_command: str) -> None:
+    def _handle_temperature_memory_item(self, item: Any, *, source_command: str) -> int | None:
         if not isinstance(item, dict):
-            return
+            return None
         try:
             memory_id = int(item.get("id"))
             temperature = _raw_to_float(item.get("temperature"))
         except (TypeError, ValueError) as err:
             _LOGGER.debug("Ignoring invalid temperature memory item=%r: %s", item, err)
-            return
+            return None
         measurement_id = TEMPERATURE_MEMORY_ID_TO_MEASUREMENT.get(memory_id)
         if measurement_id is None:
-            return
+            return None
         attributes = {
             "memory_id": memory_id,
             "name": str(item.get("name", DEFAULT_TEMPERATURE_MEMORY_NAMES.get(memory_id, ""))),
@@ -1449,6 +1527,7 @@ class DHEClient:
             temperature,
             force_update=previous_attributes != attributes,
         )
+        return memory_id
 
     def _handle_odb_value(self, odb_id: int, raw_value: Any, *, is_valid: Any = None) -> None:
         if is_valid is False:
