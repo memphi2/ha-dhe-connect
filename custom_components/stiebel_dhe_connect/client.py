@@ -274,7 +274,6 @@ DEVICE_INFO_REQUEST_COMMANDS = tuple(
     command.replace("set:", "get:", 1) for command in DEVICE_INFO_SET_COMMANDS
 )
 APP_SETTING_SET_COMMAND_IDS = {
-    CURRENCY_SET_COMMAND: ID_APP_CURRENCY,
     "set:ste.common.temperature:maxOverride": ID_TEMPERATURE_MAX_OVERRIDE,
 }
 APP_SETTING_REQUEST_COMMANDS = tuple(
@@ -671,8 +670,7 @@ class DHEClient:
                         "command": CURRENCY_GET_COMMAND,
                         "value": requested,
                     }))
-                    self._handle_app_startup_value(CURRENCY_SET_COMMAND, requested)
-                    await self._request_optional_app_value(ctx, CURRENCY_GET_COMMAND)
+                    self._handle_currency_value(requested, source_command=CURRENCY_GET_COMMAND)
                     return requested.upper()
                 except Exception as err:  # noqa: BLE001
                     if attempt == 0:
@@ -1240,8 +1238,8 @@ class DHEClient:
         if command in DEVICE_INFO_COMMAND_IDS:
             self._handle_device_info_value(command, value)
             return
-        if command == CURRENCY_GET_COMMAND and value not in (None, ""):
-            self._handle_app_startup_value(CURRENCY_SET_COMMAND, value)
+        if command in {CURRENCY_GET_COMMAND, CURRENCY_SET_COMMAND}:
+            self._handle_currency_value(value, source_command=command)
             return
         if command in APP_STARTUP_SET_COMMANDS:
             self._handle_app_startup_value(command, value)
@@ -1440,6 +1438,26 @@ class DHEClient:
         self._handle_measurement(
             measurement_id,
             self._format_app_setting_value(raw_value),
+            force_update=previous_attributes != attributes,
+        )
+
+    def _handle_currency_value(self, raw_value: Any, *, source_command: str) -> None:
+        if raw_value in (None, ""):
+            return
+        value = str(raw_value).strip().upper()
+        if not value or value == "UNSET":
+            return
+
+        self._last_app_values[source_command] = raw_value
+        attributes = {
+            "source_command": source_command,
+            "raw_value": raw_value,
+        }
+        previous_attributes = self._last_measurement_attributes.get(ID_APP_CURRENCY)
+        self._last_measurement_attributes[ID_APP_CURRENCY] = attributes
+        self._handle_measurement(
+            ID_APP_CURRENCY,
+            value,
             force_update=previous_attributes != attributes,
         )
 

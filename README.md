@@ -141,7 +141,6 @@ The climate entity keeps the last valid target temperature during short reconnec
 | Brush timer remaining | `M:SS` | none | none | `set:ste.app.brushTimer:remainingMilliseconds` |
 | Shower timer remaining | `M:SS` | none | none | `set:ste.app.showerTimer:remainingMilliseconds` |
 | Reconnects | count | none | `total_increasing` | Successful reconnect count after the initial connection |
-| App currency | text | diagnostic | none | `set:ste.common.currency:value` |
 | Maximum temperature override | text | diagnostic | none | `set:ste.common.temperature:maxOverride` |
 | Device info | text | diagnostic | none | DHE version and device information commands |
 | Unhandled ODB values | count | diagnostic | none | Unknown valid ODB values and invalid ODB readbacks |
@@ -168,9 +167,9 @@ Temperature memory writes keep the existing memory name and send `operation: add
 
 | Entity | Options | Source / command | Behavior |
 |---|---|---|---|
-| Currency | `EUR`, `GBP`, `CZK`, `PLN`, `CNY`, `USD`, `AUD`, `HKD` | `get:ste.common.currency:value` | Sends the lower-case currency code, matching the DHE app behavior |
+| Currency | `EUR`, `GBP`, `CZK`, `PLN`, `CNY`, `USD`, `AUD`, `HKD` | `get:ste.common.currency:value` with a value | Sends the lower-case currency code, matching the DHE app behavior |
 
-The currency select expands its option list at runtime if the DHE reports another valid currency code.
+The DHE does not reliably answer an empty currency read. The currency select therefore restores the last selected Home Assistant state on startup and updates when a currency write or non-empty device response is seen.
 
 ### Texts
 
@@ -362,7 +361,6 @@ Best-effort startup reads collect additional values:
 | `get:ste.app.consumption:energyYear` | Year energy chart |
 | `get:ste.app.consumption:energyYears` | Multi-year energy chart |
 | `get:ste.app.consumption:lastUsage` | Last usage payload |
-| `get:ste.common.currency:value` | DHE app currency |
 | `get:ste.common.temperature:maxOverride` | Maximum override metadata |
 | `get:ste.app.savingMonitor:ActivationRate` | Saving monitor activation rate |
 | `get:ste.app.savingMonitor:possible` | Saving monitor possible payload |

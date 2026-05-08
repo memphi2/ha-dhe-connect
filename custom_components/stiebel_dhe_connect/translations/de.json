@@ -320,9 +320,6 @@
       "reconnect_count": {
         "name": "Reconnects"
       },
-      "app_currency": {
-        "name": "App-Währung"
-      },
       "temperature_max_override": {
         "name": "Maximaltemperatur-Override"
       },

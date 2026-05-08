@@ -28,7 +28,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .client import (
     BRUSH_TIMER_PATH,
     DHEClient,
-    ID_APP_CURRENCY,
     ID_BRUSH_TIMER_REMAINING,
     ID_CONFIGURED_POWER,
     ID_DEVICE_INFO,
@@ -357,14 +356,6 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         odb_id=ID_SHOWER_TIMER_REMAINING,
         timer_path=SHOWER_TIMER_PATH,
         timer_property="remainingMilliseconds",
-    ),
-    StiebelDHESensorEntityDescription(
-        key="app_currency",
-        translation_key="app_currency",
-        icon="mdi:currency-eur",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        odb_id=ID_APP_CURRENCY,
-        source_command="set:ste.common.currency:value",
     ),
     StiebelDHESensorEntityDescription(
         key="temperature_max_override",
