@@ -126,18 +126,18 @@ The climate entity keeps the last valid target temperature during short reconnec
 | Last usage energy | `kWh` | none | `measurement` | `set:ste.app.consumption:lastUsage.energy` |
 | Last usage duration | `min` | `duration` | `measurement` | `set:ste.app.consumption:lastUsage.time` |
 | Last usage cost | `EUR` | `monetary` | none | `set:ste.app.consumption:lastUsage.costs` |
-| Saving monitor consumption water | `L` | none | `measurement` | `set:ste.app.savingMonitor:consumption.water_l` |
-| Saving monitor consumption energy | `kWh` | none | `measurement` | `set:ste.app.savingMonitor:consumption.energy_Wh / 1000` |
+| Saving monitor consumption water | `L` | none | `measurement` | `set:ste.app.savingMonitor:consumption.water_l`, rounded to 2 decimals |
+| Saving monitor consumption energy | `kWh` | none | `measurement` | `set:ste.app.savingMonitor:consumption.energy_Wh / 1000`, rounded to 2 decimals |
 | Saving monitor consumption CO2 | `kg` | none | `measurement` | `set:ste.app.savingMonitor:consumption.emission_Co2Kg`, rounded to 2 decimals |
-| Saving monitor activation rate | `%` | none | `measurement` | `set:ste.app.savingMonitor:ActivationRate` |
-| Saving monitor possible water saving | `L` | none | `measurement` | `set:ste.app.savingMonitor:possible.water_l` |
-| Saving monitor possible energy saving | `kWh` | none | `measurement` | `set:ste.app.savingMonitor:possible.energy_Wh / 1000` |
+| Saving monitor activation rate | `%` | none | `measurement` | `set:ste.app.savingMonitor:ActivationRate`, rounded to 1 decimal |
+| Saving monitor possible water saving | `L` | none | `measurement` | `set:ste.app.savingMonitor:possible.water_l`, rounded to 2 decimals |
+| Saving monitor possible energy saving | `kWh` | none | `measurement` | `set:ste.app.savingMonitor:possible.energy_Wh / 1000`, rounded to 2 decimals |
 | Saving monitor possible CO2 saving | `kg` | none | `measurement` | `set:ste.app.savingMonitor:possible.emission_Co2Kg`, rounded to 2 decimals |
-| Saving monitor possible cost saving | `EUR` | `monetary` | none | `set:ste.app.savingMonitor:possible.value_E` |
-| Saving monitor real water saving | `L` | none | `measurement` | `set:ste.app.savingMonitor:real.water_l` |
-| Saving monitor real energy saving | `kWh` | none | `measurement` | `set:ste.app.savingMonitor:real.energy_Wh / 1000` |
+| Saving monitor possible cost saving | `EUR` | `monetary` | none | `set:ste.app.savingMonitor:possible.value_E`, rounded to 2 decimals |
+| Saving monitor real water saving | `L` | none | `measurement` | `set:ste.app.savingMonitor:real.water_l`, rounded to 2 decimals |
+| Saving monitor real energy saving | `kWh` | none | `measurement` | `set:ste.app.savingMonitor:real.energy_Wh / 1000`, rounded to 2 decimals |
 | Saving monitor real CO2 saving | `kg` | none | `measurement` | `set:ste.app.savingMonitor:real.emission_Co2Kg`, rounded to 2 decimals |
-| Saving monitor real cost saving | `EUR` | `monetary` | none | `set:ste.app.savingMonitor:real.value_E` |
+| Saving monitor real cost saving | `EUR` | `monetary` | none | `set:ste.app.savingMonitor:real.value_E`, rounded to 2 decimals |
 | Brush timer remaining | `M:SS` | none | none | `set:ste.app.brushTimer:remainingMilliseconds` |
 | Shower timer remaining | `M:SS` | none | none | `set:ste.app.showerTimer:remainingMilliseconds` |
 | Reconnects | count | none | `total_increasing` | Successful reconnect count after the initial connection |

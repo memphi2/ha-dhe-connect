@@ -1365,7 +1365,7 @@ class DHEClient:
         key = command.rsplit(":", 1)[-1]
         if key == "ActivationRate":
             try:
-                activation_rate = _raw_to_float(raw_value)
+                activation_rate = round(_raw_to_float(raw_value), 1)
             except (TypeError, ValueError) as err:
                 _LOGGER.debug("Ignoring invalid saving monitor activation value=%r: %s", raw_value, err)
                 return
@@ -1383,12 +1383,12 @@ class DHEClient:
             return
         try:
             values = {
-                "water_l": _raw_to_float(raw_value["water_l"]),
-                "energy_kwh": _raw_to_float(raw_value["energy_Wh"]) / 1000.0,
+                "water_l": round(_raw_to_float(raw_value["water_l"]), 2),
+                "energy_kwh": round(_raw_to_float(raw_value["energy_Wh"]) / 1000.0, 2),
                 "co2_kg": round(_raw_to_float(raw_value["emission_Co2Kg"]), 2),
             }
             if raw_value.get("value_E") is not None:
-                values["value_eur"] = _raw_to_float(raw_value["value_E"])
+                values["value_eur"] = round(_raw_to_float(raw_value["value_E"]), 2)
         except (KeyError, TypeError, ValueError) as err:
             _LOGGER.debug("Ignoring invalid saving monitor %s value=%r: %s", key, raw_value, err)
             return
