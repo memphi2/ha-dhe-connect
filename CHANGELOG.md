@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add diagnostic entities for online status and reconnect count.
 - Send temperature memory preset buttons with the temperature currently stored in the selected memory slot instead of fixed ODB ID `66` values.
 
 ## 0.7.10

@@ -39,6 +39,11 @@
     }
   },
   "entity": {
+    "binary_sensor": {
+      "online": {
+        "name": "Online"
+      }
+    },
     "button": {
       "reset_brush_timer": {
         "name": "Reset brush timer"
@@ -109,6 +114,9 @@
       },
       "shower_timer_remaining": {
         "name": "Shower timer remaining"
+      },
+      "reconnect_count": {
+        "name": "Reconnects"
       }
     },
     "switch": {

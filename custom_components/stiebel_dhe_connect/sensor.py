@@ -19,6 +19,7 @@ from homeassistant.const import (
     UnitOfVolumeFlowRate,
 )
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .client import (
@@ -174,6 +175,13 @@ async def async_setup_entry(
             )
             for description in SENSOR_DESCRIPTIONS
         ]
+        + [
+            StiebelDHEReconnectCountSensor(
+                entry_id=entry.entry_id,
+                name=runtime.name,
+                client=runtime.client,
+            )
+        ]
     )
 
 
@@ -265,4 +273,41 @@ class StiebelDHESensor(SensorEntity):
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
         self._attr_available = available or self._attr_native_value is not None
+        self.async_write_ha_state()
+
+
+class StiebelDHEReconnectCountSensor(SensorEntity):
+    """DHE reconnect count diagnostic sensor."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:restart"
+    _attr_should_poll = False
+    _attr_translation_key = "reconnect_count"
+
+    def __init__(self, entry_id: str, name: str, client: DHEClient) -> None:
+        """Initialize the reconnect count sensor."""
+        self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_reconnect_count"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, client.host)},
+            "manufacturer": "STIEBEL ELTRON",
+            "model": "DHE Connect",
+            "name": name,
+        }
+        self._client = client
+        self._attr_available = True
+        self._attr_native_value = client.reconnect_count
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to DHE reconnect updates and start the persistent session."""
+        self.async_on_remove(
+            self._client.add_reconnect_callback(self._handle_reconnect_update)
+        )
+        self._attr_native_value = self._client.reconnect_count
+        await self._client.start()
+
+    @callback
+    def _handle_reconnect_update(self, reconnect_count: int) -> None:
+        """Handle DHE reconnect count updates."""
+        self._attr_native_value = reconnect_count
         self.async_write_ha_state()

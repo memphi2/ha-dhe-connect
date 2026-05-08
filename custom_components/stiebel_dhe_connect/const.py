@@ -10,6 +10,7 @@ DEFAULT_NAME = "DHE Connect"
 DEFAULT_PORT = 8443
 
 PLATFORMS = [
+    Platform.BINARY_SENSOR,
     Platform.CLIMATE,
     Platform.SENSOR,
     Platform.NUMBER,

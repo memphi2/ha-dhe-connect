@@ -170,7 +170,9 @@ OPTIONAL_STARTUP_ODB_IDS = (
 ODBValue = bool | float
 SetpointCallback = Callable[[float], None]
 AvailabilityCallback = Callable[[bool], None]
+OnlineCallback = Callable[[bool], None]
 MeasurementCallback = Callable[[int, ODBValue], None]
+ReconnectCallback = Callable[[int], None]
 CallbackRemover = Callable[[], None]
 
 
@@ -269,8 +271,13 @@ class DHEClient:
         self._command_lock = asyncio.Lock()
         self._setpoint_callbacks: set[SetpointCallback] = set()
         self._availability_callbacks: set[AvailabilityCallback] = set()
+        self._online_callbacks: set[OnlineCallback] = set()
         self._measurement_callbacks: set[MeasurementCallback] = set()
+        self._reconnect_callbacks: set[ReconnectCallback] = set()
         self._available = False
+        self._online = False
+        self._has_connected = False
+        self._reconnect_count = 0
         self._availability_drop_task: asyncio.Task[None] | None = None
         self._last_setpoint: float | None = None
         self._last_measurements: dict[int, ODBValue] = {}
@@ -293,6 +300,14 @@ class DHEClient:
     @property
     def available(self) -> bool:
         return self._available
+
+    @property
+    def online(self) -> bool:
+        return self._online
+
+    @property
+    def reconnect_count(self) -> int:
+        return self._reconnect_count
 
     @property
     def last_measurements(self) -> dict[int, ODBValue]:
@@ -322,8 +337,14 @@ class DHEClient:
     def add_availability_callback(self, callback: AvailabilityCallback) -> CallbackRemover:
         return self._add_callback(self._availability_callbacks, callback)
 
+    def add_online_callback(self, callback: OnlineCallback) -> CallbackRemover:
+        return self._add_callback(self._online_callbacks, callback)
+
     def add_measurement_callback(self, callback: MeasurementCallback) -> CallbackRemover:
         return self._add_callback(self._measurement_callbacks, callback)
+
+    def add_reconnect_callback(self, callback: ReconnectCallback) -> CallbackRemover:
+        return self._add_callback(self._reconnect_callbacks, callback)
 
     @staticmethod
     def _add_callback(callbacks: set[Callable[..., None]], callback: Callable[..., None]) -> CallbackRemover:
@@ -359,6 +380,7 @@ class DHEClient:
         self._ready.clear()
         if ctx is not None:
             await self._close_session(ctx)
+        self._set_online(False)
         self._set_available(False, immediate=True)
 
     async def set_temperature(self, temperature: float) -> float:
@@ -691,6 +713,8 @@ class DHEClient:
         while not self._stopped.is_set():
             try:
                 self._ctx = await self._open_authenticated_session()
+                self._record_session_connected()
+                self._set_online(True)
                 self._ready.set()
                 self._set_available(True)
                 await self._request_initial_values(self._ctx)
@@ -704,6 +728,7 @@ class DHEClient:
                 self._clear_pending_future(err)
                 self._clear_pending_write_future(err)
                 self._ready.clear()
+                self._set_online(False)
                 self._set_available(False)
                 ctx = self._ctx
                 self._ctx = None
@@ -793,6 +818,7 @@ class DHEClient:
         ctx = self._ctx
         self._ctx = None
         self._ready.clear()
+        self._set_online(False)
         self._set_available(False)
         if ctx is not None:
             await self._close_session(ctx)
@@ -801,6 +827,15 @@ class DHEClient:
         if self._ctx is not None and self._available:
             return
         await asyncio.wait_for(self._ready.wait(), timeout=timeout)
+
+    def _record_session_connected(self) -> None:
+        if not self._has_connected:
+            self._has_connected = True
+            return
+
+        self._reconnect_count += 1
+        for callback in tuple(self._reconnect_callbacks):
+            callback(self._reconnect_count)
 
     async def _handle_runtime_event(self, event: DHEEvent) -> None:
         if event.name == "__closed":
@@ -1157,6 +1192,13 @@ class DHEClient:
         self._available = available
         for callback in tuple(self._availability_callbacks):
             callback(available)
+
+    def _set_online(self, online: bool) -> None:
+        if self._online == online:
+            return
+        self._online = online
+        for callback in tuple(self._online_callbacks):
+            callback(online)
 
     def _cancel_delayed_unavailable(self) -> None:
         task = self._availability_drop_task
