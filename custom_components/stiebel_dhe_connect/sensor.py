@@ -49,7 +49,11 @@ from .client import (
     MeasurementValue,
     SHOWER_TIMER_PATH,
 )
-from .const import DOMAIN
+from .const import (
+    CONF_WATER_DASHBOARD_COMPATIBLE,
+    DEFAULT_WATER_DASHBOARD_COMPATIBLE,
+    DOMAIN,
+)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -61,6 +65,7 @@ class StiebelDHESensorEntityDescription(SensorEntityDescription):
     timer_property: str | None = None
     source_command: str | None = None
     period: str | None = None
+    water_dashboard_meter: bool = False
 
 
 SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
@@ -97,6 +102,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         odb_id=ID_WATER_CONSUMPTION_WEEK,
         source_command="set:ste.app.consumption:waterWeek",
         period="week",
+        water_dashboard_meter=True,
     ),
     StiebelDHESensorEntityDescription(
         key="water_consumption_year",
@@ -108,6 +114,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         odb_id=ID_WATER_CONSUMPTION_YEAR,
         source_command="set:ste.app.consumption:waterYear",
         period="year",
+        water_dashboard_meter=True,
     ),
     StiebelDHESensorEntityDescription(
         key="water_consumption_years",
@@ -119,6 +126,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         odb_id=ID_WATER_CONSUMPTION_YEARS,
         source_command="set:ste.app.consumption:waterYears",
         period="years",
+        water_dashboard_meter=True,
     ),
     StiebelDHESensorEntityDescription(
         key="energy_consumption_week",
@@ -264,6 +272,12 @@ async def async_setup_entry(
 ) -> None:
     """Set up DHE sensors from a config entry."""
     runtime = hass.data[DOMAIN][entry.entry_id]
+    water_dashboard_compatible = bool(
+        {**entry.data, **entry.options}.get(
+            CONF_WATER_DASHBOARD_COMPATIBLE,
+            DEFAULT_WATER_DASHBOARD_COMPATIBLE,
+        )
+    )
     async_add_entities(
         [
             StiebelDHESensor(
@@ -271,6 +285,7 @@ async def async_setup_entry(
                 name=runtime.name,
                 client=runtime.client,
                 description=description,
+                water_dashboard_compatible=water_dashboard_compatible,
             )
             for description in SENSOR_DESCRIPTIONS
         ]
@@ -297,6 +312,7 @@ class StiebelDHESensor(SensorEntity):
         name: str,
         client: DHEClient,
         description: StiebelDHESensorEntityDescription,
+        water_dashboard_compatible: bool,
     ) -> None:
         """Initialize the sensor."""
         self.entity_description = description
@@ -322,6 +338,10 @@ class StiebelDHESensor(SensorEntity):
         else:
             self._base_extra_state_attributes = {"odb_id": description.odb_id}
         self._attr_extra_state_attributes = dict(self._base_extra_state_attributes)
+        if water_dashboard_compatible and description.water_dashboard_meter:
+            self._attr_device_class = getattr(SensorDeviceClass, "WATER", SensorDeviceClass.VOLUME)
+            self._attr_state_class = SensorStateClass.TOTAL_INCREASING
+            self._attr_extra_state_attributes["water_dashboard_compatible"] = True
         self._client = client
         self._attr_available = False
         self._attr_native_value: float | str | None = None
