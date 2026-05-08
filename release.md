@@ -1,22 +1,23 @@
-# Release [0.7.9] - 2026-05-07
+# Release [0.7.10] - 2026-05-08
 
 ## Included
-- Bump integration version to `0.7.9`.
-- Add box-mode number entities for DHE temperature memory slots 1 and 2.
-- Change brush and shower timer duration numbers to box mode.
-- Add best-effort temperature memory value reads.
-- Refresh docs and translations for the new number entities.
+- Bump integration version to `0.7.10`.
+- Request all currently known web UI startup values best-effort after required entity seed values.
+- Cache optional non-entity app and ODB startup values internally.
+- Reuse precomputed timer command sets in the runtime event path.
+- Simplify callback removal.
+- Refresh docs for the broader startup reads.
 
 ## Summary
 
-Temperature memory configuration and timer duration box-input release.
+Optimized startup value read release.
 
 ## Changes
 
-- Temperature memory slot 1 writes through `assign:ste.common.temperature:memory` with memory ID `0`.
-- Temperature memory slot 2 writes through `assign:ste.common.temperature:memory` with memory ID `1`.
-- Temperature memory values are requested best-effort at startup and after memory writes.
-- Brush and shower timer duration controls use Home Assistant number box mode instead of slider mode.
+- Required entity startup reads keep their previous behavior.
+- Optional startup reads cover remaining readable ODB ID `4`, temperature memory, consumption volume format and last usage, wellness programs and maximum override. ODB ID `66` stays write-only.
+- Optional read failures are logged at debug level and do not abort the runtime session.
+- App timer command matching uses a precomputed command set instead of rebuilding a set during every event.
 
 ## Installation via HACS custom repository
 

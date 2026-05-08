@@ -6,13 +6,14 @@ This component uses the local DHE Socket.IO / Engine.IO v3 long-polling interfac
 
 ## Version
 
-Current version: `0.7.9` (temperature memory box inputs).
+Current version: `0.7.10` (optimized startup value reads).
 
 ## Entities
 
 The integration provides:
 
 - target-temperature climate control
+- best-effort startup reads for all currently known DHE web UI values
 - current water flow, current power and configured power sensors
 - water and energy consumption sensors from DHE app chart messages
 - Eco mode, Eco flow limit and maximum-temperature controls

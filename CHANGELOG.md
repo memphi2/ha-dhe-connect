@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.10
+
+- Request all currently known web UI startup values best-effort after the required entity seed values.
+- Add optional startup reads for remaining readable ODB ID `4`, consumption volume format and last usage, wellness programs and maximum override.
+- Store non-entity startup app and ODB values internally without adding Home Assistant entities.
+- Reuse precomputed app timer command sets in the runtime event path and simplify callback removal.
+- Bump integration version to `0.7.10`.
+
 ## 0.7.9
 
 - Add box-mode number entities for configuring temperature memory slots 1 and 2.

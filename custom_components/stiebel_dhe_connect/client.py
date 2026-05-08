@@ -32,6 +32,7 @@ ID_SETPOINT = 0
 ID_BATH_FILL_ACTIVE = 1
 ID_WELLNESS_SHOWER_PROGRAM = 2
 ID_BATH_FILL_TARGET_VOLUME = 3
+ID_STARTUP_ODB_4 = 4
 ID_MAX_TEMPERATURE = 5
 ID_ECO_MODE = 6
 ID_ECO_FLOW_LIMIT = 7
@@ -128,6 +129,7 @@ APP_TIMER_ASSIGN_COMMANDS = {
     for property_name in property_ids
     if property_name != "remainingMilliseconds"
 }
+APP_TIMER_VALUE_COMMANDS = APP_TIMER_SET_COMMANDS | APP_TIMER_ASSIGN_COMMANDS
 APP_TIMER_RESET_COMMANDS = {
     f"{action}:{path}:reset"
     for action in ("set", "assign")
@@ -148,6 +150,22 @@ CONSUMPTION_COMMAND_IDS = {
 }
 CONSUMPTION_REQUEST_COMMANDS = tuple(
     command.replace("set:", "get:", 1) for command in CONSUMPTION_COMMAND_IDS
+)
+APP_STARTUP_REQUEST_COMMANDS = (
+    "get:ste.app.consumption:volumeFormat",
+    "get:ste.app.consumption:lastUsage",
+    "get:ste.app.wellness:programs",
+    "get:ste.common.temperature:maxOverride",
+)
+APP_STARTUP_SET_COMMANDS = {
+    command.replace("get:", "set:", 1) for command in APP_STARTUP_REQUEST_COMMANDS
+}
+OPTIONAL_STARTUP_APP_REQUEST_COMMANDS = (
+    TEMP_MEMORY_GET_COMMAND,
+    *APP_STARTUP_REQUEST_COMMANDS,
+)
+OPTIONAL_STARTUP_ODB_IDS = (
+    ID_STARTUP_ODB_4,
 )
 
 
@@ -255,6 +273,8 @@ class DHEClient:
         self._last_setpoint: float | None = None
         self._last_measurements: dict[int, ODBValue] = {}
         self._last_measurement_attributes: dict[int, dict[str, Any]] = {}
+        self._last_app_values: dict[str, Any] = {}
+        self._last_unhandled_odb_values: dict[int, Any] = {}
         self._configured_power_kw = DEFAULT_CONFIGURED_POWER_KW
         self._last_power_fraction: float | None = None
         self._pending_setpoint_future: asyncio.Future[float] | None = None
@@ -286,6 +306,14 @@ class DHEClient:
             for key, value in self._last_measurement_attributes.items()
         }
 
+    @property
+    def last_app_values(self) -> dict[str, Any]:
+        return dict(self._last_app_values)
+
+    @property
+    def last_unhandled_odb_values(self) -> dict[int, Any]:
+        return dict(self._last_unhandled_odb_values)
+
     def add_setpoint_callback(self, callback: SetpointCallback) -> CallbackRemover:
         return self._add_callback(self._setpoint_callbacks, callback)
 
@@ -300,10 +328,7 @@ class DHEClient:
         callbacks.add(callback)
 
         def _remove_callback() -> None:
-            try:
-                callbacks.remove(callback)
-            except KeyError:
-                pass
+            callbacks.discard(callback)
 
         return _remove_callback
 
@@ -754,7 +779,7 @@ class DHEClient:
         if command in APP_TIMER_RESET_COMMANDS:
             self._handle_app_timer_reset(command)
             return
-        if command in APP_TIMER_SET_COMMANDS | APP_TIMER_ASSIGN_COMMANDS:
+        if command in APP_TIMER_VALUE_COMMANDS:
             self._handle_app_timer_value(command, value)
             return
         if command in CONSUMPTION_COMMAND_IDS:
@@ -762,6 +787,9 @@ class DHEClient:
             return
         if command in {TEMP_MEMORY_SET_COMMAND, TEMP_MEMORY_ASSIGN_COMMAND}:
             self._handle_temperature_memory_value(value, source_command=command)
+            return
+        if command in APP_STARTUP_SET_COMMANDS:
+            self._last_app_values[command] = value
             return
         if command not in {ODB_SET_COMMAND, ODB_ASSIGN_COMMAND} or not isinstance(value, dict):
             return
@@ -876,6 +904,8 @@ class DHEClient:
                     self._handle_measurement(ID_POWER, self._last_power_fraction * self._configured_power_kw)
             elif odb_id in WRITABLE_OPTION_IDS:
                 self._handle_measurement(odb_id, self._convert_odb_value(odb_id, raw_value))
+            else:
+                self._last_unhandled_odb_values[odb_id] = raw_value
         except (TypeError, ValueError) as err:
             _LOGGER.debug("Ignoring invalid DHE ODB value id=%s value=%r: %s", odb_id, raw_value, err)
 
@@ -1007,7 +1037,10 @@ class DHEClient:
             await self._request_app_value(ctx, command)
         for command in CONSUMPTION_REQUEST_COMMANDS:
             await self._request_app_value(ctx, command)
-        await self._request_optional_app_value(ctx, TEMP_MEMORY_GET_COMMAND)
+        for odb_id in OPTIONAL_STARTUP_ODB_IDS:
+            await self._request_optional_odb_value(ctx, odb_id)
+        for command in OPTIONAL_STARTUP_APP_REQUEST_COMMANDS:
+            await self._request_optional_app_value(ctx, command)
 
     async def _request_odb_value(self, ctx: DHESession, odb_id: int) -> None:
         await self._post_packet(
@@ -1017,6 +1050,12 @@ class DHEClient:
 
     async def _request_app_value(self, ctx: DHESession, command: str) -> None:
         await self._post_packet(ctx, self._message_packet({"command": command, "value": ""}))
+
+    async def _request_optional_odb_value(self, ctx: DHESession, odb_id: int) -> None:
+        try:
+            await self._request_odb_value(ctx, odb_id)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Ignoring optional startup ODB id %s request failure: %s", odb_id, err)
 
     async def _request_optional_app_value(self, ctx: DHESession, command: str) -> None:
         try:
