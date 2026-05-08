@@ -16,6 +16,7 @@ The integration provides:
 - best-effort startup reads for all currently known DHE web UI values
 - current water flow, current power and configured power sensors
 - water and energy consumption sensors from DHE app chart messages
+- diagnostic online status and reconnect count entities
 - Eco mode, Eco flow limit and maximum-temperature controls
 - bath-fill switch and target-volume control
 - brush timer and shower timer switches, duration numbers, remaining sensors and reset buttons

@@ -19,6 +19,7 @@ Current version: `0.7.10` (optimized startup value reads).
 - Best-effort startup reads for all currently known DHE web UI values.
 - Target-temperature control through the existing DHE ODB interface.
 - Current water flow, current power, configured power and app consumption sensors.
+- Diagnostic online status and reconnect count entities.
 - Eco mode, Eco flow limit, maximum temperature and bath-fill controls.
 - Separate brush timer and shower timer controls.
 - Timer reset buttons.
@@ -53,6 +54,13 @@ Current version: `0.7.10` (optimized startup value reads).
 | Shower timer remaining | `set:ste.app.showerTimer:remainingMilliseconds`, displayed as `M:SS` |
 
 Consumption sensors expose the raw chart values as attributes and the EUR total reported by the DHE as `cost_eur`.
+
+### Diagnostics
+
+| Entity | Type | Source / behavior |
+|---|---|---|
+| Online | Binary sensor | Current authenticated persistent session status |
+| Reconnects | Sensor | Number of successful reconnects after the initial connection |
 
 ### Controls
 
