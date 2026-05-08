@@ -380,10 +380,20 @@ class DHEClient:
         return self._add_callback(self._setpoint_callbacks, callback)
 
     def add_availability_callback(self, callback: AvailabilityCallback) -> CallbackRemover:
-        return self._add_callback(self._availability_callbacks, callback)
+        remove = self._add_callback(self._availability_callbacks, callback)
+        try:
+            callback(self._available)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Could not initialize availability callback: %s", err)
+        return remove
 
     def add_online_callback(self, callback: OnlineCallback) -> CallbackRemover:
-        return self._add_callback(self._online_callbacks, callback)
+        remove = self._add_callback(self._online_callbacks, callback)
+        try:
+            callback(self._online)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Could not initialize online callback: %s", err)
+        return remove
 
     def add_measurement_callback(self, callback: MeasurementCallback) -> CallbackRemover:
         return self._add_callback(self._measurement_callbacks, callback)
