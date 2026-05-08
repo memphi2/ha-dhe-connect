@@ -26,6 +26,7 @@ CURRENCY_OPTIONS = (
     "AUD",
     "HKD",
 )
+DEFAULT_CURRENCY = CURRENCY_OPTIONS[0]
 
 
 async def async_setup_entry(
@@ -90,6 +91,10 @@ class StiebelDHECurrencySelect(SelectEntity, RestoreEntity):
         if last_state and last_state.state not in {"unknown", "unavailable"}:
             self._set_current_option(last_state.state)
             self._attr_available = True
+            return
+
+        self._set_current_option(DEFAULT_CURRENCY)
+        self._attr_available = True
 
     async def async_select_option(self, option: str) -> None:
         """Set the DHE currency."""

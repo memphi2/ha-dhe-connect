@@ -173,7 +173,7 @@ Temperature memory writes keep the existing memory name and send `operation: add
 |---|---|---|---|
 | Currency | `EUR`, `GBP`, `CZK`, `PLN`, `CNY`, `USD`, `AUD`, `HKD` | `get:ste.common.currency:value` with a value | Sends the lower-case currency code, matching the DHE app behavior |
 
-The DHE does not reliably answer an empty currency read. The currency select therefore restores the last selected Home Assistant state on startup and updates when a currency write or non-empty device response is seen.
+The DHE answers the startup currency read with an empty value. The currency select therefore restores the last selected Home Assistant state on startup, falls back to `EUR` on first setup and updates when a currency write or non-empty device response is seen.
 
 ### Texts
 
