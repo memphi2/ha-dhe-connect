@@ -65,7 +65,6 @@ BUTTON_DESCRIPTIONS: tuple[StiebelDHEButtonEntityDescription, ...] = (
         extra_state_attributes={
             "temperature_memory_slot": 1,
             "odb_id": 66,
-            "odb_value": 10620,
         },
     ),
     StiebelDHEButtonEntityDescription(
@@ -77,7 +76,6 @@ BUTTON_DESCRIPTIONS: tuple[StiebelDHEButtonEntityDescription, ...] = (
         extra_state_attributes={
             "temperature_memory_slot": 2,
             "odb_id": 66,
-            "odb_value": 10650,
         },
     ),
 )

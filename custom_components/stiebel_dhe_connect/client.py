@@ -65,10 +65,8 @@ COMMAND_CONFIRMATION_TIMEOUT = 12.0
 COMMAND_READBACK_INTERVAL = 1.0
 APP_COMMAND_CONFIRMATION_TIMEOUT = 3.0
 AVAILABILITY_DROP_GRACE_SECONDS = 20.0
-TEMPERATURE_MEMORY_BUTTON_VALUES = {
-    1: 10620,
-    2: 10650,
-}
+# DHE memory button payloads encode 38 C as 10620 and 41 C as 10650.
+TEMPERATURE_MEMORY_BUTTON_ADDR = 10
 TEMPERATURE_MEMORY_SLOT_IDS = {
     1: 0,
     2: 1,
@@ -226,6 +224,10 @@ def _raw_to_float(value: Any) -> float:
 def _build_req66(temp_c: float, addr: int) -> int:
     raw = _c_to_raw_tenths(temp_c) & 1023
     return int(raw | ((addr & 0xFF) << 10))
+
+
+def _build_temperature_memory_button_value(temp_c: float) -> int:
+    return _build_req66(temp_c, TEMPERATURE_MEMORY_BUTTON_ADDR)
 
 
 def _raw_to_bool(value: Any) -> bool:
@@ -439,7 +441,8 @@ class DHEClient:
 
     async def press_temperature_memory(self, memory_slot: int) -> bool:
         try:
-            request_value = TEMPERATURE_MEMORY_BUTTON_VALUES[int(memory_slot)]
+            memory_id = TEMPERATURE_MEMORY_SLOT_IDS[int(memory_slot)]
+            measurement_id = TEMPERATURE_MEMORY_ID_TO_MEASUREMENT[memory_id]
         except KeyError as err:
             raise DHEError(f"Unsupported temperature memory slot: {memory_slot}") from err
 
@@ -450,6 +453,12 @@ class DHEClient:
                     ctx = self._ctx
                     if ctx is None:
                         raise DHEError("DHE session is not connected")
+                    temperature = await self._get_temperature_memory_temperature(
+                        ctx,
+                        memory_slot,
+                        measurement_id,
+                    )
+                    request_value = _build_temperature_memory_button_value(temperature)
                     await self._post_packet(ctx, self._message_packet({
                         "command": ODB_ASSIGN_COMMAND,
                         "value": {"id": ID_SET_REQ, "value": request_value},
@@ -470,6 +479,31 @@ class DHEClient:
                         continue
                     raise DHEError(f"Could not press DHE temperature memory {memory_slot}: {err}") from err
         raise DHEError(f"Could not press DHE temperature memory {memory_slot}")
+
+    async def _get_temperature_memory_temperature(
+        self,
+        ctx: DHESession,
+        memory_slot: int,
+        measurement_id: int,
+    ) -> float:
+        temperature = self._cached_temperature_memory_temperature(measurement_id)
+        if temperature is not None:
+            return temperature
+
+        await self._request_app_value(ctx, TEMP_MEMORY_GET_COMMAND)
+        deadline = time.monotonic() + APP_COMMAND_CONFIRMATION_TIMEOUT
+        while time.monotonic() < deadline:
+            temperature = self._cached_temperature_memory_temperature(measurement_id)
+            if temperature is not None:
+                return temperature
+            await asyncio.sleep(0.1)
+        raise DHEError(f"DHE temperature memory {memory_slot} is not available yet")
+
+    def _cached_temperature_memory_temperature(self, measurement_id: int) -> float | None:
+        value = self._last_measurements.get(measurement_id)
+        if value is None or isinstance(value, bool):
+            return None
+        return _round_to_half_c(_clamp(float(value), 20.0, 60.0))
 
     async def set_temperature_memory(self, memory_slot: int, temperature: float) -> float:
         try:

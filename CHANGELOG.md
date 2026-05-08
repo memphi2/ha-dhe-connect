@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Send temperature memory preset buttons with the temperature currently stored in the selected memory slot instead of fixed ODB ID `66` values.
+
 ## 0.7.10
 
 - Request all currently known web UI startup values best-effort after the required entity seed values.
