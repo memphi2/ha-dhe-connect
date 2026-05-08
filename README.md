@@ -6,7 +6,7 @@ The integration talks directly to the DHE web interface on your local network. I
 
 ## Status
 
-- Current version: `0.8.0`
+- Current version: `1.0.0`
 - Home Assistant setup: UI config flow
 - HACS type: custom integration
 - IoT class: local push
@@ -408,11 +408,13 @@ The integration has no external Python package requirements.
 Before publishing a release:
 
 1. Update `custom_components/stiebel_dhe_connect/manifest.json` version.
-2. Update this README and `CHANGELOG.md`.
+2. Update this README if behavior, entities or protocol notes changed.
 3. Validate JSON files under `custom_components/stiebel_dhe_connect/translations/`.
 4. Run Python syntax checks for the integration.
 5. Test setup, reload, unload and reconnect behavior in Home Assistant.
-6. Test water dashboard entity selection after statistics refresh.
+6. Run the HACS and Hassfest validation workflows.
+7. Test water dashboard entity selection after statistics refresh.
+8. Publish a GitHub release, not just a tag.
 
 ## Disclaimer
 
