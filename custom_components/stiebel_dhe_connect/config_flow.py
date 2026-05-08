@@ -16,10 +16,8 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
-    CONF_WATER_DASHBOARD_COMPATIBLE,
     DEFAULT_NAME,
     DEFAULT_PORT,
-    DEFAULT_WATER_DASHBOARD_COMPATIBLE,
     DOMAIN,
 )
 
@@ -92,13 +90,6 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
             vol.Required(CONF_HOST, default=defaults.get(CONF_HOST, "")): str,
             vol.Optional(CONF_PORT, default=defaults.get(CONF_PORT, DEFAULT_PORT)): int,
             vol.Optional(CONF_NAME, default=defaults.get(CONF_NAME, DEFAULT_NAME)): str,
-            vol.Optional(
-                CONF_WATER_DASHBOARD_COMPATIBLE,
-                default=defaults.get(
-                    CONF_WATER_DASHBOARD_COMPATIBLE,
-                    DEFAULT_WATER_DASHBOARD_COMPATIBLE,
-                ),
-            ): bool,
         }
     )
 
@@ -147,12 +138,6 @@ class StiebelDHEConnectConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             CONF_HOST: host,
                             CONF_PORT: port,
                             CONF_NAME: name,
-                            CONF_WATER_DASHBOARD_COMPATIBLE: bool(
-                                user_input.get(
-                                    CONF_WATER_DASHBOARD_COMPATIBLE,
-                                    DEFAULT_WATER_DASHBOARD_COMPATIBLE,
-                                )
-                            ),
                         },
                     )
 
@@ -199,12 +184,6 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
                             CONF_HOST: host,
                             CONF_PORT: port,
                             CONF_NAME: name,
-                            CONF_WATER_DASHBOARD_COMPATIBLE: bool(
-                                user_input.get(
-                                    CONF_WATER_DASHBOARD_COMPATIBLE,
-                                    DEFAULT_WATER_DASHBOARD_COMPATIBLE,
-                                )
-                            ),
                         },
                     )
 

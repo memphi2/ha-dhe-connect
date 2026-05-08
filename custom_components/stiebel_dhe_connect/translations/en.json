@@ -7,8 +7,7 @@
         "data": {
           "host": "IP address or hostname",
           "port": "Port",
-          "name": "Device name",
-          "water_dashboard_compatible": "Water dashboard compatible water meters"
+          "name": "Device name"
         }
       }
     },
@@ -29,8 +28,7 @@
         "data": {
           "host": "IP address or hostname",
           "port": "Port",
-          "name": "Device name",
-          "water_dashboard_compatible": "Water dashboard compatible water meters"
+          "name": "Device name"
         }
       }
     },
