@@ -74,6 +74,9 @@
       "water_price": {
         "name": "Water price"
       },
+      "co2_emission": {
+        "name": "CO2 emission"
+      },
       "brush_timer_duration": {
         "name": "Brush timer duration"
       },

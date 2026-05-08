@@ -48,6 +48,7 @@ ID_CONFIGURED_POWER = 20
 ID_ELECTRICITY_PRICE_EUROS = 61
 ID_WATER_PRICE_EUROS = 62
 ID_SET_REQ = 66
+ID_CO2_EMISSION_RAW = 69
 ID_ELECTRICITY_PRICE_CENTS = 70
 ID_WATER_PRICE_CENTS = 71
 ID_BRUSH_TIMER_ACTIVATION = 1001
@@ -91,6 +92,7 @@ ID_TIME_DATE_FORMAT = 1096
 ID_TIME_CLOCK_FORMAT = 1097
 ID_ELECTRICITY_PRICE = 1101
 ID_WATER_PRICE = 1102
+ID_CO2_EMISSION = 1103
 DEFAULT_CONFIGURED_POWER_KW = 24.0
 COMMAND_CONFIRMATION_TIMEOUT = 12.0
 COMMAND_READBACK_INTERVAL = 1.0
@@ -144,6 +146,7 @@ INITIAL_VALUE_IDS = (
     ID_ELECTRICITY_PRICE_CENTS,
     ID_WATER_PRICE_EUROS,
     ID_WATER_PRICE_CENTS,
+    ID_CO2_EMISSION_RAW,
 )
 WRITABLE_OPTION_IDS = {
     ID_BATH_FILL_ACTIVE,
@@ -623,6 +626,12 @@ class DHEClient:
             ID_WATER_PRICE_EUROS,
             ID_WATER_PRICE_CENTS,
         )
+
+    async def set_co2_emission(self, kg_per_kwh: float) -> float:
+        value = round(_clamp(float(kg_per_kwh), 0.0, 99.99), 2)
+        raw_value = self._co2_emission_to_raw(value)
+        await self.write_odb_value(ID_CO2_EMISSION_RAW, raw_value)
+        return value
 
     async def _set_price(self, value: float, euros_odb_id: int, cents_odb_id: int) -> float:
         total_cents = int(round(_clamp(float(value), 0.0, 9.99) * 100))
@@ -1381,6 +1390,8 @@ class DHEClient:
                     self._handle_measurement(ID_POWER, self._last_power_fraction * self._configured_power_kw)
             elif odb_id in PRICE_COMPONENT_IDS:
                 self._handle_price_component(odb_id, raw_value)
+            elif odb_id == ID_CO2_EMISSION_RAW:
+                self._handle_co2_emission(raw_value)
             elif odb_id == ID_MAXIMUM_ACTIVE:
                 self._handle_measurement(odb_id, _raw_to_bool(raw_value))
             elif odb_id in WRITABLE_OPTION_IDS:
@@ -1419,6 +1430,30 @@ class DHEClient:
             price,
             force_update=previous_attributes != attributes,
         )
+
+    def _handle_co2_emission(self, raw_value: Any) -> None:
+        raw = _raw_to_float(raw_value)
+        value = self._raw_to_co2_emission(raw)
+        self._handle_measurement(ID_CO2_EMISSION_RAW, raw)
+        attributes = {
+            "source_odb_id": ID_CO2_EMISSION_RAW,
+            "raw_value": raw,
+        }
+        previous_attributes = self._last_measurement_attributes.get(ID_CO2_EMISSION)
+        self._last_measurement_attributes[ID_CO2_EMISSION] = attributes
+        self._handle_measurement(
+            ID_CO2_EMISSION,
+            value,
+            force_update=previous_attributes != attributes,
+        )
+
+    @staticmethod
+    def _co2_emission_to_raw(kg_per_kwh: float) -> int:
+        return 1000 + int(round(float(kg_per_kwh) * 1000))
+
+    @staticmethod
+    def _raw_to_co2_emission(raw_value: float) -> float:
+        return round(max(0.0, (float(raw_value) - 1000.0) / 1000.0), 2)
 
     def _store_unhandled_odb_value(self, odb_id: int, raw_value: Any, *, is_valid: Any = None) -> None:
         self._last_unhandled_odb_values[int(odb_id)] = {

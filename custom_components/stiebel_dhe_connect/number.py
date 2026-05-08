@@ -23,6 +23,7 @@ from .client import (
     DHEError,
     ID_BATH_FILL_TARGET_VOLUME,
     ID_BRUSH_TIMER_DURATION,
+    ID_CO2_EMISSION,
     ID_ECO_FLOW_LIMIT,
     ID_ELECTRICITY_PRICE,
     ID_MAX_TEMPERATURE,
@@ -103,6 +104,17 @@ NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         native_step=0.01,
         mode=NumberMode.BOX,
         odb_id=ID_WATER_PRICE,
+    ),
+    StiebelDHENumberEntityDescription(
+        key="co2_emission",
+        translation_key="co2_emission",
+        native_unit_of_measurement="kg/kWh",
+        icon="mdi:molecule-co2",
+        native_min_value=0.0,
+        native_max_value=99.99,
+        native_step=0.01,
+        mode=NumberMode.BOX,
+        odb_id=ID_CO2_EMISSION,
     ),
     StiebelDHENumberEntityDescription(
         key="brush_timer_duration",
@@ -251,6 +263,8 @@ class StiebelDHENumber(RestoreNumber):
                 confirmed = await self._client.set_electricity_price(value)
             elif self.entity_description.odb_id == ID_WATER_PRICE:
                 confirmed = await self._client.set_water_price(value)
+            elif self.entity_description.odb_id == ID_CO2_EMISSION:
+                confirmed = await self._client.set_co2_emission(value)
             elif self.entity_description.odb_id == ID_BRUSH_TIMER_DURATION:
                 confirmed = await self._client.set_brush_timer_duration_minutes(value)
             elif self.entity_description.odb_id == ID_SHOWER_TIMER_DURATION:
