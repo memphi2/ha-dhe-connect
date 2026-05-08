@@ -889,7 +889,11 @@ class DHEClient:
     async def _close_session(self, ctx: DHESession) -> None:
         ping_task = ctx.websocket_ping_task
         ctx.websocket_ping_task = None
-        if ping_task is not None and not ping_task.done():
+        if (
+            ping_task is not None
+            and ping_task is not asyncio.current_task()
+            and not ping_task.done()
+        ):
             ping_task.cancel()
             try:
                 await ping_task
@@ -904,12 +908,21 @@ class DHEClient:
         if websocket is not None and not websocket.closed:
             await websocket.close()
 
-    async def _force_reconnect(self) -> None:
+    async def _force_reconnect(
+        self,
+        ctx: DHESession | None = None,
+        *,
+        immediate_availability: bool = False,
+    ) -> None:
+        if ctx is not None and self._ctx is not ctx:
+            await self._close_session(ctx)
+            return
+
         ctx = self._ctx
         self._ctx = None
         self._ready.clear()
         self._set_online(False)
-        self._set_available(False)
+        self._set_available(False, immediate=immediate_availability)
         if ctx is not None:
             await self._close_session(ctx)
 
@@ -1583,6 +1596,8 @@ class DHEClient:
             return
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("DHE websocket heartbeat failed: %r", err)
+            if not self._stopped.is_set():
+                await self._force_reconnect(ctx, immediate_availability=True)
 
     async def _read_events_once(self, ctx: DHESession) -> list[DHEEvent]:
         if ctx.websocket is None:
