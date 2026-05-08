@@ -71,6 +71,9 @@
       "electricity_price": {
         "name": "Strompreis"
       },
+      "water_price": {
+        "name": "Wasserpreis"
+      },
       "brush_timer_duration": {
         "name": "Zahnputz-Timer Dauer"
       },

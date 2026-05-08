@@ -46,8 +46,10 @@ ID_WATER_FLOW = 15
 ID_POWER = 16
 ID_CONFIGURED_POWER = 20
 ID_ELECTRICITY_PRICE_EUROS = 61
+ID_WATER_PRICE_EUROS = 62
 ID_SET_REQ = 66
 ID_ELECTRICITY_PRICE_CENTS = 70
+ID_WATER_PRICE_CENTS = 71
 ID_BRUSH_TIMER_ACTIVATION = 1001
 ID_BRUSH_TIMER_DURATION = 1002
 ID_BRUSH_TIMER_REMAINING = 1003
@@ -88,6 +90,7 @@ ID_TEMPERATURE_MAX_OVERRIDE = 1095
 ID_TIME_DATE_FORMAT = 1096
 ID_TIME_CLOCK_FORMAT = 1097
 ID_ELECTRICITY_PRICE = 1101
+ID_WATER_PRICE = 1102
 DEFAULT_CONFIGURED_POWER_KW = 24.0
 COMMAND_CONFIRMATION_TIMEOUT = 12.0
 COMMAND_READBACK_INTERVAL = 1.0
@@ -96,6 +99,20 @@ AVAILABILITY_DROP_GRACE_SECONDS = 20.0
 WEBSOCKET_UPGRADE_TIMEOUT = 8.0
 AUTH_POLL_TIMEOUT_SECONDS = 10.0
 DEFAULT_ENGINEIO_PING_INTERVAL_SECONDS = 25.0
+PRICE_COMPONENT_IDS = {
+    ID_ELECTRICITY_PRICE_EUROS: (
+        ID_ELECTRICITY_PRICE,
+        ID_ELECTRICITY_PRICE_EUROS,
+        ID_ELECTRICITY_PRICE_CENTS,
+    ),
+    ID_ELECTRICITY_PRICE_CENTS: (
+        ID_ELECTRICITY_PRICE,
+        ID_ELECTRICITY_PRICE_EUROS,
+        ID_ELECTRICITY_PRICE_CENTS,
+    ),
+    ID_WATER_PRICE_EUROS: (ID_WATER_PRICE, ID_WATER_PRICE_EUROS, ID_WATER_PRICE_CENTS),
+    ID_WATER_PRICE_CENTS: (ID_WATER_PRICE, ID_WATER_PRICE_EUROS, ID_WATER_PRICE_CENTS),
+}
 # DHE memory button payloads encode 38 C as 10620 and 41 C as 10650.
 TEMPERATURE_MEMORY_BUTTON_ADDR = 10
 TEMPERATURE_MEMORY_SLOT_IDS = {
@@ -125,6 +142,8 @@ INITIAL_VALUE_IDS = (
     ID_CONFIGURED_POWER,
     ID_ELECTRICITY_PRICE_EUROS,
     ID_ELECTRICITY_PRICE_CENTS,
+    ID_WATER_PRICE_EUROS,
+    ID_WATER_PRICE_CENTS,
 )
 WRITABLE_OPTION_IDS = {
     ID_BATH_FILL_ACTIVE,
@@ -592,10 +611,24 @@ class DHEClient:
         return float(await self.write_odb_value(ID_ECO_FLOW_LIMIT, raw_value))
 
     async def set_electricity_price(self, euros_per_kwh: float) -> float:
-        total_cents = int(round(_clamp(float(euros_per_kwh), 0.0, 9.99) * 100))
+        return await self._set_price(
+            euros_per_kwh,
+            ID_ELECTRICITY_PRICE_EUROS,
+            ID_ELECTRICITY_PRICE_CENTS,
+        )
+
+    async def set_water_price(self, euros_per_m3: float) -> float:
+        return await self._set_price(
+            euros_per_m3,
+            ID_WATER_PRICE_EUROS,
+            ID_WATER_PRICE_CENTS,
+        )
+
+    async def _set_price(self, value: float, euros_odb_id: int, cents_odb_id: int) -> float:
+        total_cents = int(round(_clamp(float(value), 0.0, 9.99) * 100))
         euros, cents = divmod(total_cents, 100)
-        await self.write_odb_value(ID_ELECTRICITY_PRICE_EUROS, euros)
-        await self.write_odb_value(ID_ELECTRICITY_PRICE_CENTS, cents)
+        await self.write_odb_value(euros_odb_id, euros)
+        await self.write_odb_value(cents_odb_id, cents)
         return total_cents / 100.0
 
     async def press_temperature_memory(self, memory_slot: int) -> bool:
@@ -1346,8 +1379,8 @@ class DHEClient:
                 self._handle_measurement(odb_id, self._configured_power_kw)
                 if self._last_power_fraction is not None:
                     self._handle_measurement(ID_POWER, self._last_power_fraction * self._configured_power_kw)
-            elif odb_id in {ID_ELECTRICITY_PRICE_EUROS, ID_ELECTRICITY_PRICE_CENTS}:
-                self._handle_electricity_price_component(odb_id, raw_value)
+            elif odb_id in PRICE_COMPONENT_IDS:
+                self._handle_price_component(odb_id, raw_value)
             elif odb_id == ID_MAXIMUM_ACTIVE:
                 self._handle_measurement(odb_id, _raw_to_bool(raw_value))
             elif odb_id in WRITABLE_OPTION_IDS:
@@ -1357,31 +1390,32 @@ class DHEClient:
         except (TypeError, ValueError) as err:
             _LOGGER.debug("Ignoring invalid DHE ODB value id=%s value=%r: %s", odb_id, raw_value, err)
 
-    def _handle_electricity_price_component(self, odb_id: int, raw_value: Any) -> None:
+    def _handle_price_component(self, odb_id: int, raw_value: Any) -> None:
         value = int(round(_raw_to_float(raw_value)))
-        if odb_id == ID_ELECTRICITY_PRICE_CENTS:
+        measurement_id, euros_odb_id, cents_odb_id = PRICE_COMPONENT_IDS[odb_id]
+        if odb_id == cents_odb_id:
             value = int(_clamp(value, 0, 99))
         else:
             value = int(_clamp(value, 0, 9))
         self._handle_measurement(odb_id, float(value))
 
-        euros_value = self._last_measurements.get(ID_ELECTRICITY_PRICE_EUROS)
-        cents_value = self._last_measurements.get(ID_ELECTRICITY_PRICE_CENTS)
+        euros_value = self._last_measurements.get(euros_odb_id)
+        cents_value = self._last_measurements.get(cents_odb_id)
         if euros_value is None or cents_value is None:
             return
         price = float(int(euros_value)) + (float(int(cents_value)) / 100.0)
         attributes = {
             "source_odb_ids": {
-                "euros": ID_ELECTRICITY_PRICE_EUROS,
-                "cents": ID_ELECTRICITY_PRICE_CENTS,
+                "euros": euros_odb_id,
+                "cents": cents_odb_id,
             },
             "euros": int(euros_value),
             "cents": int(cents_value),
         }
-        previous_attributes = self._last_measurement_attributes.get(ID_ELECTRICITY_PRICE)
-        self._last_measurement_attributes[ID_ELECTRICITY_PRICE] = attributes
+        previous_attributes = self._last_measurement_attributes.get(measurement_id)
+        self._last_measurement_attributes[measurement_id] = attributes
         self._handle_measurement(
-            ID_ELECTRICITY_PRICE,
+            measurement_id,
             price,
             force_update=previous_attributes != attributes,
         )

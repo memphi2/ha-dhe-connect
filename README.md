@@ -159,6 +159,7 @@ Consumption sensors expose the DHE chart array as a `chart` attribute and the re
 | Maximum temperature | `C` | `30` to `50` | slider | ODB ID `5`, accepts raw tenths or degrees |
 | Eco flow limit | `L/min` | `6` to `8` | slider | ODB ID `7`, sent as raw tenths |
 | Electricity price | `EUR/kWh` | `0.00` to `9.99` | box | ODB ID `61` for euros and ODB ID `70` for cents |
+| Water price | `EUR/m3` | `0.00` to `9.99` | box | ODB ID `62` for euros and ODB ID `71` for cents |
 | Brush timer duration | `min` | `1` to `20` | box | `assign:ste.app.brushTimer:durationMilliseconds` |
 | Shower timer duration | `min` | `1` to `20` | box | `assign:ste.app.showerTimer:durationMilliseconds` |
 | Temperature memory 1 temperature | `C` | `20` to `60` | box | `assign:ste.common.temperature:memory`, memory ID `0` |
@@ -327,7 +328,9 @@ Required startup reads seed the interactive entities:
 | `16` | Current power fraction |
 | `20` | Configured power |
 | `61` | Electricity price euros |
+| `62` | Water price euros |
 | `70` | Electricity price cents |
+| `71` | Water price cents |
 
 Best-effort startup reads collect additional values:
 
@@ -371,6 +374,7 @@ Mapped ODB values are converted before publishing to Home Assistant:
 | `16` | Raw percent divided by `100`, multiplied by configured power |
 | `20` | Accepts `18` to `24`, `180` to `240`, or `1800` to `2400` formats |
 | `61` and `70` | Combined to the `Electricity price` number as euros plus cents |
+| `62` and `71` | Combined to the `Water price` number as euros plus cents |
 
 If a DHE ODB readback is marked with `isValid: false`, it is not published as a normal entity state. It is stored in the `Unhandled ODB values` diagnostic sensor instead.
 

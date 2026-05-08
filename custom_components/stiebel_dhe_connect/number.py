@@ -29,6 +29,7 @@ from .client import (
     ID_SHOWER_TIMER_DURATION,
     ID_TEMPERATURE_MEMORY_1,
     ID_TEMPERATURE_MEMORY_2,
+    ID_WATER_PRICE,
     SHOWER_TIMER_PATH,
     ODBValue,
 )
@@ -91,6 +92,17 @@ NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         native_step=0.01,
         mode=NumberMode.BOX,
         odb_id=ID_ELECTRICITY_PRICE,
+    ),
+    StiebelDHENumberEntityDescription(
+        key="water_price",
+        translation_key="water_price",
+        native_unit_of_measurement="EUR/m3",
+        icon="mdi:water-percent",
+        native_min_value=0.0,
+        native_max_value=9.99,
+        native_step=0.01,
+        mode=NumberMode.BOX,
+        odb_id=ID_WATER_PRICE,
     ),
     StiebelDHENumberEntityDescription(
         key="brush_timer_duration",
@@ -237,6 +249,8 @@ class StiebelDHENumber(RestoreNumber):
                 confirmed = await self._client.set_eco_flow_limit(value)
             elif self.entity_description.odb_id == ID_ELECTRICITY_PRICE:
                 confirmed = await self._client.set_electricity_price(value)
+            elif self.entity_description.odb_id == ID_WATER_PRICE:
+                confirmed = await self._client.set_water_price(value)
             elif self.entity_description.odb_id == ID_BRUSH_TIMER_DURATION:
                 confirmed = await self._client.set_brush_timer_duration_minutes(value)
             elif self.entity_description.odb_id == ID_SHOWER_TIMER_DURATION:

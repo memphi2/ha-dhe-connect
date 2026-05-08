@@ -71,6 +71,9 @@
       "electricity_price": {
         "name": "Electricity price"
       },
+      "water_price": {
+        "name": "Water price"
+      },
       "brush_timer_duration": {
         "name": "Brush timer duration"
       },
