@@ -68,6 +68,9 @@
       "eco_flow_limit": {
         "name": "Eco flow limit"
       },
+      "electricity_price": {
+        "name": "Electricity price"
+      },
       "brush_timer_duration": {
         "name": "Brush timer duration"
       },

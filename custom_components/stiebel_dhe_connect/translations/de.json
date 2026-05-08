@@ -68,6 +68,9 @@
       "eco_flow_limit": {
         "name": "Eco-Durchflussbegrenzung"
       },
+      "electricity_price": {
+        "name": "Strompreis"
+      },
       "brush_timer_duration": {
         "name": "Zahnputz-Timer Dauer"
       },

@@ -45,7 +45,9 @@ ID_STOP_PROGRAM = 10
 ID_WATER_FLOW = 15
 ID_POWER = 16
 ID_CONFIGURED_POWER = 20
+ID_ELECTRICITY_PRICE_EUROS = 61
 ID_SET_REQ = 66
+ID_ELECTRICITY_PRICE_CENTS = 70
 ID_BRUSH_TIMER_ACTIVATION = 1001
 ID_BRUSH_TIMER_DURATION = 1002
 ID_BRUSH_TIMER_REMAINING = 1003
@@ -85,6 +87,7 @@ ID_APP_VIEW = 1094
 ID_TEMPERATURE_MAX_OVERRIDE = 1095
 ID_TIME_DATE_FORMAT = 1096
 ID_TIME_CLOCK_FORMAT = 1097
+ID_ELECTRICITY_PRICE = 1101
 DEFAULT_CONFIGURED_POWER_KW = 24.0
 COMMAND_CONFIRMATION_TIMEOUT = 12.0
 COMMAND_READBACK_INTERVAL = 1.0
@@ -120,6 +123,8 @@ INITIAL_VALUE_IDS = (
     ID_WATER_FLOW,
     ID_POWER,
     ID_CONFIGURED_POWER,
+    ID_ELECTRICITY_PRICE_EUROS,
+    ID_ELECTRICITY_PRICE_CENTS,
 )
 WRITABLE_OPTION_IDS = {
     ID_BATH_FILL_ACTIVE,
@@ -585,6 +590,13 @@ class DHEClient:
         requested_l_min = int(round(_clamp(float(liters_per_minute), 6.0, 8.0)))
         raw_value = requested_l_min * 10
         return float(await self.write_odb_value(ID_ECO_FLOW_LIMIT, raw_value))
+
+    async def set_electricity_price(self, euros_per_kwh: float) -> float:
+        total_cents = int(round(_clamp(float(euros_per_kwh), 0.0, 9.99) * 100))
+        euros, cents = divmod(total_cents, 100)
+        await self.write_odb_value(ID_ELECTRICITY_PRICE_EUROS, euros)
+        await self.write_odb_value(ID_ELECTRICITY_PRICE_CENTS, cents)
+        return total_cents / 100.0
 
     async def press_temperature_memory(self, memory_slot: int) -> bool:
         try:
@@ -1334,6 +1346,8 @@ class DHEClient:
                 self._handle_measurement(odb_id, self._configured_power_kw)
                 if self._last_power_fraction is not None:
                     self._handle_measurement(ID_POWER, self._last_power_fraction * self._configured_power_kw)
+            elif odb_id in {ID_ELECTRICITY_PRICE_EUROS, ID_ELECTRICITY_PRICE_CENTS}:
+                self._handle_electricity_price_component(odb_id, raw_value)
             elif odb_id == ID_MAXIMUM_ACTIVE:
                 self._handle_measurement(odb_id, _raw_to_bool(raw_value))
             elif odb_id in WRITABLE_OPTION_IDS:
@@ -1342,6 +1356,35 @@ class DHEClient:
                 self._store_unhandled_odb_value(odb_id, raw_value, is_valid=is_valid)
         except (TypeError, ValueError) as err:
             _LOGGER.debug("Ignoring invalid DHE ODB value id=%s value=%r: %s", odb_id, raw_value, err)
+
+    def _handle_electricity_price_component(self, odb_id: int, raw_value: Any) -> None:
+        value = int(round(_raw_to_float(raw_value)))
+        if odb_id == ID_ELECTRICITY_PRICE_CENTS:
+            value = int(_clamp(value, 0, 99))
+        else:
+            value = int(_clamp(value, 0, 9))
+        self._handle_measurement(odb_id, float(value))
+
+        euros_value = self._last_measurements.get(ID_ELECTRICITY_PRICE_EUROS)
+        cents_value = self._last_measurements.get(ID_ELECTRICITY_PRICE_CENTS)
+        if euros_value is None or cents_value is None:
+            return
+        price = float(int(euros_value)) + (float(int(cents_value)) / 100.0)
+        attributes = {
+            "source_odb_ids": {
+                "euros": ID_ELECTRICITY_PRICE_EUROS,
+                "cents": ID_ELECTRICITY_PRICE_CENTS,
+            },
+            "euros": int(euros_value),
+            "cents": int(cents_value),
+        }
+        previous_attributes = self._last_measurement_attributes.get(ID_ELECTRICITY_PRICE)
+        self._last_measurement_attributes[ID_ELECTRICITY_PRICE] = attributes
+        self._handle_measurement(
+            ID_ELECTRICITY_PRICE,
+            price,
+            force_update=previous_attributes != attributes,
+        )
 
     def _store_unhandled_odb_value(self, odb_id: int, raw_value: Any, *, is_valid: Any = None) -> None:
         self._last_unhandled_odb_values[int(odb_id)] = {
