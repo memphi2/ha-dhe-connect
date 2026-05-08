@@ -86,6 +86,42 @@
       },
       "temperature_memory_12": {
         "name": "Temperaturspeicher 12"
+      },
+      "delete_temperature_memory_1": {
+        "name": "Temperaturspeicher 1 löschen"
+      },
+      "delete_temperature_memory_2": {
+        "name": "Temperaturspeicher 2 löschen"
+      },
+      "delete_temperature_memory_3": {
+        "name": "Temperaturspeicher 3 löschen"
+      },
+      "delete_temperature_memory_4": {
+        "name": "Temperaturspeicher 4 löschen"
+      },
+      "delete_temperature_memory_5": {
+        "name": "Temperaturspeicher 5 löschen"
+      },
+      "delete_temperature_memory_6": {
+        "name": "Temperaturspeicher 6 löschen"
+      },
+      "delete_temperature_memory_7": {
+        "name": "Temperaturspeicher 7 löschen"
+      },
+      "delete_temperature_memory_8": {
+        "name": "Temperaturspeicher 8 löschen"
+      },
+      "delete_temperature_memory_9": {
+        "name": "Temperaturspeicher 9 löschen"
+      },
+      "delete_temperature_memory_10": {
+        "name": "Temperaturspeicher 10 löschen"
+      },
+      "delete_temperature_memory_11": {
+        "name": "Temperaturspeicher 11 löschen"
+      },
+      "delete_temperature_memory_12": {
+        "name": "Temperaturspeicher 12 löschen"
       }
     },
     "number": {

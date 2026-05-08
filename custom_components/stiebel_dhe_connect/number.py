@@ -29,9 +29,9 @@ from .client import (
     ID_MAX_TEMPERATURE,
     ID_SHOWER_TIMER_DURATION,
     ID_WATER_PRICE,
+    MeasurementValue,
     SHOWER_TIMER_PATH,
     TEMPERATURE_MEMORY_SLOT_MEASUREMENTS,
-    ODBValue,
 )
 from .const import DOMAIN
 
@@ -279,9 +279,18 @@ class StiebelDHENumber(RestoreNumber):
         self.async_write_ha_state()
 
     @callback
-    def _handle_measurement_update(self, odb_id: int, value: ODBValue) -> None:
+    def _handle_measurement_update(self, odb_id: int, value: MeasurementValue) -> None:
         """Handle converted ODB value updates from the persistent client."""
         if odb_id != self.entity_description.odb_id or isinstance(value, bool):
+            return
+        if value is None:
+            self._attr_native_value = None
+            self._attr_available = (
+                self._client.available
+                if self.entity_description.temperature_memory_slot is not None
+                else False
+            )
+            self.async_write_ha_state()
             return
 
         self._attr_native_value = float(value)
@@ -291,5 +300,9 @@ class StiebelDHENumber(RestoreNumber):
     @callback
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
+        if self.entity_description.temperature_memory_slot is not None:
+            self._attr_available = available
+            self.async_write_ha_state()
+            return
         self._attr_available = available or self._attr_native_value is not None
         self.async_write_ha_state()

@@ -208,6 +208,7 @@ Wellness programs are triggered by writing the program ID and then sending the D
 | Reset brush timer | `assign:ste.app.brushTimer:reset` | Resets brush timer remaining time and activation state |
 | Reset shower timer | `assign:ste.app.showerTimer:reset` | Resets shower timer remaining time and activation state |
 | Temperature memory 1-12 | ODB ID `66` command | Sends the temperature stored in the matching memory slot |
+| Delete temperature memory 1-12 | `assign:ste.common.temperature:memory` | Deletes the matching memory slot with `operation: delete` |
 
 The memory preset buttons do not send fixed temperatures. They read the current memory slot value from the DHE cache, refresh it if needed, build the ODB ID `66` button payload from that temperature and send it.
 
@@ -390,6 +391,12 @@ Temperature memory changes use `assign:ste.common.temperature:memory`. Existing 
 
 ```json
 {"command": "assign:ste.common.temperature:memory", "value": {"name": "%1 3", "temperature": 40, "operation": "add_change"}}
+```
+
+Deleting a memory slot uses the zero-based `id` and `operation: delete`:
+
+```json
+{"command": "assign:ste.common.temperature:memory", "value": {"id": 2, "operation": "delete"}}
 ```
 
 ### ODB handling

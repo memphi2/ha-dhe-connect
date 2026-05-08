@@ -138,15 +138,18 @@ class StiebelDHEText(TextEntity, RestoreEntity):
         if odb_id != self.entity_description.measurement_id:
             return
 
-        self._set_value_from_client()
-        self._attr_available = True
+        if value is None or not self._set_value_from_client():
+            self._attr_native_value = None
+            self._attr_available = self._client.available
+        else:
+            self._attr_available = True
         self._update_extra_state_attributes()
         self.async_write_ha_state()
 
     @callback
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
-        self._attr_available = available or self._attr_native_value is not None
+        self._attr_available = available
         self.async_write_ha_state()
 
     def _set_value_from_client(self) -> bool:

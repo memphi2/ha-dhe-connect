@@ -308,7 +308,7 @@ OPTIONAL_STARTUP_ODB_IDS: tuple[int, ...] = ()
 
 
 ODBValue = bool | float
-MeasurementValue = bool | float | str
+MeasurementValue = bool | float | str | None
 SetpointCallback = Callable[[float], None]
 AvailabilityCallback = Callable[[bool], None]
 OnlineCallback = Callable[[bool], None]
@@ -891,6 +891,38 @@ class DHEClient:
                         continue
                     raise DHEError(f"Could not set DHE temperature memory {memory_slot} name: {err}") from err
         raise DHEError(f"Could not set DHE temperature memory {memory_slot} name")
+
+    async def delete_temperature_memory(self, memory_slot: int) -> bool:
+        memory_id, measurement_id = self._temperature_memory_ids(memory_slot)
+
+        async with self._command_lock:
+            for attempt in range(2):
+                try:
+                    await self._ensure_ready(timeout=45)
+                    ctx = self._ctx
+                    if ctx is None:
+                        raise DHEError("DHE session is not connected")
+                    await self._refresh_temperature_memories(ctx)
+                    if not self._temperature_memory_exists(memory_id, measurement_id):
+                        raise DHEError(f"DHE temperature memory {memory_slot} is not available")
+                    await self._post_packet(ctx, self._message_packet({
+                        "command": TEMP_MEMORY_ASSIGN_COMMAND,
+                        "value": {
+                            "id": memory_id,
+                            "operation": "delete",
+                        },
+                    }))
+                    await self._refresh_temperature_memories(ctx)
+                    if self._temperature_memory_exists(memory_id, measurement_id):
+                        raise DHEError(f"DHE temperature memory {memory_slot} was not deleted")
+                    return True
+                except Exception as err:  # noqa: BLE001
+                    if attempt == 0:
+                        await self._force_reconnect()
+                        await asyncio.sleep(1)
+                        continue
+                    raise DHEError(f"Could not delete DHE temperature memory {memory_slot}: {err}") from err
+        raise DHEError(f"Could not delete DHE temperature memory {memory_slot}")
 
     async def set_wellness_cold_prevention(self, enabled: bool) -> bool:
         if enabled:
@@ -1486,6 +1518,10 @@ class DHEClient:
 
     def _handle_temperature_memory_value(self, raw_value: Any, *, source_command: str) -> None:
         if isinstance(raw_value, dict):
+            if str(raw_value.get("operation", "")).lower() == "delete":
+                self._handle_temperature_memory_delete_item(raw_value, source_command=source_command)
+                self._temperature_memory_generation += 1
+                return
             memory_id = self._handle_temperature_memory_item(raw_value, source_command=source_command)
             if memory_id is not None:
                 self._temperature_memory_ids_seen.add(memory_id)
@@ -1500,8 +1536,19 @@ class DHEClient:
             memory_id = self._handle_temperature_memory_item(item, source_command=source_command)
             if memory_id is not None:
                 memory_ids.add(memory_id)
+        for stale_memory_id in self._temperature_memory_ids_seen - memory_ids:
+            self._clear_temperature_memory(stale_memory_id, source_command=source_command)
         self._temperature_memory_ids_seen = memory_ids
         self._temperature_memory_generation += 1
+
+    def _handle_temperature_memory_delete_item(self, item: dict[str, Any], *, source_command: str) -> None:
+        try:
+            memory_id = int(item.get("id"))
+        except (TypeError, ValueError) as err:
+            _LOGGER.debug("Ignoring invalid temperature memory delete item=%r: %s", item, err)
+            return
+        self._temperature_memory_ids_seen.discard(memory_id)
+        self._clear_temperature_memory(memory_id, source_command=source_command)
 
     def _handle_temperature_memory_item(self, item: Any, *, source_command: str) -> int | None:
         if not isinstance(item, dict):
@@ -1528,6 +1575,19 @@ class DHEClient:
             force_update=previous_attributes != attributes,
         )
         return memory_id
+
+    def _clear_temperature_memory(self, memory_id: int, *, source_command: str) -> None:
+        measurement_id = TEMPERATURE_MEMORY_ID_TO_MEASUREMENT.get(memory_id)
+        if measurement_id is None:
+            return
+        self._last_measurements.pop(measurement_id, None)
+        self._last_measurement_attributes[measurement_id] = {
+            "memory_id": memory_id,
+            "source_command": source_command,
+            "operation": "delete",
+        }
+        for callback in tuple(self._measurement_callbacks):
+            callback(measurement_id, None)
 
     def _handle_odb_value(self, odb_id: int, raw_value: Any, *, is_valid: Any = None) -> None:
         if is_valid is False:
@@ -1652,7 +1712,7 @@ class DHEClient:
     def _handle_measurement(self, odb_id: int, value: MeasurementValue, *, force_update: bool = False) -> None:
         previous = self._last_measurements.get(odb_id)
         self._last_measurements[odb_id] = value
-        if not isinstance(value, str):
+        if value is not None and not isinstance(value, str):
             self._maybe_complete_write_future(odb_id, value)
         if not force_update and previous is not None:
             if isinstance(previous, str) or isinstance(value, str):

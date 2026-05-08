@@ -17,7 +17,7 @@ from .client import (
     DHEError,
     ID_BRUSH_TIMER_ACTIVATION,
     ID_SHOWER_TIMER_ACTIVATION,
-    ODBValue,
+    MeasurementValue,
     SHOWER_TIMER_PATH,
     TEMPERATURE_MEMORY_SLOT_MEASUREMENTS,
 )
@@ -69,6 +69,22 @@ BUTTON_DESCRIPTIONS: tuple[StiebelDHEButtonEntityDescription, ...] = (
                 "temperature_memory_slot": slot,
                 "temperature_memory_id": slot - 1,
                 "odb_id": 66,
+            },
+        )
+        for slot, measurement_id in TEMPERATURE_MEMORY_SLOT_MEASUREMENTS.items()
+    ),
+    *(
+        StiebelDHEButtonEntityDescription(
+            key=f"delete_temperature_memory_{slot}",
+            translation_key=f"delete_temperature_memory_{slot}",
+            method="delete_temperature_memory",
+            method_args=(slot,),
+            icon="mdi:trash-can-outline",
+            availability_measurement_id=measurement_id,
+            extra_state_attributes={
+                "temperature_memory_slot": slot,
+                "temperature_memory_id": slot - 1,
+                "temperature_memory_operation": "delete",
             },
         )
         for slot, measurement_id in TEMPERATURE_MEMORY_SLOT_MEASUREMENTS.items()
@@ -148,12 +164,12 @@ class StiebelDHEButton(ButtonEntity):
         self._attr_available = self._button_available(self._client.available)
 
     @callback
-    def _handle_measurement_update(self, odb_id: int, value: ODBValue) -> None:
+    def _handle_measurement_update(self, odb_id: int, value: MeasurementValue) -> None:
         """Track whether the heater has delivered a related state."""
         availability_measurement_id = self.entity_description.availability_measurement_id
         if availability_measurement_id is None or odb_id != availability_measurement_id:
             return
-        self._has_seen_availability_state = True
+        self._has_seen_availability_state = value is not None
         self._attr_available = self._button_available(self._client.available)
         self.async_write_ha_state()
 

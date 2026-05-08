@@ -86,6 +86,42 @@
       },
       "temperature_memory_12": {
         "name": "Temperature memory 12"
+      },
+      "delete_temperature_memory_1": {
+        "name": "Delete temperature memory 1"
+      },
+      "delete_temperature_memory_2": {
+        "name": "Delete temperature memory 2"
+      },
+      "delete_temperature_memory_3": {
+        "name": "Delete temperature memory 3"
+      },
+      "delete_temperature_memory_4": {
+        "name": "Delete temperature memory 4"
+      },
+      "delete_temperature_memory_5": {
+        "name": "Delete temperature memory 5"
+      },
+      "delete_temperature_memory_6": {
+        "name": "Delete temperature memory 6"
+      },
+      "delete_temperature_memory_7": {
+        "name": "Delete temperature memory 7"
+      },
+      "delete_temperature_memory_8": {
+        "name": "Delete temperature memory 8"
+      },
+      "delete_temperature_memory_9": {
+        "name": "Delete temperature memory 9"
+      },
+      "delete_temperature_memory_10": {
+        "name": "Delete temperature memory 10"
+      },
+      "delete_temperature_memory_11": {
+        "name": "Delete temperature memory 11"
+      },
+      "delete_temperature_memory_12": {
+        "name": "Delete temperature memory 12"
       }
     },
     "number": {
