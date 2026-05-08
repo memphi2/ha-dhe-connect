@@ -1481,11 +1481,11 @@ class DHEClient:
 
     @staticmethod
     def _co2_emission_to_raw(kg_per_kwh: float) -> int:
-        return 1000 + int(round(float(kg_per_kwh) * 1000))
+        return int(round(float(kg_per_kwh) * 1000))
 
     @staticmethod
     def _raw_to_co2_emission(raw_value: float) -> float:
-        return round(max(0.0, (float(raw_value) - 1000.0) / 1000.0), 2)
+        return round(max(0.0, float(raw_value) / 1000.0), 2)
 
     def _store_unhandled_odb_value(self, odb_id: int, raw_value: Any, *, is_valid: Any = None) -> None:
         self._last_unhandled_odb_values[int(odb_id)] = {
