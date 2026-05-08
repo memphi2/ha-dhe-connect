@@ -377,7 +377,13 @@ class DHEClient:
         return dict(self._last_unhandled_odb_values)
 
     def add_setpoint_callback(self, callback: SetpointCallback) -> CallbackRemover:
-        return self._add_callback(self._setpoint_callbacks, callback)
+        remove = self._add_callback(self._setpoint_callbacks, callback)
+        if self._last_setpoint is not None:
+            try:
+                callback(self._last_setpoint)
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Could not initialize setpoint callback: %s", err)
+        return remove
 
     def add_availability_callback(self, callback: AvailabilityCallback) -> CallbackRemover:
         remove = self._add_callback(self._availability_callbacks, callback)
@@ -396,10 +402,21 @@ class DHEClient:
         return remove
 
     def add_measurement_callback(self, callback: MeasurementCallback) -> CallbackRemover:
-        return self._add_callback(self._measurement_callbacks, callback)
+        remove = self._add_callback(self._measurement_callbacks, callback)
+        for odb_id, value in self._last_measurements.items():
+            try:
+                callback(odb_id, value)
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Could not initialize measurement callback for %s: %s", odb_id, err)
+        return remove
 
     def add_reconnect_callback(self, callback: ReconnectCallback) -> CallbackRemover:
-        return self._add_callback(self._reconnect_callbacks, callback)
+        remove = self._add_callback(self._reconnect_callbacks, callback)
+        try:
+            callback(self._reconnect_count)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Could not initialize reconnect callback: %s", err)
+        return remove
 
     @staticmethod
     def _add_callback(callbacks: set[Callable[..., None]], callback: Callable[..., None]) -> CallbackRemover:

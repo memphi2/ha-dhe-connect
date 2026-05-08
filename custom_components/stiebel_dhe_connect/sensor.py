@@ -12,7 +12,9 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
+    PERCENTAGE,
     UnitOfEnergy,
+    UnitOfMass,
     UnitOfPower,
     UnitOfTime,
     UnitOfVolume,
@@ -182,6 +184,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         key="last_usage_cost",
         translation_key="last_usage_cost",
         native_unit_of_measurement="EUR",
+        device_class=SensorDeviceClass.MONETARY,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:cash",
         odb_id=ID_LAST_USAGE_COST,
@@ -208,8 +211,9 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
     StiebelDHESensorEntityDescription(
         key="saving_monitor_co2",
         translation_key="saving_monitor_co2",
-        native_unit_of_measurement="kg",
+        native_unit_of_measurement=UnitOfMass.KILOGRAMS,
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
         icon="mdi:molecule-co2",
         odb_id=ID_SAVING_MONITOR_CO2,
         source_command="set:ste.app.savingMonitor:consumption",
@@ -217,6 +221,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
     StiebelDHESensorEntityDescription(
         key="saving_monitor_activation_rate",
         translation_key="saving_monitor_activation_rate",
+        native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:leaf-circle",
         odb_id=ID_SAVING_MONITOR_ACTIVATION_RATE,
@@ -381,6 +386,7 @@ class StiebelDHEReconnectCountSensor(SensorEntity):
     _attr_has_entity_name = True
     _attr_icon = "mdi:restart"
     _attr_should_poll = False
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_translation_key = "reconnect_count"
 
     def __init__(self, entry_id: str, name: str, client: DHEClient) -> None:

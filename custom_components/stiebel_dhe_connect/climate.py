@@ -66,7 +66,7 @@ class StiebelDHEClimate(ClimateEntity):
     def _update_extra_state_attributes(self) -> None:
         """Update diagnostic attributes without doing I/O in properties."""
         self._attr_extra_state_attributes = {
-            "communication_model": "persistent_socketio_long_polling",
+            "communication_model": "persistent_socketio_websocket",
             "connection_state": self._connection_state,
             "readback_id": 0,
             "write_id": 66,
