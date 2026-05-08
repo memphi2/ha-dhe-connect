@@ -416,4 +416,4 @@ Before publishing a release:
 
 ## Disclaimer
 
-This project is not affiliated with STIEBEL ELTRON. Product names are used only to describe compatibility with the local DHE Connect web interface.
+This is an unofficial custom integration. It is not affiliated with, endorsed by, sponsored by or approved by STIEBEL ELTRON. Product names are used only to describe compatibility with the local DHE Connect web interface. STIEBEL ELTRON trademarks and logos are not included or licensed by this project.
