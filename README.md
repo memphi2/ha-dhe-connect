@@ -159,9 +159,9 @@ Consumption sensors expose the DHE chart array as a `chart` attribute and the re
 | CO2 emission | `kg/kWh` | `0.00` to `99.99` | box | ODB ID `69`, encoded as `kg/kWh * 1000` |
 | Brush timer duration | `min` | `1` to `20` | box | `assign:ste.app.brushTimer:durationMilliseconds` |
 | Shower timer duration | `min` | `1` to `20` | box | `assign:ste.app.showerTimer:durationMilliseconds` |
-| Temperature memory 1-12 temperature | `C` | `20` to `60` | box | `assign:ste.common.temperature:memory`, memory ID `0` to `11` |
+| Temperature memory 1-12 temperature | `C` | `20` to `60` | box | `assign:ste.common.temperature:memory`, memory ID `0` to `11`; created only for slots reported by the DHE |
 
-Temperature memory writes keep the existing memory name and send `operation: add_change`. Existing memories are written with their `id`; creating the next free memory omits `id`, matching the DHE app protocol.
+Temperature memory writes keep the existing memory name and send `operation: add_change`. The Home Assistant entities are only shown for memory slots currently reported by the DHE, so empty memory slots do not clutter the device configuration card.
 
 ### Selects
 
@@ -175,9 +175,9 @@ The DHE does not reliably answer an empty currency read. The currency select the
 
 | Entity | Source / command | Behavior |
 |---|---|---|
-| Temperature memory 1-12 name | `assign:ste.common.temperature:memory`, memory ID `0` to `11` | Renames an existing memory slot or creates the next free slot |
+| Temperature memory 1-12 name | `assign:ste.common.temperature:memory`, memory ID `0` to `11` | Renames a memory slot reported by the DHE |
 
-Temperature memory name writes use the current cached or freshly read memory temperature and send `operation: add_change`. If a new memory is created through its name field, the default temperature is `40 C`.
+Temperature memory name writes use the current cached or freshly read memory temperature and send `operation: add_change`. Name fields are created only for memory slots currently reported by the DHE.
 
 ### Switches
 

@@ -14,6 +14,7 @@ from homeassistant.components.number import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature, UnitOfTime, UnitOfVolume, UnitOfVolumeFlowRate
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -48,7 +49,7 @@ class StiebelDHENumberEntityDescription(NumberEntityDescription):
     temperature_memory_slot: int | None = None
 
 
-NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
+STATIC_NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
     StiebelDHENumberEntityDescription(
         key="bath_fill_target_volume",
         translation_key="bath_fill_target_volume",
@@ -141,23 +142,32 @@ NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         timer_path=SHOWER_TIMER_PATH,
         timer_property="durationMilliseconds",
     ),
-    *(
-        StiebelDHENumberEntityDescription(
-            key=f"temperature_memory_{slot}_temperature",
-            translation_key=f"temperature_memory_{slot}_temperature",
-            native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-            device_class=NumberDeviceClass.TEMPERATURE,
-            icon=f"mdi:numeric-{slot}-box-outline" if slot < 10 else "mdi:counter",
-            native_min_value=20.0,
-            native_max_value=60.0,
-            native_step=0.5,
-            mode=NumberMode.BOX,
-            odb_id=measurement_id,
-            temperature_memory_slot=slot,
-        )
-        for slot, measurement_id in TEMPERATURE_MEMORY_SLOT_MEASUREMENTS.items()
-    ),
 )
+
+
+TEMPERATURE_MEMORY_MEASUREMENT_SLOTS = {
+    measurement_id: slot for slot, measurement_id in TEMPERATURE_MEMORY_SLOT_MEASUREMENTS.items()
+}
+
+
+def _temperature_memory_number_description(
+    slot: int,
+    measurement_id: int,
+) -> StiebelDHENumberEntityDescription:
+    """Create the number description for a reported temperature memory slot."""
+    return StiebelDHENumberEntityDescription(
+        key=f"temperature_memory_{slot}_temperature",
+        translation_key=f"temperature_memory_{slot}_temperature",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=NumberDeviceClass.TEMPERATURE,
+        icon=f"mdi:numeric-{slot}-box-outline" if slot < 10 else "mdi:counter",
+        native_min_value=20.0,
+        native_max_value=60.0,
+        native_step=0.5,
+        mode=NumberMode.BOX,
+        odb_id=measurement_id,
+        temperature_memory_slot=slot,
+    )
 
 
 async def async_setup_entry(
@@ -167,17 +177,62 @@ async def async_setup_entry(
 ) -> None:
     """Set up DHE number entities from a config entry."""
     runtime = hass.data[DOMAIN][entry.entry_id]
+    client: DHEClient = runtime.client
+    added_memory_numbers: dict[int, StiebelDHENumber] = {}
+
+    def add_memory_number(measurement_id: int) -> None:
+        if measurement_id in added_memory_numbers:
+            return
+        slot = TEMPERATURE_MEMORY_MEASUREMENT_SLOTS.get(measurement_id)
+        if slot is None:
+            return
+        entity = StiebelDHENumber(
+            entry_id=entry.entry_id,
+            name=runtime.name,
+            client=client,
+            description=_temperature_memory_number_description(slot, measurement_id),
+        )
+        added_memory_numbers[measurement_id] = entity
+        async_add_entities([entity])
+
+    async def remove_memory_number(measurement_id: int) -> None:
+        entity = added_memory_numbers.pop(measurement_id, None)
+        if entity is not None:
+            await entity.async_remove()
+        slot = TEMPERATURE_MEMORY_MEASUREMENT_SLOTS.get(measurement_id)
+        if slot is None:
+            return
+        registry = er.async_get(hass)
+        description = _temperature_memory_number_description(slot, measurement_id)
+        entity_id = registry.async_get_entity_id(
+            "number",
+            DOMAIN,
+            f"stiebel_dhe_connect_{entry.entry_id}_{description.key}",
+        )
+        if entity_id is not None:
+            registry.async_remove(entity_id)
+
+    @callback
+    def handle_temperature_memory_update(odb_id: int, value: MeasurementValue) -> None:
+        if odb_id not in TEMPERATURE_MEMORY_MEASUREMENT_SLOTS:
+            return
+        if value is None:
+            hass.async_create_task(remove_memory_number(odb_id))
+            return
+        add_memory_number(odb_id)
+
     async_add_entities(
         [
             StiebelDHENumber(
                 entry_id=entry.entry_id,
                 name=runtime.name,
-                client=runtime.client,
+                client=client,
                 description=description,
             )
-            for description in NUMBER_DESCRIPTIONS
+            for description in STATIC_NUMBER_DESCRIPTIONS
         ]
     )
+    entry.async_on_unload(client.add_measurement_callback(handle_temperature_memory_update))
 
 
 class StiebelDHENumber(RestoreNumber):

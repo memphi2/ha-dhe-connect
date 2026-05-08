@@ -52,76 +52,76 @@
         "name": "Reset shower timer"
       },
       "temperature_memory_1": {
-        "name": "Temperature memory 1"
+        "name": "Memory 1"
       },
       "temperature_memory_2": {
-        "name": "Temperature memory 2"
+        "name": "Memory 2"
       },
       "temperature_memory_3": {
-        "name": "Temperature memory 3"
+        "name": "Memory 3"
       },
       "temperature_memory_4": {
-        "name": "Temperature memory 4"
+        "name": "Memory 4"
       },
       "temperature_memory_5": {
-        "name": "Temperature memory 5"
+        "name": "Memory 5"
       },
       "temperature_memory_6": {
-        "name": "Temperature memory 6"
+        "name": "Memory 6"
       },
       "temperature_memory_7": {
-        "name": "Temperature memory 7"
+        "name": "Memory 7"
       },
       "temperature_memory_8": {
-        "name": "Temperature memory 8"
+        "name": "Memory 8"
       },
       "temperature_memory_9": {
-        "name": "Temperature memory 9"
+        "name": "Memory 9"
       },
       "temperature_memory_10": {
-        "name": "Temperature memory 10"
+        "name": "Memory 10"
       },
       "temperature_memory_11": {
-        "name": "Temperature memory 11"
+        "name": "Memory 11"
       },
       "temperature_memory_12": {
-        "name": "Temperature memory 12"
+        "name": "Memory 12"
       },
       "delete_temperature_memory_1": {
-        "name": "Delete temperature memory 1"
+        "name": "Delete memory 1"
       },
       "delete_temperature_memory_2": {
-        "name": "Delete temperature memory 2"
+        "name": "Delete memory 2"
       },
       "delete_temperature_memory_3": {
-        "name": "Delete temperature memory 3"
+        "name": "Delete memory 3"
       },
       "delete_temperature_memory_4": {
-        "name": "Delete temperature memory 4"
+        "name": "Delete memory 4"
       },
       "delete_temperature_memory_5": {
-        "name": "Delete temperature memory 5"
+        "name": "Delete memory 5"
       },
       "delete_temperature_memory_6": {
-        "name": "Delete temperature memory 6"
+        "name": "Delete memory 6"
       },
       "delete_temperature_memory_7": {
-        "name": "Delete temperature memory 7"
+        "name": "Delete memory 7"
       },
       "delete_temperature_memory_8": {
-        "name": "Delete temperature memory 8"
+        "name": "Delete memory 8"
       },
       "delete_temperature_memory_9": {
-        "name": "Delete temperature memory 9"
+        "name": "Delete memory 9"
       },
       "delete_temperature_memory_10": {
-        "name": "Delete temperature memory 10"
+        "name": "Delete memory 10"
       },
       "delete_temperature_memory_11": {
-        "name": "Delete temperature memory 11"
+        "name": "Delete memory 11"
       },
       "delete_temperature_memory_12": {
-        "name": "Delete temperature memory 12"
+        "name": "Delete memory 12"
       }
     },
     "number": {
@@ -150,40 +150,40 @@
         "name": "Shower timer duration"
       },
       "temperature_memory_1_temperature": {
-        "name": "Temperature memory 1 temperature"
+        "name": "Memory 1 temperature"
       },
       "temperature_memory_2_temperature": {
-        "name": "Temperature memory 2 temperature"
+        "name": "Memory 2 temperature"
       },
       "temperature_memory_3_temperature": {
-        "name": "Temperature memory 3 temperature"
+        "name": "Memory 3 temperature"
       },
       "temperature_memory_4_temperature": {
-        "name": "Temperature memory 4 temperature"
+        "name": "Memory 4 temperature"
       },
       "temperature_memory_5_temperature": {
-        "name": "Temperature memory 5 temperature"
+        "name": "Memory 5 temperature"
       },
       "temperature_memory_6_temperature": {
-        "name": "Temperature memory 6 temperature"
+        "name": "Memory 6 temperature"
       },
       "temperature_memory_7_temperature": {
-        "name": "Temperature memory 7 temperature"
+        "name": "Memory 7 temperature"
       },
       "temperature_memory_8_temperature": {
-        "name": "Temperature memory 8 temperature"
+        "name": "Memory 8 temperature"
       },
       "temperature_memory_9_temperature": {
-        "name": "Temperature memory 9 temperature"
+        "name": "Memory 9 temperature"
       },
       "temperature_memory_10_temperature": {
-        "name": "Temperature memory 10 temperature"
+        "name": "Memory 10 temperature"
       },
       "temperature_memory_11_temperature": {
-        "name": "Temperature memory 11 temperature"
+        "name": "Memory 11 temperature"
       },
       "temperature_memory_12_temperature": {
-        "name": "Temperature memory 12 temperature"
+        "name": "Memory 12 temperature"
       }
     },
     "select": {
@@ -193,40 +193,40 @@
     },
     "text": {
       "temperature_memory_1_name": {
-        "name": "Temperature memory 1 name"
+        "name": "Memory 1 name"
       },
       "temperature_memory_2_name": {
-        "name": "Temperature memory 2 name"
+        "name": "Memory 2 name"
       },
       "temperature_memory_3_name": {
-        "name": "Temperature memory 3 name"
+        "name": "Memory 3 name"
       },
       "temperature_memory_4_name": {
-        "name": "Temperature memory 4 name"
+        "name": "Memory 4 name"
       },
       "temperature_memory_5_name": {
-        "name": "Temperature memory 5 name"
+        "name": "Memory 5 name"
       },
       "temperature_memory_6_name": {
-        "name": "Temperature memory 6 name"
+        "name": "Memory 6 name"
       },
       "temperature_memory_7_name": {
-        "name": "Temperature memory 7 name"
+        "name": "Memory 7 name"
       },
       "temperature_memory_8_name": {
-        "name": "Temperature memory 8 name"
+        "name": "Memory 8 name"
       },
       "temperature_memory_9_name": {
-        "name": "Temperature memory 9 name"
+        "name": "Memory 9 name"
       },
       "temperature_memory_10_name": {
-        "name": "Temperature memory 10 name"
+        "name": "Memory 10 name"
       },
       "temperature_memory_11_name": {
-        "name": "Temperature memory 11 name"
+        "name": "Memory 11 name"
       },
       "temperature_memory_12_name": {
-        "name": "Temperature memory 12 name"
+        "name": "Memory 12 name"
       }
     },
     "sensor": {

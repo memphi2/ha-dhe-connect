@@ -52,76 +52,76 @@
         "name": "Duschtimer zurücksetzen"
       },
       "temperature_memory_1": {
-        "name": "Temperaturspeicher 1"
+        "name": "Speicher 1"
       },
       "temperature_memory_2": {
-        "name": "Temperaturspeicher 2"
+        "name": "Speicher 2"
       },
       "temperature_memory_3": {
-        "name": "Temperaturspeicher 3"
+        "name": "Speicher 3"
       },
       "temperature_memory_4": {
-        "name": "Temperaturspeicher 4"
+        "name": "Speicher 4"
       },
       "temperature_memory_5": {
-        "name": "Temperaturspeicher 5"
+        "name": "Speicher 5"
       },
       "temperature_memory_6": {
-        "name": "Temperaturspeicher 6"
+        "name": "Speicher 6"
       },
       "temperature_memory_7": {
-        "name": "Temperaturspeicher 7"
+        "name": "Speicher 7"
       },
       "temperature_memory_8": {
-        "name": "Temperaturspeicher 8"
+        "name": "Speicher 8"
       },
       "temperature_memory_9": {
-        "name": "Temperaturspeicher 9"
+        "name": "Speicher 9"
       },
       "temperature_memory_10": {
-        "name": "Temperaturspeicher 10"
+        "name": "Speicher 10"
       },
       "temperature_memory_11": {
-        "name": "Temperaturspeicher 11"
+        "name": "Speicher 11"
       },
       "temperature_memory_12": {
-        "name": "Temperaturspeicher 12"
+        "name": "Speicher 12"
       },
       "delete_temperature_memory_1": {
-        "name": "Temperaturspeicher 1 löschen"
+        "name": "Speicher 1 löschen"
       },
       "delete_temperature_memory_2": {
-        "name": "Temperaturspeicher 2 löschen"
+        "name": "Speicher 2 löschen"
       },
       "delete_temperature_memory_3": {
-        "name": "Temperaturspeicher 3 löschen"
+        "name": "Speicher 3 löschen"
       },
       "delete_temperature_memory_4": {
-        "name": "Temperaturspeicher 4 löschen"
+        "name": "Speicher 4 löschen"
       },
       "delete_temperature_memory_5": {
-        "name": "Temperaturspeicher 5 löschen"
+        "name": "Speicher 5 löschen"
       },
       "delete_temperature_memory_6": {
-        "name": "Temperaturspeicher 6 löschen"
+        "name": "Speicher 6 löschen"
       },
       "delete_temperature_memory_7": {
-        "name": "Temperaturspeicher 7 löschen"
+        "name": "Speicher 7 löschen"
       },
       "delete_temperature_memory_8": {
-        "name": "Temperaturspeicher 8 löschen"
+        "name": "Speicher 8 löschen"
       },
       "delete_temperature_memory_9": {
-        "name": "Temperaturspeicher 9 löschen"
+        "name": "Speicher 9 löschen"
       },
       "delete_temperature_memory_10": {
-        "name": "Temperaturspeicher 10 löschen"
+        "name": "Speicher 10 löschen"
       },
       "delete_temperature_memory_11": {
-        "name": "Temperaturspeicher 11 löschen"
+        "name": "Speicher 11 löschen"
       },
       "delete_temperature_memory_12": {
-        "name": "Temperaturspeicher 12 löschen"
+        "name": "Speicher 12 löschen"
       }
     },
     "number": {
@@ -150,40 +150,40 @@
         "name": "Duschtimer-Dauer"
       },
       "temperature_memory_1_temperature": {
-        "name": "Temperaturspeicher 1 Temperatur"
+        "name": "Speicher 1 Temperatur"
       },
       "temperature_memory_2_temperature": {
-        "name": "Temperaturspeicher 2 Temperatur"
+        "name": "Speicher 2 Temperatur"
       },
       "temperature_memory_3_temperature": {
-        "name": "Temperaturspeicher 3 Temperatur"
+        "name": "Speicher 3 Temperatur"
       },
       "temperature_memory_4_temperature": {
-        "name": "Temperaturspeicher 4 Temperatur"
+        "name": "Speicher 4 Temperatur"
       },
       "temperature_memory_5_temperature": {
-        "name": "Temperaturspeicher 5 Temperatur"
+        "name": "Speicher 5 Temperatur"
       },
       "temperature_memory_6_temperature": {
-        "name": "Temperaturspeicher 6 Temperatur"
+        "name": "Speicher 6 Temperatur"
       },
       "temperature_memory_7_temperature": {
-        "name": "Temperaturspeicher 7 Temperatur"
+        "name": "Speicher 7 Temperatur"
       },
       "temperature_memory_8_temperature": {
-        "name": "Temperaturspeicher 8 Temperatur"
+        "name": "Speicher 8 Temperatur"
       },
       "temperature_memory_9_temperature": {
-        "name": "Temperaturspeicher 9 Temperatur"
+        "name": "Speicher 9 Temperatur"
       },
       "temperature_memory_10_temperature": {
-        "name": "Temperaturspeicher 10 Temperatur"
+        "name": "Speicher 10 Temperatur"
       },
       "temperature_memory_11_temperature": {
-        "name": "Temperaturspeicher 11 Temperatur"
+        "name": "Speicher 11 Temperatur"
       },
       "temperature_memory_12_temperature": {
-        "name": "Temperaturspeicher 12 Temperatur"
+        "name": "Speicher 12 Temperatur"
       }
     },
     "select": {
@@ -193,40 +193,40 @@
     },
     "text": {
       "temperature_memory_1_name": {
-        "name": "Temperaturspeicher 1 Name"
+        "name": "Speicher 1 Name"
       },
       "temperature_memory_2_name": {
-        "name": "Temperaturspeicher 2 Name"
+        "name": "Speicher 2 Name"
       },
       "temperature_memory_3_name": {
-        "name": "Temperaturspeicher 3 Name"
+        "name": "Speicher 3 Name"
       },
       "temperature_memory_4_name": {
-        "name": "Temperaturspeicher 4 Name"
+        "name": "Speicher 4 Name"
       },
       "temperature_memory_5_name": {
-        "name": "Temperaturspeicher 5 Name"
+        "name": "Speicher 5 Name"
       },
       "temperature_memory_6_name": {
-        "name": "Temperaturspeicher 6 Name"
+        "name": "Speicher 6 Name"
       },
       "temperature_memory_7_name": {
-        "name": "Temperaturspeicher 7 Name"
+        "name": "Speicher 7 Name"
       },
       "temperature_memory_8_name": {
-        "name": "Temperaturspeicher 8 Name"
+        "name": "Speicher 8 Name"
       },
       "temperature_memory_9_name": {
-        "name": "Temperaturspeicher 9 Name"
+        "name": "Speicher 9 Name"
       },
       "temperature_memory_10_name": {
-        "name": "Temperaturspeicher 10 Name"
+        "name": "Speicher 10 Name"
       },
       "temperature_memory_11_name": {
-        "name": "Temperaturspeicher 11 Name"
+        "name": "Speicher 11 Name"
       },
       "temperature_memory_12_name": {
-        "name": "Temperaturspeicher 12 Name"
+        "name": "Speicher 12 Name"
       }
     },
     "sensor": {
