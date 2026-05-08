@@ -1070,7 +1070,7 @@ class DHEClient:
             values = {
                 "water_l": _raw_to_float(raw_value["water_l"]),
                 "energy_kwh": _raw_to_float(raw_value["energy_Wh"]) / 1000.0,
-                "co2_kg": _raw_to_float(raw_value["emission_Co2Kg"]),
+                "co2_kg": round(_raw_to_float(raw_value["emission_Co2Kg"]), 2),
             }
             if raw_value.get("value_E") is not None:
                 values["value_eur"] = _raw_to_float(raw_value["value_E"])
