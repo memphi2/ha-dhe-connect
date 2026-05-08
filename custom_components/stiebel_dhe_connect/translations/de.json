@@ -93,7 +93,7 @@
         "name": "Wasserverbrauch Jahr"
       },
       "water_consumption_years": {
-        "name": "Wasserverbrauch Jahre"
+        "name": "Gesamtwasserverbrauch"
       },
       "energy_consumption_week": {
         "name": "Energieverbrauch Woche"
@@ -102,7 +102,7 @@
         "name": "Energieverbrauch Jahr"
       },
       "energy_consumption_years": {
-        "name": "Energieverbrauch Jahre"
+        "name": "Gesamtenergieverbrauch"
       },
       "brush_timer_remaining": {
         "name": "Zahnputz-Timer Restzeit"
