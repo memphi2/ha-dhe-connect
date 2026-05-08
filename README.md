@@ -62,7 +62,7 @@ The config flow asks for:
 
 | Field | Example | Notes |
 |---|---|---|
-| Host | `172.16.2.124` | IP address or hostname only |
+| Host | `192.168.1.100` | IP address or hostname only |
 | Port | `8443` | DHE web interface port |
 | Device name | `DHE Connect` | Name shown in Home Assistant |
 

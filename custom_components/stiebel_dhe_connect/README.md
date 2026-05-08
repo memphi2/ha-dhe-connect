@@ -45,7 +45,7 @@ Required values:
 
 | Field | Example |
 |---|---|
-| IP address or hostname | `172.16.2.124` |
+| IP address or hostname | `192.168.1.100` |
 | Port | `8443` |
 | Device name | `DHE Connect` |
 
