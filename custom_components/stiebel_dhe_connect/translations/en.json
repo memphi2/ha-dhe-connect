@@ -95,6 +95,14 @@
         "name": "Currency"
       }
     },
+    "text": {
+      "temperature_memory_1_name": {
+        "name": "Temperature memory 1 name"
+      },
+      "temperature_memory_2_name": {
+        "name": "Temperature memory 2 name"
+      }
+    },
     "sensor": {
       "water_flow": {
         "name": "Current water flow"
@@ -104,6 +112,12 @@
       },
       "configured_power": {
         "name": "Configured power"
+      },
+      "internal_temperature_1": {
+        "name": "Internal temperature 1"
+      },
+      "internal_temperature_2": {
+        "name": "Internal temperature 2"
       },
       "water_consumption_week": {
         "name": "Water consumption week"

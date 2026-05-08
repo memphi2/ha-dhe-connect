@@ -44,6 +44,8 @@ WELLNESS_COLD_PREVENTION_PROGRAM_ID = 1
 SUMMER_FITNESS_PROGRAM_ID = 3
 CIRCULATION_SUPPORT_PROGRAM_ID = 4
 ID_STOP_PROGRAM = 10
+ID_INTERNAL_TEMPERATURE_1 = 13
+ID_INTERNAL_TEMPERATURE_2 = 14
 ID_WATER_FLOW = 15
 ID_POWER = 16
 ID_CONFIGURED_POWER = 20
@@ -141,6 +143,8 @@ INITIAL_VALUE_IDS = (
     ID_ECO_MODE,
     ID_ECO_FLOW_LIMIT,
     ID_STOP_PROGRAM,
+    ID_INTERNAL_TEMPERATURE_1,
+    ID_INTERNAL_TEMPERATURE_2,
     ID_WATER_FLOW,
     ID_POWER,
     ID_CONFIGURED_POWER,
@@ -773,6 +777,50 @@ class DHEClient:
                         continue
                     raise DHEError(f"Could not set DHE temperature memory {memory_slot}: {err}") from err
         raise DHEError(f"Could not set DHE temperature memory {memory_slot}")
+
+    async def set_temperature_memory_name(self, memory_slot: int, name: str) -> str:
+        try:
+            memory_id = TEMPERATURE_MEMORY_SLOT_IDS[int(memory_slot)]
+            measurement_id = TEMPERATURE_MEMORY_ID_TO_MEASUREMENT[memory_id]
+        except KeyError as err:
+            raise DHEError(f"Unsupported temperature memory slot: {memory_slot}") from err
+
+        requested_name = str(name).strip()
+        if not requested_name:
+            raise DHEError(f"DHE temperature memory {memory_slot} name must not be empty")
+
+        async with self._command_lock:
+            for attempt in range(2):
+                try:
+                    await self._ensure_ready(timeout=45)
+                    ctx = self._ctx
+                    if ctx is None:
+                        raise DHEError("DHE session is not connected")
+                    temperature = await self._get_temperature_memory_temperature(
+                        ctx,
+                        memory_slot,
+                        measurement_id,
+                    )
+                    payload = {
+                        "id": memory_id,
+                        "name": requested_name,
+                        "temperature": temperature,
+                        "operation": "add_change",
+                    }
+                    await self._post_packet(ctx, self._message_packet({
+                        "command": TEMP_MEMORY_ASSIGN_COMMAND,
+                        "value": payload,
+                    }))
+                    self._handle_temperature_memory_item(payload, source_command=TEMP_MEMORY_ASSIGN_COMMAND)
+                    await self._request_optional_app_value(ctx, TEMP_MEMORY_GET_COMMAND)
+                    return requested_name
+                except Exception as err:  # noqa: BLE001
+                    if attempt == 0:
+                        await self._force_reconnect()
+                        await asyncio.sleep(1)
+                        continue
+                    raise DHEError(f"Could not set DHE temperature memory {memory_slot} name: {err}") from err
+        raise DHEError(f"Could not set DHE temperature memory {memory_slot} name")
 
     async def set_wellness_cold_prevention(self, enabled: bool) -> bool:
         if enabled:
@@ -1420,6 +1468,8 @@ class DHEClient:
                 self._handle_measurement(odb_id, self._configured_power_kw)
                 if self._last_power_fraction is not None:
                     self._handle_measurement(ID_POWER, self._last_power_fraction * self._configured_power_kw)
+            elif odb_id in {ID_INTERNAL_TEMPERATURE_1, ID_INTERNAL_TEMPERATURE_2}:
+                self._handle_measurement(odb_id, _raw_tenths_to_c(_raw_to_float(raw_value)))
             elif odb_id in PRICE_COMPONENT_IDS:
                 self._handle_price_component(odb_id, raw_value)
             elif odb_id == ID_CO2_EMISSION_RAW:

@@ -114,6 +114,8 @@ The climate entity keeps the last valid target temperature during short reconnec
 | Current water flow | `L/min` | `volume_flow_rate` | `measurement` | ODB ID `15 / 10` |
 | Current power consumption | `kW` | `power` | `measurement` | ODB ID `16 / 100 * configured_power_kw` |
 | Configured power | `kW` | `power` | none | ODB ID `20` |
+| Internal temperature 1 | `C` | `temperature`, diagnostic | `measurement` | ODB ID `13 / 10` |
+| Internal temperature 2 | `C` | `temperature`, diagnostic | `measurement` | ODB ID `14 / 10` |
 | Water consumption week | `L` | `water` | `total_increasing` | `set:ste.app.consumption:waterWeek` |
 | Water consumption year | `m3` | `water` | `total_increasing` | `set:ste.app.consumption:waterYear` |
 | Water consumption years | `m3` | `water` | `total_increasing` | `set:ste.app.consumption:waterYears` |
@@ -175,6 +177,15 @@ Temperature memory writes keep the existing memory name and send `operation: add
 | Currency | `EUR`, `GBP`, `CZK`, `PLN`, `CNY`, `USD`, `AUD`, `HKD` | `get:ste.common.currency:value` | Sends the lower-case currency code, matching the DHE app behavior |
 
 The currency select expands its option list at runtime if the DHE reports another valid currency code.
+
+### Texts
+
+| Entity | Source / command | Behavior |
+|---|---|---|
+| Temperature memory 1 name | `assign:ste.common.temperature:memory`, memory ID `0` | Renames memory slot 1 and keeps the stored temperature |
+| Temperature memory 2 name | `assign:ste.common.temperature:memory`, memory ID `1` | Renames memory slot 2 and keeps the stored temperature |
+
+Temperature memory name writes use the current cached or freshly read memory temperature and send `operation: add_change`.
 
 ### Switches
 
@@ -333,6 +344,8 @@ Required startup reads seed the interactive entities:
 | `6` | Eco mode |
 | `7` | Eco flow limit |
 | `10` | Program stop/trigger state |
+| `13` | Internal temperature 1 |
+| `14` | Internal temperature 2 |
 | `15` | Water flow |
 | `16` | Current power fraction |
 | `20` | Configured power |
@@ -386,6 +399,7 @@ Mapped ODB values are converted before publishing to Home Assistant:
 | `4` | Raw truthy value to the `Maximum active` switch |
 | `5` | Raw tenths to Celsius when value is `300` to `500` |
 | `7` | Raw tenths to `L/min` when value is `60` to `80` |
+| `13` and `14` | Raw tenths to Celsius |
 | `15` | Raw value divided by `10` |
 | `16` | Raw percent divided by `100`, multiplied by configured power |
 | `20` | Accepts `18` to `24`, `180` to `240`, or `1800` to `2400` formats |
