@@ -1540,7 +1540,7 @@ class DHEClient:
                 try:
                     websocket = await self._session.ws_connect(
                         url,
-                        autoping=False,
+                        autoping=True,
                         heartbeat=None,
                         headers=self._websocket_headers(sid),
                         timeout=WEBSOCKET_UPGRADE_TIMEOUT,
