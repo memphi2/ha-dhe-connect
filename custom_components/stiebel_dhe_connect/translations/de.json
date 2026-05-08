@@ -1,0 +1,179 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Stiebel DHE Connect einrichten",
+        "description": "Lokale Verbindung zum DHE Connect konfigurieren. Beim ersten Verbindungsaufbau Pairing am DHE bestätigen, wenn es angefordert wird.",
+        "data": {
+          "host": "IP-Adresse oder Hostname",
+          "port": "Port",
+          "name": "Gerätename"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbindung zum DHE nicht möglich. IP-Adresse und Port prüfen.",
+      "invalid_host": "Ungültiger Host. Bitte nur IP-Adresse oder Hostname ohne Pfad, Benutzername oder Port eingeben.",
+      "invalid_port": "Ungültiger Port. Der Port muss zwischen 1 und 65535 liegen."
+    },
+    "abort": {
+      "already_configured": "Stiebel DHE Connect ist bereits konfiguriert."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Stiebel DHE Connect konfigurieren",
+        "description": "IP-Adresse, Port und Gerätename ändern.",
+        "data": {
+          "host": "IP-Adresse oder Hostname",
+          "port": "Port",
+          "name": "Gerätename"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbindung zum DHE nicht möglich. IP-Adresse und Port prüfen.",
+      "invalid_host": "Ungültiger Host. Bitte nur IP-Adresse oder Hostname ohne Pfad, Benutzername oder Port eingeben.",
+      "invalid_port": "Ungültiger Port. Der Port muss zwischen 1 und 65535 liegen."
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "online": {
+        "name": "Online"
+      }
+    },
+    "button": {
+      "reset_brush_timer": {
+        "name": "Zahnputz-Timer zurücksetzen"
+      },
+      "reset_shower_timer": {
+        "name": "Duschtimer zurücksetzen"
+      },
+      "temperature_memory_1": {
+        "name": "Temperaturspeicher 1"
+      },
+      "temperature_memory_2": {
+        "name": "Temperaturspeicher 2"
+      }
+    },
+    "number": {
+      "bath_fill_target_volume": {
+        "name": "Wannenfüllmenge"
+      },
+      "maximum_temperature": {
+        "name": "Maximaltemperatur"
+      },
+      "eco_flow_limit": {
+        "name": "Eco-Durchflussbegrenzung"
+      },
+      "brush_timer_duration": {
+        "name": "Zahnputz-Timer Dauer"
+      },
+      "shower_timer_duration": {
+        "name": "Duschtimer-Dauer"
+      },
+      "temperature_memory_1_temperature": {
+        "name": "Temperaturspeicher 1 Temperatur"
+      },
+      "temperature_memory_2_temperature": {
+        "name": "Temperaturspeicher 2 Temperatur"
+      }
+    },
+    "sensor": {
+      "water_flow": {
+        "name": "Aktueller Wasserdurchfluss"
+      },
+      "power": {
+        "name": "Aktueller Stromverbrauch"
+      },
+      "configured_power": {
+        "name": "Eingestellte Leistung"
+      },
+      "water_consumption_week": {
+        "name": "Wasserverbrauch Woche"
+      },
+      "water_consumption_year": {
+        "name": "Wasserverbrauch Jahr"
+      },
+      "water_consumption_years": {
+        "name": "Gesamtwasserverbrauch"
+      },
+      "energy_consumption_week": {
+        "name": "Energieverbrauch Woche"
+      },
+      "energy_consumption_year": {
+        "name": "Energieverbrauch Jahr"
+      },
+      "energy_consumption_years": {
+        "name": "Gesamtenergieverbrauch"
+      },
+      "last_usage_water": {
+        "name": "Letzter Wasserverbrauch"
+      },
+      "last_usage_energy": {
+        "name": "Letzter Energieverbrauch"
+      },
+      "last_usage_time": {
+        "name": "Letzte Nutzungsdauer"
+      },
+      "last_usage_cost": {
+        "name": "Letzte Nutzungskosten"
+      },
+      "saving_monitor_water": {
+        "name": "Sparmonitor Wasser"
+      },
+      "saving_monitor_energy": {
+        "name": "Sparmonitor Energie"
+      },
+      "saving_monitor_co2": {
+        "name": "Sparmonitor CO2"
+      },
+      "saving_monitor_activation_rate": {
+        "name": "Sparmonitor Aktivierungsrate"
+      },
+      "brush_timer_remaining": {
+        "name": "Zahnputz-Timer Restzeit"
+      },
+      "shower_timer_remaining": {
+        "name": "Duschtimer Restzeit"
+      },
+      "reconnect_count": {
+        "name": "Reconnects"
+      },
+      "device_info": {
+        "name": "Geräteinfo"
+      },
+      "unhandled_odb_values": {
+        "name": "Unzugeordnete ODB-Werte"
+      }
+    },
+    "switch": {
+      "eco_mode": {
+        "name": "Eco-Modus"
+      },
+      "bath_fill": {
+        "name": "Wannenfüllung"
+      },
+      "brush_timer_activation": {
+        "name": "Zahnputz-Timer"
+      },
+      "shower_timer_activation": {
+        "name": "Duschtimer"
+      },
+      "wellness_cold_prevention": {
+        "name": "Erkältungsvorbeugung"
+      },
+      "winter_refresh": {
+        "name": "Wintererfrischung"
+      },
+      "summer_fitness": {
+        "name": "Sommerfitness"
+      },
+      "circulation_support": {
+        "name": "Durchblutungsförderung"
+      }
+    }
+  }
+}
