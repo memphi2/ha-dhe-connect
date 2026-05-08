@@ -357,32 +357,6 @@ The client runs a single persistent session loop. Home Assistant entities subscr
 
 Short reconnects do not immediately drop every entity to unavailable. Entities with a known valid value stay available during brief reconnect phases where this is safe, while the diagnostic `Online` entity and reconnect counter show the real connection state.
 
-## HACS and Home Assistant compatibility
-
-Repository layout follows the HACS custom integration format:
-
-```text
-custom_components/stiebel_dhe_connect/__init__.py
-custom_components/stiebel_dhe_connect/manifest.json
-custom_components/stiebel_dhe_connect/translations/en.json
-custom_components/stiebel_dhe_connect/translations/de.json
-hacs.json
-README.md
-```
-
-The manifest includes the required HACS/Home Assistant metadata:
-
-- `domain`
-- `name`
-- `version`
-- `documentation`
-- `issue_tracker`
-- `codeowners`
-- `config_flow`
-- `iot_class`
-- `integration_type`
-
-The integration has no external Python package requirements.
 
 ## Security notes
 
@@ -402,19 +376,6 @@ The integration has no external Python package requirements.
 | Water entity missing from dashboard | Wait for Home Assistant statistics discovery, which can take up to two hours |
 | Temperature write fails | Check DHE limits, locks, device mode and local reachability |
 | Timer reset does not update | Confirm that the DHE accepts the matching brush/shower timer reset command |
-
-## Development checklist
-
-Before publishing a release:
-
-1. Update `custom_components/stiebel_dhe_connect/manifest.json` version.
-2. Update this README if behavior, entities or protocol notes changed.
-3. Validate JSON files under `custom_components/stiebel_dhe_connect/translations/`.
-4. Run Python syntax checks for the integration.
-5. Test setup, reload, unload and reconnect behavior in Home Assistant.
-6. Run the HACS and Hassfest validation workflows.
-7. Test water dashboard entity selection after statistics refresh.
-8. Publish a GitHub release, not just a tag.
 
 ## Disclaimer
 
