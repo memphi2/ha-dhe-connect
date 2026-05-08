@@ -326,6 +326,18 @@
       "device_info": {
         "name": "Device info"
       },
+      "device_type": {
+        "name": "Type"
+      },
+      "product_id": {
+        "name": "Product ID"
+      },
+      "wlan_mac": {
+        "name": "WLAN MAC"
+      },
+      "bluetooth_mac": {
+        "name": "Bluetooth MAC"
+      },
       "unhandled_odb_values": {
         "name": "Unhandled ODB values"
       }

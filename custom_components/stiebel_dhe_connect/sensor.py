@@ -71,6 +71,7 @@ class StiebelDHESensorEntityDescription(SensorEntityDescription):
     """Describe a converted DHE sensor."""
 
     odb_id: int
+    attribute_key: str | None = None
     timer_path: str | None = None
     timer_property: str | None = None
     source_command: str | None = None
@@ -374,6 +375,42 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         source_command="set:ste.common.version:*",
     ),
     StiebelDHESensorEntityDescription(
+        key="device_type",
+        translation_key="device_type",
+        icon="mdi:water-boiler",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        odb_id=ID_DEVICE_INFO,
+        attribute_key="device_type",
+        source_command="set:ste.common.version:gadgetData",
+    ),
+    StiebelDHESensorEntityDescription(
+        key="product_id",
+        translation_key="product_id",
+        icon="mdi:identifier",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        odb_id=ID_DEVICE_INFO,
+        attribute_key="device_id",
+        source_command="set:ste.common.version:gadgetData",
+    ),
+    StiebelDHESensorEntityDescription(
+        key="wlan_mac",
+        translation_key="wlan_mac",
+        icon="mdi:wifi",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        odb_id=ID_DEVICE_INFO,
+        attribute_key="wlan_mac",
+        source_command="set:ste.common.version:gadgetData",
+    ),
+    StiebelDHESensorEntityDescription(
+        key="bluetooth_mac",
+        translation_key="bluetooth_mac",
+        icon="mdi:bluetooth",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        odb_id=ID_DEVICE_INFO,
+        attribute_key="bluetooth_mac",
+        source_command="set:ste.common.version:gadgetData",
+    ),
+    StiebelDHESensorEntityDescription(
         key="unhandled_odb_values",
         translation_key="unhandled_odb_values",
         icon="mdi:database-search",
@@ -464,12 +501,21 @@ class StiebelDHESensor(SensorEntity):
 
         last_value = self._client.last_measurements.get(self.entity_description.odb_id)
         if last_value is not None:
-            self._attr_native_value = self._convert_value(last_value)
-            self._attr_available = True
             self._update_extra_state_attributes()
+            self._attr_native_value = self._convert_value(last_value)
+            self._attr_available = self._attr_native_value is not None
 
     def _convert_value(self, value: MeasurementValue) -> MeasurementValue:
         """Convert the raw client value for display."""
+        if self.entity_description.attribute_key is not None:
+            attribute_value = self._client.last_measurement_attributes.get(
+                self.entity_description.odb_id,
+                {},
+            ).get(self.entity_description.attribute_key)
+            if attribute_value in (None, ""):
+                return None
+            return str(attribute_value)
+
         if not self.entity_description.timer_path:
             return value
 
@@ -489,9 +535,9 @@ class StiebelDHESensor(SensorEntity):
         if odb_id != self.entity_description.odb_id:
             return
 
-        self._attr_native_value = self._convert_value(value)
-        self._attr_available = True
         self._update_extra_state_attributes()
+        self._attr_native_value = self._convert_value(value)
+        self._attr_available = self._attr_native_value is not None
         self.async_write_ha_state()
 
     @callback

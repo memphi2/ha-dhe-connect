@@ -143,6 +143,10 @@ The climate entity keeps the last valid target temperature during short reconnec
 | Reconnects | count | none | `total_increasing` | Successful reconnect count after the initial connection |
 | Maximum temperature override | text | diagnostic | none | `set:ste.common.temperature:maxOverride` |
 | Device info | text | diagnostic | none | DHE version and device information commands |
+| Type | text | diagnostic | none | `set:ste.common.version:gadgetData.type` |
+| Product ID | text | diagnostic | none | `set:ste.common.version:gadgetData.id` |
+| WLAN MAC | text | diagnostic | none | `set:ste.common.version:gadgetData.wlan` |
+| Bluetooth MAC | text | diagnostic | none | `set:ste.common.version:gadgetData.bluetooth` |
 | Unhandled ODB values | count | diagnostic | none | Unknown valid ODB values and invalid ODB readbacks |
 
 Consumption sensors expose the DHE chart array as a `chart` attribute and the reported cost as `cost_eur` where available. Saving monitor sensors expose the latest `possible`, `real`, `consumption` and `activation_rate` payloads as attributes. App setting diagnostics expose the original payload as `raw_value`.
