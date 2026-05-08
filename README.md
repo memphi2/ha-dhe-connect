@@ -141,10 +141,7 @@ The climate entity keeps the last valid target temperature during short reconnec
 | Brush timer remaining | `M:SS` | none | none | `set:ste.app.brushTimer:remainingMilliseconds` |
 | Shower timer remaining | `M:SS` | none | none | `set:ste.app.showerTimer:remainingMilliseconds` |
 | Reconnects | count | none | `total_increasing` | Successful reconnect count after the initial connection |
-| App volume format | text | diagnostic | none | `set:ste.app.consumption:volumeFormat` |
-| App language | text | diagnostic | none | `set:ste.common.language:value` |
 | App currency | text | diagnostic | none | `set:ste.common.currency:value` |
-| App view | text | diagnostic | none | `set:ste.common.view:value` |
 | Maximum temperature override | text | diagnostic | none | `set:ste.common.temperature:maxOverride` |
 | Date format | text | diagnostic | none | `set:ste.common.time:format_date` |
 | Clock format | text | diagnostic | none | `set:ste.common.time:format_clock` |
@@ -367,10 +364,7 @@ Best-effort startup reads collect additional values:
 | `get:ste.app.consumption:energyYear` | Year energy chart |
 | `get:ste.app.consumption:energyYears` | Multi-year energy chart |
 | `get:ste.app.consumption:lastUsage` | Last usage payload |
-| `get:ste.app.consumption:volumeFormat` | DHE app volume formatting |
-| `get:ste.common.language:value` | DHE app language |
 | `get:ste.common.currency:value` | DHE app currency |
-| `get:ste.common.view:value` | DHE app view mode |
 | `get:ste.common.temperature:maxOverride` | Maximum override metadata |
 | `get:ste.common.time:format_date` | DHE app date format |
 | `get:ste.common.time:format_clock` | DHE app clock format |

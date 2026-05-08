@@ -320,17 +320,8 @@
       "reconnect_count": {
         "name": "Reconnects"
       },
-      "app_volume_format": {
-        "name": "App volume format"
-      },
-      "app_language": {
-        "name": "App language"
-      },
       "app_currency": {
         "name": "App currency"
-      },
-      "app_view": {
-        "name": "App view"
       },
       "temperature_max_override": {
         "name": "Maximum temperature override"

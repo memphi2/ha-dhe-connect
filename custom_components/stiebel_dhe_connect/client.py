@@ -87,10 +87,7 @@ ID_DEVICE_INFO = 1071
 ID_SAVING_MONITOR_REAL_CO2 = 1072
 ID_SAVING_MONITOR_REAL_VALUE = 1073
 ID_UNHANDLED_ODB_VALUES = 1081
-ID_APP_VOLUME_FORMAT = 1091
-ID_APP_LANGUAGE = 1092
 ID_APP_CURRENCY = 1093
-ID_APP_VIEW = 1094
 ID_TEMPERATURE_MAX_OVERRIDE = 1095
 ID_TIME_DATE_FORMAT = 1096
 ID_TIME_CLOCK_FORMAT = 1097
@@ -279,10 +276,7 @@ DEVICE_INFO_REQUEST_COMMANDS = tuple(
     command.replace("set:", "get:", 1) for command in DEVICE_INFO_SET_COMMANDS
 )
 APP_SETTING_SET_COMMAND_IDS = {
-    "set:ste.app.consumption:volumeFormat": ID_APP_VOLUME_FORMAT,
-    "set:ste.common.language:value": ID_APP_LANGUAGE,
     CURRENCY_SET_COMMAND: ID_APP_CURRENCY,
-    "set:ste.common.view:value": ID_APP_VIEW,
     "set:ste.common.temperature:maxOverride": ID_TEMPERATURE_MAX_OVERRIDE,
     "set:ste.common.time:format_date": ID_TIME_DATE_FORMAT,
     "set:ste.common.time:format_clock": ID_TIME_CLOCK_FORMAT,
