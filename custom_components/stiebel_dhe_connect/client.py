@@ -27,12 +27,14 @@ ODB_ASSIGN_COMMAND = "assign:ste.common.odb:value"
 TEMP_MEMORY_GET_COMMAND = "get:ste.common.temperature:memory"
 TEMP_MEMORY_SET_COMMAND = "set:ste.common.temperature:memory"
 TEMP_MEMORY_ASSIGN_COMMAND = "assign:ste.common.temperature:memory"
+CURRENCY_GET_COMMAND = "get:ste.common.currency:value"
+CURRENCY_SET_COMMAND = "set:ste.common.currency:value"
 
 ID_SETPOINT = 0
 ID_BATH_FILL_ACTIVE = 1
 ID_WELLNESS_SHOWER_PROGRAM = 2
 ID_BATH_FILL_TARGET_VOLUME = 3
-ID_STARTUP_ODB_4 = 4
+ID_MAXIMUM_ACTIVE = 4
 ID_MAX_TEMPERATURE = 5
 ID_ECO_MODE = 6
 ID_ECO_FLOW_LIMIT = 7
@@ -42,10 +44,17 @@ WELLNESS_COLD_PREVENTION_PROGRAM_ID = 1
 SUMMER_FITNESS_PROGRAM_ID = 3
 CIRCULATION_SUPPORT_PROGRAM_ID = 4
 ID_STOP_PROGRAM = 10
+ID_INTERNAL_TEMPERATURE_1 = 13
+ID_INTERNAL_TEMPERATURE_2 = 14
 ID_WATER_FLOW = 15
 ID_POWER = 16
 ID_CONFIGURED_POWER = 20
+ID_ELECTRICITY_PRICE_EUROS = 61
+ID_WATER_PRICE_EUROS = 62
 ID_SET_REQ = 66
+ID_CO2_EMISSION_RAW = 69
+ID_ELECTRICITY_PRICE_CENTS = 70
+ID_WATER_PRICE_CENTS = 71
 ID_BRUSH_TIMER_ACTIVATION = 1001
 ID_BRUSH_TIMER_DURATION = 1002
 ID_BRUSH_TIMER_REMAINING = 1003
@@ -68,8 +77,30 @@ ID_SAVING_MONITOR_WATER = 1061
 ID_SAVING_MONITOR_ENERGY = 1062
 ID_SAVING_MONITOR_CO2 = 1063
 ID_SAVING_MONITOR_ACTIVATION_RATE = 1064
+ID_SAVING_MONITOR_POSSIBLE_WATER = 1065
+ID_SAVING_MONITOR_POSSIBLE_ENERGY = 1066
+ID_SAVING_MONITOR_POSSIBLE_CO2 = 1067
+ID_SAVING_MONITOR_POSSIBLE_VALUE = 1068
+ID_SAVING_MONITOR_REAL_WATER = 1069
+ID_SAVING_MONITOR_REAL_ENERGY = 1070
 ID_DEVICE_INFO = 1071
+ID_SAVING_MONITOR_REAL_CO2 = 1072
+ID_SAVING_MONITOR_REAL_VALUE = 1073
 ID_UNHANDLED_ODB_VALUES = 1081
+ID_APP_CURRENCY = 1093
+ID_ELECTRICITY_PRICE = 1101
+ID_WATER_PRICE = 1102
+ID_CO2_EMISSION = 1103
+ID_TEMPERATURE_MEMORY_3 = 1111
+ID_TEMPERATURE_MEMORY_4 = 1112
+ID_TEMPERATURE_MEMORY_5 = 1113
+ID_TEMPERATURE_MEMORY_6 = 1114
+ID_TEMPERATURE_MEMORY_7 = 1115
+ID_TEMPERATURE_MEMORY_8 = 1116
+ID_TEMPERATURE_MEMORY_9 = 1117
+ID_TEMPERATURE_MEMORY_10 = 1118
+ID_TEMPERATURE_MEMORY_11 = 1119
+ID_TEMPERATURE_MEMORY_12 = 1120
 DEFAULT_CONFIGURED_POWER_KW = 24.0
 COMMAND_CONFIRMATION_TIMEOUT = 12.0
 COMMAND_READBACK_INTERVAL = 1.0
@@ -78,36 +109,73 @@ AVAILABILITY_DROP_GRACE_SECONDS = 20.0
 WEBSOCKET_UPGRADE_TIMEOUT = 8.0
 AUTH_POLL_TIMEOUT_SECONDS = 10.0
 DEFAULT_ENGINEIO_PING_INTERVAL_SECONDS = 25.0
+PRICE_COMPONENT_IDS = {
+    ID_ELECTRICITY_PRICE_EUROS: (
+        ID_ELECTRICITY_PRICE,
+        ID_ELECTRICITY_PRICE_EUROS,
+        ID_ELECTRICITY_PRICE_CENTS,
+    ),
+    ID_ELECTRICITY_PRICE_CENTS: (
+        ID_ELECTRICITY_PRICE,
+        ID_ELECTRICITY_PRICE_EUROS,
+        ID_ELECTRICITY_PRICE_CENTS,
+    ),
+    ID_WATER_PRICE_EUROS: (ID_WATER_PRICE, ID_WATER_PRICE_EUROS, ID_WATER_PRICE_CENTS),
+    ID_WATER_PRICE_CENTS: (ID_WATER_PRICE, ID_WATER_PRICE_EUROS, ID_WATER_PRICE_CENTS),
+}
 # DHE memory button payloads encode 38 C as 10620 and 41 C as 10650.
 TEMPERATURE_MEMORY_BUTTON_ADDR = 10
+TEMPERATURE_MEMORY_MAX_SLOTS = 12
+DEFAULT_NEW_TEMPERATURE_MEMORY_C = 40.0
 TEMPERATURE_MEMORY_SLOT_IDS = {
-    1: 0,
-    2: 1,
+    slot: slot - 1 for slot in range(1, TEMPERATURE_MEMORY_MAX_SLOTS + 1)
+}
+TEMPERATURE_MEMORY_SLOT_MEASUREMENTS = {
+    1: ID_TEMPERATURE_MEMORY_1,
+    2: ID_TEMPERATURE_MEMORY_2,
+    3: ID_TEMPERATURE_MEMORY_3,
+    4: ID_TEMPERATURE_MEMORY_4,
+    5: ID_TEMPERATURE_MEMORY_5,
+    6: ID_TEMPERATURE_MEMORY_6,
+    7: ID_TEMPERATURE_MEMORY_7,
+    8: ID_TEMPERATURE_MEMORY_8,
+    9: ID_TEMPERATURE_MEMORY_9,
+    10: ID_TEMPERATURE_MEMORY_10,
+    11: ID_TEMPERATURE_MEMORY_11,
+    12: ID_TEMPERATURE_MEMORY_12,
 }
 TEMPERATURE_MEMORY_ID_TO_MEASUREMENT = {
-    0: ID_TEMPERATURE_MEMORY_1,
-    1: ID_TEMPERATURE_MEMORY_2,
+    memory_id: TEMPERATURE_MEMORY_SLOT_MEASUREMENTS[slot]
+    for slot, memory_id in TEMPERATURE_MEMORY_SLOT_IDS.items()
 }
 DEFAULT_TEMPERATURE_MEMORY_NAMES = {
-    0: "%1 1",
-    1: "%1 2",
+    memory_id: f"%1 {slot}" for slot, memory_id in TEMPERATURE_MEMORY_SLOT_IDS.items()
 }
 INITIAL_VALUE_IDS = (
     ID_SETPOINT,
     ID_BATH_FILL_ACTIVE,
     ID_BATH_FILL_TARGET_VOLUME,
+    ID_MAXIMUM_ACTIVE,
     ID_WELLNESS_SHOWER_PROGRAM,
     ID_MAX_TEMPERATURE,
     ID_ECO_MODE,
     ID_ECO_FLOW_LIMIT,
     ID_STOP_PROGRAM,
+    ID_INTERNAL_TEMPERATURE_1,
+    ID_INTERNAL_TEMPERATURE_2,
     ID_WATER_FLOW,
     ID_POWER,
     ID_CONFIGURED_POWER,
+    ID_ELECTRICITY_PRICE_EUROS,
+    ID_ELECTRICITY_PRICE_CENTS,
+    ID_WATER_PRICE_EUROS,
+    ID_WATER_PRICE_CENTS,
+    ID_CO2_EMISSION_RAW,
 )
 WRITABLE_OPTION_IDS = {
     ID_BATH_FILL_ACTIVE,
     ID_BATH_FILL_TARGET_VOLUME,
+    ID_MAXIMUM_ACTIVE,
     ID_WELLNESS_SHOWER_PROGRAM,
     ID_MAX_TEMPERATURE,
     ID_ECO_MODE,
@@ -174,6 +242,25 @@ SAVING_MONITOR_COMMAND_IDS = set(SAVING_MONITOR_SET_COMMANDS)
 SAVING_MONITOR_REQUEST_COMMANDS = tuple(
     command.replace("set:", "get:", 1) for command in SAVING_MONITOR_SET_COMMANDS
 )
+SAVING_MONITOR_SENSOR_FIELDS = {
+    "consumption": {
+        "water_l": ID_SAVING_MONITOR_WATER,
+        "energy_kwh": ID_SAVING_MONITOR_ENERGY,
+        "co2_kg": ID_SAVING_MONITOR_CO2,
+    },
+    "possible": {
+        "water_l": ID_SAVING_MONITOR_POSSIBLE_WATER,
+        "energy_kwh": ID_SAVING_MONITOR_POSSIBLE_ENERGY,
+        "co2_kg": ID_SAVING_MONITOR_POSSIBLE_CO2,
+        "value_eur": ID_SAVING_MONITOR_POSSIBLE_VALUE,
+    },
+    "real": {
+        "water_l": ID_SAVING_MONITOR_REAL_WATER,
+        "energy_kwh": ID_SAVING_MONITOR_REAL_ENERGY,
+        "co2_kg": ID_SAVING_MONITOR_REAL_CO2,
+        "value_eur": ID_SAVING_MONITOR_REAL_VALUE,
+    },
+}
 DEVICE_INFO_SET_COMMANDS = (
     "set:ste.common.version:contactData",
     "set:ste.common.version:orderNumber",
@@ -185,11 +272,14 @@ DEVICE_INFO_COMMAND_IDS = set(DEVICE_INFO_SET_COMMANDS)
 DEVICE_INFO_REQUEST_COMMANDS = tuple(
     command.replace("set:", "get:", 1) for command in DEVICE_INFO_SET_COMMANDS
 )
+APP_SETTING_SET_COMMAND_IDS: dict[str, int] = {}
+APP_SETTING_REQUEST_COMMANDS = tuple(
+    command.replace("set:", "get:", 1) for command in APP_SETTING_SET_COMMAND_IDS
+)
 APP_STARTUP_REQUEST_COMMANDS = (
-    "get:ste.app.consumption:volumeFormat",
+    *APP_SETTING_REQUEST_COMMANDS,
     LAST_USAGE_GET_COMMAND,
     "get:ste.app.wellness:programs",
-    "get:ste.common.temperature:maxOverride",
     *SAVING_MONITOR_REQUEST_COMMANDS,
     *DEVICE_INFO_REQUEST_COMMANDS,
 )
@@ -200,13 +290,11 @@ OPTIONAL_STARTUP_APP_REQUEST_COMMANDS = (
     TEMP_MEMORY_GET_COMMAND,
     *APP_STARTUP_REQUEST_COMMANDS,
 )
-OPTIONAL_STARTUP_ODB_IDS = (
-    ID_STARTUP_ODB_4,
-)
+OPTIONAL_STARTUP_ODB_IDS: tuple[int, ...] = ()
 
 
 ODBValue = bool | float
-MeasurementValue = bool | float | str
+MeasurementValue = bool | float | str | None
 SetpointCallback = Callable[[float], None]
 AvailabilityCallback = Callable[[bool], None]
 OnlineCallback = Callable[[bool], None]
@@ -329,6 +417,9 @@ class DHEClient:
         self._last_unhandled_odb_values: dict[int, Any] = {}
         self._last_saving_monitor_values: dict[str, Any] = {}
         self._last_device_info: dict[str, Any] = {}
+        self._temperature_memory_ids_seen: set[int] = set()
+        self._temperature_memory_generation = 0
+        self._temperature_memory_full_list_seen = False
         self._configured_power_kw = DEFAULT_CONFIGURED_POWER_KW
         self._last_power_fraction: float | None = None
         self._pending_setpoint_future: asyncio.Future[float] | None = None
@@ -408,6 +499,18 @@ class DHEClient:
                 callback(odb_id, value)
             except Exception as err:  # noqa: BLE001
                 _LOGGER.debug("Could not initialize measurement callback for %s: %s", odb_id, err)
+        if self._temperature_memory_full_list_seen:
+            for measurement_id in TEMPERATURE_MEMORY_SLOT_MEASUREMENTS.values():
+                if measurement_id in self._last_measurements:
+                    continue
+                try:
+                    callback(measurement_id, None)
+                except Exception as err:  # noqa: BLE001
+                    _LOGGER.debug(
+                        "Could not initialize missing temperature memory callback for %s: %s",
+                        measurement_id,
+                        err,
+                    )
         return remove
 
     def add_reconnect_callback(self, callback: ReconnectCallback) -> CallbackRemover:
@@ -530,6 +633,9 @@ class DHEClient:
         requested = _round_to_half_c(_clamp(float(temperature), 30.0, 50.0))
         return float(await self.write_odb_value(ID_MAX_TEMPERATURE, _c_to_raw_tenths(requested)))
 
+    async def set_maximum_active(self, enabled: bool) -> bool:
+        return bool(await self.write_odb_value(ID_MAXIMUM_ACTIVE, bool(enabled)))
+
     async def set_eco_mode(self, enabled: bool) -> bool:
         return bool(await self.write_odb_value(ID_ECO_MODE, bool(enabled)))
 
@@ -537,6 +643,59 @@ class DHEClient:
         requested_l_min = int(round(_clamp(float(liters_per_minute), 6.0, 8.0)))
         raw_value = requested_l_min * 10
         return float(await self.write_odb_value(ID_ECO_FLOW_LIMIT, raw_value))
+
+    async def set_electricity_price(self, euros_per_kwh: float) -> float:
+        return await self._set_price(
+            euros_per_kwh,
+            ID_ELECTRICITY_PRICE_EUROS,
+            ID_ELECTRICITY_PRICE_CENTS,
+        )
+
+    async def set_water_price(self, euros_per_m3: float) -> float:
+        return await self._set_price(
+            euros_per_m3,
+            ID_WATER_PRICE_EUROS,
+            ID_WATER_PRICE_CENTS,
+        )
+
+    async def set_co2_emission(self, kg_per_kwh: float) -> float:
+        value = round(_clamp(float(kg_per_kwh), 0.0, 99.99), 2)
+        raw_value = self._co2_emission_to_raw(value)
+        await self.write_odb_value(ID_CO2_EMISSION_RAW, raw_value)
+        return value
+
+    async def set_currency(self, currency: str) -> str:
+        requested = str(currency).strip().lower()
+        if not requested:
+            raise DHEError("Currency must not be empty")
+
+        async with self._command_lock:
+            for attempt in range(2):
+                try:
+                    await self._ensure_ready(timeout=45)
+                    ctx = self._ctx
+                    if ctx is None:
+                        raise DHEError("DHE session is not connected")
+                    await self._post_packet(ctx, self._message_packet({
+                        "command": CURRENCY_GET_COMMAND,
+                        "value": requested,
+                    }))
+                    self._handle_currency_value(requested, source_command=CURRENCY_GET_COMMAND)
+                    return requested.upper()
+                except Exception as err:  # noqa: BLE001
+                    if attempt == 0:
+                        await self._force_reconnect()
+                        await asyncio.sleep(1)
+                        continue
+                    raise DHEError(f"Could not set DHE currency: {err}") from err
+        raise DHEError("Could not set DHE currency")
+
+    async def _set_price(self, value: float, euros_odb_id: int, cents_odb_id: int) -> float:
+        total_cents = int(round(_clamp(float(value), 0.0, 9.99) * 100))
+        euros, cents = divmod(total_cents, 100)
+        await self.write_odb_value(euros_odb_id, euros)
+        await self.write_odb_value(cents_odb_id, cents)
+        return total_cents / 100.0
 
     async def press_temperature_memory(self, memory_slot: int) -> bool:
         try:
@@ -598,28 +757,64 @@ class DHEClient:
             await asyncio.sleep(0.1)
         raise DHEError(f"DHE temperature memory {memory_slot} is not available yet")
 
+    async def _refresh_temperature_memories(self, ctx: DHESession) -> None:
+        generation = self._temperature_memory_generation
+        await self._request_app_value(ctx, TEMP_MEMORY_GET_COMMAND)
+        deadline = time.monotonic() + APP_COMMAND_CONFIRMATION_TIMEOUT
+        while time.monotonic() < deadline:
+            if self._temperature_memory_generation != generation:
+                return
+            await asyncio.sleep(0.1)
+
     def _cached_temperature_memory_temperature(self, measurement_id: int) -> float | None:
         value = self._last_measurements.get(measurement_id)
         if value is None or isinstance(value, bool):
             return None
         return _round_to_half_c(_clamp(float(value), 20.0, 60.0))
 
-    async def set_temperature_memory(self, memory_slot: int, temperature: float) -> float:
+    def _temperature_memory_ids(self, memory_slot: int) -> tuple[int, int]:
         try:
-            memory_id = TEMPERATURE_MEMORY_SLOT_IDS[int(memory_slot)]
-            measurement_id = TEMPERATURE_MEMORY_ID_TO_MEASUREMENT[memory_id]
+            slot = int(memory_slot)
+            memory_id = TEMPERATURE_MEMORY_SLOT_IDS[slot]
+            measurement_id = TEMPERATURE_MEMORY_SLOT_MEASUREMENTS[slot]
         except KeyError as err:
             raise DHEError(f"Unsupported temperature memory slot: {memory_slot}") from err
+        return memory_id, measurement_id
 
-        requested = _round_to_half_c(_clamp(float(temperature), 20.0, 60.0))
-        attributes = self._last_measurement_attributes.get(measurement_id, {})
-        name = str(attributes.get("name", DEFAULT_TEMPERATURE_MEMORY_NAMES.get(memory_id, f"%1 {memory_slot}")))
-        payload = {
-            "id": memory_id,
+    def _temperature_memory_exists(self, memory_id: int, measurement_id: int) -> bool:
+        return memory_id in self._temperature_memory_ids_seen or measurement_id in self._last_measurements
+
+    def _can_create_temperature_memory(self, memory_id: int) -> bool:
+        if len(self._temperature_memory_ids_seen) >= TEMPERATURE_MEMORY_MAX_SLOTS:
+            return False
+        if not self._temperature_memory_ids_seen:
+            return memory_id == 0
+        return memory_id == max(self._temperature_memory_ids_seen) + 1
+
+    def _temperature_memory_payload(
+        self,
+        memory_id: int,
+        measurement_id: int,
+        name: str,
+        temperature: float,
+    ) -> dict[str, Any]:
+        exists = self._temperature_memory_exists(memory_id, measurement_id)
+        if not exists and not self._can_create_temperature_memory(memory_id):
+            raise DHEError("Temperature memories must be created in order")
+
+        payload: dict[str, Any] = {
             "name": name,
-            "temperature": requested,
+            "temperature": temperature,
             "operation": "add_change",
         }
+        if exists:
+            payload["id"] = memory_id
+        return payload
+
+    async def set_temperature_memory(self, memory_slot: int, temperature: float) -> float:
+        memory_id, measurement_id = self._temperature_memory_ids(memory_slot)
+
+        requested = _round_to_half_c(_clamp(float(temperature), 20.0, 60.0))
 
         async with self._command_lock:
             for attempt in range(2):
@@ -628,13 +823,23 @@ class DHEClient:
                     ctx = self._ctx
                     if ctx is None:
                         raise DHEError("DHE session is not connected")
+                    await self._refresh_temperature_memories(ctx)
+                    attributes = self._last_measurement_attributes.get(measurement_id, {})
+                    name = str(attributes.get("name", DEFAULT_TEMPERATURE_MEMORY_NAMES[memory_id]))
+                    payload = self._temperature_memory_payload(
+                        memory_id,
+                        measurement_id,
+                        name,
+                        requested,
+                    )
                     await self._post_packet(ctx, self._message_packet({
                         "command": TEMP_MEMORY_ASSIGN_COMMAND,
                         "value": payload,
                     }))
-                    self._handle_temperature_memory_item(payload, source_command=TEMP_MEMORY_ASSIGN_COMMAND)
-                    await self._request_optional_app_value(ctx, TEMP_MEMORY_GET_COMMAND)
-                    return requested
+                    if "id" in payload:
+                        self._handle_temperature_memory_item(payload, source_command=TEMP_MEMORY_ASSIGN_COMMAND)
+                    await self._refresh_temperature_memories(ctx)
+                    return self._cached_temperature_memory_temperature(measurement_id) or requested
                 except Exception as err:  # noqa: BLE001
                     if attempt == 0:
                         await self._force_reconnect()
@@ -642,6 +847,80 @@ class DHEClient:
                         continue
                     raise DHEError(f"Could not set DHE temperature memory {memory_slot}: {err}") from err
         raise DHEError(f"Could not set DHE temperature memory {memory_slot}")
+
+    async def set_temperature_memory_name(self, memory_slot: int, name: str) -> str:
+        memory_id, measurement_id = self._temperature_memory_ids(memory_slot)
+
+        requested_name = str(name).strip()
+        if not requested_name:
+            raise DHEError(f"DHE temperature memory {memory_slot} name must not be empty")
+
+        async with self._command_lock:
+            for attempt in range(2):
+                try:
+                    await self._ensure_ready(timeout=45)
+                    ctx = self._ctx
+                    if ctx is None:
+                        raise DHEError("DHE session is not connected")
+                    await self._refresh_temperature_memories(ctx)
+                    temperature = (
+                        self._cached_temperature_memory_temperature(measurement_id)
+                        or DEFAULT_NEW_TEMPERATURE_MEMORY_C
+                    )
+                    payload = self._temperature_memory_payload(
+                        memory_id,
+                        measurement_id,
+                        requested_name,
+                        temperature,
+                    )
+                    await self._post_packet(ctx, self._message_packet({
+                        "command": TEMP_MEMORY_ASSIGN_COMMAND,
+                        "value": payload,
+                    }))
+                    if "id" in payload:
+                        self._handle_temperature_memory_item(payload, source_command=TEMP_MEMORY_ASSIGN_COMMAND)
+                    await self._refresh_temperature_memories(ctx)
+                    attributes = self._last_measurement_attributes.get(measurement_id, {})
+                    return str(attributes.get("name", requested_name))
+                except Exception as err:  # noqa: BLE001
+                    if attempt == 0:
+                        await self._force_reconnect()
+                        await asyncio.sleep(1)
+                        continue
+                    raise DHEError(f"Could not set DHE temperature memory {memory_slot} name: {err}") from err
+        raise DHEError(f"Could not set DHE temperature memory {memory_slot} name")
+
+    async def delete_temperature_memory(self, memory_slot: int) -> bool:
+        memory_id, measurement_id = self._temperature_memory_ids(memory_slot)
+
+        async with self._command_lock:
+            for attempt in range(2):
+                try:
+                    await self._ensure_ready(timeout=45)
+                    ctx = self._ctx
+                    if ctx is None:
+                        raise DHEError("DHE session is not connected")
+                    await self._refresh_temperature_memories(ctx)
+                    if not self._temperature_memory_exists(memory_id, measurement_id):
+                        raise DHEError(f"DHE temperature memory {memory_slot} is not available")
+                    await self._post_packet(ctx, self._message_packet({
+                        "command": TEMP_MEMORY_ASSIGN_COMMAND,
+                        "value": {
+                            "id": memory_id,
+                            "operation": "delete",
+                        },
+                    }))
+                    await self._refresh_temperature_memories(ctx)
+                    if self._temperature_memory_exists(memory_id, measurement_id):
+                        raise DHEError(f"DHE temperature memory {memory_slot} was not deleted")
+                    return True
+                except Exception as err:  # noqa: BLE001
+                    if attempt == 0:
+                        await self._force_reconnect()
+                        await asyncio.sleep(1)
+                        continue
+                    raise DHEError(f"Could not delete DHE temperature memory {memory_slot}: {err}") from err
+        raise DHEError(f"Could not delete DHE temperature memory {memory_slot}")
 
     async def set_wellness_cold_prevention(self, enabled: bool) -> bool:
         if enabled:
@@ -969,8 +1248,11 @@ class DHEClient:
         if command in DEVICE_INFO_COMMAND_IDS:
             self._handle_device_info_value(command, value)
             return
+        if command in {CURRENCY_GET_COMMAND, CURRENCY_SET_COMMAND}:
+            self._handle_currency_value(value, source_command=command)
+            return
         if command in APP_STARTUP_SET_COMMANDS:
-            self._last_app_values[command] = value
+            self._handle_app_startup_value(command, value)
             return
         if command not in {ODB_SET_COMMAND, ODB_ASSIGN_COMMAND} or not isinstance(value, dict):
             return
@@ -1081,7 +1363,7 @@ class DHEClient:
         key = command.rsplit(":", 1)[-1]
         if key == "ActivationRate":
             try:
-                activation_rate = _raw_to_float(raw_value)
+                activation_rate = round(_raw_to_float(raw_value), 1)
             except (TypeError, ValueError) as err:
                 _LOGGER.debug("Ignoring invalid saving monitor activation value=%r: %s", raw_value, err)
                 return
@@ -1090,55 +1372,52 @@ class DHEClient:
                 ID_SAVING_MONITOR_ACTIVATION_RATE,
                 activation_rate,
                 "activation_rate",
+                "activation_rate",
             )
-            self._refresh_saving_monitor_consumption_sensors()
+            self._refresh_saving_monitor_sensors()
             return
 
         if not isinstance(raw_value, dict):
             return
         try:
             values = {
-                "water_l": _raw_to_float(raw_value["water_l"]),
-                "energy_kwh": _raw_to_float(raw_value["energy_Wh"]) / 1000.0,
+                "water_l": round(_raw_to_float(raw_value["water_l"]), 2),
+                "energy_kwh": round(_raw_to_float(raw_value["energy_Wh"]) / 1000.0, 2),
                 "co2_kg": round(_raw_to_float(raw_value["emission_Co2Kg"]), 2),
             }
             if raw_value.get("value_E") is not None:
-                values["value_eur"] = _raw_to_float(raw_value["value_E"])
+                values["value_eur"] = round(_raw_to_float(raw_value["value_E"]), 2)
         except (KeyError, TypeError, ValueError) as err:
             _LOGGER.debug("Ignoring invalid saving monitor %s value=%r: %s", key, raw_value, err)
             return
 
         self._last_saving_monitor_values[key.lower()] = values
-        self._refresh_saving_monitor_consumption_sensors()
+        self._refresh_saving_monitor_sensors()
 
-    def _refresh_saving_monitor_consumption_sensors(self) -> None:
-        consumption = self._last_saving_monitor_values.get("consumption")
-        if not isinstance(consumption, dict):
-            return
-        self._update_saving_monitor_sensor(
-            ID_SAVING_MONITOR_WATER,
-            consumption["water_l"],
-            "water_l",
-        )
-        self._update_saving_monitor_sensor(
-            ID_SAVING_MONITOR_ENERGY,
-            consumption["energy_kwh"],
-            "energy_kwh",
-        )
-        self._update_saving_monitor_sensor(
-            ID_SAVING_MONITOR_CO2,
-            consumption["co2_kg"],
-            "co2_kg",
-        )
+    def _refresh_saving_monitor_sensors(self) -> None:
+        for category, field_ids in SAVING_MONITOR_SENSOR_FIELDS.items():
+            values = self._last_saving_monitor_values.get(category)
+            if not isinstance(values, dict):
+                continue
+            for field, measurement_id in field_ids.items():
+                value = values.get(field)
+                if value is not None:
+                    self._update_saving_monitor_sensor(measurement_id, value, category, field)
 
-    def _update_saving_monitor_sensor(self, measurement_id: int, value: float, field: str) -> None:
+    def _update_saving_monitor_sensor(
+        self,
+        measurement_id: int,
+        value: float,
+        category: str,
+        field: str,
+    ) -> None:
+        command_category = "ActivationRate" if category == "activation_rate" else category
         source_command = (
-            "set:ste.app.savingMonitor:ActivationRate"
-            if field == "activation_rate"
-            else "set:ste.app.savingMonitor:consumption"
+            f"set:ste.app.savingMonitor:{command_category}"
         )
         attributes: dict[str, Any] = {
             "source_command": source_command,
+            "saving_monitor_category": category,
             "saving_monitor_field": field,
         }
         for key in ("activation_rate", "possible", "real", "consumption"):
@@ -1153,6 +1432,54 @@ class DHEClient:
             value,
             force_update=previous_attributes != attributes,
         )
+
+    def _handle_app_startup_value(self, command: str, raw_value: Any) -> None:
+        self._last_app_values[command] = raw_value
+        measurement_id = APP_SETTING_SET_COMMAND_IDS.get(command)
+        if measurement_id is None:
+            return
+
+        attributes = {
+            "source_command": command,
+            "raw_value": raw_value,
+        }
+        previous_attributes = self._last_measurement_attributes.get(measurement_id)
+        self._last_measurement_attributes[measurement_id] = attributes
+        self._handle_measurement(
+            measurement_id,
+            self._format_app_setting_value(raw_value),
+            force_update=previous_attributes != attributes,
+        )
+
+    def _handle_currency_value(self, raw_value: Any, *, source_command: str) -> None:
+        if raw_value in (None, ""):
+            return
+        value = str(raw_value).strip().upper()
+        if not value or value == "UNSET":
+            return
+
+        self._last_app_values[source_command] = raw_value
+        attributes = {
+            "source_command": source_command,
+            "raw_value": raw_value,
+        }
+        previous_attributes = self._last_measurement_attributes.get(ID_APP_CURRENCY)
+        self._last_measurement_attributes[ID_APP_CURRENCY] = attributes
+        self._handle_measurement(
+            ID_APP_CURRENCY,
+            value,
+            force_update=previous_attributes != attributes,
+        )
+
+    @staticmethod
+    def _format_app_setting_value(raw_value: Any) -> str:
+        if raw_value in (None, ""):
+            return "unset"
+        if isinstance(raw_value, bool):
+            return "on" if raw_value else "off"
+        if isinstance(raw_value, (dict, list)):
+            return json.dumps(raw_value, sort_keys=True)
+        return str(raw_value)
 
     def _handle_device_info_value(self, command: str, raw_value: Any) -> None:
         self._last_app_values[command] = raw_value
@@ -1209,27 +1536,54 @@ class DHEClient:
 
     def _handle_temperature_memory_value(self, raw_value: Any, *, source_command: str) -> None:
         if isinstance(raw_value, dict):
-            self._handle_temperature_memory_item(raw_value, source_command=source_command)
+            if str(raw_value.get("operation", "")).lower() == "delete":
+                self._handle_temperature_memory_delete_item(raw_value, source_command=source_command)
+                self._temperature_memory_generation += 1
+                return
+            memory_id = self._handle_temperature_memory_item(raw_value, source_command=source_command)
+            if memory_id is not None:
+                self._temperature_memory_ids_seen.add(memory_id)
+                self._temperature_memory_generation += 1
             return
         if not isinstance(raw_value, list):
             _LOGGER.debug("Ignoring invalid temperature memory value: %r", raw_value)
             return
 
+        memory_ids: set[int] = set()
         for item in raw_value:
-            self._handle_temperature_memory_item(item, source_command=source_command)
+            memory_id = self._handle_temperature_memory_item(item, source_command=source_command)
+            if memory_id is not None:
+                memory_ids.add(memory_id)
+        stale_memory_ids = self._temperature_memory_ids_seen - memory_ids
+        if not self._temperature_memory_full_list_seen:
+            stale_memory_ids = set(TEMPERATURE_MEMORY_ID_TO_MEASUREMENT) - memory_ids
+        for stale_memory_id in stale_memory_ids:
+            self._clear_temperature_memory(stale_memory_id, source_command=source_command)
+        self._temperature_memory_ids_seen = memory_ids
+        self._temperature_memory_full_list_seen = True
+        self._temperature_memory_generation += 1
 
-    def _handle_temperature_memory_item(self, item: Any, *, source_command: str) -> None:
-        if not isinstance(item, dict):
+    def _handle_temperature_memory_delete_item(self, item: dict[str, Any], *, source_command: str) -> None:
+        try:
+            memory_id = int(item.get("id"))
+        except (TypeError, ValueError) as err:
+            _LOGGER.debug("Ignoring invalid temperature memory delete item=%r: %s", item, err)
             return
+        self._temperature_memory_ids_seen.discard(memory_id)
+        self._clear_temperature_memory(memory_id, source_command=source_command)
+
+    def _handle_temperature_memory_item(self, item: Any, *, source_command: str) -> int | None:
+        if not isinstance(item, dict):
+            return None
         try:
             memory_id = int(item.get("id"))
             temperature = _raw_to_float(item.get("temperature"))
         except (TypeError, ValueError) as err:
             _LOGGER.debug("Ignoring invalid temperature memory item=%r: %s", item, err)
-            return
+            return None
         measurement_id = TEMPERATURE_MEMORY_ID_TO_MEASUREMENT.get(memory_id)
         if measurement_id is None:
-            return
+            return None
         attributes = {
             "memory_id": memory_id,
             "name": str(item.get("name", DEFAULT_TEMPERATURE_MEMORY_NAMES.get(memory_id, ""))),
@@ -1242,6 +1596,20 @@ class DHEClient:
             temperature,
             force_update=previous_attributes != attributes,
         )
+        return memory_id
+
+    def _clear_temperature_memory(self, memory_id: int, *, source_command: str) -> None:
+        measurement_id = TEMPERATURE_MEMORY_ID_TO_MEASUREMENT.get(memory_id)
+        if measurement_id is None:
+            return
+        self._last_measurements.pop(measurement_id, None)
+        self._last_measurement_attributes[measurement_id] = {
+            "memory_id": memory_id,
+            "source_command": source_command,
+            "operation": "delete",
+        }
+        for callback in tuple(self._measurement_callbacks):
+            callback(measurement_id, None)
 
     def _handle_odb_value(self, odb_id: int, raw_value: Any, *, is_valid: Any = None) -> None:
         if is_valid is False:
@@ -1261,12 +1629,74 @@ class DHEClient:
                 self._handle_measurement(odb_id, self._configured_power_kw)
                 if self._last_power_fraction is not None:
                     self._handle_measurement(ID_POWER, self._last_power_fraction * self._configured_power_kw)
+            elif odb_id in {ID_INTERNAL_TEMPERATURE_1, ID_INTERNAL_TEMPERATURE_2}:
+                self._handle_measurement(odb_id, _raw_tenths_to_c(_raw_to_float(raw_value)))
+            elif odb_id in PRICE_COMPONENT_IDS:
+                self._handle_price_component(odb_id, raw_value)
+            elif odb_id == ID_CO2_EMISSION_RAW:
+                self._handle_co2_emission(raw_value)
+            elif odb_id == ID_MAXIMUM_ACTIVE:
+                self._handle_measurement(odb_id, _raw_to_bool(raw_value))
             elif odb_id in WRITABLE_OPTION_IDS:
                 self._handle_measurement(odb_id, self._convert_odb_value(odb_id, raw_value))
             else:
                 self._store_unhandled_odb_value(odb_id, raw_value, is_valid=is_valid)
         except (TypeError, ValueError) as err:
             _LOGGER.debug("Ignoring invalid DHE ODB value id=%s value=%r: %s", odb_id, raw_value, err)
+
+    def _handle_price_component(self, odb_id: int, raw_value: Any) -> None:
+        value = int(round(_raw_to_float(raw_value)))
+        measurement_id, euros_odb_id, cents_odb_id = PRICE_COMPONENT_IDS[odb_id]
+        if odb_id == cents_odb_id:
+            value = int(_clamp(value, 0, 99))
+        else:
+            value = int(_clamp(value, 0, 9))
+        self._handle_measurement(odb_id, float(value))
+
+        euros_value = self._last_measurements.get(euros_odb_id)
+        cents_value = self._last_measurements.get(cents_odb_id)
+        if euros_value is None or cents_value is None:
+            return
+        price = float(int(euros_value)) + (float(int(cents_value)) / 100.0)
+        attributes = {
+            "source_odb_ids": {
+                "euros": euros_odb_id,
+                "cents": cents_odb_id,
+            },
+            "euros": int(euros_value),
+            "cents": int(cents_value),
+        }
+        previous_attributes = self._last_measurement_attributes.get(measurement_id)
+        self._last_measurement_attributes[measurement_id] = attributes
+        self._handle_measurement(
+            measurement_id,
+            price,
+            force_update=previous_attributes != attributes,
+        )
+
+    def _handle_co2_emission(self, raw_value: Any) -> None:
+        raw = _raw_to_float(raw_value)
+        value = self._raw_to_co2_emission(raw)
+        self._handle_measurement(ID_CO2_EMISSION_RAW, raw)
+        attributes = {
+            "source_odb_id": ID_CO2_EMISSION_RAW,
+            "raw_value": raw,
+        }
+        previous_attributes = self._last_measurement_attributes.get(ID_CO2_EMISSION)
+        self._last_measurement_attributes[ID_CO2_EMISSION] = attributes
+        self._handle_measurement(
+            ID_CO2_EMISSION,
+            value,
+            force_update=previous_attributes != attributes,
+        )
+
+    @staticmethod
+    def _co2_emission_to_raw(kg_per_kwh: float) -> int:
+        return int(round(float(kg_per_kwh) * 1000))
+
+    @staticmethod
+    def _raw_to_co2_emission(raw_value: float) -> float:
+        return round(max(0.0, float(raw_value) / 1000.0), 2)
 
     def _store_unhandled_odb_value(self, odb_id: int, raw_value: Any, *, is_valid: Any = None) -> None:
         self._last_unhandled_odb_values[int(odb_id)] = {
@@ -1304,7 +1734,7 @@ class DHEClient:
     def _handle_measurement(self, odb_id: int, value: MeasurementValue, *, force_update: bool = False) -> None:
         previous = self._last_measurements.get(odb_id)
         self._last_measurements[odb_id] = value
-        if not isinstance(value, str):
+        if value is not None and not isinstance(value, str):
             self._maybe_complete_write_future(odb_id, value)
         if not force_update and previous is not None:
             if isinstance(previous, str) or isinstance(value, str):
@@ -1384,7 +1814,7 @@ class DHEClient:
 
     @staticmethod
     def _convert_odb_value(odb_id: int, raw_value: Any) -> ODBValue:
-        if odb_id in {ID_BATH_FILL_ACTIVE, ID_ECO_MODE, ID_STOP_PROGRAM}:
+        if odb_id in {ID_BATH_FILL_ACTIVE, ID_MAXIMUM_ACTIVE, ID_ECO_MODE, ID_STOP_PROGRAM}:
             return _raw_to_bool(raw_value)
         if odb_id == ID_MAX_TEMPERATURE:
             value = _raw_to_float(raw_value)

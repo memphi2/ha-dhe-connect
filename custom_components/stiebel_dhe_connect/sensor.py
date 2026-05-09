@@ -16,6 +16,7 @@ from homeassistant.const import (
     UnitOfEnergy,
     UnitOfMass,
     UnitOfPower,
+    UnitOfTemperature,
     UnitOfTime,
     UnitOfVolume,
     UnitOfVolumeFlowRate,
@@ -29,10 +30,12 @@ from .client import (
     DHEClient,
     ID_BRUSH_TIMER_REMAINING,
     ID_CONFIGURED_POWER,
+    ID_DEVICE_INFO,
     ID_ENERGY_CONSUMPTION_WEEK,
     ID_ENERGY_CONSUMPTION_YEAR,
     ID_ENERGY_CONSUMPTION_YEARS,
-    ID_DEVICE_INFO,
+    ID_INTERNAL_TEMPERATURE_1,
+    ID_INTERNAL_TEMPERATURE_2,
     ID_LAST_USAGE_COST,
     ID_LAST_USAGE_ENERGY,
     ID_LAST_USAGE_TIME,
@@ -41,6 +44,14 @@ from .client import (
     ID_SAVING_MONITOR_ACTIVATION_RATE,
     ID_SAVING_MONITOR_CO2,
     ID_SAVING_MONITOR_ENERGY,
+    ID_SAVING_MONITOR_POSSIBLE_CO2,
+    ID_SAVING_MONITOR_POSSIBLE_ENERGY,
+    ID_SAVING_MONITOR_POSSIBLE_VALUE,
+    ID_SAVING_MONITOR_POSSIBLE_WATER,
+    ID_SAVING_MONITOR_REAL_CO2,
+    ID_SAVING_MONITOR_REAL_ENERGY,
+    ID_SAVING_MONITOR_REAL_VALUE,
+    ID_SAVING_MONITOR_REAL_WATER,
     ID_SAVING_MONITOR_WATER,
     ID_SHOWER_TIMER_REMAINING,
     ID_UNHANDLED_ODB_VALUES,
@@ -59,6 +70,7 @@ class StiebelDHESensorEntityDescription(SensorEntityDescription):
     """Describe a converted DHE sensor."""
 
     odb_id: int
+    attribute_key: str | None = None
     timer_path: str | None = None
     timer_property: str | None = None
     source_command: str | None = None
@@ -88,6 +100,26 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         device_class=SensorDeviceClass.POWER,
         odb_id=ID_CONFIGURED_POWER,
+    ),
+    StiebelDHESensorEntityDescription(
+        key="internal_temperature_1",
+        translation_key="internal_temperature_1",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:thermometer",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        odb_id=ID_INTERNAL_TEMPERATURE_1,
+    ),
+    StiebelDHESensorEntityDescription(
+        key="internal_temperature_2",
+        translation_key="internal_temperature_2",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:thermometer",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        odb_id=ID_INTERNAL_TEMPERATURE_2,
     ),
     StiebelDHESensorEntityDescription(
         key="water_consumption_week",
@@ -194,6 +226,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         translation_key="saving_monitor_water",
         native_unit_of_measurement=UnitOfVolume.LITERS,
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
         icon="mdi:water-percent",
         odb_id=ID_SAVING_MONITOR_WATER,
         source_command="set:ste.app.savingMonitor:consumption",
@@ -203,6 +236,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         translation_key="saving_monitor_energy",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
         icon="mdi:lightning-bolt-circle",
         odb_id=ID_SAVING_MONITOR_ENERGY,
         source_command="set:ste.app.savingMonitor:consumption",
@@ -222,9 +256,90 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         translation_key="saving_monitor_activation_rate",
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
         icon="mdi:leaf-circle",
         odb_id=ID_SAVING_MONITOR_ACTIVATION_RATE,
         source_command="set:ste.app.savingMonitor:ActivationRate",
+    ),
+    StiebelDHESensorEntityDescription(
+        key="saving_monitor_possible_water",
+        translation_key="saving_monitor_possible_water",
+        native_unit_of_measurement=UnitOfVolume.LITERS,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        icon="mdi:water-plus",
+        odb_id=ID_SAVING_MONITOR_POSSIBLE_WATER,
+        source_command="set:ste.app.savingMonitor:possible",
+    ),
+    StiebelDHESensorEntityDescription(
+        key="saving_monitor_possible_energy",
+        translation_key="saving_monitor_possible_energy",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        icon="mdi:lightning-bolt-outline",
+        odb_id=ID_SAVING_MONITOR_POSSIBLE_ENERGY,
+        source_command="set:ste.app.savingMonitor:possible",
+    ),
+    StiebelDHESensorEntityDescription(
+        key="saving_monitor_possible_co2",
+        translation_key="saving_monitor_possible_co2",
+        native_unit_of_measurement=UnitOfMass.KILOGRAMS,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        icon="mdi:molecule-co2",
+        odb_id=ID_SAVING_MONITOR_POSSIBLE_CO2,
+        source_command="set:ste.app.savingMonitor:possible",
+    ),
+    StiebelDHESensorEntityDescription(
+        key="saving_monitor_possible_value",
+        translation_key="saving_monitor_possible_value",
+        native_unit_of_measurement="EUR",
+        device_class=SensorDeviceClass.MONETARY,
+        suggested_display_precision=2,
+        icon="mdi:cash-plus",
+        odb_id=ID_SAVING_MONITOR_POSSIBLE_VALUE,
+        source_command="set:ste.app.savingMonitor:possible",
+    ),
+    StiebelDHESensorEntityDescription(
+        key="saving_monitor_real_water",
+        translation_key="saving_monitor_real_water",
+        native_unit_of_measurement=UnitOfVolume.LITERS,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        icon="mdi:water-check",
+        odb_id=ID_SAVING_MONITOR_REAL_WATER,
+        source_command="set:ste.app.savingMonitor:real",
+    ),
+    StiebelDHESensorEntityDescription(
+        key="saving_monitor_real_energy",
+        translation_key="saving_monitor_real_energy",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        icon="mdi:lightning-bolt-circle",
+        odb_id=ID_SAVING_MONITOR_REAL_ENERGY,
+        source_command="set:ste.app.savingMonitor:real",
+    ),
+    StiebelDHESensorEntityDescription(
+        key="saving_monitor_real_co2",
+        translation_key="saving_monitor_real_co2",
+        native_unit_of_measurement=UnitOfMass.KILOGRAMS,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        icon="mdi:molecule-co2",
+        odb_id=ID_SAVING_MONITOR_REAL_CO2,
+        source_command="set:ste.app.savingMonitor:real",
+    ),
+    StiebelDHESensorEntityDescription(
+        key="saving_monitor_real_value",
+        translation_key="saving_monitor_real_value",
+        native_unit_of_measurement="EUR",
+        device_class=SensorDeviceClass.MONETARY,
+        suggested_display_precision=2,
+        icon="mdi:cash-check",
+        odb_id=ID_SAVING_MONITOR_REAL_VALUE,
+        source_command="set:ste.app.savingMonitor:real",
     ),
     StiebelDHESensorEntityDescription(
         key="brush_timer_remaining",
@@ -249,6 +364,42 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         odb_id=ID_DEVICE_INFO,
         source_command="set:ste.common.version:*",
+    ),
+    StiebelDHESensorEntityDescription(
+        key="device_type",
+        translation_key="device_type",
+        icon="mdi:water-boiler",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        odb_id=ID_DEVICE_INFO,
+        attribute_key="device_type",
+        source_command="set:ste.common.version:gadgetData",
+    ),
+    StiebelDHESensorEntityDescription(
+        key="product_id",
+        translation_key="product_id",
+        icon="mdi:identifier",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        odb_id=ID_DEVICE_INFO,
+        attribute_key="device_id",
+        source_command="set:ste.common.version:gadgetData",
+    ),
+    StiebelDHESensorEntityDescription(
+        key="wlan_mac",
+        translation_key="wlan_mac",
+        icon="mdi:wifi",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        odb_id=ID_DEVICE_INFO,
+        attribute_key="wlan_mac",
+        source_command="set:ste.common.version:gadgetData",
+    ),
+    StiebelDHESensorEntityDescription(
+        key="bluetooth_mac",
+        translation_key="bluetooth_mac",
+        icon="mdi:bluetooth",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        odb_id=ID_DEVICE_INFO,
+        attribute_key="bluetooth_mac",
+        source_command="set:ste.common.version:gadgetData",
     ),
     StiebelDHESensorEntityDescription(
         key="unhandled_odb_values",
@@ -341,12 +492,21 @@ class StiebelDHESensor(SensorEntity):
 
         last_value = self._client.last_measurements.get(self.entity_description.odb_id)
         if last_value is not None:
-            self._attr_native_value = self._convert_value(last_value)
-            self._attr_available = True
             self._update_extra_state_attributes()
+            self._attr_native_value = self._convert_value(last_value)
+            self._attr_available = self._attr_native_value is not None
 
     def _convert_value(self, value: MeasurementValue) -> MeasurementValue:
         """Convert the raw client value for display."""
+        if self.entity_description.attribute_key is not None:
+            attribute_value = self._client.last_measurement_attributes.get(
+                self.entity_description.odb_id,
+                {},
+            ).get(self.entity_description.attribute_key)
+            if attribute_value in (None, ""):
+                return None
+            return str(attribute_value)
+
         if not self.entity_description.timer_path:
             return value
 
@@ -366,9 +526,9 @@ class StiebelDHESensor(SensorEntity):
         if odb_id != self.entity_description.odb_id:
             return
 
-        self._attr_native_value = self._convert_value(value)
-        self._attr_available = True
         self._update_extra_state_attributes()
+        self._attr_native_value = self._convert_value(value)
+        self._attr_available = self._attr_native_value is not None
         self.async_write_ha_state()
 
     @callback

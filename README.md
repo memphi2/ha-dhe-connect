@@ -6,7 +6,7 @@ The integration talks directly to the DHE web interface on your local network. I
 
 ## Status
 
-- Current version: `1.0.0`
+- Current version: `1.0.1`
 - Home Assistant setup: UI config flow
 - HACS type: custom integration
 - IoT class: local push
@@ -21,12 +21,12 @@ This is a custom integration and should be used on a trusted local network.
 - Browser-style Engine.IO heartbeat handling to keep the DHE session alive.
 - Automatic reconnect and diagnostic reconnect counter.
 - Target temperature control through the DHE ODB command interface.
-- Temperature memory buttons that use the temperatures currently stored in memory slot 1 and 2.
+- Temperature memory buttons that use the temperatures currently stored in up to 12 memory slots.
 - Water consumption sensors exposed as Home Assistant water meters for the water dashboard.
-- Energy, water, last usage, saving monitor and timer sensors.
-- Eco mode, Eco flow limit, bath fill, maximum temperature and wellness controls.
+- Energy, water, last usage, expanded saving monitor and timer sensors.
+- Eco mode, Eco flow limit, bath fill, currency, maximum temperature and wellness controls.
 - Brush timer and shower timer controls.
-- Diagnostic online status, device info and unhandled ODB value tracking.
+- Diagnostic online status, app settings, device info and unhandled ODB value tracking.
 
 ## Installation
 
@@ -114,6 +114,8 @@ The climate entity keeps the last valid target temperature during short reconnec
 | Current water flow | `L/min` | `volume_flow_rate` | `measurement` | ODB ID `15 / 10` |
 | Current power consumption | `kW` | `power` | `measurement` | ODB ID `16 / 100 * configured_power_kw` |
 | Configured power | `kW` | `power` | none | ODB ID `20` |
+| Inlet temperature | `C` | `temperature`, diagnostic | `measurement` | ODB ID `13 / 10` |
+| Outlet temperature | `C` | `temperature`, diagnostic | `measurement` | ODB ID `14 / 10` |
 | Water consumption week | `L` | `water` | `total_increasing` | `set:ste.app.consumption:waterWeek` |
 | Water consumption year | `m3` | `water` | `total_increasing` | `set:ste.app.consumption:waterYear` |
 | Water consumption years | `m3` | `water` | `total_increasing` | `set:ste.app.consumption:waterYears` |
@@ -124,14 +126,26 @@ The climate entity keeps the last valid target temperature during short reconnec
 | Last usage energy | `kWh` | none | `measurement` | `set:ste.app.consumption:lastUsage.energy` |
 | Last usage duration | `min` | `duration` | `measurement` | `set:ste.app.consumption:lastUsage.time` |
 | Last usage cost | `EUR` | `monetary` | none | `set:ste.app.consumption:lastUsage.costs` |
-| Saving monitor water | `L` | none | `measurement` | `set:ste.app.savingMonitor:consumption.water_l` |
-| Saving monitor energy | `kWh` | none | `measurement` | `set:ste.app.savingMonitor:consumption.energy_Wh / 1000` |
-| Saving monitor CO2 | `kg` | none | `measurement` | `set:ste.app.savingMonitor:consumption.emission_Co2Kg`, rounded to 2 decimals |
-| Saving monitor activation rate | `%` | none | `measurement` | `set:ste.app.savingMonitor:ActivationRate` |
+| Saving monitor consumption water | `L` | none | `measurement` | `set:ste.app.savingMonitor:consumption.water_l`, rounded to 2 decimals |
+| Saving monitor consumption energy | `kWh` | none | `measurement` | `set:ste.app.savingMonitor:consumption.energy_Wh / 1000`, rounded to 2 decimals |
+| Saving monitor consumption CO2 | `kg` | none | `measurement` | `set:ste.app.savingMonitor:consumption.emission_Co2Kg`, rounded to 2 decimals |
+| Saving monitor activation rate | `%` | none | `measurement` | `set:ste.app.savingMonitor:ActivationRate`, rounded to 1 decimal |
+| Saving monitor possible water saving | `L` | none | `measurement` | `set:ste.app.savingMonitor:possible.water_l`, rounded to 2 decimals |
+| Saving monitor possible energy saving | `kWh` | none | `measurement` | `set:ste.app.savingMonitor:possible.energy_Wh / 1000`, rounded to 2 decimals |
+| Saving monitor possible CO2 saving | `kg` | none | `measurement` | `set:ste.app.savingMonitor:possible.emission_Co2Kg`, rounded to 2 decimals |
+| Saving monitor possible cost saving | `EUR` | `monetary` | none | `set:ste.app.savingMonitor:possible.value_E`, rounded to 2 decimals |
+| Saving monitor real water saving | `L` | none | `measurement` | `set:ste.app.savingMonitor:real.water_l`, rounded to 2 decimals |
+| Saving monitor real energy saving | `kWh` | none | `measurement` | `set:ste.app.savingMonitor:real.energy_Wh / 1000`, rounded to 2 decimals |
+| Saving monitor real CO2 saving | `kg` | none | `measurement` | `set:ste.app.savingMonitor:real.emission_Co2Kg`, rounded to 2 decimals |
+| Saving monitor real cost saving | `EUR` | `monetary` | none | `set:ste.app.savingMonitor:real.value_E`, rounded to 2 decimals |
 | Brush timer remaining | `M:SS` | none | none | `set:ste.app.brushTimer:remainingMilliseconds` |
 | Shower timer remaining | `M:SS` | none | none | `set:ste.app.showerTimer:remainingMilliseconds` |
 | Reconnects | count | none | `total_increasing` | Successful reconnect count after the initial connection |
 | Device info | text | diagnostic | none | DHE version and device information commands |
+| Type | text | diagnostic | none | `set:ste.common.version:gadgetData.type` |
+| Product ID | text | diagnostic | none | `set:ste.common.version:gadgetData.id` |
+| WLAN MAC | text | diagnostic | none | `set:ste.common.version:gadgetData.wlan` |
+| Bluetooth MAC | text | diagnostic | none | `set:ste.common.version:gadgetData.bluetooth` |
 | Unhandled ODB values | count | diagnostic | none | Unknown valid ODB values and invalid ODB readbacks |
 
 Consumption sensors expose the DHE chart array as a `chart` attribute and the reported cost as `cost_eur` where available. Saving monitor sensors expose the latest `possible`, `real`, `consumption` and `activation_rate` payloads as attributes.
@@ -143,12 +157,30 @@ Consumption sensors expose the DHE chart array as a `chart` attribute and the re
 | Bath fill target volume | `L` | `1` to `300` | slider | ODB ID `3` |
 | Maximum temperature | `C` | `30` to `50` | slider | ODB ID `5`, accepts raw tenths or degrees |
 | Eco flow limit | `L/min` | `6` to `8` | slider | ODB ID `7`, sent as raw tenths |
+| Electricity price | `EUR/kWh` | `0.00` to `9.99` | box | ODB ID `61` for euros and ODB ID `70` for cents |
+| Water price | `EUR/m3` | `0.00` to `9.99` | box | ODB ID `62` for euros and ODB ID `71` for cents |
+| CO2 emission | `kg/kWh` | `0.00` to `99.99` | box | ODB ID `69`, encoded as `kg/kWh * 1000` |
 | Brush timer duration | `min` | `1` to `20` | box | `assign:ste.app.brushTimer:durationMilliseconds` |
 | Shower timer duration | `min` | `1` to `20` | box | `assign:ste.app.showerTimer:durationMilliseconds` |
-| Temperature memory 1 temperature | `C` | `20` to `60` | box | `assign:ste.common.temperature:memory`, memory ID `0` |
-| Temperature memory 2 temperature | `C` | `20` to `60` | box | `assign:ste.common.temperature:memory`, memory ID `1` |
+| Temperature memory 1-12 temperature | `C` | `20` to `60` | box | `assign:ste.common.temperature:memory`, memory ID `0` to `11`; created only for slots reported by the DHE |
 
-Temperature memory writes keep the existing memory name and send `operation: add_change`.
+Temperature memory writes keep the existing memory name and send `operation: add_change`. The Home Assistant entities are only shown for memory slots currently reported by the DHE, so empty memory slots do not clutter the device configuration card.
+
+### Selects
+
+| Entity | Options | Source / command | Behavior |
+|---|---|---|---|
+| Currency | `EUR`, `GBP`, `CZK`, `PLN`, `CNY`, `USD`, `AUD`, `HKD` | `get:ste.common.currency:value` with a value | Sends the lower-case currency code, matching the DHE app behavior |
+
+The DHE answers the startup currency read with an empty value. The currency select therefore restores the last selected Home Assistant state on startup, falls back to `EUR` on first setup and updates when a currency write or non-empty device response is seen.
+
+### Texts
+
+| Entity | Source / command | Behavior |
+|---|---|---|
+| Temperature memory 1-12 name | `assign:ste.common.temperature:memory`, memory ID `0` to `11` | Renames a memory slot reported by the DHE |
+
+Temperature memory name writes use the current cached or freshly read memory temperature and send `operation: add_change`. Name fields are created only for memory slots currently reported by the DHE.
 
 ### Switches
 
@@ -156,6 +188,7 @@ Temperature memory writes keep the existing memory name and send `operation: add
 |---|---|---|
 | Eco mode | ODB ID `6` | Turns Eco mode on or off |
 | Bath fill | ODB ID `1` | Starts or stops bath filling |
+| Maximum temperature limit | ODB ID `4` | Enables or disables the maximum temperature limit |
 | Brush timer | `assign:ste.app.brushTimer:activation` | Starts or stops the brush timer |
 | Shower timer | `assign:ste.app.showerTimer:activation` | Starts or stops the shower timer |
 | Cold prevention | ODB ID `2` value `1`, trigger ODB ID `10` | Starts wellness cold prevention, off sends stop |
@@ -171,8 +204,8 @@ Wellness programs are triggered by writing the program ID and then sending the D
 |---|---|---|
 | Reset brush timer | `assign:ste.app.brushTimer:reset` | Resets brush timer remaining time and activation state |
 | Reset shower timer | `assign:ste.app.showerTimer:reset` | Resets shower timer remaining time and activation state |
-| Temperature memory 1 | ODB ID `66` command | Sends the temperature stored in memory slot 1 |
-| Temperature memory 2 | ODB ID `66` command | Sends the temperature stored in memory slot 2 |
+| Temperature memory 1-12 | ODB ID `66` command | Sends the temperature stored in the matching memory slot; created only for slots reported by the DHE |
+| Delete temperature memory 1-12 | `assign:ste.common.temperature:memory` | Deletes the matching memory slot with `operation: delete`; created only for slots reported by the DHE |
 
 The memory preset buttons do not send fixed temperatures. They read the current memory slot value from the DHE cache, refresh it if needed, build the ODB ID `66` button payload from that temperature and send it.
 
@@ -301,13 +334,21 @@ Required startup reads seed the interactive entities:
 | `1` | Bath fill active |
 | `2` | Wellness shower program |
 | `3` | Bath fill target volume |
+| `4` | Maximum temperature limit active |
 | `5` | Maximum temperature |
 | `6` | Eco mode |
 | `7` | Eco flow limit |
 | `10` | Program stop/trigger state |
+| `13` | Inlet temperature |
+| `14` | Outlet temperature |
 | `15` | Water flow |
 | `16` | Current power fraction |
 | `20` | Configured power |
+| `61` | Electricity price euros |
+| `62` | Water price euros |
+| `69` | CO2 emission |
+| `70` | Electricity price cents |
+| `71` | Water price cents |
 
 Best-effort startup reads collect additional values:
 
@@ -323,16 +364,30 @@ Best-effort startup reads collect additional values:
 | `get:ste.app.consumption:energyYear` | Year energy chart |
 | `get:ste.app.consumption:energyYears` | Multi-year energy chart |
 | `get:ste.app.consumption:lastUsage` | Last usage payload |
-| `get:ste.app.consumption:volumeFormat` | DHE app volume formatting |
 | `get:ste.app.savingMonitor:ActivationRate` | Saving monitor activation rate |
 | `get:ste.app.savingMonitor:possible` | Saving monitor possible payload |
 | `get:ste.app.savingMonitor:real` | Saving monitor real payload |
 | `get:ste.app.savingMonitor:consumption` | Saving monitor consumption payload |
 | `get:ste.common.version:*` | Device and version information |
 | `get:ste.app.wellness:programs` | Wellness program metadata |
-| `get:ste.common.temperature:maxOverride` | Maximum override metadata |
 
-ODB ID `4` is also read best-effort and stored as unhandled diagnostic data when it is not mapped to a normal entity.
+Currency changes use the same command as the DHE app:
+
+```json
+{"command": "get:ste.common.currency:value", "value": "eur"}
+```
+
+Temperature memory changes use `assign:ste.common.temperature:memory`. Existing memory slots include the zero-based `id`; adding the next free slot omits `id` and lets the DHE assign it:
+
+```json
+{"command": "assign:ste.common.temperature:memory", "value": {"name": "%1 3", "temperature": 40, "operation": "add_change"}}
+```
+
+Deleting a memory slot uses the zero-based `id` and `operation: delete`:
+
+```json
+{"command": "assign:ste.common.temperature:memory", "value": {"id": 2, "operation": "delete"}}
+```
 
 ### ODB handling
 
@@ -341,11 +396,16 @@ Mapped ODB values are converted before publishing to Home Assistant:
 | ODB ID | Conversion |
 |---:|---|
 | `0` | Raw tenths to Celsius |
+| `4` | Raw truthy value to the `Maximum active` switch |
 | `5` | Raw tenths to Celsius when value is `300` to `500` |
 | `7` | Raw tenths to `L/min` when value is `60` to `80` |
+| `13` and `14` | Raw tenths to Celsius |
 | `15` | Raw value divided by `10` |
 | `16` | Raw percent divided by `100`, multiplied by configured power |
 | `20` | Accepts `18` to `24`, `180` to `240`, or `1800` to `2400` formats |
+| `61` and `70` | Combined to the `Electricity price` number as euros plus cents |
+| `62` and `71` | Combined to the `Water price` number as euros plus cents |
+| `69` | CO2 emission decoded as `raw / 1000` kg/kWh |
 
 If a DHE ODB readback is marked with `isValid: false`, it is not published as a normal entity state. It is stored in the `Unhandled ODB values` diagnostic sensor instead.
 

@@ -52,10 +52,76 @@
         "name": "Duschtimer zurücksetzen"
       },
       "temperature_memory_1": {
-        "name": "Temperaturspeicher 1"
+        "name": "Speicher 1"
       },
       "temperature_memory_2": {
-        "name": "Temperaturspeicher 2"
+        "name": "Speicher 2"
+      },
+      "temperature_memory_3": {
+        "name": "Speicher 3"
+      },
+      "temperature_memory_4": {
+        "name": "Speicher 4"
+      },
+      "temperature_memory_5": {
+        "name": "Speicher 5"
+      },
+      "temperature_memory_6": {
+        "name": "Speicher 6"
+      },
+      "temperature_memory_7": {
+        "name": "Speicher 7"
+      },
+      "temperature_memory_8": {
+        "name": "Speicher 8"
+      },
+      "temperature_memory_9": {
+        "name": "Speicher 9"
+      },
+      "temperature_memory_10": {
+        "name": "Speicher 10"
+      },
+      "temperature_memory_11": {
+        "name": "Speicher 11"
+      },
+      "temperature_memory_12": {
+        "name": "Speicher 12"
+      },
+      "delete_temperature_memory_1": {
+        "name": "Speicher 1 löschen"
+      },
+      "delete_temperature_memory_2": {
+        "name": "Speicher 2 löschen"
+      },
+      "delete_temperature_memory_3": {
+        "name": "Speicher 3 löschen"
+      },
+      "delete_temperature_memory_4": {
+        "name": "Speicher 4 löschen"
+      },
+      "delete_temperature_memory_5": {
+        "name": "Speicher 5 löschen"
+      },
+      "delete_temperature_memory_6": {
+        "name": "Speicher 6 löschen"
+      },
+      "delete_temperature_memory_7": {
+        "name": "Speicher 7 löschen"
+      },
+      "delete_temperature_memory_8": {
+        "name": "Speicher 8 löschen"
+      },
+      "delete_temperature_memory_9": {
+        "name": "Speicher 9 löschen"
+      },
+      "delete_temperature_memory_10": {
+        "name": "Speicher 10 löschen"
+      },
+      "delete_temperature_memory_11": {
+        "name": "Speicher 11 löschen"
+      },
+      "delete_temperature_memory_12": {
+        "name": "Speicher 12 löschen"
       }
     },
     "number": {
@@ -68,6 +134,15 @@
       "eco_flow_limit": {
         "name": "Eco-Durchflussbegrenzung"
       },
+      "electricity_price": {
+        "name": "Strompreis"
+      },
+      "water_price": {
+        "name": "Wasserpreis"
+      },
+      "co2_emission": {
+        "name": "CO2-Emission"
+      },
       "brush_timer_duration": {
         "name": "Zahnputz-Timer Dauer"
       },
@@ -75,10 +150,83 @@
         "name": "Duschtimer-Dauer"
       },
       "temperature_memory_1_temperature": {
-        "name": "Temperaturspeicher 1 Temperatur"
+        "name": "Speicher 1 Temperatur"
       },
       "temperature_memory_2_temperature": {
-        "name": "Temperaturspeicher 2 Temperatur"
+        "name": "Speicher 2 Temperatur"
+      },
+      "temperature_memory_3_temperature": {
+        "name": "Speicher 3 Temperatur"
+      },
+      "temperature_memory_4_temperature": {
+        "name": "Speicher 4 Temperatur"
+      },
+      "temperature_memory_5_temperature": {
+        "name": "Speicher 5 Temperatur"
+      },
+      "temperature_memory_6_temperature": {
+        "name": "Speicher 6 Temperatur"
+      },
+      "temperature_memory_7_temperature": {
+        "name": "Speicher 7 Temperatur"
+      },
+      "temperature_memory_8_temperature": {
+        "name": "Speicher 8 Temperatur"
+      },
+      "temperature_memory_9_temperature": {
+        "name": "Speicher 9 Temperatur"
+      },
+      "temperature_memory_10_temperature": {
+        "name": "Speicher 10 Temperatur"
+      },
+      "temperature_memory_11_temperature": {
+        "name": "Speicher 11 Temperatur"
+      },
+      "temperature_memory_12_temperature": {
+        "name": "Speicher 12 Temperatur"
+      }
+    },
+    "select": {
+      "currency": {
+        "name": "Währung"
+      }
+    },
+    "text": {
+      "temperature_memory_1_name": {
+        "name": "Speicher 1 Name"
+      },
+      "temperature_memory_2_name": {
+        "name": "Speicher 2 Name"
+      },
+      "temperature_memory_3_name": {
+        "name": "Speicher 3 Name"
+      },
+      "temperature_memory_4_name": {
+        "name": "Speicher 4 Name"
+      },
+      "temperature_memory_5_name": {
+        "name": "Speicher 5 Name"
+      },
+      "temperature_memory_6_name": {
+        "name": "Speicher 6 Name"
+      },
+      "temperature_memory_7_name": {
+        "name": "Speicher 7 Name"
+      },
+      "temperature_memory_8_name": {
+        "name": "Speicher 8 Name"
+      },
+      "temperature_memory_9_name": {
+        "name": "Speicher 9 Name"
+      },
+      "temperature_memory_10_name": {
+        "name": "Speicher 10 Name"
+      },
+      "temperature_memory_11_name": {
+        "name": "Speicher 11 Name"
+      },
+      "temperature_memory_12_name": {
+        "name": "Speicher 12 Name"
       }
     },
     "sensor": {
@@ -90,6 +238,12 @@
       },
       "configured_power": {
         "name": "Eingestellte Leistung"
+      },
+      "internal_temperature_1": {
+        "name": "Eingangstemperatur"
+      },
+      "internal_temperature_2": {
+        "name": "Ausgangstemperatur"
       },
       "water_consumption_week": {
         "name": "Wasserverbrauch Woche"
@@ -122,16 +276,40 @@
         "name": "Letzte Nutzungskosten"
       },
       "saving_monitor_water": {
-        "name": "Sparmonitor Wasser"
+        "name": "Sparmonitor Verbrauch Wasser"
       },
       "saving_monitor_energy": {
-        "name": "Sparmonitor Energie"
+        "name": "Sparmonitor Verbrauch Energie"
       },
       "saving_monitor_co2": {
-        "name": "Sparmonitor CO2"
+        "name": "Sparmonitor Verbrauch CO2"
       },
       "saving_monitor_activation_rate": {
         "name": "Sparmonitor Aktivierungsrate"
+      },
+      "saving_monitor_possible_water": {
+        "name": "Sparmonitor mögliche Einsparung Wasser"
+      },
+      "saving_monitor_possible_energy": {
+        "name": "Sparmonitor mögliche Einsparung Energie"
+      },
+      "saving_monitor_possible_co2": {
+        "name": "Sparmonitor mögliche Einsparung CO2"
+      },
+      "saving_monitor_possible_value": {
+        "name": "Sparmonitor mögliche Einsparung Kosten"
+      },
+      "saving_monitor_real_water": {
+        "name": "Sparmonitor reale Einsparung Wasser"
+      },
+      "saving_monitor_real_energy": {
+        "name": "Sparmonitor reale Einsparung Energie"
+      },
+      "saving_monitor_real_co2": {
+        "name": "Sparmonitor reale Einsparung CO2"
+      },
+      "saving_monitor_real_value": {
+        "name": "Sparmonitor reale Einsparung Kosten"
       },
       "brush_timer_remaining": {
         "name": "Zahnputz-Timer Restzeit"
@@ -145,6 +323,18 @@
       "device_info": {
         "name": "Geräteinfo"
       },
+      "device_type": {
+        "name": "Typ"
+      },
+      "product_id": {
+        "name": "Produkt-ID"
+      },
+      "wlan_mac": {
+        "name": "WLAN MAC"
+      },
+      "bluetooth_mac": {
+        "name": "Bluetooth MAC"
+      },
       "unhandled_odb_values": {
         "name": "Unzugeordnete ODB-Werte"
       }
@@ -155,6 +345,9 @@
       },
       "bath_fill": {
         "name": "Wannenfüllung"
+      },
+      "maximum_active": {
+        "name": "Maximaltemperatur-Begrenzung"
       },
       "brush_timer_activation": {
         "name": "Zahnputz-Timer"

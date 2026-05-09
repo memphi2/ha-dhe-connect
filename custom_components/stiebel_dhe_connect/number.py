@@ -14,6 +14,7 @@ from homeassistant.components.number import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature, UnitOfTime, UnitOfVolume, UnitOfVolumeFlowRate
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -23,13 +24,15 @@ from .client import (
     DHEError,
     ID_BATH_FILL_TARGET_VOLUME,
     ID_BRUSH_TIMER_DURATION,
+    ID_CO2_EMISSION,
     ID_ECO_FLOW_LIMIT,
+    ID_ELECTRICITY_PRICE,
     ID_MAX_TEMPERATURE,
     ID_SHOWER_TIMER_DURATION,
-    ID_TEMPERATURE_MEMORY_1,
-    ID_TEMPERATURE_MEMORY_2,
+    ID_WATER_PRICE,
+    MeasurementValue,
     SHOWER_TIMER_PATH,
-    ODBValue,
+    TEMPERATURE_MEMORY_SLOT_MEASUREMENTS,
 )
 from .const import DOMAIN
 
@@ -46,7 +49,7 @@ class StiebelDHENumberEntityDescription(NumberEntityDescription):
     temperature_memory_slot: int | None = None
 
 
-NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
+STATIC_NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
     StiebelDHENumberEntityDescription(
         key="bath_fill_target_volume",
         translation_key="bath_fill_target_volume",
@@ -81,6 +84,39 @@ NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         odb_id=ID_ECO_FLOW_LIMIT,
     ),
     StiebelDHENumberEntityDescription(
+        key="electricity_price",
+        translation_key="electricity_price",
+        native_unit_of_measurement="EUR/kWh",
+        icon="mdi:currency-eur",
+        native_min_value=0.0,
+        native_max_value=9.99,
+        native_step=0.01,
+        mode=NumberMode.BOX,
+        odb_id=ID_ELECTRICITY_PRICE,
+    ),
+    StiebelDHENumberEntityDescription(
+        key="water_price",
+        translation_key="water_price",
+        native_unit_of_measurement="EUR/m3",
+        icon="mdi:water-percent",
+        native_min_value=0.0,
+        native_max_value=9.99,
+        native_step=0.01,
+        mode=NumberMode.BOX,
+        odb_id=ID_WATER_PRICE,
+    ),
+    StiebelDHENumberEntityDescription(
+        key="co2_emission",
+        translation_key="co2_emission",
+        native_unit_of_measurement="kg/kWh",
+        icon="mdi:molecule-co2",
+        native_min_value=0.0,
+        native_max_value=99.99,
+        native_step=0.01,
+        mode=NumberMode.BOX,
+        odb_id=ID_CO2_EMISSION,
+    ),
+    StiebelDHENumberEntityDescription(
         key="brush_timer_duration",
         translation_key="brush_timer_duration",
         native_unit_of_measurement=UnitOfTime.MINUTES,
@@ -106,33 +142,32 @@ NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         timer_path=SHOWER_TIMER_PATH,
         timer_property="durationMilliseconds",
     ),
-    StiebelDHENumberEntityDescription(
-        key="temperature_memory_1_temperature",
-        translation_key="temperature_memory_1_temperature",
-        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-        device_class=NumberDeviceClass.TEMPERATURE,
-        icon="mdi:numeric-1-box-outline",
-        native_min_value=20.0,
-        native_max_value=60.0,
-        native_step=0.5,
-        mode=NumberMode.BOX,
-        odb_id=ID_TEMPERATURE_MEMORY_1,
-        temperature_memory_slot=1,
-    ),
-    StiebelDHENumberEntityDescription(
-        key="temperature_memory_2_temperature",
-        translation_key="temperature_memory_2_temperature",
-        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-        device_class=NumberDeviceClass.TEMPERATURE,
-        icon="mdi:numeric-2-box-outline",
-        native_min_value=20.0,
-        native_max_value=60.0,
-        native_step=0.5,
-        mode=NumberMode.BOX,
-        odb_id=ID_TEMPERATURE_MEMORY_2,
-        temperature_memory_slot=2,
-    ),
 )
+
+
+TEMPERATURE_MEMORY_MEASUREMENT_SLOTS = {
+    measurement_id: slot for slot, measurement_id in TEMPERATURE_MEMORY_SLOT_MEASUREMENTS.items()
+}
+
+
+def _temperature_memory_number_description(
+    slot: int,
+    measurement_id: int,
+) -> StiebelDHENumberEntityDescription:
+    """Create the number description for a reported temperature memory slot."""
+    return StiebelDHENumberEntityDescription(
+        key=f"temperature_memory_{slot}_temperature",
+        translation_key=f"temperature_memory_{slot}_temperature",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=NumberDeviceClass.TEMPERATURE,
+        icon=f"mdi:numeric-{slot}-box-outline" if slot < 10 else "mdi:counter",
+        native_min_value=20.0,
+        native_max_value=60.0,
+        native_step=0.5,
+        mode=NumberMode.BOX,
+        odb_id=measurement_id,
+        temperature_memory_slot=slot,
+    )
 
 
 async def async_setup_entry(
@@ -142,17 +177,62 @@ async def async_setup_entry(
 ) -> None:
     """Set up DHE number entities from a config entry."""
     runtime = hass.data[DOMAIN][entry.entry_id]
+    client: DHEClient = runtime.client
+    added_memory_numbers: dict[int, StiebelDHENumber] = {}
+
+    def add_memory_number(measurement_id: int) -> None:
+        if measurement_id in added_memory_numbers:
+            return
+        slot = TEMPERATURE_MEMORY_MEASUREMENT_SLOTS.get(measurement_id)
+        if slot is None:
+            return
+        entity = StiebelDHENumber(
+            entry_id=entry.entry_id,
+            name=runtime.name,
+            client=client,
+            description=_temperature_memory_number_description(slot, measurement_id),
+        )
+        added_memory_numbers[measurement_id] = entity
+        async_add_entities([entity])
+
+    async def remove_memory_number(measurement_id: int) -> None:
+        entity = added_memory_numbers.pop(measurement_id, None)
+        if entity is not None:
+            await entity.async_remove()
+        slot = TEMPERATURE_MEMORY_MEASUREMENT_SLOTS.get(measurement_id)
+        if slot is None:
+            return
+        registry = er.async_get(hass)
+        description = _temperature_memory_number_description(slot, measurement_id)
+        entity_id = registry.async_get_entity_id(
+            "number",
+            DOMAIN,
+            f"stiebel_dhe_connect_{entry.entry_id}_{description.key}",
+        )
+        if entity_id is not None:
+            registry.async_remove(entity_id)
+
+    @callback
+    def handle_temperature_memory_update(odb_id: int, value: MeasurementValue) -> None:
+        if odb_id not in TEMPERATURE_MEMORY_MEASUREMENT_SLOTS:
+            return
+        if value is None:
+            hass.async_create_task(remove_memory_number(odb_id))
+            return
+        add_memory_number(odb_id)
+
     async_add_entities(
         [
             StiebelDHENumber(
                 entry_id=entry.entry_id,
                 name=runtime.name,
-                client=runtime.client,
+                client=client,
                 description=description,
             )
-            for description in NUMBER_DESCRIPTIONS
+            for description in STATIC_NUMBER_DESCRIPTIONS
         ]
     )
+    entry.async_on_unload(client.add_measurement_callback(handle_temperature_memory_update))
 
 
 class StiebelDHENumber(RestoreNumber):
@@ -223,6 +303,12 @@ class StiebelDHENumber(RestoreNumber):
                 confirmed = await self._client.set_maximum_temperature(value)
             elif self.entity_description.odb_id == ID_ECO_FLOW_LIMIT:
                 confirmed = await self._client.set_eco_flow_limit(value)
+            elif self.entity_description.odb_id == ID_ELECTRICITY_PRICE:
+                confirmed = await self._client.set_electricity_price(value)
+            elif self.entity_description.odb_id == ID_WATER_PRICE:
+                confirmed = await self._client.set_water_price(value)
+            elif self.entity_description.odb_id == ID_CO2_EMISSION:
+                confirmed = await self._client.set_co2_emission(value)
             elif self.entity_description.odb_id == ID_BRUSH_TIMER_DURATION:
                 confirmed = await self._client.set_brush_timer_duration_minutes(value)
             elif self.entity_description.odb_id == ID_SHOWER_TIMER_DURATION:
@@ -248,9 +334,18 @@ class StiebelDHENumber(RestoreNumber):
         self.async_write_ha_state()
 
     @callback
-    def _handle_measurement_update(self, odb_id: int, value: ODBValue) -> None:
+    def _handle_measurement_update(self, odb_id: int, value: MeasurementValue) -> None:
         """Handle converted ODB value updates from the persistent client."""
         if odb_id != self.entity_description.odb_id or isinstance(value, bool):
+            return
+        if value is None:
+            self._attr_native_value = None
+            self._attr_available = (
+                self._client.available
+                if self.entity_description.temperature_memory_slot is not None
+                else False
+            )
+            self.async_write_ha_state()
             return
 
         self._attr_native_value = float(value)
@@ -260,5 +355,9 @@ class StiebelDHENumber(RestoreNumber):
     @callback
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
+        if self.entity_description.temperature_memory_slot is not None:
+            self._attr_available = available
+            self.async_write_ha_state()
+            return
         self._attr_available = available or self._attr_native_value is not None
         self.async_write_ha_state()

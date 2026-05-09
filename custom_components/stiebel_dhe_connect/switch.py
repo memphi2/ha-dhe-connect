@@ -20,6 +20,7 @@ from .client import (
     ID_BATH_FILL_ACTIVE,
     ID_BRUSH_TIMER_ACTIVATION,
     ID_ECO_MODE,
+    ID_MAXIMUM_ACTIVE,
     ID_STOP_PROGRAM,
     ID_WELLNESS_SHOWER_PROGRAM,
     ID_SHOWER_TIMER_ACTIVATION,
@@ -81,6 +82,11 @@ async def async_setup_entry(
             client=runtime.client,
         ),
         StiebelDHEBathFillSwitch(
+            entry_id=entry.entry_id,
+            name=runtime.name,
+            client=runtime.client,
+        ),
+        StiebelDHEMaximumActiveSwitch(
             entry_id=entry.entry_id,
             name=runtime.name,
             client=runtime.client,
@@ -286,6 +292,82 @@ class StiebelDHEBathFillSwitch(SwitchEntity, RestoreEntity):
         self._attr_available = available or self._attr_is_on is not None
         self.async_write_ha_state()
 
+
+class StiebelDHEMaximumActiveSwitch(SwitchEntity, RestoreEntity):
+    """Maximum temperature limit switch backed by DHE ODB id 4."""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_translation_key = "maximum_active"
+    _attr_icon = "mdi:thermometer-check"
+
+    def __init__(self, entry_id: str, name: str, client: DHEClient) -> None:
+        """Initialize the switch."""
+        self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_maximum_active"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, client.host)},
+            "manufacturer": "STIEBEL ELTRON",
+            "model": "DHE Connect",
+            "name": name,
+        }
+        self._attr_extra_state_attributes = {"odb_id": ID_MAXIMUM_ACTIVE}
+        self._client = client
+        self._attr_available = False
+        self._attr_is_on: bool | None = None
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to DHE updates and start the persistent session."""
+        self.async_on_remove(self._client.add_measurement_callback(self._handle_measurement_update))
+        self.async_on_remove(self._client.add_availability_callback(self._handle_availability_update))
+
+        last_value = self._client.last_measurements.get(ID_MAXIMUM_ACTIVE)
+        if last_value is not None:
+            self._attr_is_on = bool(last_value)
+            self._attr_available = True
+        else:
+            last_state = await self.async_get_last_state()
+            if last_state and last_state.state in {STATE_ON, STATE_OFF}:
+                self._attr_is_on = last_state.state == STATE_ON
+                self._attr_available = True
+
+    async def async_turn_on(self, **kwargs) -> None:  # noqa: ANN003
+        """Enable the maximum temperature limit."""
+        try:
+            self._attr_is_on = await self._client.set_maximum_active(True)
+        except DHEError as err:
+            self._attr_available = self._attr_is_on is not None
+            self.async_write_ha_state()
+            _LOGGER.error("Could not enable DHE maximum temperature limit: %s", err)
+            raise
+        self._attr_available = True
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs) -> None:  # noqa: ANN003
+        """Disable the maximum temperature limit."""
+        try:
+            self._attr_is_on = await self._client.set_maximum_active(False)
+        except DHEError as err:
+            self._attr_available = self._attr_is_on is not None
+            self.async_write_ha_state()
+            _LOGGER.error("Could not disable DHE maximum temperature limit: %s", err)
+            raise
+        self._attr_available = True
+        self.async_write_ha_state()
+
+    @callback
+    def _handle_measurement_update(self, odb_id: int, value: ODBValue) -> None:
+        """Handle converted ODB value updates from the persistent client."""
+        if odb_id != ID_MAXIMUM_ACTIVE:
+            return
+        self._attr_is_on = bool(value)
+        self._attr_available = True
+        self.async_write_ha_state()
+
+    @callback
+    def _handle_availability_update(self, available: bool) -> None:
+        """Handle DHE connection availability updates."""
+        self._attr_available = available or self._attr_is_on is not None
+        self.async_write_ha_state()
 
 
 class StiebelDHEAppTimerSwitch(SwitchEntity, RestoreEntity):

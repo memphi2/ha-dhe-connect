@@ -1,0 +1,216 @@
+"""Text platform for Stiebel DHE Connect."""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass
+
+from homeassistant.components.text import TextEntity, TextEntityDescription
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.entity import EntityCategory
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
+
+from .client import (
+    DHEClient,
+    DHEError,
+    MeasurementValue,
+    TEMPERATURE_MEMORY_SLOT_MEASUREMENTS,
+)
+from .const import DOMAIN
+
+_LOGGER = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, kw_only=True)
+class StiebelDHETextEntityDescription(TextEntityDescription):
+    """Describe a writable DHE text setting."""
+
+    measurement_id: int
+    temperature_memory_slot: int
+
+
+TEMPERATURE_MEMORY_MEASUREMENT_SLOTS = {
+    measurement_id: slot for slot, measurement_id in TEMPERATURE_MEMORY_SLOT_MEASUREMENTS.items()
+}
+
+
+def _temperature_memory_text_description(
+    slot: int,
+    measurement_id: int,
+) -> StiebelDHETextEntityDescription:
+    """Create the text description for a reported temperature memory slot."""
+    return StiebelDHETextEntityDescription(
+        key=f"temperature_memory_{slot}_name",
+        translation_key=f"temperature_memory_{slot}_name",
+        icon=f"mdi:numeric-{slot}-box-outline" if slot < 10 else "mdi:counter",
+        measurement_id=measurement_id,
+        temperature_memory_slot=slot,
+    )
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up DHE text entities from a config entry."""
+    runtime = hass.data[DOMAIN][entry.entry_id]
+    client: DHEClient = runtime.client
+    added_memory_texts: dict[int, StiebelDHEText] = {}
+
+    def add_memory_text(measurement_id: int) -> None:
+        if measurement_id in added_memory_texts:
+            return
+        slot = TEMPERATURE_MEMORY_MEASUREMENT_SLOTS.get(measurement_id)
+        if slot is None:
+            return
+        entity = StiebelDHEText(
+            entry_id=entry.entry_id,
+            name=runtime.name,
+            client=client,
+            description=_temperature_memory_text_description(slot, measurement_id),
+        )
+        added_memory_texts[measurement_id] = entity
+        async_add_entities([entity])
+
+    async def remove_memory_text(measurement_id: int) -> None:
+        entity = added_memory_texts.pop(measurement_id, None)
+        if entity is not None:
+            await entity.async_remove()
+        slot = TEMPERATURE_MEMORY_MEASUREMENT_SLOTS.get(measurement_id)
+        if slot is None:
+            return
+        registry = er.async_get(hass)
+        description = _temperature_memory_text_description(slot, measurement_id)
+        entity_id = registry.async_get_entity_id(
+            "text",
+            DOMAIN,
+            f"stiebel_dhe_connect_{entry.entry_id}_{description.key}",
+        )
+        if entity_id is not None:
+            registry.async_remove(entity_id)
+
+    @callback
+    def handle_temperature_memory_update(odb_id: int, value: MeasurementValue) -> None:
+        if odb_id not in TEMPERATURE_MEMORY_MEASUREMENT_SLOTS:
+            return
+        if value is None:
+            hass.async_create_task(remove_memory_text(odb_id))
+            return
+        add_memory_text(odb_id)
+
+    entry.async_on_unload(client.add_measurement_callback(handle_temperature_memory_update))
+
+
+class StiebelDHEText(TextEntity, RestoreEntity):
+    """Writable DHE text setting represented as a Home Assistant text entity."""
+
+    entity_description: StiebelDHETextEntityDescription
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+
+    def __init__(
+        self,
+        entry_id: str,
+        name: str,
+        client: DHEClient,
+        description: StiebelDHETextEntityDescription,
+    ) -> None:
+        """Initialize the text entity."""
+        self.entity_description = description
+        self._attr_translation_key = description.translation_key
+        self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_{description.key}"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, client.host)},
+            "manufacturer": "STIEBEL ELTRON",
+            "model": "DHE Connect",
+            "name": name,
+        }
+        self._client = client
+        self._attr_available = False
+        self._attr_native_value: str | None = None
+        self._update_extra_state_attributes()
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to DHE measurements and availability updates."""
+        self.async_on_remove(
+            self._client.add_measurement_callback(self._handle_measurement_update)
+        )
+        self.async_on_remove(
+            self._client.add_availability_callback(self._handle_availability_update)
+        )
+
+        if self._set_value_from_client():
+            self._attr_available = True
+            self._update_extra_state_attributes()
+            return
+
+        last_state = await self.async_get_last_state()
+        if last_state and last_state.state not in {"unknown", "unavailable"}:
+            self._attr_native_value = last_state.state
+            self._attr_available = True
+
+    async def async_set_value(self, value: str) -> None:
+        """Set the DHE temperature memory name."""
+        try:
+            confirmed = await self._client.set_temperature_memory_name(
+                self.entity_description.temperature_memory_slot,
+                value,
+            )
+        except DHEError as err:
+            self._attr_available = self._attr_native_value is not None
+            self.async_write_ha_state()
+            _LOGGER.error("Could not set DHE text %s: %s", self.entity_description.key, err)
+            raise
+
+        self._attr_native_value = confirmed
+        self._attr_available = True
+        self._update_extra_state_attributes()
+        self.async_write_ha_state()
+
+    @callback
+    def _handle_measurement_update(self, odb_id: int, value: MeasurementValue) -> None:
+        """Handle memory metadata updates from the persistent client."""
+        if odb_id != self.entity_description.measurement_id:
+            return
+
+        if value is None or not self._set_value_from_client():
+            self._attr_native_value = None
+            self._attr_available = self._client.available
+        else:
+            self._attr_available = True
+        self._update_extra_state_attributes()
+        self.async_write_ha_state()
+
+    @callback
+    def _handle_availability_update(self, available: bool) -> None:
+        """Handle DHE connection availability updates."""
+        self._attr_available = available
+        self.async_write_ha_state()
+
+    def _set_value_from_client(self) -> bool:
+        attributes = self._client.last_measurement_attributes.get(
+            self.entity_description.measurement_id,
+            {},
+        )
+        name = attributes.get("name")
+        if name in (None, ""):
+            return False
+        self._attr_native_value = str(name)
+        return True
+
+    def _update_extra_state_attributes(self) -> None:
+        attributes = {
+            "temperature_memory_slot": self.entity_description.temperature_memory_slot,
+        }
+        attributes.update(
+            self._client.last_measurement_attributes.get(
+                self.entity_description.measurement_id,
+                {},
+            )
+        )
+        self._attr_extra_state_attributes = attributes
