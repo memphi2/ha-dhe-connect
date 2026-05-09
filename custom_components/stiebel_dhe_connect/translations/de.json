@@ -320,9 +320,6 @@
       "reconnect_count": {
         "name": "Reconnects"
       },
-      "temperature_max_override": {
-        "name": "Maximaltemperatur-Override"
-      },
       "device_info": {
         "name": "Geräteinfo"
       },
@@ -350,7 +347,7 @@
         "name": "Wannenfüllung"
       },
       "maximum_active": {
-        "name": "Maximum aktiv"
+        "name": "Maximaltemperatur-Begrenzung"
       },
       "brush_timer_activation": {
         "name": "Zahnputz-Timer"

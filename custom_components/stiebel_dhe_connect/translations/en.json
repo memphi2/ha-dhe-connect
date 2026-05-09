@@ -320,9 +320,6 @@
       "reconnect_count": {
         "name": "Reconnects"
       },
-      "temperature_max_override": {
-        "name": "Maximum temperature override"
-      },
       "device_info": {
         "name": "Device info"
       },
@@ -350,7 +347,7 @@
         "name": "Bath fill"
       },
       "maximum_active": {
-        "name": "Maximum active"
+        "name": "Maximum temperature limit"
       },
       "brush_timer_activation": {
         "name": "Brush timer"

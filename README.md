@@ -141,7 +141,6 @@ The climate entity keeps the last valid target temperature during short reconnec
 | Brush timer remaining | `M:SS` | none | none | `set:ste.app.brushTimer:remainingMilliseconds` |
 | Shower timer remaining | `M:SS` | none | none | `set:ste.app.showerTimer:remainingMilliseconds` |
 | Reconnects | count | none | `total_increasing` | Successful reconnect count after the initial connection |
-| Maximum temperature override | text | diagnostic | none | `set:ste.common.temperature:maxOverride` |
 | Device info | text | diagnostic | none | DHE version and device information commands |
 | Type | text | diagnostic | none | `set:ste.common.version:gadgetData.type` |
 | Product ID | text | diagnostic | none | `set:ste.common.version:gadgetData.id` |
@@ -149,7 +148,7 @@ The climate entity keeps the last valid target temperature during short reconnec
 | Bluetooth MAC | text | diagnostic | none | `set:ste.common.version:gadgetData.bluetooth` |
 | Unhandled ODB values | count | diagnostic | none | Unknown valid ODB values and invalid ODB readbacks |
 
-Consumption sensors expose the DHE chart array as a `chart` attribute and the reported cost as `cost_eur` where available. Saving monitor sensors expose the latest `possible`, `real`, `consumption` and `activation_rate` payloads as attributes. App setting diagnostics expose the original payload as `raw_value`.
+Consumption sensors expose the DHE chart array as a `chart` attribute and the reported cost as `cost_eur` where available. Saving monitor sensors expose the latest `possible`, `real`, `consumption` and `activation_rate` payloads as attributes.
 
 ### Numbers
 
@@ -189,7 +188,7 @@ Temperature memory name writes use the current cached or freshly read memory tem
 |---|---|---|
 | Eco mode | ODB ID `6` | Turns Eco mode on or off |
 | Bath fill | ODB ID `1` | Starts or stops bath filling |
-| Maximum active | ODB ID `4` | Enables or disables the maximum temperature limit |
+| Maximum temperature limit | ODB ID `4` | Enables or disables the maximum temperature limit |
 | Brush timer | `assign:ste.app.brushTimer:activation` | Starts or stops the brush timer |
 | Shower timer | `assign:ste.app.showerTimer:activation` | Starts or stops the shower timer |
 | Cold prevention | ODB ID `2` value `1`, trigger ODB ID `10` | Starts wellness cold prevention, off sends stop |
@@ -365,7 +364,6 @@ Best-effort startup reads collect additional values:
 | `get:ste.app.consumption:energyYear` | Year energy chart |
 | `get:ste.app.consumption:energyYears` | Multi-year energy chart |
 | `get:ste.app.consumption:lastUsage` | Last usage payload |
-| `get:ste.common.temperature:maxOverride` | Maximum override metadata |
 | `get:ste.app.savingMonitor:ActivationRate` | Saving monitor activation rate |
 | `get:ste.app.savingMonitor:possible` | Saving monitor possible payload |
 | `get:ste.app.savingMonitor:real` | Saving monitor real payload |
