@@ -49,6 +49,11 @@ ID_INTERNAL_TEMPERATURE_2 = 14
 ID_WATER_FLOW = 15
 ID_POWER = 16
 ID_CONFIGURED_POWER = 20
+ID_UNKNOWN_ODB_22 = 22
+ID_UNKNOWN_TEMPERATURE_24 = 24
+ID_BATH_FILL_CURRENT_VOLUME = 31
+ID_UNKNOWN_ODB_33 = 33
+ID_UNKNOWN_ODB_34 = 34
 ID_ELECTRICITY_PRICE_EUROS = 61
 ID_WATER_PRICE_EUROS = 62
 ID_SET_REQ = 66
@@ -86,7 +91,7 @@ ID_SAVING_MONITOR_REAL_ENERGY = 1070
 ID_DEVICE_INFO = 1071
 ID_SAVING_MONITOR_REAL_CO2 = 1072
 ID_SAVING_MONITOR_REAL_VALUE = 1073
-ID_UNHANDLED_ODB_VALUES = 1081
+ID_BATH_FILL_REMAINING_VOLUME = 1082
 ID_APP_CURRENCY = 1093
 ID_ELECTRICITY_PRICE = 1101
 ID_WATER_PRICE = 1102
@@ -166,6 +171,11 @@ INITIAL_VALUE_IDS = (
     ID_WATER_FLOW,
     ID_POWER,
     ID_CONFIGURED_POWER,
+    ID_UNKNOWN_ODB_22,
+    ID_UNKNOWN_TEMPERATURE_24,
+    ID_BATH_FILL_CURRENT_VOLUME,
+    ID_UNKNOWN_ODB_33,
+    ID_UNKNOWN_ODB_34,
     ID_ELECTRICITY_PRICE_EUROS,
     ID_ELECTRICITY_PRICE_CENTS,
     ID_WATER_PRICE_EUROS,
@@ -182,6 +192,13 @@ WRITABLE_OPTION_IDS = {
     ID_ECO_FLOW_LIMIT,
     ID_STOP_PROGRAM,
 }
+KNOWN_ODB_VALUE_IDS = (
+    *INITIAL_VALUE_IDS,
+    *WRITABLE_OPTION_IDS,
+    *PRICE_COMPONENT_IDS,
+    ID_SET_REQ,
+    ID_BATH_FILL_CURRENT_VOLUME,
+)
 
 BRUSH_TIMER_PATH = "ste.app.brushTimer"
 SHOWER_TIMER_PATH = "ste.app.showerTimer"
@@ -219,6 +236,33 @@ APP_TIMER_REQUEST_COMMANDS = tuple(
     for path, property_ids in TIMER_PATH_IDS.items()
     for property_name in property_ids
 )
+RADIO_PATH = "ste.app.radio"
+RADIO_STATE_FIELDS = (
+    "station",
+    "volume",
+    "play",
+    "paired",
+    "title",
+)
+RADIO_CATALOG_FIELDS = {"city", "country", "genre"}
+RADIO_REQUEST_COMMANDS = tuple(f"get:{RADIO_PATH}:{field}" for field in RADIO_STATE_FIELDS)
+RADIO_SET_COMMANDS = (
+    {f"set:{RADIO_PATH}:{field}" for field in RADIO_STATE_FIELDS}
+    | {f"set:{RADIO_PATH}:{field}" for field in RADIO_CATALOG_FIELDS}
+)
+RADIO_IGNORED_SET_COMMANDS = {
+    f"set:{RADIO_PATH}:favorites",
+    f"set:{RADIO_PATH}:stations",
+}
+RADIO_ASSIGN_COMMANDS = {
+    f"assign:{RADIO_PATH}:volume",
+    f"assign:{RADIO_PATH}:play",
+}
+WEATHER_PATH = "ste.app.weather"
+WEATHER_LOCATION_GET_COMMAND = f"get:{WEATHER_PATH}:location"
+WEATHER_LOCATION_SET_COMMAND = f"set:{WEATHER_PATH}:location"
+WEATHER_REQUEST_COMMANDS = (WEATHER_LOCATION_GET_COMMAND,)
+WEATHER_SET_COMMANDS = {WEATHER_LOCATION_SET_COMMAND}
 CONSUMPTION_COMMAND_IDS = {
     "set:ste.app.consumption:waterWeek": ID_WATER_CONSUMPTION_WEEK,
     "set:ste.app.consumption:waterYear": ID_WATER_CONSUMPTION_YEAR,
@@ -278,6 +322,8 @@ APP_SETTING_REQUEST_COMMANDS = tuple(
 )
 APP_STARTUP_REQUEST_COMMANDS = (
     *APP_SETTING_REQUEST_COMMANDS,
+    *RADIO_REQUEST_COMMANDS,
+    *WEATHER_REQUEST_COMMANDS,
     LAST_USAGE_GET_COMMAND,
     "get:ste.app.wellness:programs",
     *SAVING_MONITOR_REQUEST_COMMANDS,
@@ -300,6 +346,8 @@ AvailabilityCallback = Callable[[bool], None]
 OnlineCallback = Callable[[bool], None]
 MeasurementCallback = Callable[[int, MeasurementValue], None]
 ReconnectCallback = Callable[[int], None]
+RadioCallback = Callable[[dict[str, Any]], None]
+WeatherCallback = Callable[[dict[str, Any]], None]
 CallbackRemover = Callable[[], None]
 
 
@@ -382,6 +430,83 @@ def _values_equal(a: ODBValue | None, b: ODBValue | None) -> bool:
     return abs(float(a) - float(b)) < 0.001
 
 
+def _summarize_radio_value(value: Any) -> Any:
+    if isinstance(value, list):
+        if value and all(isinstance(item, dict) for item in value):
+            return {
+                "count": len(value),
+                "stations": [
+                    {
+                        "Id": item.get("Id"),
+                        "Name": item.get("Name"),
+                        "City": item.get("City"),
+                    }
+                    for item in value[:10]
+                ],
+            }
+        return {
+            "count": len(value),
+            "sample": value[:10],
+        }
+    if isinstance(value, dict):
+        if "station" in value or "favorites" in value:
+            return {
+                key: _summarize_radio_value(item)
+                for key, item in value.items()
+            }
+        if "Id" in value or "Name" in value or "StreamUrls" in value:
+            return {
+                "Id": value.get("Id"),
+                "Name": value.get("Name"),
+                "City": value.get("City"),
+                "Country": value.get("Country"),
+                "Genres": value.get("Genres"),
+                "Logo44Url": value.get("Logo44Url"),
+            }
+        return {
+            key: _summarize_radio_value(item)
+            for key, item in value.items()
+        }
+    return value
+
+
+def _copy_json_like_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _copy_json_like_value(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_copy_json_like_value(item) for item in value]
+    return value
+
+
+def _normalize_weather_value(raw_value: dict[str, Any]) -> dict[str, Any]:
+    state: dict[str, Any] = {}
+
+    location = raw_value.get("Location")
+    if isinstance(location, dict):
+        state["location"] = _copy_json_like_value(location)
+
+    complete_days = raw_value.get("CompleteDays")
+    if isinstance(complete_days, list):
+        state["complete_days"] = [
+            _copy_json_like_value(day)
+            for day in complete_days
+            if isinstance(day, dict)
+        ]
+
+    simple_days = raw_value.get("SimpleDays")
+    if isinstance(simple_days, list):
+        state["simple_days"] = [
+            _copy_json_like_value(day)
+            for day in simple_days
+            if isinstance(day, dict)
+        ]
+
+    return state
+
+
 class DHEClient:
     """Persistent Engine.IO v3 WebSocket client for DHE Connect."""
 
@@ -405,6 +530,8 @@ class DHEClient:
         self._online_callbacks: set[OnlineCallback] = set()
         self._measurement_callbacks: set[MeasurementCallback] = set()
         self._reconnect_callbacks: set[ReconnectCallback] = set()
+        self._radio_callbacks: set[RadioCallback] = set()
+        self._weather_callbacks: set[WeatherCallback] = set()
         self._available = False
         self._online = False
         self._has_connected = False
@@ -414,7 +541,8 @@ class DHEClient:
         self._last_measurements: dict[int, MeasurementValue] = {}
         self._last_measurement_attributes: dict[int, dict[str, Any]] = {}
         self._last_app_values: dict[str, Any] = {}
-        self._last_unhandled_odb_values: dict[int, Any] = {}
+        self._last_radio_state: dict[str, Any] = {}
+        self._last_weather_state: dict[str, Any] = {}
         self._last_saving_monitor_values: dict[str, Any] = {}
         self._last_device_info: dict[str, Any] = {}
         self._temperature_memory_ids_seen: set[int] = set()
@@ -464,8 +592,12 @@ class DHEClient:
         return dict(self._last_app_values)
 
     @property
-    def last_unhandled_odb_values(self) -> dict[int, Any]:
-        return dict(self._last_unhandled_odb_values)
+    def last_radio_state(self) -> dict[str, Any]:
+        return self._copy_radio_state()
+
+    @property
+    def last_weather_state(self) -> dict[str, Any]:
+        return self._copy_weather_state()
 
     def add_setpoint_callback(self, callback: SetpointCallback) -> CallbackRemover:
         remove = self._add_callback(self._setpoint_callbacks, callback)
@@ -519,6 +651,22 @@ class DHEClient:
             callback(self._reconnect_count)
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Could not initialize reconnect callback: %s", err)
+        return remove
+
+    def add_radio_callback(self, callback: RadioCallback) -> CallbackRemover:
+        remove = self._add_callback(self._radio_callbacks, callback)
+        try:
+            callback(self._copy_radio_state())
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Could not initialize radio callback: %s", err)
+        return remove
+
+    def add_weather_callback(self, callback: WeatherCallback) -> CallbackRemover:
+        remove = self._add_callback(self._weather_callbacks, callback)
+        try:
+            callback(self._copy_weather_state())
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Could not initialize weather callback: %s", err)
         return remove
 
     @staticmethod
@@ -689,6 +837,43 @@ class DHEClient:
                         continue
                     raise DHEError(f"Could not set DHE currency: {err}") from err
         raise DHEError("Could not set DHE currency")
+
+    async def set_radio_play(self, play: bool) -> bool:
+        requested = bool(play)
+        await self._assign_radio_value("play", requested)
+        self._handle_radio_value(f"assign:{RADIO_PATH}:play", requested)
+        return requested
+
+    async def set_radio_volume(self, volume_level: float) -> float:
+        volume = int(round(_clamp(float(volume_level), 0.0, 1.0) * 100.0))
+        await self._assign_radio_value("volume", volume)
+        self._handle_radio_value(f"assign:{RADIO_PATH}:volume", volume)
+        return volume / 100.0
+
+    async def _assign_radio_value(self, field: str, value: Any) -> None:
+        command = f"assign:{RADIO_PATH}:{field}"
+        if command not in RADIO_ASSIGN_COMMANDS:
+            raise DHEError(f"Unsupported DHE radio assignment: {field}")
+
+        async with self._command_lock:
+            for attempt in range(2):
+                try:
+                    await self._ensure_ready(timeout=45)
+                    ctx = self._ctx
+                    if ctx is None:
+                        raise DHEError("DHE session is not connected")
+                    await self._post_packet(ctx, self._message_packet({
+                        "command": command,
+                        "value": value,
+                    }))
+                    return
+                except Exception as err:  # noqa: BLE001
+                    if attempt == 0:
+                        await self._force_reconnect()
+                        await asyncio.sleep(1)
+                        continue
+                    raise DHEError(f"Could not write DHE radio {field}: {err}") from err
+        raise DHEError(f"Could not write DHE radio {field}")
 
     async def _set_price(self, value: float, euros_odb_id: int, cents_odb_id: int) -> float:
         total_cents = int(round(_clamp(float(value), 0.0, 9.99) * 100))
@@ -1227,11 +1412,21 @@ class DHEClient:
         data = event.data
         command = data.get("command")
         value = data.get("value")
+        is_radio_command = isinstance(command, str) and RADIO_PATH in command
         if command in APP_TIMER_RESET_COMMANDS:
             self._handle_app_timer_reset(command)
             return
         if command in APP_TIMER_VALUE_COMMANDS:
             self._handle_app_timer_value(command, value)
+            return
+        if command in RADIO_IGNORED_SET_COMMANDS:
+            self._last_app_values[command] = _summarize_radio_value(value)
+            return
+        if command in RADIO_SET_COMMANDS:
+            self._handle_radio_value(command, value)
+            return
+        if command in WEATHER_SET_COMMANDS:
+            self._handle_weather_value(command, value)
             return
         if command in CONSUMPTION_COMMAND_IDS:
             self._handle_consumption_value(command, value)
@@ -1254,11 +1449,23 @@ class DHEClient:
         if command in APP_STARTUP_SET_COMMANDS:
             self._handle_app_startup_value(command, value)
             return
-        if command not in {ODB_SET_COMMAND, ODB_ASSIGN_COMMAND} or not isinstance(value, dict):
+        if is_radio_command:
+            _LOGGER.debug(
+                "DHE radio unhandled command=%s value_summary=%r",
+                command,
+                _summarize_radio_value(value),
+            )
+            return
+        if command not in {ODB_SET_COMMAND, ODB_ASSIGN_COMMAND}:
+            self._log_unhandled_ste_command(command, value)
+            return
+        if not isinstance(value, dict):
+            self._log_unhandled_ste_command(command, value)
             return
         try:
             odb_id = int(value.get("id", -1))
         except (TypeError, ValueError):
+            self._log_unhandled_ste_command(command, value)
             return
         self._handle_odb_value(
             odb_id,
@@ -1290,6 +1497,67 @@ class DHEClient:
         elif path == SHOWER_TIMER_PATH:
             self._handle_measurement(ID_SHOWER_TIMER_REMAINING, 0.0, force_update=True)
             self._handle_measurement(ID_SHOWER_TIMER_ACTIVATION, False, force_update=True)
+
+    def _handle_radio_value(self, command: str, raw_value: Any) -> None:
+        field = command.rsplit(":", 1)[-1]
+        if field == "volume":
+            try:
+                value = int(_clamp(round(_raw_to_float(raw_value)), 0, 100))
+            except (TypeError, ValueError):
+                return
+        elif field in {"play", "paired"}:
+            try:
+                value = _raw_to_bool(raw_value)
+            except (TypeError, ValueError):
+                return
+        elif field == "station":
+            if not isinstance(raw_value, dict):
+                return
+            value = dict(raw_value)
+        elif field in RADIO_CATALOG_FIELDS and isinstance(raw_value, list):
+            self._last_app_values[command] = _summarize_radio_value(raw_value)
+            return
+        else:
+            value = "" if raw_value is None else str(raw_value)
+
+        self._last_app_values[command] = raw_value
+        if self._last_radio_state.get(field) == value:
+            return
+        self._last_radio_state[field] = value
+        for callback in tuple(self._radio_callbacks):
+            callback(self._copy_radio_state())
+
+    def _copy_radio_state(self) -> dict[str, Any]:
+        state: dict[str, Any] = {}
+        for key, value in self._last_radio_state.items():
+            if isinstance(value, dict):
+                state[key] = dict(value)
+            elif isinstance(value, list):
+                state[key] = [
+                    dict(item) if isinstance(item, dict) else item
+                    for item in value
+                ]
+            else:
+                state[key] = value
+        return state
+
+    def _handle_weather_value(self, command: str, raw_value: Any) -> None:
+        if not isinstance(raw_value, dict):
+            return
+
+        state = _normalize_weather_value(raw_value)
+        self._last_app_values[command] = state
+        if self._last_weather_state == state:
+            return
+        self._last_weather_state = state
+        for callback in tuple(self._weather_callbacks):
+            callback(self._copy_weather_state())
+
+    def _copy_weather_state(self) -> dict[str, Any]:
+        return {
+            key: _copy_json_like_value(value)
+            for key, value in self._last_weather_state.items()
+        }
 
     def _handle_consumption_value(self, command: str, raw_value: Any) -> None:
         if not isinstance(raw_value, dict):
@@ -1338,6 +1606,8 @@ class DHEClient:
             except (TypeError, ValueError) as err:
                 _LOGGER.debug("Ignoring invalid last usage %s value=%r: %s", field, item, err)
                 continue
+            if field in {"water", "energy"}:
+                value = round(value, 2)
 
             attributes = {
                 "source_command": LAST_USAGE_SET_COMMAND,
@@ -1613,8 +1883,8 @@ class DHEClient:
 
     def _handle_odb_value(self, odb_id: int, raw_value: Any, *, is_valid: Any = None) -> None:
         if is_valid is False:
-            self._store_unhandled_odb_value(odb_id, raw_value, is_valid=False)
-            _LOGGER.debug("Ignoring invalid DHE ODB value id=%s value=%r", odb_id, raw_value)
+            if int(odb_id) not in KNOWN_ODB_VALUE_IDS:
+                self._log_unhandled_odb_value(odb_id, raw_value, is_valid=False)
             return
         try:
             if odb_id == ID_SETPOINT:
@@ -1629,20 +1899,75 @@ class DHEClient:
                 self._handle_measurement(odb_id, self._configured_power_kw)
                 if self._last_power_fraction is not None:
                     self._handle_measurement(ID_POWER, self._last_power_fraction * self._configured_power_kw)
-            elif odb_id in {ID_INTERNAL_TEMPERATURE_1, ID_INTERNAL_TEMPERATURE_2}:
+            elif odb_id == ID_BATH_FILL_TARGET_VOLUME:
+                self._handle_measurement(odb_id, self._convert_odb_value(odb_id, raw_value))
+                self._refresh_bath_fill_remaining()
+            elif odb_id == ID_BATH_FILL_CURRENT_VOLUME:
+                self._handle_measurement(odb_id, max(0.0, _raw_to_float(raw_value)))
+                self._refresh_bath_fill_remaining()
+            elif odb_id in {
+                ID_INTERNAL_TEMPERATURE_1,
+                ID_INTERNAL_TEMPERATURE_2,
+                ID_UNKNOWN_TEMPERATURE_24,
+            }:
                 self._handle_measurement(odb_id, _raw_tenths_to_c(_raw_to_float(raw_value)))
+            elif odb_id in {
+                ID_UNKNOWN_ODB_22,
+                ID_UNKNOWN_ODB_33,
+                ID_UNKNOWN_ODB_34,
+            }:
+                self._handle_measurement(odb_id, _raw_to_float(raw_value))
             elif odb_id in PRICE_COMPONENT_IDS:
                 self._handle_price_component(odb_id, raw_value)
             elif odb_id == ID_CO2_EMISSION_RAW:
                 self._handle_co2_emission(raw_value)
             elif odb_id == ID_MAXIMUM_ACTIVE:
                 self._handle_measurement(odb_id, _raw_to_bool(raw_value))
+            elif odb_id == ID_SET_REQ:
+                return
             elif odb_id in WRITABLE_OPTION_IDS:
                 self._handle_measurement(odb_id, self._convert_odb_value(odb_id, raw_value))
             else:
-                self._store_unhandled_odb_value(odb_id, raw_value, is_valid=is_valid)
+                self._log_unhandled_odb_value(odb_id, raw_value, is_valid=is_valid)
+        except (TypeError, ValueError):
+            return
+
+    def _log_unhandled_ste_command(self, command: Any, value: Any) -> None:
+        if not isinstance(command, str) or not command.startswith(("get:ste", "set:ste")):
+            return
+        _LOGGER.debug("Unhandled DHE ste command=%s value=%r", command, value)
+
+    def _refresh_bath_fill_remaining(self) -> None:
+        target = self._last_measurements.get(ID_BATH_FILL_TARGET_VOLUME)
+        current = self._last_measurements.get(ID_BATH_FILL_CURRENT_VOLUME)
+        if target is None or current is None:
+            return
+        try:
+            target_l = max(0.0, _raw_to_float(target))
+            current_l = max(0.0, _raw_to_float(current))
         except (TypeError, ValueError) as err:
-            _LOGGER.debug("Ignoring invalid DHE ODB value id=%s value=%r: %s", odb_id, raw_value, err)
+            _LOGGER.debug(
+                "Ignoring invalid bath fill remaining values target=%r current=%r: %s",
+                target,
+                current,
+                err,
+            )
+            return
+
+        attributes = {
+            "source": "derived",
+            "target_l": target_l,
+            "filled_l": current_l,
+            "target_odb_id": ID_BATH_FILL_TARGET_VOLUME,
+            "filled_odb_id": ID_BATH_FILL_CURRENT_VOLUME,
+        }
+        previous_attributes = self._last_measurement_attributes.get(ID_BATH_FILL_REMAINING_VOLUME)
+        self._last_measurement_attributes[ID_BATH_FILL_REMAINING_VOLUME] = attributes
+        self._handle_measurement(
+            ID_BATH_FILL_REMAINING_VOLUME,
+            max(target_l - current_l, 0.0),
+            force_update=previous_attributes != attributes,
+        )
 
     def _handle_price_component(self, odb_id: int, raw_value: Any) -> None:
         value = int(round(_raw_to_float(raw_value)))
@@ -1698,24 +2023,13 @@ class DHEClient:
     def _raw_to_co2_emission(raw_value: float) -> float:
         return round(max(0.0, float(raw_value) / 1000.0), 2)
 
-    def _store_unhandled_odb_value(self, odb_id: int, raw_value: Any, *, is_valid: Any = None) -> None:
-        self._last_unhandled_odb_values[int(odb_id)] = {
-            "value": raw_value,
-            "is_valid": is_valid,
-        }
-        attributes = {
-            "values": {
-                str(key): value
-                for key, value in sorted(self._last_unhandled_odb_values.items())
-            },
-            "source": "ste.common.odb:value",
-        }
-        previous_attributes = self._last_measurement_attributes.get(ID_UNHANDLED_ODB_VALUES)
-        self._last_measurement_attributes[ID_UNHANDLED_ODB_VALUES] = attributes
-        self._handle_measurement(
-            ID_UNHANDLED_ODB_VALUES,
-            float(len(self._last_unhandled_odb_values)),
-            force_update=previous_attributes != attributes,
+    @staticmethod
+    def _log_unhandled_odb_value(odb_id: int, raw_value: Any, *, is_valid: Any = None) -> None:
+        _LOGGER.debug(
+            "Unhandled DHE ODB value id=%s value=%r is_valid=%r",
+            odb_id,
+            raw_value,
+            is_valid,
         )
 
     def _handle_setpoint(self, value: float) -> None:

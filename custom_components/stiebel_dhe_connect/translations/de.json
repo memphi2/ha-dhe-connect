@@ -87,12 +87,6 @@
       "temperature_memory_12": {
         "name": "Speicher 12"
       },
-      "delete_temperature_memory_1": {
-        "name": "Speicher 1 löschen"
-      },
-      "delete_temperature_memory_2": {
-        "name": "Speicher 2 löschen"
-      },
       "delete_temperature_memory_3": {
         "name": "Speicher 3 löschen"
       },
@@ -122,6 +116,16 @@
       },
       "delete_temperature_memory_12": {
         "name": "Speicher 12 löschen"
+      }
+    },
+    "media_player": {
+      "radio": {
+        "name": "Radio"
+      }
+    },
+    "weather": {
+      "weather": {
+        "name": "Wetter"
       }
     },
     "number": {
@@ -245,6 +249,18 @@
       "internal_temperature_2": {
         "name": "Ausgangstemperatur"
       },
+      "unknown_odb_22": {
+        "name": "Unbekannter ODB-Wert 22"
+      },
+      "unknown_temperature_24": {
+        "name": "Unbekannte Temperatur 24"
+      },
+      "unknown_odb_33": {
+        "name": "Unbekannter ODB-Wert 33"
+      },
+      "unknown_odb_34": {
+        "name": "Unbekannter ODB-Wert 34"
+      },
       "water_consumption_week": {
         "name": "Wasserverbrauch Woche"
       },
@@ -274,6 +290,9 @@
       },
       "last_usage_cost": {
         "name": "Letzte Nutzungskosten"
+      },
+      "bath_fill_remaining_volume": {
+        "name": "Wannenfüllung verbleibend"
       },
       "saving_monitor_water": {
         "name": "Sparmonitor Verbrauch Wasser"
@@ -323,9 +342,6 @@
       "device_info": {
         "name": "Geräteinfo"
       },
-      "device_type": {
-        "name": "Typ"
-      },
       "product_id": {
         "name": "Produkt-ID"
       },
@@ -334,9 +350,6 @@
       },
       "bluetooth_mac": {
         "name": "Bluetooth MAC"
-      },
-      "unhandled_odb_values": {
-        "name": "Unzugeordnete ODB-Werte"
       }
     },
     "switch": {

@@ -49,6 +49,7 @@ class StiebelDHECurrencySelect(SelectEntity, RestoreEntity):
     """Currency select backed by the DHE app currency setting."""
 
     _attr_entity_category = EntityCategory.CONFIG
+    _attr_entity_registry_enabled_default = False
     _attr_has_entity_name = True
     _attr_icon = "mdi:currency-eur"
     _attr_should_poll = False

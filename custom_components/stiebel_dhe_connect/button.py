@@ -68,9 +68,9 @@ TEMPERATURE_MEMORY_MEASUREMENT_SLOTS = {
 def _temperature_memory_button_descriptions(
     slot: int,
     measurement_id: int,
-) -> tuple[StiebelDHEButtonEntityDescription, StiebelDHEButtonEntityDescription]:
+) -> tuple[StiebelDHEButtonEntityDescription, ...]:
     icon = f"mdi:numeric-{slot}-box-outline" if slot < 10 else "mdi:counter"
-    return (
+    descriptions = [
         StiebelDHEButtonEntityDescription(
             key=f"temperature_memory_{slot}",
             translation_key=f"temperature_memory_{slot}",
@@ -84,20 +84,24 @@ def _temperature_memory_button_descriptions(
                 "odb_id": 66,
             },
         ),
-        StiebelDHEButtonEntityDescription(
-            key=f"delete_temperature_memory_{slot}",
-            translation_key=f"delete_temperature_memory_{slot}",
-            method="delete_temperature_memory",
-            method_args=(slot,),
-            icon="mdi:trash-can-outline",
-            availability_measurement_id=measurement_id,
-            extra_state_attributes={
-                "temperature_memory_slot": slot,
-                "temperature_memory_id": slot - 1,
-                "temperature_memory_operation": "delete",
-            },
-        ),
-    )
+    ]
+    if slot > 2:
+        descriptions.append(
+            StiebelDHEButtonEntityDescription(
+                key=f"delete_temperature_memory_{slot}",
+                translation_key=f"delete_temperature_memory_{slot}",
+                method="delete_temperature_memory",
+                method_args=(slot,),
+                icon="mdi:trash-can-outline",
+                availability_measurement_id=measurement_id,
+                extra_state_attributes={
+                    "temperature_memory_slot": slot,
+                    "temperature_memory_id": slot - 1,
+                    "temperature_memory_operation": "delete",
+                },
+            )
+        )
+    return tuple(descriptions)
 
 
 async def async_setup_entry(
@@ -108,7 +112,7 @@ async def async_setup_entry(
     """Set up DHE buttons from a config entry."""
     runtime = hass.data[DOMAIN][entry.entry_id]
     client: DHEClient = runtime.client
-    added_memory_buttons: dict[int, tuple[StiebelDHEButton, StiebelDHEButton]] = {}
+    added_memory_buttons: dict[int, tuple[StiebelDHEButton, ...]] = {}
 
     def add_memory_buttons(measurement_id: int) -> None:
         if measurement_id in added_memory_buttons:
@@ -165,6 +169,16 @@ async def async_setup_entry(
             for description in STATIC_BUTTON_DESCRIPTIONS
         ]
     )
+    registry = er.async_get(hass)
+    for slot in (1, 2):
+        entity_id = registry.async_get_entity_id(
+            "button",
+            DOMAIN,
+            f"stiebel_dhe_connect_{entry.entry_id}_delete_temperature_memory_{slot}",
+        )
+        if entity_id is not None:
+            registry.async_remove(entity_id)
+
     entry.async_on_unload(client.add_measurement_callback(handle_temperature_memory_update))
 
 

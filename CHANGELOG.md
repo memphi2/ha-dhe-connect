@@ -1,5 +1,28 @@
 # Changelog
 
+## v1.0.2 - 2026-05-10
+
+This release focuses on a cleaner device card, better protocol coverage and less noisy diagnostics while keeping the local WebSocket behavior close to the DHE browser UI.
+
+### Added
+
+- Radio media player for current station metadata, playback and volume.
+- Weather entity based on the DHE `ste.app.weather:location` forecast payload.
+- Bath fill remaining sensor derived from target volume minus current fill volume.
+- Disabled-by-default diagnostic entities for observed ODB IDs `22`, `24`, `33` and `34`.
+
+### Changed
+
+- Reduced default entity noise: advanced diagnostics, saving monitor values, configured power and week/year consumption sensors now start disabled.
+- Kept radio startup lean by requesting only station, title, play, pairing and volume state; catalog/search/favorites payloads are recognized but not exposed.
+- Rounded last usage water and energy values to two decimals.
+- Updated README protocol notes, entity tables and troubleshooting guidance for the v1.0.2 entity model.
+
+### Removed
+
+- Removed legacy duplicate device type and unhandled ODB value entities.
+- Removed delete buttons for fixed temperature memory slots 1 and 2.
+
 ## v1.0.1 - 2026-05-09
 
 ### Added

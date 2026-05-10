@@ -6,7 +6,7 @@ The integration talks directly to the DHE web interface on your local network. I
 
 ## Status
 
-- Current version: `1.0.1`
+- Current version: `1.0.2`
 - Home Assistant setup: UI config flow
 - HACS type: custom integration
 - IoT class: local push
@@ -22,11 +22,13 @@ This is a custom integration and should be used on a trusted local network.
 - Automatic reconnect and diagnostic reconnect counter.
 - Target temperature control through the DHE ODB command interface.
 - Temperature memory buttons that use the temperatures currently stored in up to 12 memory slots.
-- Water consumption sensors exposed as Home Assistant water meters for the water dashboard.
-- Energy, water, last usage, expanded saving monitor and timer sensors.
+- Water and energy consumption sensors, with long-term values disabled by default to keep the device card tidy.
+- Last usage, saving monitor, brush timer, shower timer and device diagnostic sensors.
 - Eco mode, Eco flow limit, bath fill, currency, maximum temperature and wellness controls.
+- Compact radio media player for station metadata, playback and volume.
+- Weather entity for the DHE forecast payload.
 - Brush timer and shower timer controls.
-- Diagnostic online status, app settings, device info and unhandled ODB value tracking.
+- Diagnostic online status, reconnect count and device information.
 
 ## Installation
 
@@ -107,46 +109,65 @@ The climate entity keeps the last valid target temperature during short reconnec
 |---|---|---|---|
 | Online | Binary sensor | `connectivity` | Authenticated persistent session state |
 
+### Media player
+
+| Entity | Features | Source / command | Behavior |
+|---|---|---|---|
+| Radio | play/pause, volume | `get:ste.app.radio:station`, `volume`, `play`, `paired`, `title`; `assign:ste.app.radio:play`, `volume` | Shows the current radio station/title and controls playback/volume |
+
+The radio entity intentionally does not request the full station catalog. Catalog, favorites and search payloads are treated as known protocol messages when the DHE sends them, but they are not exposed as controls.
+
+### Weather
+
+| Entity | Features | Source / command | Behavior |
+|---|---|---|---|
+| Weather | daily forecast | `get:ste.app.weather:location` | Shows the DHE weather location, current forecast condition and daily forecast values |
+
+The weather entity exposes the DHE forecast location, daily temperatures, precipitation probabilities and original `icon_id_*` values. Home Assistant weather conditions are derived conservatively from precipitation until the DHE icon ID mapping has been verified with real device data.
+
 ### Sensors
 
 | Entity | Unit | Class / category | State class | Source / scaling |
 |---|---:|---|---|---|
 | Current water flow | `L/min` | `volume_flow_rate` | `measurement` | ODB ID `15 / 10` |
 | Current power consumption | `kW` | `power` | `measurement` | ODB ID `16 / 100 * configured_power_kw` |
-| Configured power | `kW` | `power` | none | ODB ID `20` |
+| Configured power | `kW` | `power`, disabled by default | none | ODB ID `20` |
+| Unknown ODB value 22 | none | diagnostic, disabled by default | `measurement` | ODB ID `22`, raw numeric value |
 | Inlet temperature | `C` | `temperature`, diagnostic | `measurement` | ODB ID `13 / 10` |
 | Outlet temperature | `C` | `temperature`, diagnostic | `measurement` | ODB ID `14 / 10` |
-| Water consumption week | `L` | `water` | `total_increasing` | `set:ste.app.consumption:waterWeek` |
-| Water consumption year | `m3` | `water` | `total_increasing` | `set:ste.app.consumption:waterYear` |
-| Water consumption years | `m3` | `water` | `total_increasing` | `set:ste.app.consumption:waterYears` |
-| Energy consumption week | `kWh` | `energy` | `total` | `set:ste.app.consumption:energyWeek` |
-| Energy consumption year | `kWh` | `energy` | `total` | `set:ste.app.consumption:energyYear` |
-| Energy consumption years | `kWh` | `energy` | `total` | `set:ste.app.consumption:energyYears` |
+| Unknown temperature 24 | `C` | `temperature`, diagnostic, disabled by default | `measurement` | ODB ID `24 / 10` |
+| Unknown ODB value 33 | none | diagnostic, disabled by default | `measurement` | ODB ID `33`, raw numeric value |
+| Unknown ODB value 34 | none | diagnostic, disabled by default | `measurement` | ODB ID `34`, raw numeric value |
+| Water consumption week | `L` | `water`, disabled by default | `total_increasing` | `set:ste.app.consumption:waterWeek` |
+| Water consumption year | `m3` | `water`, disabled by default | `total_increasing` | `set:ste.app.consumption:waterYear` |
+| Water consumption years | `m3` | `water`, disabled by default | `total_increasing` | `set:ste.app.consumption:waterYears` |
+| Energy consumption week | `kWh` | `energy`, disabled by default | `total` | `set:ste.app.consumption:energyWeek` |
+| Energy consumption year | `kWh` | `energy`, disabled by default | `total` | `set:ste.app.consumption:energyYear` |
+| Energy consumption years | `kWh` | `energy`, disabled by default | `total` | `set:ste.app.consumption:energyYears` |
 | Last usage water | `L` | none | `measurement` | `set:ste.app.consumption:lastUsage.water` |
 | Last usage energy | `kWh` | none | `measurement` | `set:ste.app.consumption:lastUsage.energy` |
 | Last usage duration | `min` | `duration` | `measurement` | `set:ste.app.consumption:lastUsage.time` |
 | Last usage cost | `EUR` | `monetary` | none | `set:ste.app.consumption:lastUsage.costs` |
-| Saving monitor consumption water | `L` | none | `measurement` | `set:ste.app.savingMonitor:consumption.water_l`, rounded to 2 decimals |
-| Saving monitor consumption energy | `kWh` | none | `measurement` | `set:ste.app.savingMonitor:consumption.energy_Wh / 1000`, rounded to 2 decimals |
-| Saving monitor consumption CO2 | `kg` | none | `measurement` | `set:ste.app.savingMonitor:consumption.emission_Co2Kg`, rounded to 2 decimals |
-| Saving monitor activation rate | `%` | none | `measurement` | `set:ste.app.savingMonitor:ActivationRate`, rounded to 1 decimal |
-| Saving monitor possible water saving | `L` | none | `measurement` | `set:ste.app.savingMonitor:possible.water_l`, rounded to 2 decimals |
-| Saving monitor possible energy saving | `kWh` | none | `measurement` | `set:ste.app.savingMonitor:possible.energy_Wh / 1000`, rounded to 2 decimals |
-| Saving monitor possible CO2 saving | `kg` | none | `measurement` | `set:ste.app.savingMonitor:possible.emission_Co2Kg`, rounded to 2 decimals |
-| Saving monitor possible cost saving | `EUR` | `monetary` | none | `set:ste.app.savingMonitor:possible.value_E`, rounded to 2 decimals |
-| Saving monitor real water saving | `L` | none | `measurement` | `set:ste.app.savingMonitor:real.water_l`, rounded to 2 decimals |
-| Saving monitor real energy saving | `kWh` | none | `measurement` | `set:ste.app.savingMonitor:real.energy_Wh / 1000`, rounded to 2 decimals |
-| Saving monitor real CO2 saving | `kg` | none | `measurement` | `set:ste.app.savingMonitor:real.emission_Co2Kg`, rounded to 2 decimals |
-| Saving monitor real cost saving | `EUR` | `monetary` | none | `set:ste.app.savingMonitor:real.value_E`, rounded to 2 decimals |
+| Bath fill remaining | `L` | none | `measurement` | Derived from target volume ODB ID `3` minus current bath fill ODB ID `31` |
+| Saving monitor consumption water | `L` | disabled by default | `measurement` | `set:ste.app.savingMonitor:consumption.water_l`, rounded to 2 decimals |
+| Saving monitor consumption energy | `kWh` | disabled by default | `measurement` | `set:ste.app.savingMonitor:consumption.energy_Wh / 1000`, rounded to 2 decimals |
+| Saving monitor consumption CO2 | `kg` | disabled by default | `measurement` | `set:ste.app.savingMonitor:consumption.emission_Co2Kg`, rounded to 2 decimals |
+| Saving monitor activation rate | `%` | disabled by default | `measurement` | `set:ste.app.savingMonitor:ActivationRate`, rounded to 1 decimal |
+| Saving monitor possible water saving | `L` | disabled by default | `measurement` | `set:ste.app.savingMonitor:possible.water_l`, rounded to 2 decimals |
+| Saving monitor possible energy saving | `kWh` | disabled by default | `measurement` | `set:ste.app.savingMonitor:possible.energy_Wh / 1000`, rounded to 2 decimals |
+| Saving monitor possible CO2 saving | `kg` | disabled by default | `measurement` | `set:ste.app.savingMonitor:possible.emission_Co2Kg`, rounded to 2 decimals |
+| Saving monitor possible cost saving | `EUR` | `monetary`, disabled by default | none | `set:ste.app.savingMonitor:possible.value_E`, rounded to 2 decimals |
+| Saving monitor real water saving | `L` | disabled by default | `measurement` | `set:ste.app.savingMonitor:real.water_l`, rounded to 2 decimals |
+| Saving monitor real energy saving | `kWh` | disabled by default | `measurement` | `set:ste.app.savingMonitor:real.energy_Wh / 1000`, rounded to 2 decimals |
+| Saving monitor real CO2 saving | `kg` | disabled by default | `measurement` | `set:ste.app.savingMonitor:real.emission_Co2Kg`, rounded to 2 decimals |
+| Saving monitor real cost saving | `EUR` | `monetary`, disabled by default | none | `set:ste.app.savingMonitor:real.value_E`, rounded to 2 decimals |
 | Brush timer remaining | `M:SS` | none | none | `set:ste.app.brushTimer:remainingMilliseconds` |
 | Shower timer remaining | `M:SS` | none | none | `set:ste.app.showerTimer:remainingMilliseconds` |
 | Reconnects | count | none | `total_increasing` | Successful reconnect count after the initial connection |
 | Device info | text | diagnostic | none | DHE version and device information commands |
-| Type | text | diagnostic | none | `set:ste.common.version:gadgetData.type` |
 | Product ID | text | diagnostic | none | `set:ste.common.version:gadgetData.id` |
 | WLAN MAC | text | diagnostic | none | `set:ste.common.version:gadgetData.wlan` |
 | Bluetooth MAC | text | diagnostic | none | `set:ste.common.version:gadgetData.bluetooth` |
-| Unhandled ODB values | count | diagnostic | none | Unknown valid ODB values and invalid ODB readbacks |
 
 Consumption sensors expose the DHE chart array as a `chart` attribute and the reported cost as `cost_eur` where available. Saving monitor sensors expose the latest `possible`, `real`, `consumption` and `activation_rate` payloads as attributes.
 
@@ -205,7 +226,7 @@ Wellness programs are triggered by writing the program ID and then sending the D
 | Reset brush timer | `assign:ste.app.brushTimer:reset` | Resets brush timer remaining time and activation state |
 | Reset shower timer | `assign:ste.app.showerTimer:reset` | Resets shower timer remaining time and activation state |
 | Temperature memory 1-12 | ODB ID `66` command | Sends the temperature stored in the matching memory slot; created only for slots reported by the DHE |
-| Delete temperature memory 1-12 | `assign:ste.common.temperature:memory` | Deletes the matching memory slot with `operation: delete`; created only for slots reported by the DHE |
+| Delete temperature memory 3-12 | `assign:ste.common.temperature:memory` | Deletes the matching memory slot with `operation: delete`; memory slots 1 and 2 are fixed presets and are not deletable |
 
 The memory preset buttons do not send fixed temperatures. They read the current memory slot value from the DHE cache, refresh it if needed, build the ODB ID `66` button payload from that temperature and send it.
 
@@ -217,7 +238,7 @@ The three water consumption sensors are exposed as real Home Assistant water met
 - `state_class=total_increasing`
 - units `L` or `m3`
 
-This allows them to be used in the Home Assistant energy/water dashboard. Home Assistant may need up to two hours before newly added long-term statistics entities appear in dashboard pickers.
+This allows them to be used in the Home Assistant energy/water dashboard after you enable the desired disabled-by-default consumption entities. Home Assistant may need up to two hours before newly added long-term statistics entities appear in dashboard pickers.
 
 ## Protocol
 
@@ -344,6 +365,11 @@ Required startup reads seed the interactive entities:
 | `15` | Water flow |
 | `16` | Current power fraction |
 | `20` | Configured power |
+| `22` | Unknown raw diagnostic value, disabled entity |
+| `24` | Unknown temperature, disabled entity |
+| `31` | Current bath fill volume |
+| `33` | Unknown raw diagnostic value, disabled entity |
+| `34` | Unknown raw diagnostic value, disabled entity |
 | `61` | Electricity price euros |
 | `62` | Water price euros |
 | `69` | CO2 emission |
@@ -357,6 +383,12 @@ Best-effort startup reads collect additional values:
 | `get:ste.common.temperature:memory` | Temperature memory slots |
 | `get:ste.app.brushTimer:*` | Brush timer activation, duration and remaining time |
 | `get:ste.app.showerTimer:*` | Shower timer activation, duration and remaining time |
+| `get:ste.app.radio:station` | Current radio station metadata |
+| `get:ste.app.radio:volume` | Radio volume in percent |
+| `get:ste.app.radio:play` | Radio playback state |
+| `get:ste.app.radio:paired` | Radio pairing state |
+| `get:ste.app.radio:title` | Current radio title |
+| `get:ste.app.weather:location` | Weather location and daily forecast payload |
 | `get:ste.app.consumption:waterWeek` | Weekly water chart |
 | `get:ste.app.consumption:waterYear` | Year water chart |
 | `get:ste.app.consumption:waterYears` | Multi-year water chart |
@@ -389,6 +421,12 @@ Deleting a memory slot uses the zero-based `id` and `operation: delete`:
 {"command": "assign:ste.common.temperature:memory", "value": {"id": 2, "operation": "delete"}}
 ```
 
+Radio playback uses `assign:ste.app.radio:*`:
+
+```json
+{"command": "assign:ste.app.radio:play", "value": true}
+```
+
 ### ODB handling
 
 Mapped ODB values are converted before publishing to Home Assistant:
@@ -407,7 +445,7 @@ Mapped ODB values are converted before publishing to Home Assistant:
 | `62` and `71` | Combined to the `Water price` number as euros plus cents |
 | `69` | CO2 emission decoded as `raw / 1000` kg/kWh |
 
-If a DHE ODB readback is marked with `isValid: false`, it is not published as a normal entity state. It is stored in the `Unhandled ODB values` diagnostic sensor instead.
+If a DHE ODB readback is marked with `isValid: false`, it is not published as a normal entity state. Unknown ODB values are logged at debug level for protocol discovery.
 
 ODB ID `66` is command-only and is not read at startup.
 
@@ -433,6 +471,7 @@ Short reconnects do not immediately drop every entity to unavailable. Entities w
 | Pairing repeats | Delete `/config/.storage/stiebel_dhe_connect_token.txt` and pair again |
 | Entities stay unavailable | Check the `Online` binary sensor and Home Assistant logs for DHE session errors |
 | Reconnect counter increases often | Confirm the WebSocket connection is not blocked and no second client is fighting for the DHE session |
+| Radio entity has no station/title | Open or change the radio once on the DHE UI so the device publishes station metadata |
 | Water entity missing from dashboard | Wait for Home Assistant statistics discovery, which can take up to two hours |
 | Temperature write fails | Check DHE limits, locks, device mode and local reachability |
 | Timer reset does not update | Confirm that the DHE accepts the matching brush/shower timer reset command |

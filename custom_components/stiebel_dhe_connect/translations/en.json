@@ -87,12 +87,6 @@
       "temperature_memory_12": {
         "name": "Memory 12"
       },
-      "delete_temperature_memory_1": {
-        "name": "Delete memory 1"
-      },
-      "delete_temperature_memory_2": {
-        "name": "Delete memory 2"
-      },
       "delete_temperature_memory_3": {
         "name": "Delete memory 3"
       },
@@ -122,6 +116,16 @@
       },
       "delete_temperature_memory_12": {
         "name": "Delete memory 12"
+      }
+    },
+    "media_player": {
+      "radio": {
+        "name": "Radio"
+      }
+    },
+    "weather": {
+      "weather": {
+        "name": "Weather"
       }
     },
     "number": {
@@ -245,6 +249,18 @@
       "internal_temperature_2": {
         "name": "Outlet temperature"
       },
+      "unknown_odb_22": {
+        "name": "Unknown ODB value 22"
+      },
+      "unknown_temperature_24": {
+        "name": "Unknown temperature 24"
+      },
+      "unknown_odb_33": {
+        "name": "Unknown ODB value 33"
+      },
+      "unknown_odb_34": {
+        "name": "Unknown ODB value 34"
+      },
       "water_consumption_week": {
         "name": "Water consumption week"
       },
@@ -274,6 +290,9 @@
       },
       "last_usage_cost": {
         "name": "Last usage cost"
+      },
+      "bath_fill_remaining_volume": {
+        "name": "Bath fill remaining"
       },
       "saving_monitor_water": {
         "name": "Saving monitor consumption water"
@@ -323,9 +342,6 @@
       "device_info": {
         "name": "Device info"
       },
-      "device_type": {
-        "name": "Type"
-      },
       "product_id": {
         "name": "Product ID"
       },
@@ -334,9 +350,6 @@
       },
       "bluetooth_mac": {
         "name": "Bluetooth MAC"
-      },
-      "unhandled_odb_values": {
-        "name": "Unhandled ODB values"
       }
     },
     "switch": {
