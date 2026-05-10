@@ -93,6 +93,7 @@ STATIC_NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         native_step=0.01,
         mode=NumberMode.BOX,
         odb_id=ID_ELECTRICITY_PRICE,
+        entity_registry_enabled_default=False,
     ),
     StiebelDHENumberEntityDescription(
         key="water_price",
@@ -104,6 +105,7 @@ STATIC_NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         native_step=0.01,
         mode=NumberMode.BOX,
         odb_id=ID_WATER_PRICE,
+        entity_registry_enabled_default=False,
     ),
     StiebelDHENumberEntityDescription(
         key="co2_emission",
@@ -115,6 +117,7 @@ STATIC_NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         native_step=0.01,
         mode=NumberMode.BOX,
         odb_id=ID_CO2_EMISSION,
+        entity_registry_enabled_default=False,
     ),
     StiebelDHENumberEntityDescription(
         key="brush_timer_duration",

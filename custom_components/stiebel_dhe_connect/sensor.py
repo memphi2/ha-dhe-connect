@@ -22,12 +22,14 @@ from homeassistant.const import (
     UnitOfVolumeFlowRate,
 )
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .client import (
     BRUSH_TIMER_PATH,
     DHEClient,
+    ID_BATH_FILL_REMAINING_VOLUME,
     ID_BRUSH_TIMER_REMAINING,
     ID_CONFIGURED_POWER,
     ID_DEVICE_INFO,
@@ -54,7 +56,10 @@ from .client import (
     ID_SAVING_MONITOR_REAL_WATER,
     ID_SAVING_MONITOR_WATER,
     ID_SHOWER_TIMER_REMAINING,
-    ID_UNHANDLED_ODB_VALUES,
+    ID_UNKNOWN_ODB_22,
+    ID_UNKNOWN_ODB_33,
+    ID_UNKNOWN_ODB_34,
+    ID_UNKNOWN_TEMPERATURE_24,
     ID_WATER_CONSUMPTION_WEEK,
     ID_WATER_CONSUMPTION_YEAR,
     ID_WATER_CONSUMPTION_YEARS,
@@ -75,6 +80,29 @@ class StiebelDHESensorEntityDescription(SensorEntityDescription):
     timer_property: str | None = None
     source_command: str | None = None
     period: str | None = None
+
+
+DEFAULT_DISABLED_SENSOR_KEYS = {
+    "configured_power",
+    "water_consumption_week",
+    "water_consumption_year",
+    "water_consumption_years",
+    "energy_consumption_week",
+    "energy_consumption_year",
+    "energy_consumption_years",
+    "saving_monitor_water",
+    "saving_monitor_energy",
+    "saving_monitor_co2",
+    "saving_monitor_activation_rate",
+    "saving_monitor_possible_water",
+    "saving_monitor_possible_energy",
+    "saving_monitor_possible_co2",
+    "saving_monitor_possible_value",
+    "saving_monitor_real_water",
+    "saving_monitor_real_energy",
+    "saving_monitor_real_co2",
+    "saving_monitor_real_value",
+}
 
 
 SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
@@ -102,6 +130,15 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         odb_id=ID_CONFIGURED_POWER,
     ),
     StiebelDHESensorEntityDescription(
+        key="unknown_odb_22",
+        translation_key="unknown_odb_22",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:database-question",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        odb_id=ID_UNKNOWN_ODB_22,
+    ),
+    StiebelDHESensorEntityDescription(
         key="internal_temperature_1",
         translation_key="internal_temperature_1",
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
@@ -109,6 +146,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:thermometer",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
         odb_id=ID_INTERNAL_TEMPERATURE_1,
     ),
     StiebelDHESensorEntityDescription(
@@ -119,7 +157,37 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:thermometer",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
         odb_id=ID_INTERNAL_TEMPERATURE_2,
+    ),
+    StiebelDHESensorEntityDescription(
+        key="unknown_temperature_24",
+        translation_key="unknown_temperature_24",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:thermometer-alert",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        odb_id=ID_UNKNOWN_TEMPERATURE_24,
+    ),
+    StiebelDHESensorEntityDescription(
+        key="unknown_odb_33",
+        translation_key="unknown_odb_33",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:database-question",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        odb_id=ID_UNKNOWN_ODB_33,
+    ),
+    StiebelDHESensorEntityDescription(
+        key="unknown_odb_34",
+        translation_key="unknown_odb_34",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:database-question",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        odb_id=ID_UNKNOWN_ODB_34,
     ),
     StiebelDHESensorEntityDescription(
         key="water_consumption_week",
@@ -189,6 +257,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         translation_key="last_usage_water",
         native_unit_of_measurement=UnitOfVolume.LITERS,
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
         icon="mdi:water-check",
         odb_id=ID_LAST_USAGE_WATER,
         source_command="set:ste.app.consumption:lastUsage",
@@ -198,6 +267,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         translation_key="last_usage_energy",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
         icon="mdi:lightning-bolt",
         odb_id=ID_LAST_USAGE_ENERGY,
         source_command="set:ste.app.consumption:lastUsage",
@@ -342,6 +412,16 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         source_command="set:ste.app.savingMonitor:real",
     ),
     StiebelDHESensorEntityDescription(
+        key="bath_fill_remaining_volume",
+        translation_key="bath_fill_remaining_volume",
+        native_unit_of_measurement=UnitOfVolume.LITERS,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        icon="mdi:bathtub",
+        odb_id=ID_BATH_FILL_REMAINING_VOLUME,
+        source_command="derived:bath_fill_remaining",
+    ),
+    StiebelDHESensorEntityDescription(
         key="brush_timer_remaining",
         translation_key="brush_timer_remaining",
         icon="mdi:toothbrush",
@@ -366,19 +446,11 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         source_command="set:ste.common.version:*",
     ),
     StiebelDHESensorEntityDescription(
-        key="device_type",
-        translation_key="device_type",
-        icon="mdi:water-boiler",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        odb_id=ID_DEVICE_INFO,
-        attribute_key="device_type",
-        source_command="set:ste.common.version:gadgetData",
-    ),
-    StiebelDHESensorEntityDescription(
         key="product_id",
         translation_key="product_id",
         icon="mdi:identifier",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
         odb_id=ID_DEVICE_INFO,
         attribute_key="device_id",
         source_command="set:ste.common.version:gadgetData",
@@ -388,6 +460,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         translation_key="wlan_mac",
         icon="mdi:wifi",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
         odb_id=ID_DEVICE_INFO,
         attribute_key="wlan_mac",
         source_command="set:ste.common.version:gadgetData",
@@ -397,17 +470,10 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         translation_key="bluetooth_mac",
         icon="mdi:bluetooth",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
         odb_id=ID_DEVICE_INFO,
         attribute_key="bluetooth_mac",
         source_command="set:ste.common.version:gadgetData",
-    ),
-    StiebelDHESensorEntityDescription(
-        key="unhandled_odb_values",
-        translation_key="unhandled_odb_values",
-        icon="mdi:database-search",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        odb_id=ID_UNHANDLED_ODB_VALUES,
-        source_command="ste.common.odb:value",
     ),
 )
 
@@ -419,6 +485,16 @@ async def async_setup_entry(
 ) -> None:
     """Set up DHE sensors from a config entry."""
     runtime = hass.data[DOMAIN][entry.entry_id]
+    registry = er.async_get(hass)
+    for legacy_key in ("device_type", "unhandled_odb_values"):
+        legacy_entity_id = registry.async_get_entity_id(
+            "sensor",
+            DOMAIN,
+            f"stiebel_dhe_connect_{entry.entry_id}_{legacy_key}",
+        )
+        if legacy_entity_id is not None:
+            registry.async_remove(legacy_entity_id)
+
     async_add_entities(
         [
             StiebelDHESensor(
@@ -457,6 +533,8 @@ class StiebelDHESensor(SensorEntity):
         self.entity_description = description
         self._attr_translation_key = description.translation_key
         self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_{description.key}"
+        if description.key in DEFAULT_DISABLED_SENSOR_KEYS:
+            self._attr_entity_registry_enabled_default = False
         self._attr_device_info = {
             "identifiers": {(DOMAIN, client.host)},
             "manufacturer": "STIEBEL ELTRON",
@@ -542,6 +620,7 @@ class StiebelDHEReconnectCountSensor(SensorEntity):
     """DHE reconnect count diagnostic sensor."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
     _attr_has_entity_name = True
     _attr_icon = "mdi:restart"
     _attr_should_poll = False
