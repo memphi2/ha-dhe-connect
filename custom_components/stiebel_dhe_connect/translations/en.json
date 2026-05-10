@@ -24,32 +24,123 @@
     "step": {
       "init": {
         "title": "Configure Stiebel DHE Connect",
+        "description": "Manage connection settings, costs, weather favorites or radio stations.",
+        "menu_options": {
+          "connection": "Change connection",
+          "device_settings": "Costs & emissions",
+          "weather_favorite": "Add weather favorite",
+          "remove_weather_favorite": "Remove weather favorite",
+          "radio_favorite": "Add radio station",
+          "remove_radio_favorite": "Remove radio station"
+        }
+      },
+      "connection": {
+        "title": "Configure connection",
         "description": "Change IP address, port and device name.",
         "data": {
           "host": "IP address or hostname",
           "port": "Port",
           "name": "Device name"
         }
+      },
+      "device_settings": {
+        "title": "Costs & emissions",
+        "description": "Set currency, electricity price, water price and CO2 emission on the DHE. Number fields are prefilled with current device values, currency defaults to EUR.",
+        "data": {
+          "currency": "Currency",
+          "electricity_price": "Electricity price (EUR/kWh)",
+          "water_price": "Water price (EUR/m³)",
+          "co2_emission": "CO2 emission (kg/kWh)"
+        }
+      },
+      "weather_favorite": {
+        "title": "Search weather favorite",
+        "description": "Select a country and search for a location.",
+        "data": {
+          "country_id": "Country",
+          "name": "Search term"
+        }
+      },
+      "weather_favorite_result": {
+        "title": "Select weather favorite",
+        "description": "Select a result and save it as favorite.",
+        "data": {
+          "result": "Result"
+        }
+      },
+      "remove_weather_favorite": {
+        "title": "Remove weather favorite",
+        "description": "Select an existing favorite and remove it from the DHE.",
+        "data": {
+          "result": "Favorite"
+        }
+      },
+      "radio_favorite": {
+        "title": "Select radio search",
+        "description": "Search by text, genre, country or city. Genre uses the DHE catalog directly; country and city use catalog selection plus a search term.",
+        "data": {
+          "search_type": "Search type"
+        }
+      },
+      "radio_favorite_catalog": {
+        "title": "Enter radio search",
+        "description": "Enter a search term and, for country, city or genre, select the matching catalog entry.",
+        "data": {
+          "selection": "Selection (country/city/genre)",
+          "filter_text": "Text filter (for example *)"
+        }
+      },
+      "radio_favorite_result": {
+        "title": "Select radio station",
+        "description": "Select a result, save it as favorite and activate it on the DHE.",
+        "data": {
+          "result": "Station"
+        }
+      },
+      "remove_radio_favorite": {
+        "title": "Remove radio station",
+        "description": "Select an existing radio favorite and remove it from the DHE.",
+        "data": {
+          "result": "Station"
+        }
       }
     },
     "error": {
       "cannot_connect": "Could not connect to the DHE. Check the IP address and port.",
       "invalid_host": "Invalid host. Enter only an IP address or hostname, without path, username or port.",
-      "invalid_port": "Invalid port. The port must be between 1 and 65535."
+      "invalid_port": "Invalid port. The port must be between 1 and 65535.",
+      "not_loaded": "The integration is not loaded yet.",
+      "no_countries": "No weather countries received from the DHE.",
+      "no_results": "No results found.",
+      "no_favorites": "No weather favorites available.",
+      "search_failed": "Weather search failed.",
+      "favorite_failed": "Could not save favorite.",
+      "remove_favorite_failed": "Could not remove favorite.",
+      "invalid_device_setting": "Invalid cost or emission value.",
+      "device_settings_failed": "Could not save costs and emissions.",
+      "no_radio_catalog": "No radio catalog received from the DHE.",
+      "radio_catalog_failed": "Could not read radio catalog.",
+      "radio_search_failed": "Radio search failed.",
+      "radio_favorite_failed": "Could not save radio station.",
+      "no_radio_favorites": "No radio favorites available.",
+      "remove_radio_favorite_failed": "Could not remove radio station.",
+      "required": "This field is required.",
+      "invalid_radio_search_type": "Invalid search type.",
+      "invalid_radio_catalog_value": "Invalid selection.",
+      "invalid_country": "Invalid country.",
+      "invalid_result": "Invalid result."
     }
   },
   "entity": {
-    "binary_sensor": {
-      "online": {
-        "name": "Online"
-      }
-    },
     "button": {
       "reset_brush_timer": {
         "name": "Reset brush timer"
       },
       "reset_shower_timer": {
         "name": "Reset shower timer"
+      },
+      "disconnect_radio_pairing": {
+        "name": "Disconnect radio pairing"
       },
       "temperature_memory_1": {
         "name": "Memory 1"
@@ -123,6 +214,11 @@
         "name": "Radio"
       }
     },
+    "climate": {
+      "water_heating": {
+        "name": "Water heating"
+      }
+    },
     "weather": {
       "weather": {
         "name": "Weather"
@@ -137,15 +233,6 @@
       },
       "eco_flow_limit": {
         "name": "Eco flow limit"
-      },
-      "electricity_price": {
-        "name": "Electricity price"
-      },
-      "water_price": {
-        "name": "Water price"
-      },
-      "co2_emission": {
-        "name": "CO2 emission"
       },
       "brush_timer_duration": {
         "name": "Brush timer duration"
@@ -191,8 +278,8 @@
       }
     },
     "select": {
-      "currency": {
-        "name": "Currency"
+      "weather_location": {
+        "name": "Weather location"
       }
     },
     "text": {
@@ -255,8 +342,8 @@
       "unknown_temperature_24": {
         "name": "Unknown temperature 24"
       },
-      "unknown_odb_33": {
-        "name": "Unknown ODB value 33"
+      "water_heating_enabled": {
+        "name": "Water heating enabled"
       },
       "unknown_odb_34": {
         "name": "Unknown ODB value 34"
@@ -336,8 +423,23 @@
       "shower_timer_remaining": {
         "name": "Shower timer remaining"
       },
+      "temperature_error_status": {
+        "name": "Error status"
+      },
       "reconnect_count": {
         "name": "Reconnects"
+      },
+      "connection_state": {
+        "name": "Connection state"
+      },
+      "last_reconnect_reason": {
+        "name": "Last reconnect reason"
+      },
+      "last_message_command": {
+        "name": "Last received command"
+      },
+      "last_message_age": {
+        "name": "Time since last message"
       },
       "device_info": {
         "name": "Device info"

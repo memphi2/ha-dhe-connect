@@ -1,5 +1,29 @@
 # Changelog
 
+## v1.0.4 - 2026-05-10
+
+### Added
+
+- Full weather favorites workflow: search, add/remove favorite and select active weather location.
+- Full radio favorites workflow: search by text/genre/country/city, add/remove favorite and select station.
+- Temperature memory expanded to all 12 slots with sensible defaults (slots 3-12 disabled by default).
+- New diagnostic sensors for connection state, reconnect reason, last command age and general temperature error status.
+- Lightweight repository validation script and workflow checks for manifest/translations/docs consistency.
+
+### Changed
+
+- Currency, electricity price, water price and CO2 emission moved from entities to the options flow.
+- Weather entity attributes now expose clear location data (`city`, `country`, `location`) plus icon metadata.
+- Last usage duration now renders as `M:SS`, aligned with timer remaining sensors.
+- Entity defaults were cleaned up to reduce device-card noise (advanced diagnostics/long-term stats optional).
+
+### Fixed
+
+- Climate setpoint flow now turns heating on first (if OFF) before writing a new setpoint.
+- HVAC mode now follows confirmed `id 33` writebacks instead of optimistic local mode flips.
+- General error status now updates immediately on online/offline changes.
+- Removed stale/legacy registry entities and old binary-sensor leftovers from active setup.
+
 ## v1.0.2 - 2026-05-10
 
 This release focuses on a cleaner device card, better protocol coverage and less noisy diagnostics while keeping the local WebSocket behavior close to the DHE browser UI.
