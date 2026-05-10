@@ -52,11 +52,17 @@ ID_CONFIGURED_POWER = 20
 ID_UNKNOWN_ODB_22 = 22
 ID_UNKNOWN_TEMPERATURE_24 = 24
 ID_BATH_FILL_CURRENT_VOLUME = 31
-ID_UNKNOWN_ODB_33 = 33
+ID_WATER_HEATING_ENABLED = 33
 ID_UNKNOWN_ODB_34 = 34
 ID_ELECTRICITY_PRICE_EUROS = 61
 ID_WATER_PRICE_EUROS = 62
 ID_SET_REQ = 66
+SET_REQ_OFF_VALUE = 10440
+# Observed device behavior in field tests:
+# - id 33 raw 1 => water heating OFF
+# - id 33 raw 0 => water heating ON
+WATER_HEATING_OFF_RAW = 1
+WATER_HEATING_ON_RAW = 0
 ID_CO2_EMISSION_RAW = 69
 ID_ELECTRICITY_PRICE_CENTS = 70
 ID_WATER_PRICE_CENTS = 71
@@ -110,6 +116,7 @@ DEFAULT_CONFIGURED_POWER_KW = 24.0
 COMMAND_CONFIRMATION_TIMEOUT = 12.0
 COMMAND_READBACK_INTERVAL = 1.0
 APP_COMMAND_CONFIRMATION_TIMEOUT = 3.0
+WEATHER_CATALOG_TIMEOUT = 8.0
 AVAILABILITY_DROP_GRACE_SECONDS = 20.0
 WEBSOCKET_UPGRADE_TIMEOUT = 8.0
 AUTH_POLL_TIMEOUT_SECONDS = 10.0
@@ -174,7 +181,7 @@ INITIAL_VALUE_IDS = (
     ID_UNKNOWN_ODB_22,
     ID_UNKNOWN_TEMPERATURE_24,
     ID_BATH_FILL_CURRENT_VOLUME,
-    ID_UNKNOWN_ODB_33,
+    ID_WATER_HEATING_ENABLED,
     ID_UNKNOWN_ODB_34,
     ID_ELECTRICITY_PRICE_EUROS,
     ID_ELECTRICITY_PRICE_CENTS,
@@ -245,24 +252,77 @@ RADIO_STATE_FIELDS = (
     "title",
 )
 RADIO_CATALOG_FIELDS = {"city", "country", "genre"}
-RADIO_REQUEST_COMMANDS = tuple(f"get:{RADIO_PATH}:{field}" for field in RADIO_STATE_FIELDS)
+RADIO_STATION_SEARCH_FIELDS = {*RADIO_CATALOG_FIELDS, "text"}
+RADIO_STATIONS_GET_COMMAND = f"get:{RADIO_PATH}:stations"
+RADIO_FAVORITES_GET_COMMAND = f"get:{RADIO_PATH}:favorites"
+RADIO_CITY_GET_COMMAND = f"get:{RADIO_PATH}:city"
+RADIO_COUNTRY_GET_COMMAND = f"get:{RADIO_PATH}:country"
+RADIO_GENRE_GET_COMMAND = f"get:{RADIO_PATH}:genre"
+RADIO_STATIONS_SET_COMMAND = f"set:{RADIO_PATH}:stations"
+RADIO_FAVORITES_SET_COMMAND = f"set:{RADIO_PATH}:favorites"
+RADIO_CITY_SET_COMMAND = f"set:{RADIO_PATH}:city"
+RADIO_COUNTRY_SET_COMMAND = f"set:{RADIO_PATH}:country"
+RADIO_GENRE_SET_COMMAND = f"set:{RADIO_PATH}:genre"
+RADIO_CATALOG_GET_COMMANDS = {
+    "city": RADIO_CITY_GET_COMMAND,
+    "country": RADIO_COUNTRY_GET_COMMAND,
+    "genre": RADIO_GENRE_GET_COMMAND,
+}
+RADIO_CATALOG_SET_COMMANDS = {
+    "city": RADIO_CITY_SET_COMMAND,
+    "country": RADIO_COUNTRY_SET_COMMAND,
+    "genre": RADIO_GENRE_SET_COMMAND,
+}
+RADIO_FAVORITE_ASSIGN_COMMAND = f"assign:{RADIO_PATH}:favorite"
+RADIO_STATION_ASSIGN_COMMAND = f"assign:{RADIO_PATH}:station"
+RADIO_REQUEST_COMMANDS = (
+    *(f"get:{RADIO_PATH}:{field}" for field in RADIO_STATE_FIELDS),
+    RADIO_FAVORITES_GET_COMMAND,
+)
+RADIO_KNOWN_REQUEST_COMMANDS = {
+    *RADIO_REQUEST_COMMANDS,
+    RADIO_STATIONS_GET_COMMAND,
+    RADIO_FAVORITES_GET_COMMAND,
+    RADIO_CITY_GET_COMMAND,
+    RADIO_COUNTRY_GET_COMMAND,
+    RADIO_GENRE_GET_COMMAND,
+}
 RADIO_SET_COMMANDS = (
     {f"set:{RADIO_PATH}:{field}" for field in RADIO_STATE_FIELDS}
-    | {f"set:{RADIO_PATH}:{field}" for field in RADIO_CATALOG_FIELDS}
+    | set(RADIO_CATALOG_SET_COMMANDS.values())
 )
-RADIO_IGNORED_SET_COMMANDS = {
-    f"set:{RADIO_PATH}:favorites",
-    f"set:{RADIO_PATH}:stations",
-}
 RADIO_ASSIGN_COMMANDS = {
     f"assign:{RADIO_PATH}:volume",
     f"assign:{RADIO_PATH}:play",
+    f"assign:{RADIO_PATH}:paired",
+    RADIO_FAVORITE_ASSIGN_COMMAND,
+    RADIO_STATION_ASSIGN_COMMAND,
 }
 WEATHER_PATH = "ste.app.weather"
 WEATHER_LOCATION_GET_COMMAND = f"get:{WEATHER_PATH}:location"
+WEATHER_FAVORITES_GET_COMMAND = f"get:{WEATHER_PATH}:favorites"
+WEATHER_COUNTRIES_GET_COMMAND = f"get:{WEATHER_PATH}:countries"
+WEATHER_COUNTRY_GET_COMMAND = f"get:{WEATHER_PATH}:country"
+WEATHER_FORECAST_GET_COMMAND = f"get:{WEATHER_PATH}:forecast"
 WEATHER_LOCATION_SET_COMMAND = f"set:{WEATHER_PATH}:location"
-WEATHER_REQUEST_COMMANDS = (WEATHER_LOCATION_GET_COMMAND,)
-WEATHER_SET_COMMANDS = {WEATHER_LOCATION_SET_COMMAND}
+WEATHER_FAVORITES_SET_COMMAND = f"set:{WEATHER_PATH}:favorites"
+WEATHER_COUNTRIES_SET_COMMAND = f"set:{WEATHER_PATH}:countries"
+WEATHER_COUNTRY_SET_COMMAND = f"set:{WEATHER_PATH}:country"
+WEATHER_FORECAST_SET_COMMAND = f"set:{WEATHER_PATH}:forecast"
+WEATHER_FAVORITE_ASSIGN_COMMAND = f"assign:{WEATHER_PATH}:favorite"
+WEATHER_REQUEST_COMMANDS = (
+    WEATHER_LOCATION_GET_COMMAND,
+    WEATHER_FAVORITES_GET_COMMAND,
+    WEATHER_COUNTRY_GET_COMMAND,
+)
+WEATHER_SET_COMMANDS = {
+    WEATHER_LOCATION_SET_COMMAND,
+    WEATHER_FAVORITES_SET_COMMAND,
+    WEATHER_COUNTRIES_SET_COMMAND,
+    WEATHER_COUNTRY_SET_COMMAND,
+    WEATHER_FORECAST_SET_COMMAND,
+}
+WEATHER_ASSIGN_COMMANDS = {WEATHER_FAVORITE_ASSIGN_COMMAND}
 CONSUMPTION_COMMAND_IDS = {
     "set:ste.app.consumption:waterWeek": ID_WATER_CONSUMPTION_WEEK,
     "set:ste.app.consumption:waterYear": ID_WATER_CONSUMPTION_YEAR,
@@ -348,6 +408,7 @@ MeasurementCallback = Callable[[int, MeasurementValue], None]
 ReconnectCallback = Callable[[int], None]
 RadioCallback = Callable[[dict[str, Any]], None]
 WeatherCallback = Callable[[dict[str, Any]], None]
+DiagnosticCallback = Callable[[dict[str, Any]], None]
 CallbackRemover = Callable[[], None]
 
 
@@ -422,6 +483,16 @@ def _raw_to_bool(value: Any) -> bool:
     return bool(int(_raw_to_float(value)))
 
 
+def _raw_to_water_heating_enabled(value: Any) -> bool:
+    """Decode ODB id 33 value to water-heating enabled state."""
+    return int(_raw_to_float(value)) == WATER_HEATING_ON_RAW
+
+
+def _water_heating_enabled_to_raw(enabled: bool) -> int:
+    """Encode water-heating enabled state to ODB id 33 value."""
+    return WATER_HEATING_ON_RAW if enabled else WATER_HEATING_OFF_RAW
+
+
 def _values_equal(a: ODBValue | None, b: ODBValue | None) -> bool:
     if a is None or b is None:
         return a is b
@@ -470,6 +541,91 @@ def _summarize_radio_value(value: Any) -> Any:
     return value
 
 
+def _summarize_weather_location(value: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: value.get(key)
+        for key in ("Name", "Country", "CountryId", "LocationId", "SearchType")
+        if value.get(key) not in (None, "")
+    }
+
+
+def _summarize_weather_value(value: Any) -> Any:
+    if isinstance(value, list):
+        if value and all(isinstance(item, dict) for item in value):
+            return {
+                "count": len(value),
+                "items": [
+                    _summarize_weather_location(item)
+                    for item in value[:10]
+                ],
+            }
+        return {
+            "count": len(value),
+            "sample": value[:10],
+        }
+    if isinstance(value, dict):
+        if "Location" in value or "CompleteDays" in value or "SimpleDays" in value:
+            summary: dict[str, Any] = {}
+            location = value.get("Location")
+            if isinstance(location, dict):
+                summary["location"] = _summarize_weather_location(location)
+            for key in ("CompleteDays", "SimpleDays"):
+                days = value.get(key)
+                if isinstance(days, list):
+                    summary[key[:1].lower() + key[1:]] = {
+                        "count": len(days),
+                        "dates": [
+                            day.get("date")
+                            for day in days[:10]
+                            if isinstance(day, dict) and day.get("date")
+                        ],
+                    }
+            return summary
+        if "Country" in value or "LocationId" in value:
+            return _summarize_weather_location(value)
+        return {
+            key: _summarize_weather_value(item)
+            for key, item in value.items()
+        }
+    return value
+
+
+def _diagnostic_error(error: BaseException) -> str:
+    message = str(error)
+    reason = type(error).__name__ if not message else f"{type(error).__name__}: {message}"
+    return reason[:240]
+
+
+def _diagnostic_timestamp() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def _summarize_diagnostic_value(value: Any, *, depth: int = 0) -> Any:
+    if depth >= 3:
+        return type(value).__name__
+    if isinstance(value, dict):
+        keys = list(value)[:8]
+        summary = {
+            str(key): _summarize_diagnostic_value(value[key], depth=depth + 1)
+            for key in keys
+        }
+        if len(value) > len(keys):
+            summary["_omitted_keys"] = len(value) - len(keys)
+        return summary
+    if isinstance(value, list):
+        return {
+            "type": "list",
+            "count": len(value),
+            "sample": [
+                _summarize_diagnostic_value(item, depth=depth + 1)
+                for item in value[:3]
+            ],
+        }
+    if isinstance(value, str) and len(value) > 120:
+        return f"{value[:117]}..."
+    return value
+
+
 def _copy_json_like_value(value: Any) -> Any:
     if isinstance(value, dict):
         return {
@@ -507,6 +663,76 @@ def _normalize_weather_value(raw_value: dict[str, Any]) -> dict[str, Any]:
     return state
 
 
+def _normalize_weather_favorites_value(raw_value: Any) -> list[dict[str, Any]] | None:
+    if not isinstance(raw_value, list):
+        return None
+    return [
+        _copy_json_like_value(location)
+        for location in raw_value
+        if isinstance(location, dict)
+    ]
+
+
+def _normalize_weather_locations_value(raw_value: Any) -> list[dict[str, Any]] | None:
+    if not isinstance(raw_value, list):
+        return None
+    return [
+        _copy_json_like_value(location)
+        for location in raw_value
+        if isinstance(location, dict)
+    ]
+
+
+def _normalize_radio_stations_value(raw_value: Any) -> list[dict[str, Any]] | None:
+    if not isinstance(raw_value, list):
+        return None
+    return [
+        _copy_json_like_value(station)
+        for station in raw_value
+        if isinstance(station, dict)
+    ]
+
+
+def _normalize_radio_string_catalog(raw_value: Any) -> list[str] | None:
+    if not isinstance(raw_value, list):
+        return None
+
+    values: list[str] = []
+    for item in raw_value:
+        value = str(item).strip()
+        if value:
+            values.append(value)
+    return values
+
+
+def _radio_station_id(station: dict[str, Any]) -> int | None:
+    try:
+        return int(station.get("Id", station.get("id")))
+    except (TypeError, ValueError):
+        return None
+
+
+def _radio_station_in_list(
+    station_id: int,
+    stations: list[dict[str, Any]],
+) -> bool:
+    return any(_radio_station_id(candidate) == station_id for candidate in stations)
+
+
+def _weather_location_id(location: dict[str, Any]) -> str:
+    return str(location.get("LocationId", "")).strip()
+
+
+def _weather_location_in_list(
+    location: dict[str, Any],
+    locations: list[dict[str, Any]],
+) -> bool:
+    location_id = _weather_location_id(location)
+    if not location_id:
+        return False
+    return any(_weather_location_id(candidate) == location_id for candidate in locations)
+
+
 class DHEClient:
     """Persistent Engine.IO v3 WebSocket client for DHE Connect."""
 
@@ -532,17 +758,37 @@ class DHEClient:
         self._reconnect_callbacks: set[ReconnectCallback] = set()
         self._radio_callbacks: set[RadioCallback] = set()
         self._weather_callbacks: set[WeatherCallback] = set()
+        self._diagnostic_callbacks: set[DiagnosticCallback] = set()
         self._available = False
         self._online = False
         self._has_connected = False
         self._reconnect_count = 0
+        self._last_message_monotonic: float | None = None
+        self._message_count = 0
+        self._diagnostic_state: dict[str, Any] = {"connection_state": "starting"}
         self._availability_drop_task: asyncio.Task[None] | None = None
         self._last_setpoint: float | None = None
         self._last_measurements: dict[int, MeasurementValue] = {}
         self._last_measurement_attributes: dict[int, dict[str, Any]] = {}
         self._last_app_values: dict[str, Any] = {}
         self._last_radio_state: dict[str, Any] = {}
+        self._last_radio_stations: list[dict[str, Any]] = []
+        self._last_radio_favorites: list[dict[str, Any]] = []
+        self._last_radio_catalogs: dict[str, list[str]] = {
+            field: [] for field in RADIO_CATALOG_FIELDS
+        }
+        self._last_radio_genres: list[str] = []
+        self._radio_catalog_generations: dict[str, int] = {
+            field: 0 for field in RADIO_CATALOG_FIELDS
+        }
+        self._radio_stations_generation = 0
+        self._radio_favorites_generation = 0
+        self._radio_genres_generation = 0
         self._last_weather_state: dict[str, Any] = {}
+        self._weather_search_generation = 0
+        self._weather_favorites_generation = 0
+        self._weather_countries_generation = 0
+        self._last_weather_countries: list[dict[str, Any]] = []
         self._last_saving_monitor_values: dict[str, Any] = {}
         self._last_device_info: dict[str, Any] = {}
         self._temperature_memory_ids_seen: set[int] = set()
@@ -599,29 +845,33 @@ class DHEClient:
     def last_weather_state(self) -> dict[str, Any]:
         return self._copy_weather_state()
 
+    @property
+    def diagnostic_state(self) -> dict[str, Any]:
+        return self._copy_diagnostic_state()
+
     def add_setpoint_callback(self, callback: SetpointCallback) -> CallbackRemover:
         remove = self._add_callback(self._setpoint_callbacks, callback)
         if self._last_setpoint is not None:
             try:
                 callback(self._last_setpoint)
-            except Exception as err:  # noqa: BLE001
-                _LOGGER.debug("Could not initialize setpoint callback: %s", err)
+            except Exception:  # noqa: BLE001
+                pass
         return remove
 
     def add_availability_callback(self, callback: AvailabilityCallback) -> CallbackRemover:
         remove = self._add_callback(self._availability_callbacks, callback)
         try:
             callback(self._available)
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("Could not initialize availability callback: %s", err)
+        except Exception:  # noqa: BLE001
+            pass
         return remove
 
     def add_online_callback(self, callback: OnlineCallback) -> CallbackRemover:
         remove = self._add_callback(self._online_callbacks, callback)
         try:
             callback(self._online)
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("Could not initialize online callback: %s", err)
+        except Exception:  # noqa: BLE001
+            pass
         return remove
 
     def add_measurement_callback(self, callback: MeasurementCallback) -> CallbackRemover:
@@ -629,44 +879,48 @@ class DHEClient:
         for odb_id, value in self._last_measurements.items():
             try:
                 callback(odb_id, value)
-            except Exception as err:  # noqa: BLE001
-                _LOGGER.debug("Could not initialize measurement callback for %s: %s", odb_id, err)
+            except Exception:  # noqa: BLE001
+                pass
         if self._temperature_memory_full_list_seen:
             for measurement_id in TEMPERATURE_MEMORY_SLOT_MEASUREMENTS.values():
                 if measurement_id in self._last_measurements:
                     continue
                 try:
                     callback(measurement_id, None)
-                except Exception as err:  # noqa: BLE001
-                    _LOGGER.debug(
-                        "Could not initialize missing temperature memory callback for %s: %s",
-                        measurement_id,
-                        err,
-                    )
+                except Exception:  # noqa: BLE001
+                    pass
         return remove
 
     def add_reconnect_callback(self, callback: ReconnectCallback) -> CallbackRemover:
         remove = self._add_callback(self._reconnect_callbacks, callback)
         try:
             callback(self._reconnect_count)
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("Could not initialize reconnect callback: %s", err)
+        except Exception:  # noqa: BLE001
+            pass
         return remove
 
     def add_radio_callback(self, callback: RadioCallback) -> CallbackRemover:
         remove = self._add_callback(self._radio_callbacks, callback)
         try:
             callback(self._copy_radio_state())
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("Could not initialize radio callback: %s", err)
+        except Exception:  # noqa: BLE001
+            pass
         return remove
 
     def add_weather_callback(self, callback: WeatherCallback) -> CallbackRemover:
         remove = self._add_callback(self._weather_callbacks, callback)
         try:
             callback(self._copy_weather_state())
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("Could not initialize weather callback: %s", err)
+        except Exception:  # noqa: BLE001
+            pass
+        return remove
+
+    def add_diagnostic_callback(self, callback: DiagnosticCallback) -> CallbackRemover:
+        remove = self._add_callback(self._diagnostic_callbacks, callback)
+        try:
+            callback(self._copy_diagnostic_state())
+        except Exception:  # noqa: BLE001
+            pass
         return remove
 
     @staticmethod
@@ -695,6 +949,7 @@ class DHEClient:
 
     async def stop(self) -> None:
         self._stopped.set()
+        self._update_diagnostics(connection_state="stopping")
         runner = self._runner
         self._runner = None
         if runner:
@@ -710,6 +965,7 @@ class DHEClient:
             await self._close_session(ctx)
         self._set_online(False)
         self._set_available(False, immediate=True)
+        self._update_diagnostics(connection_state="stopped")
 
     async def set_temperature(self, temperature: float) -> float:
         requested = _round_to_half_c(_clamp(float(temperature), 20.0, 60.0))
@@ -734,11 +990,54 @@ class DHEClient:
                 except Exception as err:  # noqa: BLE001
                     self._clear_pending_future(None)
                     if attempt == 0:
-                        await self._force_reconnect()
+                        await self._force_reconnect(reason=_diagnostic_error(err))
                         await asyncio.sleep(1)
                         continue
                     raise DHEError(f"Could not set DHE setpoint: {err}") from err
         raise DHEError("Could not set DHE setpoint")
+
+    async def set_heating_off(self) -> None:
+        """Backward-compatible wrapper for the known DHE sync request."""
+        await self._send_set_req_sync()
+
+    async def set_water_heating_enabled(self, enabled: bool) -> bool:
+        """Enable or disable water heating via ODB id 33 and sync request."""
+        requested = bool(enabled)
+        confirmed = bool(
+            await self.write_odb_value(
+                ID_WATER_HEATING_ENABLED,
+                _water_heating_enabled_to_raw(requested),
+            )
+        )
+        await self._send_set_req_sync()
+        return confirmed
+
+    async def _send_set_req_sync(self) -> None:
+        """Send the observed ID 66 sync request used by the native app."""
+        async with self._command_lock:
+            for attempt in range(2):
+                try:
+                    await self._ensure_ready(timeout=45)
+                    ctx = self._ctx
+                    if ctx is None:
+                        raise DHEError("DHE session is not connected")
+                    await self._post_packet(
+                        ctx,
+                        self._message_packet(
+                            {
+                                "command": ODB_ASSIGN_COMMAND,
+                                "value": {"id": ID_SET_REQ, "value": SET_REQ_OFF_VALUE},
+                            }
+                        ),
+                    )
+                    return
+                except Exception as err:  # noqa: BLE001
+                    if attempt == 0:
+                        await self._force_reconnect(reason=_diagnostic_error(err))
+                        await asyncio.sleep(1)
+                        continue
+                    raise DHEError(f"Could not send DHE set-req sync: {err}") from err
+        raise DHEError("Could not send DHE set-req sync")
 
     async def write_odb_value(self, odb_id: int, value: Any) -> ODBValue:
         expected = self._convert_odb_value(odb_id, value)
@@ -761,7 +1060,7 @@ class DHEClient:
                 except Exception as err:  # noqa: BLE001
                     self._clear_pending_write_future(None)
                     if attempt == 0:
-                        await self._force_reconnect()
+                        await self._force_reconnect(reason=_diagnostic_error(err))
                         await asyncio.sleep(1)
                         continue
                     raise DHEError(f"Could not write DHE ODB id {odb_id}: {err}") from err
@@ -832,7 +1131,7 @@ class DHEClient:
                     return requested.upper()
                 except Exception as err:  # noqa: BLE001
                     if attempt == 0:
-                        await self._force_reconnect()
+                        await self._force_reconnect(reason=_diagnostic_error(err))
                         await asyncio.sleep(1)
                         continue
                     raise DHEError(f"Could not set DHE currency: {err}") from err
@@ -849,6 +1148,454 @@ class DHEClient:
         await self._assign_radio_value("volume", volume)
         self._handle_radio_value(f"assign:{RADIO_PATH}:volume", volume)
         return volume / 100.0
+
+    async def disconnect_radio_pairing(self) -> bool:
+        """Send the DHE radio pairing disconnect action."""
+        await self._assign_radio_value("paired", False)
+        self._handle_radio_value(f"assign:{RADIO_PATH}:paired", False)
+        return True
+
+    async def list_radio_genres(self) -> list[str]:
+        """Return the DHE radio genre catalog."""
+        return await self.list_radio_catalog("genre")
+
+    async def list_radio_catalog(self, attribute: str) -> list[str]:
+        """Return a DHE radio station search catalog."""
+        requested_attribute = str(attribute).strip().lower()
+        command = RADIO_CATALOG_GET_COMMANDS.get(requested_attribute)
+        if command is None:
+            raise DHEError(f"Unsupported DHE radio catalog: {attribute}")
+
+        async with self._command_lock:
+            for attempt in range(2):
+                try:
+                    await self._ensure_ready(timeout=45)
+                    ctx = self._ctx
+                    if ctx is None:
+                        raise DHEError("DHE session is not connected")
+                    generation = self._radio_catalog_generations[requested_attribute]
+                    await self._request_app_value(ctx, command)
+                    return await self._wait_for_radio_catalog(
+                        requested_attribute,
+                        generation,
+                    )
+                except Exception as err:  # noqa: BLE001
+                    if attempt == 0:
+                        await self._force_reconnect(reason=_diagnostic_error(err))
+                        await asyncio.sleep(1)
+                        continue
+                    raise DHEError(
+                        f"Could not read DHE radio {requested_attribute} catalog: {err}"
+                    ) from err
+        raise DHEError(f"Could not read DHE radio {requested_attribute} catalog")
+
+    async def search_radio_stations_by_genre(self, genre: str) -> list[dict[str, Any]]:
+        """Search radio stations by DHE radio genre path."""
+        return await self.search_radio_stations("genre", genre)
+
+    async def search_radio_stations(
+        self,
+        attribute: str,
+        value: str,
+        *,
+        search_text: str | None = None,
+    ) -> list[dict[str, Any]]:
+        requested_attribute = str(attribute).strip().lower()
+        requested_value = str(value).strip()
+        requested_search_text = (
+            str(search_text).strip() if search_text is not None else ""
+        )
+        if requested_attribute not in RADIO_STATION_SEARCH_FIELDS:
+            raise DHEError(f"Unsupported DHE radio station search: {attribute}")
+        if not requested_value:
+            raise DHEError("Radio station search value must not be empty")
+        if search_text is not None and not requested_search_text:
+            raise DHEError("Radio station search text must not be empty")
+        search_payload = {
+            "attribute": requested_attribute,
+            "value": requested_value,
+        }
+        if requested_search_text:
+            search_payload["text"] = requested_search_text
+
+        async with self._command_lock:
+            for attempt in range(2):
+                try:
+                    await self._ensure_ready(timeout=45)
+                    ctx = self._ctx
+                    if ctx is None:
+                        raise DHEError("DHE session is not connected")
+                    generation = self._radio_stations_generation
+                    await self._post_packet(ctx, self._message_packet({
+                        "command": RADIO_STATIONS_GET_COMMAND,
+                        "value": search_payload,
+                    }))
+                    return await self._wait_for_radio_stations(generation)
+                except Exception as err:  # noqa: BLE001
+                    if attempt == 0:
+                        await self._force_reconnect(reason=_diagnostic_error(err))
+                        await asyncio.sleep(1)
+                        continue
+                    raise DHEError(f"Could not search DHE radio stations: {err}") from err
+        raise DHEError("Could not search DHE radio stations")
+
+    async def list_radio_favorites(self) -> list[dict[str, Any]]:
+        """Return DHE radio favorites."""
+        async with self._command_lock:
+            for attempt in range(2):
+                try:
+                    await self._ensure_ready(timeout=45)
+                    ctx = self._ctx
+                    if ctx is None:
+                        raise DHEError("DHE session is not connected")
+                    generation = self._radio_favorites_generation
+                    await self._request_app_value(ctx, RADIO_FAVORITES_GET_COMMAND)
+                    return await self._wait_for_radio_favorites(generation)
+                except Exception as err:  # noqa: BLE001
+                    if attempt == 0:
+                        await self._force_reconnect(reason=_diagnostic_error(err))
+                        await asyncio.sleep(1)
+                        continue
+                    raise DHEError(f"Could not read DHE radio favorites: {err}") from err
+        raise DHEError("Could not read DHE radio favorites")
+
+    async def add_radio_favorite(
+        self,
+        station: dict[str, Any] | int | str,
+        *,
+        select: bool = True,
+    ) -> bool:
+        """Add a radio station favorite and optionally select it."""
+        if isinstance(station, dict):
+            station_id = _radio_station_id(station)
+        else:
+            try:
+                station_id = int(station)
+            except (TypeError, ValueError) as err:
+                raise DHEError("Radio station must include Id") from err
+        if station_id is None:
+            raise DHEError("Radio station must include Id")
+
+        async with self._command_lock:
+            for attempt in range(2):
+                try:
+                    await self._ensure_ready(timeout=45)
+                    ctx = self._ctx
+                    if ctx is None:
+                        raise DHEError("DHE session is not connected")
+
+                    favorites = self._radio_favorites()
+                    favorites_known = bool(favorites)
+                    try:
+                        favorites_generation = self._radio_favorites_generation
+                        await self._request_app_value(ctx, RADIO_FAVORITES_GET_COMMAND)
+                        favorites = await self._wait_for_radio_favorites(
+                            favorites_generation
+                        )
+                        favorites_known = True
+                    except DHEError:
+                        if not favorites_known:
+                            raise
+
+                    if not _radio_station_in_list(station_id, favorites):
+                        favorites_generation = self._radio_favorites_generation
+                        await self._post_packet(ctx, self._message_packet({
+                            "command": RADIO_FAVORITE_ASSIGN_COMMAND,
+                            "value": station_id,
+                        }))
+                        try:
+                            await self._wait_for_radio_favorites(favorites_generation)
+                        except DHEError:
+                            await self._request_app_value(ctx, RADIO_FAVORITES_GET_COMMAND)
+                            await self._wait_for_radio_favorites(favorites_generation)
+
+                    if select:
+                        await self._post_packet(ctx, self._message_packet({
+                            "command": RADIO_STATION_ASSIGN_COMMAND,
+                            "value": station_id,
+                        }))
+                        try:
+                            await self._wait_for_radio_station(station_id)
+                        except DHEError:
+                            pass
+                    return True
+                except Exception as err:  # noqa: BLE001
+                    if attempt == 0:
+                        await self._force_reconnect(reason=_diagnostic_error(err))
+                        await asyncio.sleep(1)
+                        continue
+                    raise DHEError(f"Could not add DHE radio favorite: {err}") from err
+        raise DHEError("Could not add DHE radio favorite")
+
+    async def remove_radio_favorite(self, station: dict[str, Any] | int | str) -> bool:
+        """Remove a radio station favorite."""
+        if isinstance(station, dict):
+            station_id = _radio_station_id(station)
+        else:
+            try:
+                station_id = int(station)
+            except (TypeError, ValueError) as err:
+                raise DHEError("Radio station must include Id") from err
+        if station_id is None:
+            raise DHEError("Radio station must include Id")
+
+        async with self._command_lock:
+            for attempt in range(2):
+                try:
+                    await self._ensure_ready(timeout=45)
+                    ctx = self._ctx
+                    if ctx is None:
+                        raise DHEError("DHE session is not connected")
+
+                    favorites_generation = self._radio_favorites_generation
+                    await self._request_app_value(ctx, RADIO_FAVORITES_GET_COMMAND)
+                    favorites = await self._wait_for_radio_favorites(
+                        favorites_generation
+                    )
+                    if not _radio_station_in_list(station_id, favorites):
+                        return True
+
+                    favorites_generation = self._radio_favorites_generation
+                    await self._post_packet(ctx, self._message_packet({
+                        "command": RADIO_FAVORITE_ASSIGN_COMMAND,
+                        "value": station_id,
+                    }))
+                    try:
+                        favorites = await self._wait_for_radio_favorites(
+                            favorites_generation
+                        )
+                    except DHEError:
+                        await self._request_app_value(ctx, RADIO_FAVORITES_GET_COMMAND)
+                        favorites = await self._wait_for_radio_favorites(
+                            favorites_generation
+                        )
+                    if _radio_station_in_list(station_id, favorites):
+                        raise DHEError("DHE radio favorite did not change")
+                    return True
+                except Exception as err:  # noqa: BLE001
+                    if attempt == 0:
+                        await self._force_reconnect(reason=_diagnostic_error(err))
+                        await asyncio.sleep(1)
+                        continue
+                    raise DHEError(
+                        f"Could not remove DHE radio favorite: {err}"
+                    ) from err
+        raise DHEError("Could not remove DHE radio favorite")
+
+    async def select_radio_station(self, station: dict[str, Any] | int | str) -> bool:
+        """Select/play a radio station by station payload or station ID."""
+        if isinstance(station, dict):
+            station_id = _radio_station_id(station)
+        else:
+            try:
+                station_id = int(station)
+            except (TypeError, ValueError) as err:
+                raise DHEError("Radio station must include Id") from err
+        if station_id is None:
+            raise DHEError("Radio station must include Id")
+
+        async with self._command_lock:
+            for attempt in range(2):
+                try:
+                    await self._ensure_ready(timeout=45)
+                    ctx = self._ctx
+                    if ctx is None:
+                        raise DHEError("DHE session is not connected")
+                    await self._post_packet(ctx, self._message_packet({
+                        "command": RADIO_STATION_ASSIGN_COMMAND,
+                        "value": station_id,
+                    }))
+                    try:
+                        await self._wait_for_radio_station(station_id)
+                    except DHEError:
+                        pass
+                    return True
+                except Exception as err:  # noqa: BLE001
+                    if attempt == 0:
+                        await self._force_reconnect(reason=_diagnostic_error(err))
+                        await asyncio.sleep(1)
+                        continue
+                    raise DHEError(f"Could not select DHE radio station: {err}") from err
+        raise DHEError("Could not select DHE radio station")
+
+    async def search_weather_locations(
+        self,
+        name: str,
+        country_id: int | float | str,
+    ) -> list[dict[str, Any]]:
+        requested_name = str(name).strip()
+        if not requested_name:
+            raise DHEError("Weather location search name must not be empty")
+        requested_country_id = int(_raw_to_float(country_id))
+
+        async with self._command_lock:
+            for attempt in range(2):
+                try:
+                    await self._ensure_ready(timeout=45)
+                    ctx = self._ctx
+                    if ctx is None:
+                        raise DHEError("DHE session is not connected")
+                    generation = self._weather_search_generation
+                    await self._post_packet(ctx, self._message_packet({
+                        "command": WEATHER_FORECAST_GET_COMMAND,
+                        "value": {
+                            "name": requested_name,
+                            "countryId": requested_country_id,
+                        },
+                    }))
+                    return await self._wait_for_weather_search_results(generation)
+                except Exception as err:  # noqa: BLE001
+                    if attempt == 0:
+                        await self._force_reconnect(reason=_diagnostic_error(err))
+                        await asyncio.sleep(1)
+                        continue
+                    raise DHEError(f"Could not search DHE weather locations: {err}") from err
+        raise DHEError("Could not search DHE weather locations")
+
+    async def list_weather_countries(self) -> list[dict[str, Any]]:
+        """Return the weather country catalog from the DHE."""
+        async with self._command_lock:
+            for attempt in range(2):
+                try:
+                    await self._ensure_ready(timeout=45)
+                    ctx = self._ctx
+                    if ctx is None:
+                        raise DHEError("DHE session is not connected")
+                    generation = self._weather_countries_generation
+                    await self._request_app_value(ctx, WEATHER_COUNTRIES_GET_COMMAND)
+                    return await self._wait_for_weather_countries(generation)
+                except Exception as err:  # noqa: BLE001
+                    if attempt == 0:
+                        await self._force_reconnect(reason=_diagnostic_error(err))
+                        await asyncio.sleep(1)
+                        continue
+                    raise DHEError(f"Could not read DHE weather countries: {err}") from err
+        raise DHEError("Could not read DHE weather countries")
+
+    async def toggle_weather_favorite(self, location: dict[str, Any]) -> bool:
+        if not isinstance(location, dict) or not location.get("LocationId"):
+            raise DHEError("Weather favorite location must include LocationId")
+
+        async with self._command_lock:
+            for attempt in range(2):
+                try:
+                    await self._ensure_ready(timeout=45)
+                    ctx = self._ctx
+                    if ctx is None:
+                        raise DHEError("DHE session is not connected")
+                    payload = _copy_json_like_value(location)
+                    await self._post_packet(ctx, self._message_packet({
+                        "command": WEATHER_FAVORITE_ASSIGN_COMMAND,
+                        "value": payload,
+                    }))
+                    await self._request_app_value(ctx, WEATHER_FAVORITES_GET_COMMAND)
+                    return True
+                except Exception as err:  # noqa: BLE001
+                    if attempt == 0:
+                        await self._force_reconnect(reason=_diagnostic_error(err))
+                        await asyncio.sleep(1)
+                        continue
+                    raise DHEError(f"Could not toggle DHE weather favorite: {err}") from err
+        raise DHEError("Could not toggle DHE weather favorite")
+
+    async def list_weather_favorites(self) -> list[dict[str, Any]]:
+        """Return the weather favorites from the DHE."""
+        async with self._command_lock:
+            for attempt in range(2):
+                try:
+                    await self._ensure_ready(timeout=45)
+                    ctx = self._ctx
+                    if ctx is None:
+                        raise DHEError("DHE session is not connected")
+                    favorites_generation = self._weather_favorites_generation
+                    await self._request_app_value(ctx, WEATHER_FAVORITES_GET_COMMAND)
+                    return await self._wait_for_weather_favorites(favorites_generation)
+                except Exception as err:  # noqa: BLE001
+                    if attempt == 0:
+                        await self._force_reconnect(reason=_diagnostic_error(err))
+                        await asyncio.sleep(1)
+                        continue
+                    raise DHEError(f"Could not read DHE weather favorites: {err}") from err
+        raise DHEError("Could not read DHE weather favorites")
+
+    async def add_weather_favorite(self, location: dict[str, Any]) -> bool:
+        """Add a weather favorite without toggling an existing favorite off."""
+        if not isinstance(location, dict) or not location.get("LocationId"):
+            raise DHEError("Weather favorite location must include LocationId")
+
+        async with self._command_lock:
+            for attempt in range(2):
+                try:
+                    await self._ensure_ready(timeout=45)
+                    ctx = self._ctx
+                    if ctx is None:
+                        raise DHEError("DHE session is not connected")
+                    payload = _copy_json_like_value(location)
+
+                    favorites = self._weather_favorites()
+                    try:
+                        favorites_generation = self._weather_favorites_generation
+                        await self._request_app_value(ctx, WEATHER_FAVORITES_GET_COMMAND)
+                        favorites = await self._wait_for_weather_favorites(favorites_generation)
+                    except DHEError:
+                        pass
+                    if _weather_location_in_list(payload, favorites):
+                        return True
+
+                    location_id = _weather_location_id(payload)
+                    favorites_generation = self._weather_favorites_generation
+                    await self._post_packet(ctx, self._message_packet({
+                        "command": WEATHER_FAVORITE_ASSIGN_COMMAND,
+                        "value": payload,
+                    }))
+                    await self._post_packet(ctx, self._message_packet({
+                        "command": WEATHER_LOCATION_GET_COMMAND,
+                        "value": location_id,
+                    }))
+                    await self._wait_for_weather_location(location_id)
+                    try:
+                        await self._wait_for_weather_favorites(favorites_generation)
+                    except DHEError:
+                        await self._request_app_value(ctx, WEATHER_FAVORITES_GET_COMMAND)
+                        await self._wait_for_weather_favorites(favorites_generation)
+                    return True
+                except Exception as err:  # noqa: BLE001
+                    if attempt == 0:
+                        await self._force_reconnect(reason=_diagnostic_error(err))
+                        await asyncio.sleep(1)
+                        continue
+                    raise DHEError(f"Could not add DHE weather favorite: {err}") from err
+        raise DHEError("Could not add DHE weather favorite")
+
+    async def select_weather_location(self, location: dict[str, Any] | str) -> bool:
+        if isinstance(location, dict):
+            location_id = location.get("LocationId")
+        else:
+            location_id = location
+        requested_location_id = str(location_id or "").strip()
+        if not requested_location_id:
+            raise DHEError("Weather location must include LocationId")
+
+        async with self._command_lock:
+            for attempt in range(2):
+                try:
+                    await self._ensure_ready(timeout=45)
+                    ctx = self._ctx
+                    if ctx is None:
+                        raise DHEError("DHE session is not connected")
+                    await self._post_packet(ctx, self._message_packet({
+                        "command": WEATHER_LOCATION_GET_COMMAND,
+                        "value": requested_location_id,
+                    }))
+                    await self._wait_for_weather_location(requested_location_id)
+                    return True
+                except Exception as err:  # noqa: BLE001
+                    if attempt == 0:
+                        await self._force_reconnect(reason=_diagnostic_error(err))
+                        await asyncio.sleep(1)
+                        continue
+                    raise DHEError(f"Could not select DHE weather location: {err}") from err
+        raise DHEError("Could not select DHE weather location")
 
     async def _assign_radio_value(self, field: str, value: Any) -> None:
         command = f"assign:{RADIO_PATH}:{field}"
@@ -869,7 +1616,7 @@ class DHEClient:
                     return
                 except Exception as err:  # noqa: BLE001
                     if attempt == 0:
-                        await self._force_reconnect()
+                        await self._force_reconnect(reason=_diagnostic_error(err))
                         await asyncio.sleep(1)
                         continue
                     raise DHEError(f"Could not write DHE radio {field}: {err}") from err
@@ -908,16 +1655,12 @@ class DHEClient:
                     }))
                     try:
                         await self._request_setpoint(ctx)
-                    except Exception as err:  # noqa: BLE001
-                        _LOGGER.debug(
-                            "Could not refresh setpoint after DHE temperature memory %s: %s",
-                            memory_slot,
-                            err,
-                        )
+                    except Exception:  # noqa: BLE001
+                        pass
                     return True
                 except Exception as err:  # noqa: BLE001
                     if attempt == 0:
-                        await self._force_reconnect()
+                        await self._force_reconnect(reason=_diagnostic_error(err))
                         await asyncio.sleep(1)
                         continue
                     raise DHEError(f"Could not press DHE temperature memory {memory_slot}: {err}") from err
@@ -1027,7 +1770,7 @@ class DHEClient:
                     return self._cached_temperature_memory_temperature(measurement_id) or requested
                 except Exception as err:  # noqa: BLE001
                     if attempt == 0:
-                        await self._force_reconnect()
+                        await self._force_reconnect(reason=_diagnostic_error(err))
                         await asyncio.sleep(1)
                         continue
                     raise DHEError(f"Could not set DHE temperature memory {memory_slot}: {err}") from err
@@ -1069,7 +1812,7 @@ class DHEClient:
                     return str(attributes.get("name", requested_name))
                 except Exception as err:  # noqa: BLE001
                     if attempt == 0:
-                        await self._force_reconnect()
+                        await self._force_reconnect(reason=_diagnostic_error(err))
                         await asyncio.sleep(1)
                         continue
                     raise DHEError(f"Could not set DHE temperature memory {memory_slot} name: {err}") from err
@@ -1101,7 +1844,7 @@ class DHEClient:
                     return True
                 except Exception as err:  # noqa: BLE001
                     if attempt == 0:
-                        await self._force_reconnect()
+                        await self._force_reconnect(reason=_diagnostic_error(err))
                         await asyncio.sleep(1)
                         continue
                     raise DHEError(f"Could not delete DHE temperature memory {memory_slot}: {err}") from err
@@ -1244,7 +1987,7 @@ class DHEClient:
                 except Exception as err:  # noqa: BLE001
                     self._clear_pending_write_future(None)
                     if attempt == 0:
-                        await self._force_reconnect()
+                        await self._force_reconnect(reason=_diagnostic_error(err))
                         await asyncio.sleep(1)
                         continue
                     raise DHEError(f"Could not write DHE app command {command}: {err}") from err
@@ -1255,6 +1998,12 @@ class DHEClient:
             try:
                 self._ctx = await self._open_authenticated_session()
                 self._record_session_connected()
+                self._update_diagnostics(
+                    connection_state="connected",
+                    ping_interval_seconds=self._ctx.ping_interval,
+                    session_id=self._ctx.sid,
+                    websocket_sid=self._ctx.websocket_sid,
+                )
                 self._set_online(True)
                 self._ready.set()
                 self._set_available(True)
@@ -1265,7 +2014,10 @@ class DHEClient:
             except asyncio.CancelledError:
                 raise
             except Exception as err:  # noqa: BLE001
-                _LOGGER.debug("DHE persistent session failed: %r", err)
+                self._update_diagnostics(
+                    connection_state="reconnecting",
+                    last_reconnect_reason=_diagnostic_error(err),
+                )
                 self._clear_pending_future(err)
                 self._clear_pending_write_future(err)
                 self._ready.clear()
@@ -1306,7 +2058,7 @@ class DHEClient:
                     elif event.name == "pairing_request":
                         _LOGGER.info("DHE pairing requested. Confirm on the DHE if prompted.")
                     elif event.name == "pairing_result":
-                        _LOGGER.debug("DHE pairing_result received: %s", event.data)
+                        pass
                 if time.monotonic() - last_nudge > 0.9:
                     await self._post_packet(ctx, self._event_packet("token_request", {"token": token, "name": self.name}))
                     last_nudge = time.monotonic()
@@ -1377,6 +2129,7 @@ class DHEClient:
         ctx: DHESession | None = None,
         *,
         immediate_availability: bool = False,
+        reason: str | None = None,
     ) -> None:
         if ctx is not None and self._ctx is not ctx:
             await self._close_session(ctx)
@@ -1387,6 +2140,10 @@ class DHEClient:
         self._ready.clear()
         self._set_online(False)
         self._set_available(False, immediate=immediate_availability)
+        self._update_diagnostics(
+            connection_state="reconnecting",
+            last_reconnect_reason=reason or "Forced reconnect requested",
+        )
         if ctx is not None:
             await self._close_session(ctx)
 
@@ -1406,12 +2163,17 @@ class DHEClient:
 
     async def _handle_runtime_event(self, event: DHEEvent) -> None:
         if event.name == "__closed":
+            self._update_diagnostics(
+                connection_state="reconnecting",
+                last_reconnect_reason="DHE closed Socket.IO session",
+            )
             raise DHESessionClosed("DHE closed Socket.IO session")
         if event.name != "message" or not isinstance(event.data, dict):
             return
         data = event.data
         command = data.get("command")
         value = data.get("value")
+        self._record_runtime_message(command, value)
         is_radio_command = isinstance(command, str) and RADIO_PATH in command
         if command in APP_TIMER_RESET_COMMANDS:
             self._handle_app_timer_reset(command)
@@ -1419,7 +2181,16 @@ class DHEClient:
         if command in APP_TIMER_VALUE_COMMANDS:
             self._handle_app_timer_value(command, value)
             return
-        if command in RADIO_IGNORED_SET_COMMANDS:
+        if command in RADIO_KNOWN_REQUEST_COMMANDS:
+            self._last_app_values[command] = _summarize_radio_value(value)
+            return
+        if command == RADIO_STATIONS_SET_COMMAND:
+            self._handle_radio_stations_value(value)
+            return
+        if command == RADIO_FAVORITES_SET_COMMAND:
+            self._handle_radio_favorites_value(value)
+            return
+        if command in RADIO_ASSIGN_COMMANDS:
             self._last_app_values[command] = _summarize_radio_value(value)
             return
         if command in RADIO_SET_COMMANDS:
@@ -1427,6 +2198,9 @@ class DHEClient:
             return
         if command in WEATHER_SET_COMMANDS:
             self._handle_weather_value(command, value)
+            return
+        if command in WEATHER_ASSIGN_COMMANDS:
+            self._last_app_values[command] = _summarize_weather_value(value)
             return
         if command in CONSUMPTION_COMMAND_IDS:
             self._handle_consumption_value(command, value)
@@ -1483,8 +2257,8 @@ class DHEClient:
                 self._handle_measurement(measurement_id, _raw_to_bool(raw_value))
             elif property_name in {"durationMilliseconds", "remainingMilliseconds"}:
                 self._handle_measurement(measurement_id, _raw_to_float(raw_value) / 60000.0)
-        except (TypeError, ValueError) as err:
-            _LOGGER.debug("Ignoring invalid app timer value command=%s value=%r: %s", command, raw_value, err)
+        except (TypeError, ValueError):
+            return
 
     def _handle_app_timer_reset(self, command: str) -> None:
         try:
@@ -1515,7 +2289,7 @@ class DHEClient:
                 return
             value = dict(raw_value)
         elif field in RADIO_CATALOG_FIELDS and isinstance(raw_value, list):
-            self._last_app_values[command] = _summarize_radio_value(raw_value)
+            self._handle_radio_catalog_value(command, raw_value)
             return
         else:
             value = "" if raw_value is None else str(raw_value)
@@ -1526,6 +2300,48 @@ class DHEClient:
         self._last_radio_state[field] = value
         for callback in tuple(self._radio_callbacks):
             callback(self._copy_radio_state())
+
+    def _handle_radio_catalog_value(self, command: str, raw_value: Any) -> None:
+        self._last_app_values[command] = _summarize_radio_value(raw_value)
+        field = command.rsplit(":", 1)[-1]
+        if field not in RADIO_CATALOG_FIELDS:
+            return
+
+        catalog = _normalize_radio_string_catalog(raw_value)
+        if catalog is None:
+            return
+        self._last_radio_catalogs[field] = catalog
+        self._radio_catalog_generations[field] += 1
+        if command == RADIO_GENRE_SET_COMMAND:
+            self._last_radio_genres = catalog
+            self._radio_genres_generation = self._radio_catalog_generations[field]
+
+    def _handle_radio_stations_value(self, raw_value: Any) -> None:
+        self._last_app_values[RADIO_STATIONS_SET_COMMAND] = _summarize_radio_value(
+            raw_value
+        )
+        stations = _normalize_radio_stations_value(raw_value)
+        if stations is None:
+            return
+        self._last_radio_stations = stations
+        self._radio_stations_generation += 1
+
+    def _handle_radio_favorites_value(self, raw_value: Any) -> None:
+        self._last_app_values[RADIO_FAVORITES_SET_COMMAND] = _summarize_radio_value(
+            raw_value
+        )
+        favorites = _normalize_radio_stations_value(raw_value)
+        if favorites is None:
+            return
+        self._last_radio_favorites = favorites
+        self._radio_favorites_generation += 1
+
+        state = self._copy_radio_state()
+        state["favorites"] = favorites
+        if state != self._last_radio_state:
+            self._last_radio_state = state
+            for callback in tuple(self._radio_callbacks):
+                callback(self._copy_radio_state())
 
     def _copy_radio_state(self) -> dict[str, Any]:
         state: dict[str, Any] = {}
@@ -1541,12 +2357,68 @@ class DHEClient:
                 state[key] = value
         return state
 
+    def _radio_favorites(self) -> list[dict[str, Any]]:
+        return [
+            _copy_json_like_value(favorite)
+            for favorite in self._last_radio_favorites
+            if isinstance(favorite, dict)
+        ]
+
     def _handle_weather_value(self, command: str, raw_value: Any) -> None:
-        if not isinstance(raw_value, dict):
+        self._last_app_values[command] = _summarize_weather_value(raw_value)
+
+        if command == WEATHER_FAVORITES_SET_COMMAND:
+            favorites = _normalize_weather_favorites_value(raw_value)
+            if favorites is None:
+                return
+            state = self._copy_weather_state()
+            state["favorites"] = favorites
+            self._weather_favorites_generation += 1
+            self._set_weather_state(state)
             return
 
+        if command == WEATHER_COUNTRY_SET_COMMAND:
+            state = self._copy_weather_state()
+            try:
+                state["country_id"] = int(_raw_to_float(raw_value))
+            except (TypeError, ValueError):
+                state.pop("country_id", None)
+            self._set_weather_state(state)
+            return
+
+        if command == WEATHER_FORECAST_SET_COMMAND:
+            results = _normalize_weather_locations_value(raw_value)
+            if results is None:
+                return
+            state = self._copy_weather_state()
+            state["forecast_results"] = results
+            self._weather_search_generation += 1
+            self._set_weather_state(state)
+            return
+
+        if command == WEATHER_COUNTRIES_SET_COMMAND:
+            countries = _normalize_weather_locations_value(raw_value)
+            if countries is None:
+                return
+            self._last_weather_countries = countries
+            self._weather_countries_generation += 1
+            return
+
+        if command != WEATHER_LOCATION_SET_COMMAND:
+            return
+
+        if not isinstance(raw_value, dict):
+            self._set_weather_state({})
+            return
         state = _normalize_weather_value(raw_value)
-        self._last_app_values[command] = state
+
+        existing = self._copy_weather_state()
+        for key in ("favorites", "country_id", "forecast_results"):
+            if key in existing and key not in state:
+                state[key] = existing[key]
+        self._set_weather_state(state)
+
+    def _set_weather_state(self, state: dict[str, Any]) -> None:
         if self._last_weather_state == state:
             return
         self._last_weather_state = state
@@ -1559,19 +2431,68 @@ class DHEClient:
             for key, value in self._last_weather_state.items()
         }
 
+    def _weather_favorites(self) -> list[dict[str, Any]]:
+        favorites = self._last_weather_state.get("favorites")
+        if not isinstance(favorites, list):
+            return []
+        return [
+            _copy_json_like_value(favorite)
+            for favorite in favorites
+            if isinstance(favorite, dict)
+        ]
+
+    def _copy_diagnostic_state(self) -> dict[str, Any]:
+        state = {
+            key: _copy_json_like_value(value)
+            for key, value in self._diagnostic_state.items()
+        }
+        if self._last_message_monotonic is not None:
+            state["last_message_age_seconds"] = max(
+                0,
+                int(round(time.monotonic() - self._last_message_monotonic)),
+            )
+        return state
+
+    def _update_diagnostics(self, **updates: Any) -> None:
+        changed = False
+        for key, value in updates.items():
+            if value is None:
+                if key in self._diagnostic_state:
+                    self._diagnostic_state.pop(key)
+                    changed = True
+                continue
+            if self._diagnostic_state.get(key) != value:
+                self._diagnostic_state[key] = value
+                changed = True
+        if not changed:
+            return
+        state = self._copy_diagnostic_state()
+        for callback in tuple(self._diagnostic_callbacks):
+            callback(state)
+
+    def _record_runtime_message(self, command: Any, value: Any) -> None:
+        if not isinstance(command, str):
+            return
+        self._last_message_monotonic = time.monotonic()
+        self._message_count += 1
+        self._update_diagnostics(
+            last_message_command=command,
+            last_message_received_at=_diagnostic_timestamp(),
+            last_message_summary=_summarize_diagnostic_value(value),
+            message_count=self._message_count,
+        )
+
     def _handle_consumption_value(self, command: str, raw_value: Any) -> None:
         if not isinstance(raw_value, dict):
             return
         measurement_id = CONSUMPTION_COMMAND_IDS[command]
         raw_chart = raw_value.get("chart", [])
         if not isinstance(raw_chart, list):
-            _LOGGER.debug("Ignoring invalid consumption chart command=%s value=%r", command, raw_value)
             return
         try:
             chart = [_raw_to_float(value) for value in raw_chart]
             cost_eur = _raw_to_float(raw_value["sum"]) if raw_value.get("sum") is not None else None
-        except (TypeError, ValueError) as err:
-            _LOGGER.debug("Ignoring invalid consumption value command=%s value=%r: %s", command, raw_value, err)
+        except (TypeError, ValueError):
             return
 
         attributes = {
@@ -1603,8 +2524,7 @@ class DHEClient:
                 continue
             try:
                 value = _raw_to_float(item.get("value"))
-            except (TypeError, ValueError) as err:
-                _LOGGER.debug("Ignoring invalid last usage %s value=%r: %s", field, item, err)
+            except (TypeError, ValueError):
                 continue
             if field in {"water", "energy"}:
                 value = round(value, 2)
@@ -1634,8 +2554,7 @@ class DHEClient:
         if key == "ActivationRate":
             try:
                 activation_rate = round(_raw_to_float(raw_value), 1)
-            except (TypeError, ValueError) as err:
-                _LOGGER.debug("Ignoring invalid saving monitor activation value=%r: %s", raw_value, err)
+            except (TypeError, ValueError):
                 return
             self._last_saving_monitor_values["activation_rate"] = activation_rate
             self._update_saving_monitor_sensor(
@@ -1657,8 +2576,7 @@ class DHEClient:
             }
             if raw_value.get("value_E") is not None:
                 values["value_eur"] = round(_raw_to_float(raw_value["value_E"]), 2)
-        except (KeyError, TypeError, ValueError) as err:
-            _LOGGER.debug("Ignoring invalid saving monitor %s value=%r: %s", key, raw_value, err)
+        except (KeyError, TypeError, ValueError):
             return
 
         self._last_saving_monitor_values[key.lower()] = values
@@ -1816,7 +2734,6 @@ class DHEClient:
                 self._temperature_memory_generation += 1
             return
         if not isinstance(raw_value, list):
-            _LOGGER.debug("Ignoring invalid temperature memory value: %r", raw_value)
             return
 
         memory_ids: set[int] = set()
@@ -1836,8 +2753,7 @@ class DHEClient:
     def _handle_temperature_memory_delete_item(self, item: dict[str, Any], *, source_command: str) -> None:
         try:
             memory_id = int(item.get("id"))
-        except (TypeError, ValueError) as err:
-            _LOGGER.debug("Ignoring invalid temperature memory delete item=%r: %s", item, err)
+        except (TypeError, ValueError):
             return
         self._temperature_memory_ids_seen.discard(memory_id)
         self._clear_temperature_memory(memory_id, source_command=source_command)
@@ -1848,8 +2764,7 @@ class DHEClient:
         try:
             memory_id = int(item.get("id"))
             temperature = _raw_to_float(item.get("temperature"))
-        except (TypeError, ValueError) as err:
-            _LOGGER.debug("Ignoring invalid temperature memory item=%r: %s", item, err)
+        except (TypeError, ValueError):
             return None
         measurement_id = TEMPERATURE_MEMORY_ID_TO_MEASUREMENT.get(memory_id)
         if measurement_id is None:
@@ -1884,7 +2799,7 @@ class DHEClient:
     def _handle_odb_value(self, odb_id: int, raw_value: Any, *, is_valid: Any = None) -> None:
         if is_valid is False:
             if int(odb_id) not in KNOWN_ODB_VALUE_IDS:
-                self._log_unhandled_odb_value(odb_id, raw_value, is_valid=False)
+                self._log_unknown_odb_value(odb_id, raw_value, is_valid=False)
             return
         try:
             if odb_id == ID_SETPOINT:
@@ -1908,12 +2823,14 @@ class DHEClient:
             elif odb_id in {
                 ID_INTERNAL_TEMPERATURE_1,
                 ID_INTERNAL_TEMPERATURE_2,
-                ID_UNKNOWN_TEMPERATURE_24,
             }:
                 self._handle_measurement(odb_id, _raw_tenths_to_c(_raw_to_float(raw_value)))
+            elif odb_id == ID_UNKNOWN_TEMPERATURE_24:
+                self._handle_measurement(odb_id, _raw_tenths_to_c(_raw_to_float(raw_value)))
+            elif odb_id == ID_WATER_HEATING_ENABLED:
+                self._handle_measurement(odb_id, _raw_to_water_heating_enabled(raw_value))
             elif odb_id in {
                 ID_UNKNOWN_ODB_22,
-                ID_UNKNOWN_ODB_33,
                 ID_UNKNOWN_ODB_34,
             }:
                 self._handle_measurement(odb_id, _raw_to_float(raw_value))
@@ -1928,14 +2845,20 @@ class DHEClient:
             elif odb_id in WRITABLE_OPTION_IDS:
                 self._handle_measurement(odb_id, self._convert_odb_value(odb_id, raw_value))
             else:
-                self._log_unhandled_odb_value(odb_id, raw_value, is_valid=is_valid)
+                self._log_unknown_odb_value(odb_id, raw_value, is_valid=is_valid)
         except (TypeError, ValueError):
             return
 
     def _log_unhandled_ste_command(self, command: Any, value: Any) -> None:
-        if not isinstance(command, str) or not command.startswith(("get:ste", "set:ste")):
+        if not isinstance(command, str) or not command.startswith(
+            ("get:ste", "set:ste", "assign:ste")
+        ):
             return
-        _LOGGER.debug("Unhandled DHE ste command=%s value=%r", command, value)
+        _LOGGER.debug(
+            "Unhandled DHE ste command=%s value_summary=%r",
+            command,
+            _summarize_diagnostic_value(value),
+        )
 
     def _refresh_bath_fill_remaining(self) -> None:
         target = self._last_measurements.get(ID_BATH_FILL_TARGET_VOLUME)
@@ -1945,13 +2868,7 @@ class DHEClient:
         try:
             target_l = max(0.0, _raw_to_float(target))
             current_l = max(0.0, _raw_to_float(current))
-        except (TypeError, ValueError) as err:
-            _LOGGER.debug(
-                "Ignoring invalid bath fill remaining values target=%r current=%r: %s",
-                target,
-                current,
-                err,
-            )
+        except (TypeError, ValueError):
             return
 
         attributes = {
@@ -2024,9 +2941,9 @@ class DHEClient:
         return round(max(0.0, float(raw_value) / 1000.0), 2)
 
     @staticmethod
-    def _log_unhandled_odb_value(odb_id: int, raw_value: Any, *, is_valid: Any = None) -> None:
+    def _log_unknown_odb_value(odb_id: int, raw_value: Any, *, is_valid: Any = None) -> None:
         _LOGGER.debug(
-            "Unhandled DHE ODB value id=%s value=%r is_valid=%r",
+            "Unknown DHE ODB value id=%s value=%r is_valid=%r",
             odb_id,
             raw_value,
             is_valid,
@@ -2126,10 +3043,141 @@ class DHEClient:
             timeout=APP_COMMAND_CONFIRMATION_TIMEOUT,
         )
 
+    async def _wait_for_radio_stations(
+        self,
+        previous_generation: int,
+    ) -> list[dict[str, Any]]:
+        deadline = time.monotonic() + APP_COMMAND_CONFIRMATION_TIMEOUT
+        while time.monotonic() < deadline:
+            if self._radio_stations_generation != previous_generation:
+                return [
+                    _copy_json_like_value(station)
+                    for station in self._last_radio_stations
+                    if isinstance(station, dict)
+                ]
+            await asyncio.sleep(0.1)
+        raise DHEError("radio station search timed out")
+
+    async def _wait_for_radio_favorites(
+        self,
+        previous_generation: int,
+    ) -> list[dict[str, Any]]:
+        deadline = time.monotonic() + APP_COMMAND_CONFIRMATION_TIMEOUT
+        while time.monotonic() < deadline:
+            if self._radio_favorites_generation != previous_generation:
+                return self._radio_favorites()
+            await asyncio.sleep(0.1)
+        raise DHEError("radio favorites timed out")
+
+    async def _wait_for_radio_catalog(
+        self,
+        attribute: str,
+        previous_generation: int,
+    ) -> list[str]:
+        requested_attribute = str(attribute).strip().lower()
+        deadline = time.monotonic() + WEATHER_CATALOG_TIMEOUT
+        while time.monotonic() < deadline:
+            if (
+                self._radio_catalog_generations.get(requested_attribute, 0)
+                != previous_generation
+            ):
+                return list(self._last_radio_catalogs.get(requested_attribute, []))
+            await asyncio.sleep(0.1)
+        catalog = self._last_radio_catalogs.get(requested_attribute, [])
+        if catalog:
+            return list(catalog)
+        raise DHEError(f"radio {requested_attribute} catalog timed out")
+
+    async def _wait_for_radio_genres(self, previous_generation: int) -> list[str]:
+        return await self._wait_for_radio_catalog("genre", previous_generation)
+
+    async def _wait_for_radio_station(self, station_id: int) -> None:
+        deadline = time.monotonic() + APP_COMMAND_CONFIRMATION_TIMEOUT
+        while time.monotonic() < deadline:
+            station = self._last_radio_state.get("station")
+            if isinstance(station, dict) and _radio_station_id(station) == station_id:
+                return
+            await asyncio.sleep(0.1)
+        raise DHEError("radio station selection timed out")
+
+    async def _wait_for_weather_search_results(
+        self,
+        previous_generation: int,
+    ) -> list[dict[str, Any]]:
+        deadline = time.monotonic() + APP_COMMAND_CONFIRMATION_TIMEOUT
+        while time.monotonic() < deadline:
+            if self._weather_search_generation != previous_generation:
+                results = self._last_weather_state.get("forecast_results")
+                if isinstance(results, list):
+                    return [
+                        _copy_json_like_value(result)
+                        for result in results
+                        if isinstance(result, dict)
+                    ]
+                return []
+            await asyncio.sleep(0.1)
+        raise DHEError("weather location search timed out")
+
+    async def _wait_for_weather_countries(
+        self,
+        previous_generation: int,
+    ) -> list[dict[str, Any]]:
+        deadline = time.monotonic() + WEATHER_CATALOG_TIMEOUT
+        while time.monotonic() < deadline:
+            if self._weather_countries_generation != previous_generation:
+                return [
+                    _copy_json_like_value(country)
+                    for country in self._last_weather_countries
+                    if isinstance(country, dict)
+                ]
+            await asyncio.sleep(0.1)
+        if self._last_weather_countries:
+            return [
+                _copy_json_like_value(country)
+                for country in self._last_weather_countries
+                if isinstance(country, dict)
+            ]
+        raise DHEError("weather country catalog timed out")
+
+    async def _wait_for_weather_favorites(
+        self,
+        previous_generation: int,
+    ) -> list[dict[str, Any]]:
+        deadline = time.monotonic() + APP_COMMAND_CONFIRMATION_TIMEOUT
+        while time.monotonic() < deadline:
+            if self._weather_favorites_generation != previous_generation:
+                favorites = self._last_weather_state.get("favorites")
+                if isinstance(favorites, list):
+                    return [
+                        _copy_json_like_value(favorite)
+                        for favorite in favorites
+                        if isinstance(favorite, dict)
+                    ]
+                return []
+            await asyncio.sleep(0.1)
+        raise DHEError("weather favorites timed out")
+
+    async def _wait_for_weather_location(
+        self,
+        location_id: str,
+    ) -> None:
+        deadline = time.monotonic() + APP_COMMAND_CONFIRMATION_TIMEOUT
+        while time.monotonic() < deadline:
+            location = self._last_weather_state.get("location")
+            if (
+                isinstance(location, dict)
+                and str(location.get("LocationId", "")) == location_id
+            ):
+                return
+            await asyncio.sleep(0.1)
+        raise DHEError("weather location selection timed out")
+
     @staticmethod
     def _convert_odb_value(odb_id: int, raw_value: Any) -> ODBValue:
         if odb_id in {ID_BATH_FILL_ACTIVE, ID_MAXIMUM_ACTIVE, ID_ECO_MODE, ID_STOP_PROGRAM}:
             return _raw_to_bool(raw_value)
+        if odb_id == ID_WATER_HEATING_ENABLED:
+            return _raw_to_water_heating_enabled(raw_value)
         if odb_id == ID_MAX_TEMPERATURE:
             value = _raw_to_float(raw_value)
             if 300.0 <= value <= 500.0:
@@ -2182,14 +3230,14 @@ class DHEClient:
     async def _request_optional_odb_value(self, ctx: DHESession, odb_id: int) -> None:
         try:
             await self._request_odb_value(ctx, odb_id)
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("Ignoring optional startup ODB id %s request failure: %s", odb_id, err)
+        except Exception:  # noqa: BLE001
+            pass
 
     async def _request_optional_app_value(self, ctx: DHESession, command: str) -> None:
         try:
             await self._request_app_value(ctx, command)
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("Ignoring optional app command %s request failure: %s", command, err)
+        except Exception:  # noqa: BLE001
+            pass
 
     def _new_setpoint_future(self, expected: float | None = None) -> asyncio.Future[float]:
         self._clear_pending_future(None)
@@ -2303,7 +3351,6 @@ class DHEClient:
                                 self._websocket_ping_loop(ctx),
                                 "stiebel_dhe_connect_websocket_ping",
                             )
-                            _LOGGER.debug("DHE session upgraded to websocket transport using %s", label)
                             return
                         if packet == "2":
                             await websocket.send_str("3")
@@ -2339,9 +3386,12 @@ class DHEClient:
         except asyncio.CancelledError:
             return
         except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("DHE websocket heartbeat failed: %r", err)
             if not self._stopped.is_set():
-                await self._force_reconnect(ctx, immediate_availability=True)
+                await self._force_reconnect(
+                    ctx,
+                    immediate_availability=True,
+                    reason=f"Heartbeat failed: {_diagnostic_error(err)}",
+                )
 
     async def _read_events_once(self, ctx: DHESession) -> list[DHEEvent]:
         if ctx.websocket is None:
@@ -2582,7 +3632,10 @@ class DHEClient:
                         data = parsed[1] if len(parsed) > 1 else None
                         out.append(DHEEvent(name, data))
                 except json.JSONDecodeError:
-                    _LOGGER.debug("Could not parse Socket.IO JSON frame: %s", json_text)
+                    _LOGGER.debug(
+                        "Could not parse Socket.IO JSON frame: %r",
+                        _summarize_diagnostic_value(json_text),
+                    )
                 pos = next_pos
         return out
 

@@ -3,30 +3,19 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.restore_state import RestoreEntity
 
-from .client import DHEClient, DHEError, ID_APP_CURRENCY, MeasurementValue
+from .client import DHEClient, DHEError
 from .const import DOMAIN
+from .weather import weather_location_attributes, weather_location_name
 
 _LOGGER = logging.getLogger(__name__)
-
-CURRENCY_OPTIONS = (
-    "EUR",
-    "GBP",
-    "CZK",
-    "PLN",
-    "CNY",
-    "USD",
-    "AUD",
-    "HKD",
-)
-DEFAULT_CURRENCY = CURRENCY_OPTIONS[0]
 
 
 async def async_setup_entry(
@@ -37,7 +26,7 @@ async def async_setup_entry(
     """Set up DHE select entities from a config entry."""
     runtime = hass.data[DOMAIN][entry.entry_id]
     async_add_entities([
-        StiebelDHECurrencySelect(
+        StiebelDHEWeatherLocationSelect(
             entry_id=entry.entry_id,
             name=runtime.name,
             client=runtime.client,
@@ -45,92 +34,183 @@ async def async_setup_entry(
     ])
 
 
-class StiebelDHECurrencySelect(SelectEntity, RestoreEntity):
-    """Currency select backed by the DHE app currency setting."""
+class StiebelDHEWeatherLocationSelect(SelectEntity):
+    """Weather location select backed by the DHE weather favorites."""
 
     _attr_entity_category = EntityCategory.CONFIG
     _attr_entity_registry_enabled_default = False
     _attr_has_entity_name = True
-    _attr_icon = "mdi:currency-eur"
+    _attr_icon = "mdi:map-marker"
     _attr_should_poll = False
-    _attr_translation_key = "currency"
+    _attr_translation_key = "weather_location"
 
     def __init__(self, entry_id: str, name: str, client: DHEClient) -> None:
-        """Initialize the currency select."""
-        self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_currency"
+        """Initialize the weather location select."""
+        self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_weather_location"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, client.host)},
             "manufacturer": "STIEBEL ELTRON",
             "model": "DHE Connect",
             "name": name,
         }
-        self._attr_extra_state_attributes = {
-            "source_command": "get:ste.common.currency:value",
-        }
         self._client = client
-        self._currency_options = list(CURRENCY_OPTIONS)
-        self._attr_options = list(self._currency_options)
+        self._locations_by_option: dict[str, dict[str, Any]] = {}
+        self._have_weather_state = False
         self._attr_available = False
         self._attr_current_option: str | None = None
+        self._attr_options: list[str] = []
+        self._attr_extra_state_attributes = {"weather_path": "ste.app.weather"}
 
     async def async_added_to_hass(self) -> None:
-        """Subscribe to DHE measurement and availability updates."""
+        """Subscribe to DHE weather and availability updates."""
         self.async_on_remove(
-            self._client.add_measurement_callback(self._handle_measurement_update)
+            self._client.add_weather_callback(self._handle_weather_update)
         )
         self.async_on_remove(
             self._client.add_availability_callback(self._handle_availability_update)
         )
-
-        last_value = self._client.last_measurements.get(ID_APP_CURRENCY)
-        if last_value is not None:
-            self._set_current_option(last_value)
-            self._attr_available = True
-            return
-
-        last_state = await self.async_get_last_state()
-        if last_state and last_state.state not in {"unknown", "unavailable"}:
-            self._set_current_option(last_state.state)
-            self._attr_available = True
-            return
-
-        self._set_current_option(DEFAULT_CURRENCY)
-        self._attr_available = True
+        self._apply_weather_state(self._client.last_weather_state)
 
     async def async_select_option(self, option: str) -> None:
-        """Set the DHE currency."""
+        """Select a DHE weather favorite."""
+        location = self._locations_by_option.get(option)
+        if location is None:
+            raise ValueError(f"Unknown weather location option: {option}")
+
         try:
-            confirmed = await self._client.set_currency(option)
+            await self._client.select_weather_location(location)
         except DHEError as err:
-            self._attr_available = self._attr_current_option is not None
+            self._attr_available = self._have_weather_state
             self.async_write_ha_state()
-            _LOGGER.error("Could not set DHE currency: %s", err)
+            _LOGGER.error("Could not select DHE weather location: %s", err)
             raise
 
-        self._set_current_option(confirmed)
-        self._attr_available = True
+        self._apply_weather_state(self._client.last_weather_state)
         self.async_write_ha_state()
 
     @callback
-    def _handle_measurement_update(self, odb_id: int, value: MeasurementValue) -> None:
-        """Handle converted currency updates from the persistent client."""
-        if odb_id != ID_APP_CURRENCY:
-            return
-        self._set_current_option(value)
-        self._attr_available = True
+    def _handle_weather_update(self, state: dict[str, Any]) -> None:
+        """Handle weather state updates from the persistent client."""
+        self._apply_weather_state(state)
         self.async_write_ha_state()
 
     @callback
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
-        self._attr_available = available or self._attr_current_option is not None
+        self._attr_available = available or self._have_weather_state
         self.async_write_ha_state()
 
-    def _set_current_option(self, value: MeasurementValue) -> None:
-        option = str(value).strip().upper()
-        if not option or option == "UNSET":
-            return
-        if option not in self._currency_options:
-            self._currency_options.append(option)
-            self._attr_options = list(self._currency_options)
-        self._attr_current_option = option
+    def _apply_weather_state(self, state: dict[str, Any]) -> None:
+        location = state.get("location")
+        current_location = location if isinstance(location, dict) else None
+        favorites = _weather_locations(state.get("favorites"))
+        self._locations_by_option = _weather_location_option_map(
+            favorites,
+            current_location=current_location,
+        )
+        self._attr_options = list(self._locations_by_option)
+        self._attr_current_option = _option_for_location(
+            current_location,
+            self._locations_by_option,
+        )
+        self._have_weather_state = current_location is not None or bool(self._attr_options)
+        self._attr_available = self._have_weather_state
+
+        attributes: dict[str, Any] = {
+            "weather_path": "ste.app.weather",
+            "favorite_count": len(favorites),
+        }
+        if current_location is not None:
+            attributes.update(weather_location_attributes(current_location))
+            attributes["is_favorite"] = _location_in_list(current_location, favorites)
+        self._attr_extra_state_attributes = attributes
+
+
+def _weather_locations(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
+def _weather_location_option_map(
+    favorites: list[dict[str, Any]],
+    *,
+    current_location: dict[str, Any] | None,
+) -> dict[str, dict[str, Any]]:
+    locations = list(favorites)
+    if current_location is not None and not _location_in_list(current_location, locations):
+        locations.insert(0, current_location)
+
+    labels = _weather_location_labels(locations)
+    return {
+        label: location
+        for label, location in zip(labels, locations, strict=False)
+    }
+
+
+def _weather_location_labels(locations: list[dict[str, Any]]) -> list[str]:
+    base_labels = [_base_weather_location_label(location) for location in locations]
+    duplicate_labels = {
+        label for label in base_labels if base_labels.count(label) > 1
+    }
+    labels: list[str] = []
+    used_labels: set[str] = set()
+
+    for location, base_label in zip(locations, base_labels, strict=False):
+        label = base_label
+        if label in duplicate_labels:
+            country = str(location.get("Country") or "").strip()
+            if country:
+                label = f"{base_label}, {country}"
+        if label in used_labels:
+            location_id = str(location.get("LocationId") or "").strip()
+            if location_id:
+                label = f"{label} ({location_id})"
+        if label in used_labels:
+            label = f"{label} #{len(used_labels) + 1}"
+        labels.append(label)
+        used_labels.add(label)
+    return labels
+
+
+def _base_weather_location_label(location: dict[str, Any]) -> str:
+    name = weather_location_name(location)
+    country = str(location.get("Country") or "").strip()
+    if name:
+        return f"{name}, {country}" if country else name
+    location_id = str(location.get("LocationId") or "").strip()
+    if location_id:
+        return location_id
+    return "Unknown location"
+
+
+def _option_for_location(
+    location: dict[str, Any] | None,
+    locations_by_option: dict[str, dict[str, Any]],
+) -> str | None:
+    if location is None:
+        return None
+    location_id = _location_identifier(location)
+    for option, candidate in locations_by_option.items():
+        if _location_identifier(candidate) == location_id:
+            return option
+    return _base_weather_location_label(location)
+
+
+def _location_in_list(
+    location: dict[str, Any],
+    locations: list[dict[str, Any]],
+) -> bool:
+    location_id = _location_identifier(location)
+    return any(_location_identifier(candidate) == location_id for candidate in locations)
+
+
+def _location_identifier(location: dict[str, Any]) -> str | None:
+    location_id = location.get("LocationId")
+    if location_id not in (None, ""):
+        return str(location_id)
+    country_id = location.get("CountryId")
+    name = weather_location_name(location)
+    if name and country_id not in (None, ""):
+        return f"{country_id}:{name}"
+    return name

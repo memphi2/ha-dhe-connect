@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import ipaddress
-import logging
 import re
 from typing import Any
 from urllib.parse import urlsplit
@@ -15,13 +14,46 @@ from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
+from .client import (
+    DHEError,
+    ID_CO2_EMISSION,
+    ID_ELECTRICITY_PRICE,
+    ID_WATER_PRICE,
+)
 from .const import (
     DEFAULT_NAME,
     DEFAULT_PORT,
     DOMAIN,
 )
 
-_LOGGER = logging.getLogger(__name__)
+ATTR_COUNTRY_ID = "country_id"
+ATTR_RADIO_SELECTION = "selection"
+ATTR_RADIO_SEARCH_TYPE = "search_type"
+ATTR_RADIO_FILTER_TEXT = "filter_text"
+ATTR_RESULT = "result"
+ATTR_CO2_EMISSION = "co2_emission"
+ATTR_CURRENCY = "currency"
+ATTR_ELECTRICITY_PRICE = "electricity_price"
+ATTR_WATER_PRICE = "water_price"
+CURRENCY_UNCHANGED = "__unchanged__"
+CURRENCY_OPTIONS = ("EUR", "GBP", "CZK", "PLN", "CNY", "USD", "AUD", "HKD")
+DEFAULT_RADIO_GENRE = "Dekaden/Dekade 1980s"
+DEFAULT_WEATHER_COUNTRY_ID = 34
+MAX_RADIO_RESULT_OPTIONS = 50
+MAX_WEATHER_RESULT_OPTIONS = 50
+RADIO_CATALOG_SEARCH_TYPES = ("genre", "country", "city")
+RADIO_FILTER_SEARCH_TYPES = ("country", "city")
+RADIO_SEARCH_TYPES = ("text", *RADIO_CATALOG_SEARCH_TYPES)
+DEFAULT_RADIO_CATALOG_VALUES = {
+    "genre": DEFAULT_RADIO_GENRE,
+    "country": "Deutschland",
+    "city": "Düsseldorf/Nordrhein-Westfalen",
+}
+DEFAULT_RADIO_SEARCH_TEXTS = {
+    "text": "1Live",
+    "country": "*",
+    "city": "*",
+}
 
 _HOST_RE = re.compile(
     r"^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)*"
@@ -94,6 +126,345 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     )
 
 
+def _string_default(value: Any) -> str:
+    if value in (None, ""):
+        return ""
+    return str(value)
+
+
+def _optional_float(value: Any, min_value: float, max_value: float) -> float | None:
+    if value in (None, ""):
+        return None
+    text = str(value).strip().replace(",", ".")
+    if not text:
+        return None
+    parsed = float(text)
+    if parsed < min_value or parsed > max_value:
+        raise ValueError("invalid_range")
+    return parsed
+
+
+def _currency_options(hass: HomeAssistant, current: str = "") -> dict[str, str]:
+    language = str(getattr(hass.config, "language", "") or "").lower()
+    options = {
+        CURRENCY_UNCHANGED: (
+            "Nicht ändern" if language.startswith("de") else "Do not change"
+        )
+    }
+    options.update({currency: currency for currency in CURRENCY_OPTIONS})
+    current_value = str(current or "").strip()
+    if current_value and current_value != CURRENCY_UNCHANGED:
+        current_value = current_value.upper()
+    if current_value and current_value not in options:
+        options[current_value] = current_value
+    return options
+
+
+def _format_number_default(value: Any) -> str:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return ""
+    if numeric.is_integer():
+        return str(int(numeric))
+    return f"{numeric:.2f}".rstrip("0").rstrip(".")
+
+
+def _device_settings_defaults(client: Any) -> dict[str, Any]:
+    measurements = getattr(client, "last_measurements", {})
+    return {
+        # Requested UX: keep currency default at EUR.
+        ATTR_CURRENCY: "EUR",
+        ATTR_ELECTRICITY_PRICE: _format_number_default(
+            measurements.get(ID_ELECTRICITY_PRICE)
+        ),
+        ATTR_WATER_PRICE: _format_number_default(measurements.get(ID_WATER_PRICE)),
+        ATTR_CO2_EMISSION: _format_number_default(measurements.get(ID_CO2_EMISSION)),
+    }
+
+
+def _device_settings_schema(
+    hass: HomeAssistant,
+    defaults: dict[str, Any] | None = None,
+) -> vol.Schema:
+    defaults = defaults or {}
+    currency = str(defaults.get(ATTR_CURRENCY) or CURRENCY_UNCHANGED).strip()
+    if currency != CURRENCY_UNCHANGED:
+        currency = currency.upper()
+    return vol.Schema(
+        {
+            vol.Optional(ATTR_CURRENCY, default=currency): vol.In(
+                _currency_options(hass, currency)
+            ),
+            vol.Optional(
+                ATTR_ELECTRICITY_PRICE,
+                default=_string_default(defaults.get(ATTR_ELECTRICITY_PRICE, "")),
+            ): str,
+            vol.Optional(
+                ATTR_WATER_PRICE,
+                default=_string_default(defaults.get(ATTR_WATER_PRICE, "")),
+            ): str,
+            vol.Optional(
+                ATTR_CO2_EMISSION,
+                default=_string_default(defaults.get(ATTR_CO2_EMISSION, "")),
+            ): str,
+        }
+    )
+
+
+def _weather_country_options(countries: list[dict[str, Any]]) -> dict[str, str]:
+    """Build a sorted select list for DHE weather countries."""
+    options: dict[str, str] = {}
+    for country in countries:
+        country_id = country.get("CountryId")
+        name = str(country.get("Country") or "").strip()
+        if country_id is None or not name:
+            continue
+        try:
+            country_id_key = str(int(country_id))
+        except (TypeError, ValueError):
+            continue
+        options[country_id_key] = f"{name} ({country_id_key})"
+    return dict(sorted(options.items(), key=lambda item: item[1].casefold()))
+
+
+def _default_weather_country_id(country_options: dict[str, str]) -> str:
+    """Return a sensible default country id for the weather favorite search."""
+    preferred = str(DEFAULT_WEATHER_COUNTRY_ID)
+    if preferred in country_options:
+        return preferred
+    if country_options:
+        return next(iter(country_options))
+    return preferred
+
+
+def _weather_search_schema(
+    country_options: dict[str, str],
+    defaults: dict[str, Any] | None = None,
+) -> vol.Schema:
+    """Build the weather favorite search form."""
+    defaults = defaults or {}
+    default_country = str(
+        defaults.get(ATTR_COUNTRY_ID) or _default_weather_country_id(country_options)
+    )
+    if country_options and default_country not in country_options:
+        default_country = _default_weather_country_id(country_options)
+
+    country_validator: Any
+    if country_options:
+        country_validator = vol.In(country_options)
+    else:
+        country_validator = str
+
+    return vol.Schema(
+        {
+            vol.Required(ATTR_COUNTRY_ID, default=default_country): country_validator,
+            vol.Required(CONF_NAME, default=defaults.get(CONF_NAME, "")): str,
+        }
+    )
+
+
+def _weather_location_label(location: dict[str, Any]) -> str:
+    """Return a readable label for a weather search result."""
+    name = str(location.get("Name") or "").strip()
+    country = str(location.get("Country") or "").strip()
+    location_id = str(location.get("LocationId") or "").strip()
+
+    if name and country:
+        return f"{name}, {country}"
+    if name:
+        return name
+    if location_id:
+        return location_id
+    return "Unknown location"
+
+
+def _weather_result_options(results: list[dict[str, Any]]) -> dict[str, str]:
+    """Build a select list for weather search results."""
+    options: dict[str, str] = {}
+    for index, location in enumerate(results[:MAX_WEATHER_RESULT_OPTIONS]):
+        options[str(index)] = _weather_location_label(location)
+    return options
+
+
+def _radio_search_type_options(hass: HomeAssistant) -> dict[str, str]:
+    """Build radio search type options."""
+    language = str(getattr(hass.config, "language", "") or "").lower()
+    if language.startswith("de"):
+        return {
+            "text": "Volltext",
+            "genre": "Musikrichtung",
+            "country": "Land",
+            "city": "Stadt",
+        }
+    return {
+        "text": "Text",
+        "genre": "Genre",
+        "country": "Country",
+        "city": "City",
+    }
+
+
+def _radio_search_type_schema(
+    hass: HomeAssistant,
+    defaults: dict[str, Any] | None = None,
+) -> vol.Schema:
+    """Build the radio station search type form."""
+    defaults = defaults or {}
+    search_type_options = _radio_search_type_options(hass)
+    default_search_type = str(defaults.get(ATTR_RADIO_SEARCH_TYPE) or "text")
+    if default_search_type not in search_type_options:
+        default_search_type = "text"
+
+    return vol.Schema(
+        {
+            vol.Required(
+                ATTR_RADIO_SEARCH_TYPE,
+                default=default_search_type,
+            ): vol.In(search_type_options),
+        }
+    )
+
+
+def _radio_catalog_options(values: list[str]) -> dict[str, str]:
+    """Build a select list for a DHE radio search catalog."""
+    options: dict[str, str] = {}
+    for item in values:
+        value = str(item).strip()
+        if value:
+            options[value] = value
+    return options
+
+
+def _default_radio_catalog_value(
+    search_type: str,
+    catalog_options: dict[str, str],
+) -> str:
+    """Return a sensible default value for radio station search."""
+    preferred = DEFAULT_RADIO_CATALOG_VALUES.get(search_type, "")
+    if preferred in catalog_options:
+        return preferred
+    if catalog_options:
+        return next(iter(catalog_options))
+    return preferred
+
+
+def _radio_catalog_schema(
+    search_type: str,
+    catalog_options: dict[str, str],
+    defaults: dict[str, Any] | None = None,
+) -> vol.Schema:
+    """Build the radio station catalog value form."""
+    defaults = defaults or {}
+    schema: dict[Any, Any] = {}
+    default_value = str(
+        defaults.get(ATTR_RADIO_SELECTION)
+        or _default_radio_catalog_value(search_type, catalog_options)
+    )
+    if (
+        search_type in RADIO_CATALOG_SEARCH_TYPES
+        and catalog_options
+        and default_value not in catalog_options
+    ):
+        default_value = _default_radio_catalog_value(search_type, catalog_options)
+
+    value_validator: Any
+    if search_type in RADIO_CATALOG_SEARCH_TYPES and catalog_options:
+        value_validator = vol.In(catalog_options)
+    else:
+        value_validator = str
+
+    if search_type in RADIO_CATALOG_SEARCH_TYPES:
+        schema[
+            vol.Required(
+                ATTR_RADIO_SELECTION,
+                default=default_value,
+            )
+        ] = value_validator
+
+    if search_type == "text" or search_type in RADIO_FILTER_SEARCH_TYPES:
+        schema[
+            vol.Required(
+                ATTR_RADIO_FILTER_TEXT,
+                default=str(
+                    defaults.get(ATTR_RADIO_FILTER_TEXT)
+                    or DEFAULT_RADIO_SEARCH_TEXTS.get(search_type, "")
+                ),
+            )
+        ] = str
+
+    return vol.Schema(schema)
+
+
+def _radio_station_label(station: dict[str, Any]) -> str:
+    """Return a readable label for a radio station search result."""
+    name = str(station.get("Name") or station.get("name") or "").strip()
+    station_id = station.get("Id", station.get("id"))
+    city = str(station.get("City") or station.get("city") or "").strip()
+    country = str(station.get("Country") or station.get("country") or "").strip()
+    description = str(
+        station.get("ShortDescription")
+        or station.get("shortDescription")
+        or ""
+    ).strip()
+
+    label = name or (str(station_id) if station_id is not None else "Unknown station")
+    details = ", ".join(part for part in (city, country) if part)
+    if details:
+        label = f"{label} - {details}"
+    elif description:
+        label = f"{label} - {description}"
+    if station_id is not None:
+        label = f"{label} ({station_id})"
+    return label[:255]
+
+
+def _radio_result_options(results: list[dict[str, Any]]) -> dict[str, str]:
+    """Build a select list for radio station search results."""
+    options: dict[str, str] = {}
+    for index, station in enumerate(results[:MAX_RADIO_RESULT_OPTIONS]):
+        options[str(index)] = _radio_station_label(station)
+    return options
+
+
+def _filter_radio_results_by_text(
+    results: list[dict[str, Any]],
+    search_text: str,
+) -> list[dict[str, Any]]:
+    """Return station results matching the entered text when possible."""
+    needle = search_text.casefold().strip()
+    if needle == "*":
+        return results
+    if not needle:
+        return results
+
+    filtered: list[dict[str, Any]] = []
+    for station in results:
+        genres = station.get("Genres", station.get("genres", []))
+        genre_text = (
+            " ".join(str(genre) for genre in genres)
+            if isinstance(genres, list)
+            else str(genres or "")
+        )
+        searchable_parts = [
+            station.get("Name"),
+            station.get("name"),
+            station.get("ShortDescription"),
+            station.get("shortDescription"),
+            station.get("City"),
+            station.get("city"),
+            station.get("Country"),
+            station.get("country"),
+            genre_text,
+        ]
+        searchable = " ".join(
+            str(part).casefold() for part in searchable_parts if part
+        )
+        if needle in searchable:
+            filtered.append(station)
+    return filtered
+
+
 async def _can_connect(hass: HomeAssistant, host: str, port: int) -> bool:
     """Check if the DHE web endpoint is reachable before creating the config entry."""
     session = async_get_clientsession(hass)
@@ -103,8 +474,7 @@ async def _can_connect(hass: HomeAssistant, host: str, port: int) -> bool:
         async with session.get(url, timeout=8) as resp:
             await resp.read()
             return 200 <= resp.status < 500
-    except Exception as err:  # noqa: BLE001
-        _LOGGER.debug("Could not connect to Stiebel DHE at configured endpoint: %s", err)
+    except Exception:  # noqa: BLE001
         return False
 
 
@@ -157,8 +527,32 @@ class StiebelDHEConnectConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
     """Options flow for Stiebel DHE Connect."""
 
+    def __init__(self) -> None:
+        self._radio_catalogs: dict[str, list[str]] = {}
+        self._radio_favorites: list[dict[str, Any]] = []
+        self._radio_results: list[dict[str, Any]] = []
+        self._radio_search_type = "text"
+        self._weather_countries: list[dict[str, Any]] = []
+        self._weather_favorites: list[dict[str, Any]] = []
+        self._weather_results: list[dict[str, Any]] = []
+        self._menu_options = [
+            "connection",
+            "device_settings",
+            "weather_favorite",
+            "remove_weather_favorite",
+            "radio_favorite",
+            "remove_radio_favorite",
+        ]
+
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
-        """Manage options."""
+        """Show the options menu."""
+        return self.async_show_menu(
+            step_id="init",
+            menu_options=self._menu_options,
+        )
+
+    async def async_step_connection(self, user_input: dict[str, Any] | None = None):
+        """Manage connection options."""
         current = {**self.config_entry.data, **self.config_entry.options}
         errors: dict[str, str] = {}
 
@@ -184,7 +578,375 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
                     )
 
         return self.async_show_form(
-            step_id="init",
+            step_id="connection",
             data_schema=_schema(current),
             errors=errors,
         )
+
+    async def async_step_device_settings(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ):
+        """Manage DHE cost and emission settings."""
+        errors: dict[str, str] = {}
+        client = self._client()
+        if client is None:
+            errors["base"] = "not_loaded"
+
+        defaults = _device_settings_defaults(client) if client is not None else {}
+        if user_input is not None and not errors:
+            try:
+                currency = str(
+                    user_input.get(ATTR_CURRENCY) or CURRENCY_UNCHANGED
+                ).strip()
+                electricity_price = _optional_float(
+                    user_input.get(ATTR_ELECTRICITY_PRICE),
+                    0.0,
+                    9.99,
+                )
+                water_price = _optional_float(
+                    user_input.get(ATTR_WATER_PRICE),
+                    0.0,
+                    9.99,
+                )
+                co2_emission = _optional_float(
+                    user_input.get(ATTR_CO2_EMISSION),
+                    0.0,
+                    99.99,
+                )
+
+                if currency and currency != CURRENCY_UNCHANGED:
+                    await client.set_currency(currency)
+                if electricity_price is not None:
+                    await client.set_electricity_price(electricity_price)
+                if water_price is not None:
+                    await client.set_water_price(water_price)
+                if co2_emission is not None:
+                    await client.set_co2_emission(co2_emission)
+            except (TypeError, ValueError):
+                errors["base"] = "invalid_device_setting"
+            except DHEError:
+                errors["base"] = "device_settings_failed"
+            else:
+                return self.async_create_entry(
+                    title="",
+                    data=dict(self.config_entry.options),
+                )
+
+        return self.async_show_form(
+            step_id="device_settings",
+            data_schema=_device_settings_schema(self.hass, user_input or defaults),
+            errors=errors,
+        )
+
+    async def async_step_weather_favorite(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ):
+        """Search DHE weather locations to add a favorite."""
+        errors: dict[str, str] = {}
+        client = self._client()
+        if client is None:
+            errors["base"] = "not_loaded"
+        elif not self._weather_countries:
+            try:
+                self._weather_countries = await client.list_weather_countries()
+            except DHEError:
+                errors["base"] = "cannot_connect"
+
+        country_options = _weather_country_options(self._weather_countries)
+        defaults = user_input or {}
+
+        if user_input is not None and not errors:
+            search_name = str(user_input.get(CONF_NAME, "")).strip()
+            if not search_name:
+                errors[CONF_NAME] = "required"
+            else:
+                try:
+                    country_id = int(user_input[ATTR_COUNTRY_ID])
+                    self._weather_results = await client.search_weather_locations(
+                        search_name,
+                        country_id,
+                    )
+                except (TypeError, ValueError):
+                    errors[ATTR_COUNTRY_ID] = "invalid_country"
+                except DHEError:
+                    errors["base"] = "search_failed"
+                else:
+                    if not self._weather_results:
+                        errors["base"] = "no_results"
+                    else:
+                        return await self.async_step_weather_favorite_result()
+
+        if not country_options and not errors:
+            errors["base"] = "no_countries"
+
+        return self.async_show_form(
+            step_id="weather_favorite",
+            data_schema=_weather_search_schema(country_options, defaults),
+            errors=errors,
+        )
+
+    async def async_step_weather_favorite_result(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ):
+        """Select one weather search result and save it as favorite."""
+        errors: dict[str, str] = {}
+        client = self._client()
+        result_options = _weather_result_options(self._weather_results)
+
+        if client is None:
+            errors["base"] = "not_loaded"
+        elif not result_options:
+            errors["base"] = "no_results"
+
+        if user_input is not None and not errors:
+            try:
+                selected = int(user_input[ATTR_RESULT])
+                location = self._weather_results[selected]
+                await client.add_weather_favorite(location)
+            except (IndexError, TypeError, ValueError):
+                errors[ATTR_RESULT] = "invalid_result"
+            except DHEError:
+                errors["base"] = "favorite_failed"
+            else:
+                return self.async_create_entry(
+                    title="",
+                    data=dict(self.config_entry.options),
+                )
+
+        return self.async_show_form(
+            step_id="weather_favorite_result",
+            data_schema=vol.Schema({vol.Required(ATTR_RESULT): vol.In(result_options)}),
+            errors=errors,
+        )
+
+    async def async_step_remove_weather_favorite(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ):
+        """Remove a DHE weather favorite."""
+        errors: dict[str, str] = {}
+        client = self._client()
+        if client is None:
+            errors["base"] = "not_loaded"
+        else:
+            try:
+                self._weather_favorites = await client.list_weather_favorites()
+            except DHEError:
+                errors["base"] = "cannot_connect"
+
+        favorite_options = _weather_result_options(self._weather_favorites)
+        if not favorite_options and not errors:
+            errors["base"] = "no_favorites"
+
+        if user_input is not None and not errors:
+            try:
+                selected = int(user_input[ATTR_RESULT])
+                location = self._weather_favorites[selected]
+                await client.toggle_weather_favorite(location)
+            except (IndexError, TypeError, ValueError):
+                errors[ATTR_RESULT] = "invalid_result"
+            except DHEError:
+                errors["base"] = "remove_favorite_failed"
+            else:
+                return self.async_create_entry(
+                    title="",
+                    data=dict(self.config_entry.options),
+                )
+
+        return self.async_show_form(
+            step_id="remove_weather_favorite",
+            data_schema=vol.Schema({vol.Required(ATTR_RESULT): vol.In(favorite_options)}),
+            errors=errors,
+        )
+
+    async def async_step_radio_favorite(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ):
+        """Select how DHE radio stations should be searched."""
+        errors: dict[str, str] = {}
+        defaults = user_input or {}
+
+        if user_input is not None:
+            search_type = str(user_input.get(ATTR_RADIO_SEARCH_TYPE, "")).strip()
+            if search_type not in RADIO_SEARCH_TYPES:
+                errors[ATTR_RADIO_SEARCH_TYPE] = "invalid_radio_search_type"
+            else:
+                self._radio_search_type = search_type
+                self._radio_results = []
+                return await self.async_step_radio_favorite_catalog()
+
+        return self.async_show_form(
+            step_id="radio_favorite",
+            data_schema=_radio_search_type_schema(self.hass, defaults),
+            errors=errors,
+        )
+
+    async def async_step_radio_favorite_catalog(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ):
+        """Search DHE radio stations by a selected catalog value."""
+        errors: dict[str, str] = {}
+        client = self._client()
+        defaults = user_input or {}
+        search_type = (
+            self._radio_search_type
+            if self._radio_search_type in RADIO_SEARCH_TYPES
+            else "text"
+        )
+
+        if client is None:
+            errors["base"] = "not_loaded"
+        elif (
+            search_type in RADIO_CATALOG_SEARCH_TYPES
+            and search_type not in self._radio_catalogs
+        ):
+            try:
+                self._radio_catalogs[search_type] = await client.list_radio_catalog(
+                    search_type
+                )
+            except DHEError:
+                errors["base"] = "radio_catalog_failed"
+
+        catalog_options = (
+            _radio_catalog_options(self._radio_catalogs.get(search_type, []))
+            if search_type in RADIO_CATALOG_SEARCH_TYPES
+            else {}
+        )
+        if (
+            search_type in RADIO_CATALOG_SEARCH_TYPES
+            and not catalog_options
+            and not errors
+        ):
+            errors["base"] = "no_radio_catalog"
+
+        if user_input is not None and not errors:
+            catalog_value = str(user_input.get(ATTR_RADIO_SELECTION, "")).strip()
+            search_text = str(user_input.get(ATTR_RADIO_FILTER_TEXT, "")).strip()
+            if search_type in RADIO_CATALOG_SEARCH_TYPES and not catalog_value:
+                errors[ATTR_RADIO_SELECTION] = "required"
+            elif (
+                search_type in RADIO_CATALOG_SEARCH_TYPES
+                and catalog_options
+                and catalog_value not in catalog_options
+            ):
+                errors[ATTR_RADIO_SELECTION] = "invalid_radio_catalog_value"
+            elif (
+                search_type == "text" or search_type in RADIO_FILTER_SEARCH_TYPES
+            ) and not search_text:
+                errors[ATTR_RADIO_FILTER_TEXT] = "required"
+            else:
+                station_search_value = (
+                    search_text if search_type == "text" else catalog_value
+                )
+                station_search_text = (
+                    search_text if search_type in RADIO_FILTER_SEARCH_TYPES else None
+                )
+                try:
+                    self._radio_results = await client.search_radio_stations(
+                        search_type,
+                        station_search_value,
+                        search_text=station_search_text,
+                    )
+                    if station_search_text:
+                        self._radio_results = _filter_radio_results_by_text(
+                            self._radio_results,
+                            station_search_text,
+                        )
+                except DHEError:
+                    errors["base"] = "radio_search_failed"
+                else:
+                    if not self._radio_results:
+                        errors["base"] = "no_results"
+                    else:
+                        return await self.async_step_radio_favorite_result()
+
+        return self.async_show_form(
+            step_id="radio_favorite_catalog",
+            data_schema=_radio_catalog_schema(search_type, catalog_options, defaults),
+            errors=errors,
+        )
+
+    async def async_step_radio_favorite_result(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ):
+        """Select one radio station search result and save it as favorite."""
+        errors: dict[str, str] = {}
+        client = self._client()
+        result_options = _radio_result_options(self._radio_results)
+
+        if client is None:
+            errors["base"] = "not_loaded"
+        elif not result_options:
+            errors["base"] = "no_results"
+
+        if user_input is not None and not errors:
+            try:
+                selected = int(user_input[ATTR_RESULT])
+                station = self._radio_results[selected]
+                await client.add_radio_favorite(station, select=True)
+            except (IndexError, TypeError, ValueError):
+                errors[ATTR_RESULT] = "invalid_result"
+            except DHEError:
+                errors["base"] = "radio_favorite_failed"
+            else:
+                return self.async_create_entry(
+                    title="",
+                    data=dict(self.config_entry.options),
+                )
+
+        return self.async_show_form(
+            step_id="radio_favorite_result",
+            data_schema=vol.Schema({vol.Required(ATTR_RESULT): vol.In(result_options)}),
+            errors=errors,
+        )
+
+    async def async_step_remove_radio_favorite(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ):
+        """Remove a DHE radio favorite."""
+        errors: dict[str, str] = {}
+        client = self._client()
+        if client is None:
+            errors["base"] = "not_loaded"
+        else:
+            try:
+                self._radio_favorites = await client.list_radio_favorites()
+            except DHEError:
+                errors["base"] = "cannot_connect"
+
+        favorite_options = _radio_result_options(self._radio_favorites)
+        if not favorite_options and not errors:
+            errors["base"] = "no_radio_favorites"
+
+        if user_input is not None and not errors:
+            try:
+                selected = int(user_input[ATTR_RESULT])
+                station = self._radio_favorites[selected]
+                await client.remove_radio_favorite(station)
+            except (IndexError, TypeError, ValueError):
+                errors[ATTR_RESULT] = "invalid_result"
+            except DHEError:
+                errors["base"] = "remove_radio_favorite_failed"
+            else:
+                return self.async_create_entry(
+                    title="",
+                    data=dict(self.config_entry.options),
+                )
+
+        return self.async_show_form(
+            step_id="remove_radio_favorite",
+            data_schema=vol.Schema({vol.Required(ATTR_RESULT): vol.In(favorite_options)}),
+            errors=errors,
+        )
+
+    def _client(self) -> Any | None:
+        """Return the runtime DHE client for this config entry."""
+        runtime = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
+        return getattr(runtime, "client", None)

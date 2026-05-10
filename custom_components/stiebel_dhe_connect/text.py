@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from homeassistant.components.text import TextEntity, TextEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -37,17 +36,23 @@ TEMPERATURE_MEMORY_MEASUREMENT_SLOTS = {
 }
 
 
+def _temperature_memory_enabled_default(slot: int) -> bool:
+    """Return whether a temperature memory slot is enabled by default."""
+    return slot <= 2
+
+
 def _temperature_memory_text_description(
     slot: int,
     measurement_id: int,
 ) -> StiebelDHETextEntityDescription:
-    """Create the text description for a reported temperature memory slot."""
+    """Create the text description for a temperature memory slot."""
     return StiebelDHETextEntityDescription(
         key=f"temperature_memory_{slot}_name",
         translation_key=f"temperature_memory_{slot}_name",
         icon=f"mdi:numeric-{slot}-box-outline" if slot < 10 else "mdi:counter",
         measurement_id=measurement_id,
         temperature_memory_slot=slot,
+        entity_registry_enabled_default=_temperature_memory_enabled_default(slot),
     )
 
 
@@ -59,50 +64,19 @@ async def async_setup_entry(
     """Set up DHE text entities from a config entry."""
     runtime = hass.data[DOMAIN][entry.entry_id]
     client: DHEClient = runtime.client
-    added_memory_texts: dict[int, StiebelDHEText] = {}
-
-    def add_memory_text(measurement_id: int) -> None:
-        if measurement_id in added_memory_texts:
-            return
-        slot = TEMPERATURE_MEMORY_MEASUREMENT_SLOTS.get(measurement_id)
-        if slot is None:
-            return
-        entity = StiebelDHEText(
-            entry_id=entry.entry_id,
-            name=runtime.name,
-            client=client,
-            description=_temperature_memory_text_description(slot, measurement_id),
-        )
-        added_memory_texts[measurement_id] = entity
-        async_add_entities([entity])
-
-    async def remove_memory_text(measurement_id: int) -> None:
-        entity = added_memory_texts.pop(measurement_id, None)
-        if entity is not None:
-            await entity.async_remove()
-        slot = TEMPERATURE_MEMORY_MEASUREMENT_SLOTS.get(measurement_id)
-        if slot is None:
-            return
-        registry = er.async_get(hass)
-        description = _temperature_memory_text_description(slot, measurement_id)
-        entity_id = registry.async_get_entity_id(
-            "text",
-            DOMAIN,
-            f"stiebel_dhe_connect_{entry.entry_id}_{description.key}",
-        )
-        if entity_id is not None:
-            registry.async_remove(entity_id)
-
-    @callback
-    def handle_temperature_memory_update(odb_id: int, value: MeasurementValue) -> None:
-        if odb_id not in TEMPERATURE_MEMORY_MEASUREMENT_SLOTS:
-            return
-        if value is None:
-            hass.async_create_task(remove_memory_text(odb_id))
-            return
-        add_memory_text(odb_id)
-
-    entry.async_on_unload(client.add_measurement_callback(handle_temperature_memory_update))
+    async_add_entities(
+        [
+            StiebelDHEText(
+                entry_id=entry.entry_id,
+                name=runtime.name,
+                client=client,
+                description=_temperature_memory_text_description(slot, measurement_id),
+            )
+            for measurement_id, slot in sorted(
+                TEMPERATURE_MEMORY_MEASUREMENT_SLOTS.items(), key=lambda item: item[1]
+            )
+        ]
+    )
 
 
 class StiebelDHEText(TextEntity, RestoreEntity):
@@ -124,6 +98,9 @@ class StiebelDHEText(TextEntity, RestoreEntity):
         self.entity_description = description
         self._attr_translation_key = description.translation_key
         self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_{description.key}"
+        self._attr_entity_registry_enabled_default = (
+            description.entity_registry_enabled_default
+        )
         self._attr_device_info = {
             "identifiers": {(DOMAIN, client.host)},
             "manufacturer": "STIEBEL ELTRON",

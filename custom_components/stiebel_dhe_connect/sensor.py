@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -22,7 +23,6 @@ from homeassistant.const import (
     UnitOfVolumeFlowRate,
 )
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -57,9 +57,9 @@ from .client import (
     ID_SAVING_MONITOR_WATER,
     ID_SHOWER_TIMER_REMAINING,
     ID_UNKNOWN_ODB_22,
-    ID_UNKNOWN_ODB_33,
     ID_UNKNOWN_ODB_34,
     ID_UNKNOWN_TEMPERATURE_24,
+    ID_WATER_HEATING_ENABLED,
     ID_WATER_CONSUMPTION_WEEK,
     ID_WATER_CONSUMPTION_YEAR,
     ID_WATER_CONSUMPTION_YEARS,
@@ -80,6 +80,14 @@ class StiebelDHESensorEntityDescription(SensorEntityDescription):
     timer_property: str | None = None
     source_command: str | None = None
     period: str | None = None
+
+
+@dataclass(frozen=True, kw_only=True)
+class StiebelDHEDiagnosticSensorEntityDescription(SensorEntityDescription):
+    """Describe a DHE client diagnostic sensor."""
+
+    diagnostic_key: str
+    polls: bool = False
 
 
 DEFAULT_DISABLED_SENSOR_KEYS = {
@@ -103,6 +111,39 @@ DEFAULT_DISABLED_SENSOR_KEYS = {
     "saving_monitor_real_co2",
     "saving_monitor_real_value",
 }
+
+
+DIAGNOSTIC_SENSOR_DESCRIPTIONS: tuple[StiebelDHEDiagnosticSensorEntityDescription, ...] = (
+    StiebelDHEDiagnosticSensorEntityDescription(
+        key="connection_state",
+        translation_key="connection_state",
+        icon="mdi:lan-connect",
+        diagnostic_key="connection_state",
+    ),
+    StiebelDHEDiagnosticSensorEntityDescription(
+        key="last_reconnect_reason",
+        translation_key="last_reconnect_reason",
+        icon="mdi:alert-circle-outline",
+        diagnostic_key="last_reconnect_reason",
+    ),
+    StiebelDHEDiagnosticSensorEntityDescription(
+        key="last_message_command",
+        translation_key="last_message_command",
+        icon="mdi:message-text-clock-outline",
+        diagnostic_key="last_message_command",
+    ),
+    StiebelDHEDiagnosticSensorEntityDescription(
+        key="last_message_age",
+        translation_key="last_message_age",
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        icon="mdi:timer-sync-outline",
+        diagnostic_key="last_message_age_seconds",
+        polls=True,
+    ),
+)
 
 
 SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
@@ -172,13 +213,12 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         odb_id=ID_UNKNOWN_TEMPERATURE_24,
     ),
     StiebelDHESensorEntityDescription(
-        key="unknown_odb_33",
-        translation_key="unknown_odb_33",
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:database-question",
+        key="water_heating_enabled",
+        translation_key="water_heating_enabled",
+        icon="mdi:water-boiler",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
-        odb_id=ID_UNKNOWN_ODB_33,
+        odb_id=ID_WATER_HEATING_ENABLED,
     ),
     StiebelDHESensorEntityDescription(
         key="unknown_odb_34",
@@ -275,9 +315,6 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
     StiebelDHESensorEntityDescription(
         key="last_usage_time",
         translation_key="last_usage_time",
-        native_unit_of_measurement=UnitOfTime.MINUTES,
-        device_class=SensorDeviceClass.DURATION,
-        state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:timer-outline",
         odb_id=ID_LAST_USAGE_TIME,
         source_command="set:ste.app.consumption:lastUsage",
@@ -485,16 +522,6 @@ async def async_setup_entry(
 ) -> None:
     """Set up DHE sensors from a config entry."""
     runtime = hass.data[DOMAIN][entry.entry_id]
-    registry = er.async_get(hass)
-    for legacy_key in ("device_type", "unhandled_odb_values"):
-        legacy_entity_id = registry.async_get_entity_id(
-            "sensor",
-            DOMAIN,
-            f"stiebel_dhe_connect_{entry.entry_id}_{legacy_key}",
-        )
-        if legacy_entity_id is not None:
-            registry.async_remove(legacy_entity_id)
-
     async_add_entities(
         [
             StiebelDHESensor(
@@ -511,6 +538,22 @@ async def async_setup_entry(
                 name=runtime.name,
                 client=runtime.client,
             )
+        ]
+        + [
+            StiebelDHEErrorStatusSensor(
+                entry_id=entry.entry_id,
+                name=runtime.name,
+                client=runtime.client,
+            )
+        ]
+        + [
+            StiebelDHEDiagnosticSensor(
+                entry_id=entry.entry_id,
+                name=runtime.name,
+                client=runtime.client,
+                description=description,
+            )
+            for description in DIAGNOSTIC_SENSOR_DESCRIPTIONS
         ]
     )
 
@@ -585,7 +628,7 @@ class StiebelDHESensor(SensorEntity):
                 return None
             return str(attribute_value)
 
-        if not self.entity_description.timer_path:
+        if not self.entity_description.timer_path and self.entity_description.key != "last_usage_time":
             return value
 
         total_seconds = max(0, int(round(float(value) * 60)))
@@ -652,3 +695,191 @@ class StiebelDHEReconnectCountSensor(SensorEntity):
         """Handle DHE reconnect count updates."""
         self._attr_native_value = reconnect_count
         self.async_write_ha_state()
+
+
+class StiebelDHEErrorStatusSensor(SensorEntity):
+    """Human-readable general error status."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_translation_key = "temperature_error_status"
+    _attr_icon = "mdi:alert-octagon-outline"
+
+    def __init__(self, entry_id: str, name: str, client: DHEClient) -> None:
+        """Initialize the general error status sensor."""
+        self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_temperature_error_status"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, client.host)},
+            "manufacturer": "STIEBEL ELTRON",
+            "model": "DHE Connect",
+            "name": name,
+        }
+        self._client = client
+        self._setpoint: float | None = None
+        self._inlet_temperature: float | None = None
+        self._attr_available = False
+        self._attr_native_value: str | None = None
+        self._update_status()
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to relevant DHE updates."""
+        self.async_on_remove(
+            self._client.add_setpoint_callback(self._handle_setpoint_update)
+        )
+        self.async_on_remove(
+            self._client.add_measurement_callback(self._handle_measurement_update)
+        )
+        self.async_on_remove(
+            self._client.add_availability_callback(self._handle_availability_update)
+        )
+        self._setpoint = self._coerce_temperature(self._client.last_setpoint)
+        self._inlet_temperature = self._coerce_temperature(
+            self._client.last_measurements.get(ID_INTERNAL_TEMPERATURE_1)
+        )
+        self._update_status()
+        self.async_write_ha_state()
+
+    @callback
+    def _handle_setpoint_update(self, value: float) -> None:
+        self._setpoint = self._coerce_temperature(value)
+        self._update_status()
+        self.async_write_ha_state()
+
+    @callback
+    def _handle_measurement_update(self, odb_id: int, value: MeasurementValue) -> None:
+        if odb_id != ID_INTERNAL_TEMPERATURE_1:
+            return
+        self._inlet_temperature = self._coerce_temperature(value)
+        self._update_status()
+        self.async_write_ha_state()
+
+    @callback
+    def _handle_availability_update(self, available: bool) -> None:
+        self._attr_available = (
+            available
+            or self._setpoint is not None
+            or self._inlet_temperature is not None
+        )
+        self._update_status()
+        self.async_write_ha_state()
+
+    def _update_status(self) -> None:
+        below_inlet = (
+            self._setpoint is not None
+            and self._inlet_temperature is not None
+            and self._setpoint < self._inlet_temperature
+        )
+        language = str(getattr(self.hass.config, "language", "") or "").lower() if self.hass else ""
+        if not self._client.online:
+            self._attr_native_value = "Nicht verbunden" if language.startswith("de") else "Disconnected"
+            active_error = "disconnected"
+        elif below_inlet:
+            self._attr_native_value = (
+                "Solltemperatur unter Zulauftemperatur"
+                if language.startswith("de")
+                else "Target temperature below inlet temperature"
+            )
+            active_error = "target_below_inlet"
+        else:
+            self._attr_native_value = "OK"
+            active_error = None
+
+        self._attr_available = (
+            self._client.available
+            or self._setpoint is not None
+            or self._inlet_temperature is not None
+        )
+        self._attr_extra_state_attributes = {
+            "online": self._client.online,
+            "connected": self._client.available,
+            "active_error": active_error,
+            "setpoint_temperature": self._setpoint,
+            "inlet_temperature": self._inlet_temperature,
+            "setpoint_below_inlet": below_inlet,
+        }
+        if below_inlet and self._setpoint is not None and self._inlet_temperature is not None:
+            self._attr_extra_state_attributes["inlet_minus_setpoint"] = round(
+                self._inlet_temperature - self._setpoint, 2
+            )
+
+    @staticmethod
+    def _coerce_temperature(value: MeasurementValue) -> float | None:
+        if value is None or isinstance(value, bool):
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+
+class StiebelDHEDiagnosticSensor(SensorEntity):
+    """DHE client diagnostic sensor."""
+
+    entity_description: StiebelDHEDiagnosticSensorEntityDescription
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        entry_id: str,
+        name: str,
+        client: DHEClient,
+        description: StiebelDHEDiagnosticSensorEntityDescription,
+    ) -> None:
+        """Initialize the diagnostic sensor."""
+        self.entity_description = description
+        self._attr_translation_key = description.translation_key
+        self._attr_icon = description.icon
+        self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_{description.key}"
+        self._attr_should_poll = description.polls
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, client.host)},
+            "manufacturer": "STIEBEL ELTRON",
+            "model": "DHE Connect",
+            "name": name,
+        }
+        self._client = client
+        self._attr_available = False
+        self._attr_native_value: int | str | None = None
+        self._attr_extra_state_attributes = {}
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to diagnostic updates."""
+        self.async_on_remove(
+            self._client.add_diagnostic_callback(self._handle_diagnostic_update)
+        )
+        self._apply_diagnostic_state(self._client.diagnostic_state)
+
+    async def async_update(self) -> None:
+        """Refresh dynamic diagnostic values."""
+        self._apply_diagnostic_state(self._client.diagnostic_state)
+
+    @callback
+    def _handle_diagnostic_update(self, state: dict[str, Any]) -> None:
+        """Handle diagnostic state updates from the persistent client."""
+        self._apply_diagnostic_state(state)
+        self.async_write_ha_state()
+
+    def _apply_diagnostic_state(self, state: dict[str, Any]) -> None:
+        value = state.get(self.entity_description.diagnostic_key)
+        if (
+            value is None
+            and self.entity_description.diagnostic_key == "last_reconnect_reason"
+            and self._client.reconnect_count == 0
+        ):
+            value = self._no_reconnect_value()
+        self._attr_native_value = value if isinstance(value, (int, str)) else None
+        self._attr_available = self._attr_native_value is not None
+        self._attr_extra_state_attributes = {
+            key: value
+            for key, value in state.items()
+            if key != self.entity_description.diagnostic_key
+        }
+
+    def _no_reconnect_value(self) -> str:
+        language = str(getattr(self.hass.config, "language", "") or "").lower()
+        if language.startswith("de"):
+            return "Kein Reconnect"
+        return "No reconnect"

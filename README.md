@@ -6,7 +6,7 @@ The integration talks directly to the DHE web interface on your local network. I
 
 ## Status
 
-- Current version: `1.0.2`
+- Current version: `1.0.4`
 - Home Assistant setup: UI config flow
 - HACS type: custom integration
 - IoT class: local push
@@ -15,20 +15,23 @@ The integration talks directly to the DHE web interface on your local network. I
 
 This is a custom integration and should be used on a trusted local network.
 
+Development and protocol mapping for this release were assisted by OpenAI Codex.
+
 ## Highlights
 
 - Local Socket.IO / Engine.IO v3 session with required WebSocket upgrade.
 - Browser-style Engine.IO heartbeat handling to keep the DHE session alive.
 - Automatic reconnect and diagnostic reconnect counter.
 - Target temperature control through the DHE ODB command interface.
-- Temperature memory buttons that use the temperatures currently stored in up to 12 memory slots.
+- Temperature memory controls for all 12 supported slots; slots 3 to 12 are disabled by default.
 - Water and energy consumption sensors, with long-term values disabled by default to keep the device card tidy.
 - Last usage, saving monitor, brush timer, shower timer and device diagnostic sensors.
-- Eco mode, Eco flow limit, bath fill, currency, maximum temperature and wellness controls.
-- Compact radio media player for station metadata, playback and volume.
+- Eco mode, Eco flow limit, bath fill, maximum temperature and wellness controls; currency, cost and CO2 settings live in the integration options.
+- Compact radio media player for station metadata, playback, volume and favorites.
+- Options-flow radio search by full text, DHE genre catalog, country catalog or city catalog.
 - Weather entity for the DHE forecast payload.
 - Brush timer and shower timer controls.
-- Diagnostic online status, reconnect count and device information.
+- General diagnostic status, reconnect count, connection details and device information.
 
 ## Installation
 
@@ -72,6 +75,16 @@ The host field intentionally rejects URLs with paths, usernames, query strings o
 
 On first connection the DHE may request pairing. Confirm the request on the DHE if prompted.
 
+### First pairing flow
+
+1. Add `Stiebel DHE Connect` from `Settings` -> `Devices & services`.
+2. Enter only the DHE host/IP, port and a provisional device name.
+3. Submit the form and watch the DHE display or DHE web UI.
+4. Confirm pairing on the DHE before assigning the Home Assistant area or renaming entities.
+5. When Home Assistant finishes setup, assign the device to an area and adjust entity names as desired.
+
+Home Assistant does not yet show a dedicated pairing prompt for this integration, so the important pairing confirmation currently happens on the DHE side.
+
 ## Pairing token
 
 After successful pairing the local token is stored at:
@@ -105,17 +118,15 @@ The climate entity keeps the last valid target temperature during short reconnec
 
 ### Binary sensors
 
-| Entity | Type | Device class | Source |
-|---|---|---|---|
-| Online | Binary sensor | `connectivity` | Authenticated persistent session state |
+No dedicated binary sensors are created by default in the current entity model.
 
 ### Media player
 
 | Entity | Features | Source / command | Behavior |
 |---|---|---|---|
-| Radio | play/pause, volume | `get:ste.app.radio:station`, `volume`, `play`, `paired`, `title`; `assign:ste.app.radio:play`, `volume` | Shows the current radio station/title and controls playback/volume |
+| Radio | play/pause, volume, source selection, previous/next favorite | `get:ste.app.radio:station`, `volume`, `play`, `paired`, `title`, `favorites`; `assign:ste.app.radio:play`, `volume`, `station` | Shows the current radio station/title, controls playback/volume and switches between radio favorites |
 
-The radio entity intentionally does not request the full station catalog. Catalog, favorites and search payloads are treated as known protocol messages when the DHE sends them, but they are not exposed as controls.
+The radio entity intentionally does not request the full station catalog during startup. It does read the small favorites list so Home Assistant can expose radio favorites as media-player sources and use previous/next to cycle through them. The options flow can search stations by full text, DHE genre catalog, or by DHE country/city catalog plus a search term, then add the selected station as a DHE radio favorite and activate it. Genre searches send the selected genre directly; full-text search sends `{attribute: "text", value: "<query>"}`; country and city searches send the selected catalog value and include the entered search term as additional text. Existing radio favorites can also be removed from the options flow. Catalog, favorites and search payloads are treated as known protocol messages so they do not pollute debug logs.
 
 ### Weather
 
@@ -123,7 +134,27 @@ The radio entity intentionally does not request the full station catalog. Catalo
 |---|---|---|---|
 | Weather | daily forecast | `get:ste.app.weather:location` | Shows the DHE weather location, current forecast condition and daily forecast values |
 
-The weather entity exposes the DHE forecast location, daily temperatures, precipitation probabilities and original `icon_id_*` values. Home Assistant weather conditions are derived conservatively from precipitation until the DHE icon ID mapping has been verified with real device data.
+The weather entity exposes the DHE forecast location, including `city`, `country` and a combined `location` attribute in `place, country` format, daily temperatures, precipitation probabilities and original `icon_id_*` values. The observed DHE weather icons are mapped to Home Assistant weather conditions where verified from device traffic: `1`/`2` = sunny, `3`/`4`/`6` = partly cloudy, `5` = cloudy and `7`/`8` = rainy. Unknown icon IDs remain visible as attributes and fall back to precipitation-based conditions. Weather favorites, forecast search results and the selected country are treated as known protocol messages; the full country catalog is recognized but not requested during startup because it is very large.
+
+Weather location search uses the same split city/country workflow as the DHE UI. The integration options can add and remove weather favorites. The disabled-by-default `Weather location` select can be enabled when you want to switch between existing favorites from Home Assistant. The service `stiebel_dhe_connect.search_weather_location` sends `get:ste.app.weather:forecast` with `name` and `country_id`; the returned results are exposed as `forecast_results` attributes. The service `stiebel_dhe_connect.toggle_weather_favorite` can toggle an existing result by `result_number` or run a fresh search first when `name` and `country_id` are provided. The DHE uses the same `assign:ste.app.weather:favorite` command to add and remove favorites.
+
+Selecting the active weather location is a separate step. The service `stiebel_dhe_connect.select_weather_location` sends `get:ste.app.weather:location` with the selected `LocationId`, matching the browser protocol used when switching to a favorite. It can select by exact `location_id`, by the current search `result_number`, or run a fresh name/country search first. Example for toggling New York in the USA:
+
+```yaml
+service: stiebel_dhe_connect.toggle_weather_favorite
+data:
+  name: New York
+  country_id: 143
+  result_number: 1
+```
+
+Example for switching to an existing favorite by `LocationId`:
+
+```yaml
+service: stiebel_dhe_connect.select_weather_location
+data:
+  location_id: ID=320@ID2=84666@REGIO=5@COUNTRY_ID=34
+```
 
 ### Sensors
 
@@ -136,7 +167,7 @@ The weather entity exposes the DHE forecast location, daily temperatures, precip
 | Inlet temperature | `C` | `temperature`, diagnostic | `measurement` | ODB ID `13 / 10` |
 | Outlet temperature | `C` | `temperature`, diagnostic | `measurement` | ODB ID `14 / 10` |
 | Unknown temperature 24 | `C` | `temperature`, diagnostic, disabled by default | `measurement` | ODB ID `24 / 10` |
-| Unknown ODB value 33 | none | diagnostic, disabled by default | `measurement` | ODB ID `33`, raw numeric value |
+| Water heating enabled | none | diagnostic, disabled by default | none | ODB ID `33`, boolean `water_heating_enabled` state |
 | Unknown ODB value 34 | none | diagnostic, disabled by default | `measurement` | ODB ID `34`, raw numeric value |
 | Water consumption week | `L` | `water`, disabled by default | `total_increasing` | `set:ste.app.consumption:waterWeek` |
 | Water consumption year | `m3` | `water`, disabled by default | `total_increasing` | `set:ste.app.consumption:waterYear` |
@@ -146,7 +177,7 @@ The weather entity exposes the DHE forecast location, daily temperatures, precip
 | Energy consumption years | `kWh` | `energy`, disabled by default | `total` | `set:ste.app.consumption:energyYears` |
 | Last usage water | `L` | none | `measurement` | `set:ste.app.consumption:lastUsage.water` |
 | Last usage energy | `kWh` | none | `measurement` | `set:ste.app.consumption:lastUsage.energy` |
-| Last usage duration | `min` | `duration` | `measurement` | `set:ste.app.consumption:lastUsage.time` |
+| Last usage duration | `M:SS` | none | none | `set:ste.app.consumption:lastUsage.time`, rendered like timer remaining values |
 | Last usage cost | `EUR` | `monetary` | none | `set:ste.app.consumption:lastUsage.costs` |
 | Bath fill remaining | `L` | none | `measurement` | Derived from target volume ODB ID `3` minus current bath fill ODB ID `31` |
 | Saving monitor consumption water | `L` | disabled by default | `measurement` | `set:ste.app.savingMonitor:consumption.water_l`, rounded to 2 decimals |
@@ -163,11 +194,15 @@ The weather entity exposes the DHE forecast location, daily temperatures, precip
 | Saving monitor real cost saving | `EUR` | `monetary`, disabled by default | none | `set:ste.app.savingMonitor:real.value_E`, rounded to 2 decimals |
 | Brush timer remaining | `M:SS` | none | none | `set:ste.app.brushTimer:remainingMilliseconds` |
 | Shower timer remaining | `M:SS` | none | none | `set:ste.app.showerTimer:remainingMilliseconds` |
-| Reconnects | count | none | `total_increasing` | Successful reconnect count after the initial connection |
+| Reconnects | count | diagnostic, disabled by default | `total_increasing` | Successful reconnect count after the initial connection |
+| Connection state | text | diagnostic, disabled by default | none | Client session state such as `starting`, `connected`, `reconnecting` or `stopped` |
+| Last reconnect reason | text | diagnostic, disabled by default | none | Last recorded session failure or forced reconnect reason |
+| Last received command | text | diagnostic, disabled by default | none | Last DHE app command received from the persistent session |
+| Time since last message | `s` | duration, diagnostic, disabled by default | `measurement` | Seconds since the last received DHE app command |
 | Device info | text | diagnostic | none | DHE version and device information commands |
-| Product ID | text | diagnostic | none | `set:ste.common.version:gadgetData.id` |
-| WLAN MAC | text | diagnostic | none | `set:ste.common.version:gadgetData.wlan` |
-| Bluetooth MAC | text | diagnostic | none | `set:ste.common.version:gadgetData.bluetooth` |
+| Product ID | text | diagnostic, disabled by default | none | `set:ste.common.version:gadgetData.id` |
+| WLAN MAC | text | diagnostic, disabled by default | none | `set:ste.common.version:gadgetData.wlan` |
+| Bluetooth MAC | text | diagnostic, disabled by default | none | `set:ste.common.version:gadgetData.bluetooth` |
 
 Consumption sensors expose the DHE chart array as a `chart` attribute and the reported cost as `cost_eur` where available. Saving monitor sensors expose the latest `possible`, `real`, `consumption` and `activation_rate` payloads as attributes.
 
@@ -178,30 +213,27 @@ Consumption sensors expose the DHE chart array as a `chart` attribute and the re
 | Bath fill target volume | `L` | `1` to `300` | slider | ODB ID `3` |
 | Maximum temperature | `C` | `30` to `50` | slider | ODB ID `5`, accepts raw tenths or degrees |
 | Eco flow limit | `L/min` | `6` to `8` | slider | ODB ID `7`, sent as raw tenths |
-| Electricity price | `EUR/kWh` | `0.00` to `9.99` | box | ODB ID `61` for euros and ODB ID `70` for cents |
-| Water price | `EUR/m3` | `0.00` to `9.99` | box | ODB ID `62` for euros and ODB ID `71` for cents |
-| CO2 emission | `kg/kWh` | `0.00` to `99.99` | box | ODB ID `69`, encoded as `kg/kWh * 1000` |
 | Brush timer duration | `min` | `1` to `20` | box | `assign:ste.app.brushTimer:durationMilliseconds` |
 | Shower timer duration | `min` | `1` to `20` | box | `assign:ste.app.showerTimer:durationMilliseconds` |
-| Temperature memory 1-12 temperature | `C` | `20` to `60` | box | `assign:ste.common.temperature:memory`, memory ID `0` to `11`; created only for slots reported by the DHE |
+| Temperature memory 1-12 temperature | `C` | `20` to `60` | box | `assign:ste.common.temperature:memory`, memory ID `0` to `11`; slots 3 to 12 disabled by default |
 
-Temperature memory writes keep the existing memory name and send `operation: add_change`. The Home Assistant entities are only shown for memory slots currently reported by the DHE, so empty memory slots do not clutter the device configuration card.
+Temperature memory writes keep the existing memory name and send `operation: add_change`. Slots 1 and 2 are enabled by default. Slots 3 to 12 are created in the entity registry but disabled by default, so they can be enabled explicitly without cluttering the device configuration card.
+
+Currency, electricity price, water price and CO2 emission are configured from the integration options under `Costs & emissions` instead of being exposed as entities. The DHE writes use the same protocol values as the browser UI: currency via `get:ste.common.currency:value`, electricity price via ODB IDs `61`/`70`, water price via ODB IDs `62`/`71` and CO2 emission via ODB ID `69`.
 
 ### Selects
 
 | Entity | Options | Source / command | Behavior |
 |---|---|---|---|
-| Currency | `EUR`, `GBP`, `CZK`, `PLN`, `CNY`, `USD`, `AUD`, `HKD` | `get:ste.common.currency:value` with a value | Sends the lower-case currency code, matching the DHE app behavior |
-
-The DHE answers the startup currency read with an empty value. The currency select therefore restores the last selected Home Assistant state on startup, falls back to `EUR` on first setup and updates when a currency write or non-empty device response is seen.
+| Weather location | weather favorites, disabled by default | `get:ste.app.weather:location` with a `LocationId` value | Selects the active DHE weather favorite |
 
 ### Texts
 
 | Entity | Source / command | Behavior |
 |---|---|---|
-| Temperature memory 1-12 name | `assign:ste.common.temperature:memory`, memory ID `0` to `11` | Renames a memory slot reported by the DHE |
+| Temperature memory 1-12 name | `assign:ste.common.temperature:memory`, memory ID `0` to `11` | Renames a memory slot; slots 3 to 12 disabled by default |
 
-Temperature memory name writes use the current cached or freshly read memory temperature and send `operation: add_change`. Name fields are created only for memory slots currently reported by the DHE.
+Temperature memory name writes use the current cached or freshly read memory temperature and send `operation: add_change`. Name fields for slots 3 to 12 are disabled by default and can be enabled when those optional memories are used.
 
 ### Switches
 
@@ -225,8 +257,9 @@ Wellness programs are triggered by writing the program ID and then sending the D
 |---|---|---|
 | Reset brush timer | `assign:ste.app.brushTimer:reset` | Resets brush timer remaining time and activation state |
 | Reset shower timer | `assign:ste.app.showerTimer:reset` | Resets shower timer remaining time and activation state |
-| Temperature memory 1-12 | ODB ID `66` command | Sends the temperature stored in the matching memory slot; created only for slots reported by the DHE |
-| Delete temperature memory 3-12 | `assign:ste.common.temperature:memory` | Deletes the matching memory slot with `operation: delete`; memory slots 1 and 2 are fixed presets and are not deletable |
+| Disconnect radio pairing | `assign:ste.app.radio:paired` with `false` | Sends the observed DHE radio pairing disconnect action |
+| Temperature memory 1-12 | ODB ID `66` command | Sends the temperature stored in the matching memory slot; slots 3 to 12 disabled by default |
+| Delete temperature memory 3-12 | `assign:ste.common.temperature:memory` | Deletes the matching memory slot with `operation: delete`; disabled by default; memory slots 1 and 2 are fixed presets and are not deletable |
 
 The memory preset buttons do not send fixed temperatures. They read the current memory slot value from the DHE cache, refresh it if needed, build the ODB ID `66` button payload from that temperature and send it.
 
@@ -388,7 +421,10 @@ Best-effort startup reads collect additional values:
 | `get:ste.app.radio:play` | Radio playback state |
 | `get:ste.app.radio:paired` | Radio pairing state |
 | `get:ste.app.radio:title` | Current radio title |
-| `get:ste.app.weather:location` | Weather location and daily forecast payload |
+| `get:ste.app.radio:favorites` | Radio favorite stations |
+| `get:ste.app.weather:location` | Weather location and daily forecast payload; with a `LocationId` value it selects that favorite/location |
+| `get:ste.app.weather:favorites` | Weather favorite locations |
+| `get:ste.app.weather:country` | Selected weather country ID |
 | `get:ste.app.consumption:waterWeek` | Weekly water chart |
 | `get:ste.app.consumption:waterYear` | Year water chart |
 | `get:ste.app.consumption:waterYears` | Multi-year water chart |
@@ -402,6 +438,21 @@ Best-effort startup reads collect additional values:
 | `get:ste.app.savingMonitor:consumption` | Saving monitor consumption payload |
 | `get:ste.common.version:*` | Device and version information |
 | `get:ste.app.wellness:programs` | Wellness program metadata |
+
+Option flows and services use additional commands only when requested:
+
+| Command | Purpose |
+|---|---|
+| `get:ste.app.radio:genre` | Load the DHE radio genre catalog before genre search |
+| `get:ste.app.radio:country` | Load the DHE radio country catalog before country search |
+| `get:ste.app.radio:city` | Load the DHE radio city catalog before city search |
+| `get:ste.app.radio:stations` | Search stations by `{attribute: "text"|"genre"|"country"|"city", value: "..."}`; country and city searches additionally include `text: "<query>"` |
+| `assign:ste.app.radio:favorite` | Toggle a station ID in radio favorites |
+| `assign:ste.app.radio:station` | Select/play a station by station ID |
+| `assign:ste.app.radio:paired` | Observed pairing button action; `false` disconnects/unpairs according to the DHE UI traffic |
+| `get:ste.app.weather:countries` | Load the DHE weather country catalog before weather favorite search |
+| `get:ste.app.weather:forecast` | Search weather locations by `{name, countryId}` |
+| `assign:ste.app.weather:favorite` | Toggle a location in weather favorites |
 
 Currency changes use the same command as the DHE app:
 
@@ -441,8 +492,8 @@ Mapped ODB values are converted before publishing to Home Assistant:
 | `15` | Raw value divided by `10` |
 | `16` | Raw percent divided by `100`, multiplied by configured power |
 | `20` | Accepts `18` to `24`, `180` to `240`, or `1800` to `2400` formats |
-| `61` and `70` | Combined to the `Electricity price` number as euros plus cents |
-| `62` and `71` | Combined to the `Water price` number as euros plus cents |
+| `61` and `70` | Combined to the electricity price options value as euros plus cents |
+| `62` and `71` | Combined to the water price options value as euros plus cents |
 | `69` | CO2 emission decoded as `raw / 1000` kg/kWh |
 
 If a DHE ODB readback is marked with `isValid: false`, it is not published as a normal entity state. Unknown ODB values are logged at debug level for protocol discovery.
@@ -453,7 +504,19 @@ ODB ID `66` is command-only and is not read at startup.
 
 The client runs a single persistent session loop. Home Assistant entities subscribe to cached setpoint, measurement, online, availability and reconnect callbacks. When an entity is added after a value was already received, the current cached value is delivered immediately.
 
-Short reconnects do not immediately drop every entity to unavailable. Entities with a known valid value stay available during brief reconnect phases where this is safe, while the diagnostic `Online` entity and reconnect counter show the real connection state.
+Short reconnects do not immediately drop every entity to unavailable. Entities with a known valid value stay available during brief reconnect phases where this is safe, while the diagnostic status sensors and reconnect counter still show the real connection state.
+
+Disabled-by-default diagnostic sensors expose the current client connection state, the last reconnect reason, the last received command and the age of the last received message. These are intended for troubleshooting connection stalls, WebSocket churn and device-side session closes.
+
+## Validation
+
+The repository includes a lightweight validation script:
+
+```bash
+python scripts/check_integration.py
+```
+
+It checks the manifest, HACS metadata, required repository files, translation key parity and Python syntax without writing bytecode artifacts. The same check runs in the `Validate` GitHub Actions workflow.
 
 
 ## Security notes
@@ -469,7 +532,7 @@ Short reconnects do not immediately drop every entity to unavailable. Entities w
 |---|---|
 | Integration cannot connect | Verify host, port and browser access to `http://<host>:<port>/` |
 | Pairing repeats | Delete `/config/.storage/stiebel_dhe_connect_token.txt` and pair again |
-| Entities stay unavailable | Check the `Online` binary sensor and Home Assistant logs for DHE session errors |
+| Entities stay unavailable | Check the `Connection state` / `Temperature error status` diagnostic sensors and Home Assistant logs for DHE session errors |
 | Reconnect counter increases often | Confirm the WebSocket connection is not blocked and no second client is fighting for the DHE session |
 | Radio entity has no station/title | Open or change the radio once on the DHE UI so the device publishes station metadata |
 | Water entity missing from dashboard | Wait for Home Assistant statistics discovery, which can take up to two hours |
