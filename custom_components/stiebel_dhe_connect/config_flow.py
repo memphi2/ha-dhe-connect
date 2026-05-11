@@ -167,7 +167,7 @@ def _currency_options(hass: HomeAssistant, current: str = "") -> dict[str, str]:
     language = str(getattr(hass.config, "language", "") or "").lower()
     options = {
         CURRENCY_UNCHANGED: (
-            "Nicht Ã¤ndern" if language.startswith("de") else "Do not change"
+            "Nicht ändern" if language.startswith("de") else "Do not change"
         )
     }
     options.update({currency: currency for currency in CURRENCY_OPTIONS})
