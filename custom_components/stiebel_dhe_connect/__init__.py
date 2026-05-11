@@ -117,7 +117,7 @@ async def _async_migrate_legacy_token_if_needed(
     entry: ConfigEntry,
     token_file: str,
 ) -> None:
-    """Copy legacy single-entry token file when upgrading old installs."""
+    """Move legacy single-entry token file when upgrading old installs."""
     target_path = token_file if os.path.isabs(token_file) else hass.config.path(token_file)
     legacy_path = hass.config.path(LEGACY_TOKEN_FILE)
     if os.path.exists(target_path) or not os.path.exists(legacy_path):
@@ -125,13 +125,13 @@ async def _async_migrate_legacy_token_if_needed(
     if len(hass.config_entries.async_entries(DOMAIN)) != 1:
         return
 
-    def _copy() -> None:
+    def _move() -> None:
         os.makedirs(os.path.dirname(target_path), exist_ok=True)
-        shutil.copyfile(legacy_path, target_path)
+        shutil.move(legacy_path, target_path)
 
-    await hass.async_add_executor_job(_copy)
+    await hass.async_add_executor_job(_move)
     _LOGGER.debug(
-        "Migrated legacy token file for entry_id=%s to %s",
+        "Migrated legacy token file for entry_id=%s to %s (legacy file consumed)",
         entry.entry_id,
         token_file,
     )
