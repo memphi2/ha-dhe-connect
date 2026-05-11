@@ -6,7 +6,7 @@ The integration talks directly to the DHE web interface on your local network. I
 
 ## Status
 
-- Current version: `1.0.4`
+- Current version: `1.0.5`
 - Home Assistant setup: UI config flow
 - HACS type: custom integration
 - IoT class: local push
