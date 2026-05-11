@@ -41,7 +41,6 @@ def check_manifest() -> str:
         "config_flow": True,
         "iot_class": "local_push",
         "integration_type": "device",
-        "single_config_entry": True,
     }
     for key, expected in required.items():
         if manifest.get(key) != expected:

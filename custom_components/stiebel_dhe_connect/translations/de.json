@@ -439,7 +439,15 @@
         "name": "Reconnects"
       },
       "connection_state": {
-        "name": "Verbindungsstatus"
+        "name": "Verbindungsstatus",
+        "state": {
+          "starting": "Startet",
+          "connected": "Verbunden",
+          "reconnecting": "Verbindet neu",
+          "pairing_failed_waiting_manual_retry": "Pairing fehlgeschlagen (manueller Neustart erforderlich)",
+          "stopping": "Beendet",
+          "stopped": "Beendet"
+        }
       },
       "last_reconnect_reason": {
         "name": "Letzter Reconnect-Grund"

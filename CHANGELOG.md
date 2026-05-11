@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.0.6 - 2026-05-11 (compared to v1.0.5)
+
+### Added
+
+- Multi-device support: multiple DHE Connect config entries can now be created in one Home Assistant instance.
+- Weather services now support optional `entry_id` targeting for multi-device setups.
+
+### Changed
+
+- Pairing token storage was split per DHE target (`host`/`port`) instead of one global token file.
+- Legacy single-device token handling is migrated automatically for existing setups.
+- Connection state is now exposed as translated enum states in Home Assistant (for example `Verbunden` instead of raw `connected`).
+- Integration consistency check no longer requires `single_config_entry` in `manifest.json`.
+
 ## v1.0.5 - 2026-05-11 (compared to v1.0.4)
 
 ### Changed

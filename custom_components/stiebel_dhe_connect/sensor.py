@@ -107,12 +107,23 @@ DEFAULT_DISABLED_SENSOR_KEYS = {
     "saving_monitor_real_value",
 }
 
+CONNECTION_STATE_OPTIONS = (
+    "starting",
+    "connected",
+    "reconnecting",
+    "pairing_failed_waiting_manual_retry",
+    "stopping",
+    "stopped",
+)
+
 
 DIAGNOSTIC_SENSOR_DESCRIPTIONS: tuple[StiebelDHEDiagnosticSensorEntityDescription, ...] = (
     StiebelDHEDiagnosticSensorEntityDescription(
         key="connection_state",
         translation_key="connection_state",
         icon="mdi:lan-connect",
+        device_class=SensorDeviceClass.ENUM,
+        options=CONNECTION_STATE_OPTIONS,
         diagnostic_key="connection_state",
     ),
     StiebelDHEDiagnosticSensorEntityDescription(

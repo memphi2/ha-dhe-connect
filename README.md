@@ -6,12 +6,12 @@ The integration talks directly to the DHE web interface on your local network. I
 
 ## Status
 
-- Current version: `1.0.5`
+- Current version: `1.0.6`
 - Home Assistant setup: UI config flow
 - HACS type: custom integration
 - IoT class: local push
 - Network target: local DHE web interface, usually port `8443`
-- Scope: one configured DHE Connect device per Home Assistant instance
+- Scope: multiple configured DHE Connect devices per Home Assistant instance
 
 This is a custom integration and should be used on a trusted local network.
 
@@ -86,10 +86,10 @@ On first connection Home Assistant validates the DHE pairing before the integrat
 
 ## Pairing token
 
-After successful pairing the local token is stored at:
+After successful pairing the local token is stored per configured DHE target at:
 
 ```text
-/config/.storage/stiebel_dhe_connect_token.txt
+/config/.storage/stiebel_dhe_connect_token_<host>_<port>.txt
 ```
 
 Use the disabled-by-default `Repair pairing` button if you want to force a new pairing from Home Assistant.
@@ -140,7 +140,7 @@ The weather entity exposes the DHE forecast location, including `city`, `country
 
 Weather location search uses the same split city/country workflow as the DHE UI. The integration options can add and remove weather favorites. The disabled-by-default `Weather location` select can be enabled when you want to switch between existing favorites from Home Assistant. The service `stiebel_dhe_connect.search_weather_location` sends `get:ste.app.weather:forecast` with `name` and `country_id`; the returned results are exposed as `forecast_results` attributes. The service `stiebel_dhe_connect.toggle_weather_favorite` can toggle an existing result by `result_number` or run a fresh search first when `name` and `country_id` are provided. The DHE uses the same `assign:ste.app.weather:favorite` command to add and remove favorites.
 
-Selecting the active weather location is a separate step. The service `stiebel_dhe_connect.select_weather_location` sends `get:ste.app.weather:location` with the selected `LocationId`, matching the browser protocol used when switching to a favorite. It can select by exact `location_id`, by the current search `result_number`, or run a fresh name/country search first. Example for toggling New York in the USA:
+Selecting the active weather location is a separate step. The service `stiebel_dhe_connect.select_weather_location` sends `get:ste.app.weather:location` with the selected `LocationId`, matching the browser protocol used when switching to a favorite. It can select by exact `location_id`, by the current search `result_number`, or run a fresh name/country search first. When multiple DHE devices are configured, include `entry_id` in service data to target one integration entry. Example for toggling New York in the USA:
 
 ```yaml
 service: stiebel_dhe_connect.toggle_weather_favorite
@@ -528,7 +528,7 @@ It checks the manifest, HACS metadata, required repository files, translation ke
 | Symptom | Check |
 |---|---|
 | Integration cannot connect | Verify host, port and browser access to `http://<host>:<port>/` |
-| Pairing repeats | Enable and use the disabled-by-default `Repair pairing` button first. If needed, delete `/config/.storage/stiebel_dhe_connect_token.txt` and pair again |
+| Pairing repeats | Enable and use the disabled-by-default `Repair pairing` button first. If needed, delete the matching `/config/.storage/stiebel_dhe_connect_token_<host>_<port>.txt` file and pair again |
 | Entities stay unavailable | Check the `Connection state` / `Temperature error status` diagnostic sensors and Home Assistant logs for DHE session errors |
 | Reconnect counter increases often | Confirm the WebSocket connection is not blocked and no second client is fighting for the DHE session |
 | Radio entity has no station/title | Open or change the radio once on the DHE UI so the device publishes station metadata |

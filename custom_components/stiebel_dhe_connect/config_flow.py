@@ -63,6 +63,7 @@ _HOST_RE = re.compile(
     r"^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)*"
     r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$"
 )
+_TOKEN_FILE_COMPONENT_RE = re.compile(r"[^A-Za-z0-9_.-]")
 
 
 def _normalize_host(host: str) -> str:
@@ -131,6 +132,48 @@ def _apply_validation_error(errors: dict[str, str], err: ValueError) -> None:
         errors[CONF_HOST] = code
     else:
         errors[CONF_HOST] = "invalid_host"
+
+
+def _target_unique_id(host: str, port: int) -> str:
+    """Return stable unique_id for one DHE target."""
+    return f"{DOMAIN}:{host}:{port}"
+
+
+def _token_file_for_host_port(host: str, port: int) -> str:
+    """Return per-target token path under Home Assistant .storage."""
+    safe_host = _TOKEN_FILE_COMPONENT_RE.sub("_", host)
+    return f".storage/stiebel_dhe_connect_token_{safe_host}_{port}.txt"
+
+
+def _entry_target(entry: config_entries.ConfigEntry) -> tuple[str, int] | None:
+    """Return normalized host/port from an existing config entry."""
+    merged = {**entry.data, **entry.options}
+    host_value = merged.get(CONF_HOST)
+    if host_value is None:
+        return None
+    try:
+        host = _normalize_host(str(host_value))
+        port = _validate_port(int(merged.get(CONF_PORT, DEFAULT_PORT)))
+    except (TypeError, ValueError):
+        return None
+    return host, port
+
+
+def _is_target_used_by_other_entry(
+    hass: HomeAssistant,
+    host: str,
+    port: int,
+    *,
+    exclude_entry_id: str | None = None,
+) -> bool:
+    """Return True when another config entry already uses host/port."""
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        if exclude_entry_id is not None and entry.entry_id == exclude_entry_id:
+            continue
+        target = _entry_target(entry)
+        if target == (host, port):
+            return True
+    return False
 
 
 def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
@@ -572,13 +615,18 @@ def _map_pairing_error(error: BaseException, pairing_state: str) -> str:
     return "pairing_failed"
 
 
-async def _validate_setup_pairing(hass: HomeAssistant, host: str, port: int) -> str | None:
+async def _validate_setup_pairing(
+    hass: HomeAssistant,
+    host: str,
+    port: int,
+    token_file: str,
+) -> str | None:
     """Run one-shot pairing/auth validation before creating the config entry."""
     probe_client = DHEClient(
         hass=hass,
         host=host,
         port=port,
-        token_file=SETUP_TOKEN_FILE,
+        token_file=token_file,
         name="Home Assistant",
     )
     try:
@@ -607,24 +655,27 @@ class StiebelDHEConnectConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            await self.async_set_unique_id(DOMAIN)
-            self._abort_if_unique_id_configured()
-
             try:
                 host = _normalize_host(user_input[CONF_HOST])
                 port = _validate_port(user_input.get(CONF_PORT, DEFAULT_PORT))
             except ValueError as err:
                 _apply_validation_error(errors, err)
             else:
+                if _is_target_used_by_other_entry(self.hass, host, port):
+                    return self.async_abort(reason="already_configured")
+                await self.async_set_unique_id(_target_unique_id(host, port))
+                self._abort_if_unique_id_configured()
                 name = str(user_input.get(CONF_NAME, DEFAULT_NAME)).strip() or DEFAULT_NAME
 
                 if not await _can_connect(self.hass, host, port):
                     errors["base"] = "cannot_connect"
                 else:
+                    token_file = _token_file_for_host_port(host, port)
                     self._pending_setup_data = {
                         CONF_HOST: host,
                         CONF_PORT: port,
                         CONF_NAME: name,
+                        "token_file": token_file,
                     }
                     return await self.async_step_pairing_confirm()
 
@@ -648,9 +699,11 @@ class StiebelDHEConnectConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self.hass,
                 setup_data[CONF_HOST],
                 setup_data[CONF_PORT],
+                setup_data.get("token_file", SETUP_TOKEN_FILE),
             )
             if error_key is None:
                 self._pending_setup_data = None
+                setup_data.pop("token_file", None)
                 return self.async_create_entry(
                     title=setup_data[CONF_NAME],
                     data=setup_data,
@@ -711,9 +764,20 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
             else:
                 name = str(user_input.get(CONF_NAME, DEFAULT_NAME)).strip() or DEFAULT_NAME
 
-                if not await _can_connect(self.hass, host, port):
+                if _is_target_used_by_other_entry(
+                    self.hass,
+                    host,
+                    port,
+                    exclude_entry_id=self.config_entry.entry_id,
+                ):
+                    errors["base"] = "cannot_connect"
+                elif not await _can_connect(self.hass, host, port):
                     errors["base"] = "cannot_connect"
                 else:
+                    self.hass.config_entries.async_update_entry(
+                        self.config_entry,
+                        unique_id=_target_unique_id(host, port),
+                    )
                     return self.async_create_entry(
                         title="",
                         data={

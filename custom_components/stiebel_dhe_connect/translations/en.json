@@ -439,7 +439,15 @@
         "name": "Reconnects"
       },
       "connection_state": {
-        "name": "Connection state"
+        "name": "Connection state",
+        "state": {
+          "starting": "Starting",
+          "connected": "Connected",
+          "reconnecting": "Reconnecting",
+          "pairing_failed_waiting_manual_retry": "Pairing failed (manual retry required)",
+          "stopping": "Stopping",
+          "stopped": "Stopped"
+        }
       },
       "last_reconnect_reason": {
         "name": "Last reconnect reason"

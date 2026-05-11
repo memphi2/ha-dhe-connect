@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import logging
+import os
+import re
+import shutil
 from dataclasses import dataclass
 from typing import Any
 
@@ -30,18 +33,23 @@ SERVICE_TOGGLE_WEATHER_FAVORITE = "toggle_weather_favorite"
 SERVICE_SELECT_WEATHER_LOCATION = "select_weather_location"
 
 ATTR_COUNTRY_ID = "country_id"
+ATTR_ENTRY_ID = "entry_id"
 ATTR_LOCATION_ID = "location_id"
 ATTR_NAME = "name"
 ATTR_RESULT_NUMBER = "result_number"
+LEGACY_TOKEN_FILE = ".storage/stiebel_dhe_connect_token.txt"
+_TOKEN_FILE_COMPONENT_RE = re.compile(r"[^A-Za-z0-9_.-]")
 
 WEATHER_SEARCH_SCHEMA = vol.Schema({
     vol.Required(ATTR_NAME): cv.string,
     vol.Required(ATTR_COUNTRY_ID): vol.Coerce(int),
+    vol.Optional(ATTR_ENTRY_ID): cv.string,
 })
 WEATHER_LOCATION_ACTION_SCHEMA = vol.Schema({
     vol.Optional(ATTR_NAME): cv.string,
     vol.Optional(ATTR_COUNTRY_ID): vol.Coerce(int),
     vol.Optional(ATTR_LOCATION_ID): cv.string,
+    vol.Optional(ATTR_ENTRY_ID): cv.string,
     vol.Optional(ATTR_RESULT_NUMBER, default=1): vol.All(
         vol.Coerce(int),
         vol.Range(min=1, max=20),
@@ -84,6 +92,50 @@ class DHEConnectRuntimeData:
     name: str
 
 
+def _normalize_token_file_component(value: str) -> str:
+    safe = _TOKEN_FILE_COMPONENT_RE.sub("_", value.strip())
+    return safe or "device"
+
+
+def _token_file_for_target(host: str, port: int) -> str:
+    safe_host = _normalize_token_file_component(host)
+    return f".storage/stiebel_dhe_connect_token_{safe_host}_{port}.txt"
+
+
+def _token_file_for_entry(entry: ConfigEntry) -> str:
+    merged = {**entry.data, **entry.options}
+    host = str(merged.get(CONF_HOST, "")).strip()
+    port = int(merged.get(CONF_PORT, DEFAULT_PORT))
+    if not host:
+        return f".storage/stiebel_dhe_connect_token_{entry.entry_id}.txt"
+    return _token_file_for_target(host, port)
+
+
+async def _async_migrate_legacy_token_if_needed(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    token_file: str,
+) -> None:
+    """Copy legacy single-entry token file when upgrading old installs."""
+    target_path = token_file if os.path.isabs(token_file) else hass.config.path(token_file)
+    legacy_path = hass.config.path(LEGACY_TOKEN_FILE)
+    if os.path.exists(target_path) or not os.path.exists(legacy_path):
+        return
+    if len(hass.config_entries.async_entries(DOMAIN)) != 1:
+        return
+
+    def _copy() -> None:
+        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+        shutil.copyfile(legacy_path, target_path)
+
+    await hass.async_add_executor_job(_copy)
+    _LOGGER.debug(
+        "Migrated legacy token file for entry_id=%s to %s",
+        entry.entry_id,
+        token_file,
+    )
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Stiebel DHE Connect from a config entry."""
     hass.data.setdefault(DOMAIN, {})
@@ -93,7 +145,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     port = int(data.get(CONF_PORT, DEFAULT_PORT))
     name = data.get(CONF_NAME, DEFAULT_NAME)
 
-    token_file = ".storage/stiebel_dhe_connect_token.txt"
+    token_file = _token_file_for_entry(entry)
+    await _async_migrate_legacy_token_if_needed(hass, entry, token_file)
 
     client = DHEClient(
         hass=hass,
@@ -208,14 +261,14 @@ def _start_client_background(hass: HomeAssistant, client: DHEClient) -> None:
 def _async_register_services(hass: HomeAssistant) -> None:
     """Register integration services once."""
     async def async_search_weather_location(call: ServiceCall) -> None:
-        runtime = _single_runtime(hass)
+        runtime = _resolve_runtime(hass, call.data.get(ATTR_ENTRY_ID))
         await runtime.client.search_weather_locations(
             call.data[ATTR_NAME],
             call.data[ATTR_COUNTRY_ID],
         )
 
     async def async_toggle_weather_favorite(call: ServiceCall) -> None:
-        runtime = _single_runtime(hass)
+        runtime = _resolve_runtime(hass, call.data.get(ATTR_ENTRY_ID))
         client = runtime.client
         data = call.data
         if data.get(ATTR_NAME):
@@ -239,7 +292,7 @@ def _async_register_services(hass: HomeAssistant) -> None:
         await client.toggle_weather_favorite(location)
 
     async def async_select_weather_location(call: ServiceCall) -> None:
-        runtime = _single_runtime(hass)
+        runtime = _resolve_runtime(hass, call.data.get(ATTR_ENTRY_ID))
         client = runtime.client
         data = call.data
         if data.get(ATTR_NAME):
@@ -297,12 +350,26 @@ def _async_unregister_services(hass: HomeAssistant) -> None:
             hass.services.async_remove(DOMAIN, service)
 
 
-def _single_runtime(hass: HomeAssistant) -> DHEConnectRuntimeData:
-    """Return the single configured runtime data."""
+def _resolve_runtime(
+    hass: HomeAssistant,
+    entry_id: str | None = None,
+) -> DHEConnectRuntimeData:
+    """Resolve runtime by entry_id or infer it when only one entry exists."""
     runtimes = hass.data.get(DOMAIN) or {}
     if not runtimes:
         raise HomeAssistantError("Stiebel DHE Connect is not loaded")
-    return next(iter(runtimes.values()))
+    if entry_id:
+        runtime = runtimes.get(entry_id)
+        if runtime is None:
+            raise HomeAssistantError(
+                f"Stiebel DHE Connect entry_id not loaded: {entry_id}"
+            )
+        return runtime
+    if len(runtimes) == 1:
+        return next(iter(runtimes.values()))
+    raise HomeAssistantError(
+        "Multiple Stiebel DHE Connect devices are configured; set entry_id in the service call."
+    )
 
 
 def _select_weather_location(
