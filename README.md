@@ -80,7 +80,7 @@ On first connection Home Assistant validates the DHE pairing before the integrat
 1. Add `Stiebel DHE Connect` from `Settings` -> `Devices & services`.
 2. Enter only the DHE host/IP, port and a provisional device name.
 3. Submit the form, then click `OK` on the pairing confirmation step.
-4. Confirm the pairing request on the DHE display or DHE web UI and complete the confirmation there.
+4. Confirm the pairing request on the DHE device display and complete the confirmation there.
 5. Home Assistant creates the integration entry only after pairing and login have completed.
 6. Assign the device to an area and adjust entity names as desired.
 
