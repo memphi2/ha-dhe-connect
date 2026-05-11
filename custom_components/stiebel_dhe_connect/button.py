@@ -21,7 +21,7 @@ from .client import (
     SHOWER_TIMER_PATH,
     TEMPERATURE_MEMORY_SLOT_MEASUREMENTS,
 )
-from .entity_helpers import build_device_info
+from .entity_helpers import StiebelDHEEntityMixin
 from .runtime_helpers import get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
@@ -168,7 +168,7 @@ async def async_setup_entry(
         ]
     )
 
-class StiebelDHEButton(ButtonEntity):
+class StiebelDHEButton(StiebelDHEEntityMixin, ButtonEntity):
     """DHE command button."""
 
     entity_description: StiebelDHEButtonEntityDescription
@@ -186,18 +186,21 @@ class StiebelDHEButton(ButtonEntity):
         self.entity_description = description
         self._attr_translation_key = description.translation_key
         self._attr_icon = description.icon
-        self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_{description.key}"
         self._attr_entity_registry_enabled_default = (
             description.entity_registry_enabled_default
         )
-        self._attr_device_info = build_device_info(client.host, client.port, name, client.legacy_device_identifier)
+        self._init_dhe_entity(
+            entry_id=entry_id,
+            key=description.key,
+            name=name,
+            client=client,
+        )
         extra_state_attributes = dict(description.extra_state_attributes or {})
         if description.timer_path is not None:
             extra_state_attributes["timer_path"] = description.timer_path
         if description.timer_property is not None:
             extra_state_attributes["timer_property"] = description.timer_property
         self._attr_extra_state_attributes = extra_state_attributes or None
-        self._client = client
         self._attr_available = False
         self._has_seen_availability_state = False
 

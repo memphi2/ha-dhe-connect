@@ -224,10 +224,10 @@ Consumption sensors expose the DHE chart array as a `chart` attribute and the re
 | Entity | Unit | Range | Mode | Source / command |
 |---|---:|---:|---|---|
 | Bath fill target volume | `L` | `1` to `300` | slider | ODB ID `3` |
-| Maximum temperature | `C` | `30` to `50` | slider | ODB ID `5`, accepts raw tenths or degrees |
+| Maximum temperature | `C` | `20` to `50` | slider | ODB ID `5`, accepts raw tenths or degrees |
 | Eco flow limit | `L/min` | `6` to `8` | slider | ODB ID `7`, sent as raw tenths |
-| Brush timer duration | `min` | `1` to `20` | box | `assign:ste.app.brushTimer:durationMilliseconds` |
-| Shower timer duration | `min` | `1` to `20` | box | `assign:ste.app.showerTimer:durationMilliseconds` |
+| Brush timer duration | `s` | `60` to `1200`, step `1` | box | `assign:ste.app.brushTimer:durationMilliseconds`; exposes `duration` as `M:SS` |
+| Shower timer duration | `s` | `60` to `1200`, step `1` | box | `assign:ste.app.showerTimer:durationMilliseconds`; exposes `duration` as `M:SS` |
 | Temperature memory 1-12 temperature | `C` | `20` to `60` | box | `assign:ste.common.temperature:memory`, memory ID `0` to `11`; slots 3 to 12 disabled by default |
 
 Temperature memory writes keep the existing memory name and send `operation: add_change`. Slots 1 and 2 are enabled by default. Slots 3 to 12 are created in the entity registry but disabled by default, so they can be enabled explicitly without cluttering the device configuration card.
@@ -500,7 +500,7 @@ Mapped ODB values are converted before publishing to Home Assistant:
 |---:|---|
 | `0` | Raw tenths to Celsius |
 | `4` | Raw truthy value to the `Maximum active` switch |
-| `5` | Raw tenths to Celsius when value is `300` to `500` |
+| `5` | Raw tenths to Celsius when value is `200` to `500` |
 | `7` | Raw tenths to `L/min` when value is `60` to `80` |
 | `13` and `14` | Raw tenths to Celsius |
 | `15` | Raw value divided by `10` |

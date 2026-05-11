@@ -18,7 +18,8 @@ from .client import (
     MeasurementValue,
     TEMPERATURE_MEMORY_SLOT_MEASUREMENTS,
 )
-from .entity_helpers import build_device_info
+from .entity_helpers import StiebelDHEEntityMixin
+from .entity_state_helpers import measurement_attribute_text, merge_state_attributes
 from .runtime_helpers import get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
@@ -80,7 +81,7 @@ async def async_setup_entry(
     )
 
 
-class StiebelDHEText(TextEntity, RestoreEntity):
+class StiebelDHEText(StiebelDHEEntityMixin, TextEntity, RestoreEntity):
     """Writable DHE text setting represented as a Home Assistant text entity."""
 
     entity_description: StiebelDHETextEntityDescription
@@ -98,12 +99,15 @@ class StiebelDHEText(TextEntity, RestoreEntity):
         """Initialize the text entity."""
         self.entity_description = description
         self._attr_translation_key = description.translation_key
-        self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_{description.key}"
         self._attr_entity_registry_enabled_default = (
             description.entity_registry_enabled_default
         )
-        self._attr_device_info = build_device_info(client.host, client.port, name, client.legacy_device_identifier)
-        self._client = client
+        self._init_dhe_entity(
+            entry_id=entry_id,
+            key=description.key,
+            name=name,
+            client=client,
+        )
         self._attr_available = False
         self._attr_native_value: str | None = None
         self._update_extra_state_attributes()
@@ -170,20 +174,19 @@ class StiebelDHEText(TextEntity, RestoreEntity):
             self.entity_description.measurement_id,
             {},
         )
-        name = attributes.get("name")
-        if name in (None, ""):
+        name = measurement_attribute_text(attributes, "name")
+        if name is None:
             return False
-        self._attr_native_value = str(name)
+        self._attr_native_value = name
         return True
 
     def _update_extra_state_attributes(self) -> None:
-        attributes = {
-            "temperature_memory_slot": self.entity_description.temperature_memory_slot,
-        }
-        attributes.update(
+        self._attr_extra_state_attributes = merge_state_attributes(
+            {
+                "temperature_memory_slot": self.entity_description.temperature_memory_slot,
+            },
             self._client.last_measurement_attributes.get(
                 self.entity_description.measurement_id,
                 {},
-            )
+            ),
         )
-        self._attr_extra_state_attributes = attributes

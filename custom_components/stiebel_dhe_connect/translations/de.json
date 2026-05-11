@@ -238,7 +238,7 @@
     },
     "climate": {
       "water_heating": {
-        "name": "Wassererwärmung"
+        "name": "Durchlauferhitzer"
       }
     },
     "weather": {

@@ -12,9 +12,10 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .client import DHEClient, DHEError
-from .entity_helpers import build_device_info
+from .entity_helpers import StiebelDHEEntityMixin
+from .entity_state_helpers import connected_and_ready
 from .runtime_helpers import get_runtime_data
-from .weather import weather_location_attributes, weather_location_name
+from .weather_mapping import weather_location_attributes, weather_location_name
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -35,11 +36,10 @@ async def async_setup_entry(
     ])
 
 
-class StiebelDHEWeatherLocationSelect(SelectEntity):
+class StiebelDHEWeatherLocationSelect(StiebelDHEEntityMixin, SelectEntity):
     """Weather location select backed by the DHE weather favorites."""
 
     _attr_entity_category = EntityCategory.CONFIG
-    _attr_entity_registry_enabled_default = False
     _attr_has_entity_name = True
     _attr_icon = "mdi:map-marker"
     _attr_should_poll = False
@@ -49,11 +49,12 @@ class StiebelDHEWeatherLocationSelect(SelectEntity):
         """Initialize the weather location select."""
         # Use a dedicated unique_id to avoid clashes with legacy sensor entries
         # from older revisions that used `..._weather_location`.
-        self._attr_unique_id = (
-            f"stiebel_dhe_connect_{entry_id}_weather_location_select"
+        self._init_dhe_entity(
+            entry_id=entry_id,
+            key="weather_location_select",
+            name=name,
+            client=client,
         )
-        self._attr_device_info = build_device_info(client.host, client.port, name, client.legacy_device_identifier)
-        self._client = client
         self._locations_by_option: dict[str, dict[str, Any]] = {}
         self._have_weather_state = False
         self._attr_available = False
@@ -80,7 +81,10 @@ class StiebelDHEWeatherLocationSelect(SelectEntity):
         try:
             await self._client.select_weather_location(location)
         except DHEError as err:
-            self._attr_available = self._client.available and self._have_weather_state
+            self._attr_available = connected_and_ready(
+                self._client.available,
+                self._have_weather_state,
+            )
             self.async_write_ha_state()
             _LOGGER.error("Could not select DHE weather location: %s", err)
             raise
@@ -97,7 +101,7 @@ class StiebelDHEWeatherLocationSelect(SelectEntity):
     @callback
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
-        self._attr_available = available and self._have_weather_state
+        self._attr_available = connected_and_ready(available, self._have_weather_state)
         self.async_write_ha_state()
 
     def _apply_weather_state(self, state: dict[str, Any]) -> None:
@@ -114,7 +118,10 @@ class StiebelDHEWeatherLocationSelect(SelectEntity):
             self._locations_by_option,
         )
         self._have_weather_state = current_location is not None or bool(self._attr_options)
-        self._attr_available = self._client.available and self._have_weather_state
+        self._attr_available = connected_and_ready(
+            self._client.available,
+            self._have_weather_state,
+        )
 
         attributes: dict[str, Any] = {
             "weather_path": "ste.app.weather",

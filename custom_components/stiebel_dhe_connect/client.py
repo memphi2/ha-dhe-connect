@@ -20,6 +20,23 @@ from homeassistant.components import persistent_notification
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
+from .client_mapping import (
+    copy_json_like_value as _copy_json_like_value,
+    normalize_radio_stations_value as _normalize_radio_stations_value,
+    normalize_radio_string_catalog as _normalize_radio_string_catalog,
+    normalize_weather_favorites_value as _normalize_weather_favorites_value,
+    normalize_weather_locations_value as _normalize_weather_locations_value,
+    normalize_weather_value as _normalize_weather_value,
+    radio_station_id as _radio_station_id,
+    radio_station_in_list as _radio_station_in_list,
+    weather_location_id as _weather_location_id,
+    weather_location_in_list as _weather_location_in_list,
+)
+from .pairing_helpers import (
+    pairing_notification_text,
+    pairing_result_success as _pairing_result_success,
+)
+
 _LOGGER = logging.getLogger(__name__)
 
 NS = "1.0.0"
@@ -607,23 +624,6 @@ def _diagnostic_timestamp() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
-def _pairing_result_success(result: Any) -> bool | None:
-    if isinstance(result, bool):
-        return result
-    if isinstance(result, dict):
-        for key in ("success", "paired", "accepted", "result"):
-            if key in result:
-                return _pairing_result_success(result[key])
-        return None
-    if isinstance(result, str):
-        normalized = result.strip().casefold()
-        if normalized in {"true", "ok", "success", "successful", "accepted", "paired"}:
-            return True
-        if normalized in {"false", "failed", "failure", "rejected", "denied", "cancelled", "canceled"}:
-            return False
-    return None
-
-
 def _summarize_diagnostic_value(value: Any, *, depth: int = 0) -> Any:
     if depth >= 3:
         return type(value).__name__
@@ -648,113 +648,6 @@ def _summarize_diagnostic_value(value: Any, *, depth: int = 0) -> Any:
     if isinstance(value, str) and len(value) > 120:
         return f"{value[:117]}..."
     return value
-
-
-def _copy_json_like_value(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {
-            key: _copy_json_like_value(item)
-            for key, item in value.items()
-        }
-    if isinstance(value, list):
-        return [_copy_json_like_value(item) for item in value]
-    return value
-
-
-def _normalize_weather_value(raw_value: dict[str, Any]) -> dict[str, Any]:
-    state: dict[str, Any] = {}
-
-    location = raw_value.get("Location")
-    if isinstance(location, dict):
-        state["location"] = _copy_json_like_value(location)
-
-    complete_days = raw_value.get("CompleteDays")
-    if isinstance(complete_days, list):
-        state["complete_days"] = [
-            _copy_json_like_value(day)
-            for day in complete_days
-            if isinstance(day, dict)
-        ]
-
-    simple_days = raw_value.get("SimpleDays")
-    if isinstance(simple_days, list):
-        state["simple_days"] = [
-            _copy_json_like_value(day)
-            for day in simple_days
-            if isinstance(day, dict)
-        ]
-
-    return state
-
-
-def _normalize_weather_favorites_value(raw_value: Any) -> list[dict[str, Any]] | None:
-    if not isinstance(raw_value, list):
-        return None
-    return [
-        _copy_json_like_value(location)
-        for location in raw_value
-        if isinstance(location, dict)
-    ]
-
-
-def _normalize_weather_locations_value(raw_value: Any) -> list[dict[str, Any]] | None:
-    if not isinstance(raw_value, list):
-        return None
-    return [
-        _copy_json_like_value(location)
-        for location in raw_value
-        if isinstance(location, dict)
-    ]
-
-
-def _normalize_radio_stations_value(raw_value: Any) -> list[dict[str, Any]] | None:
-    if not isinstance(raw_value, list):
-        return None
-    return [
-        _copy_json_like_value(station)
-        for station in raw_value
-        if isinstance(station, dict)
-    ]
-
-
-def _normalize_radio_string_catalog(raw_value: Any) -> list[str] | None:
-    if not isinstance(raw_value, list):
-        return None
-
-    values: list[str] = []
-    for item in raw_value:
-        value = str(item).strip()
-        if value:
-            values.append(value)
-    return values
-
-
-def _radio_station_id(station: dict[str, Any]) -> int | None:
-    try:
-        return int(station.get("Id", station.get("id")))
-    except (TypeError, ValueError):
-        return None
-
-
-def _radio_station_in_list(
-    station_id: int,
-    stations: list[dict[str, Any]],
-) -> bool:
-    return any(_radio_station_id(candidate) == station_id for candidate in stations)
-
-
-def _weather_location_id(location: dict[str, Any]) -> str:
-    return str(location.get("LocationId", "")).strip()
-
-
-def _weather_location_in_list(
-    location: dict[str, Any],
-    locations: list[dict[str, Any]],
-) -> bool:
-    location_id = _weather_location_id(location)
-    if not location_id:
-        return False
-    return any(_weather_location_id(candidate) == location_id for candidate in locations)
 
 
 def _host_for_url(host: str) -> str:
@@ -1188,7 +1081,7 @@ class DHEClient:
         return float(await self.write_odb_value(ID_BATH_FILL_TARGET_VOLUME, requested))
 
     async def set_maximum_temperature(self, temperature: float) -> float:
-        requested = _round_to_half_c(_clamp(float(temperature), 30.0, 50.0))
+        requested = _round_to_half_c(_clamp(float(temperature), 20.0, 50.0))
         return float(await self.write_odb_value(ID_MAX_TEMPERATURE, _c_to_raw_tenths(requested)))
 
     async def set_maximum_active(self, enabled: bool) -> bool:
@@ -2046,9 +1939,14 @@ class DHEClient:
             await self.write_odb_value(ID_WELLNESS_SHOWER_TRIGGER, True)
         return True
 
-    async def _set_app_timer_duration_minutes(self, path: str, measurement_id: int, minutes: float) -> float:
-        requested_minutes = int(round(_clamp(float(minutes), 1.0, 20.0)))
-        milliseconds = requested_minutes * 60000
+    async def _set_app_timer_duration_minutes(
+        self,
+        path: str,
+        measurement_id: int,
+        minutes: float,
+    ) -> float:
+        requested_minutes = _clamp(float(minutes), 1.0, 20.0)
+        milliseconds = int(round(requested_minutes * 60000.0))
         confirmed = await self._write_app_value(
             f"assign:{path}:durationMilliseconds",
             milliseconds,
@@ -2948,80 +2846,7 @@ class DHEClient:
 
     def _pairing_notification_text(self, state: str) -> tuple[str, str]:
         language = str(getattr(self.hass.config, "language", "") or "").lower()
-        if language.startswith("de"):
-            title = "DHE-Pairing"
-            messages = {
-                "setup_requested": (
-                    "Home Assistant startet das Pairing. Bitte die Kopplungsanfrage am DHE bestätigen."
-                ),
-                "repair_requested": (
-                    "Das lokale Pairing-Token wurde verworfen. "
-                    "Bitte eine Kopplungsanfrage am DHE bestätigen, falls sie erscheint."
-                ),
-                "requesting_token": (
-                    "Home Assistant fordert ein neues Pairing-Token an. "
-                    "Bitte eine Kopplung am DHE bestätigen, falls angefordert."
-                ),
-                "waiting_for_confirmation": (
-                    "Der DHE wartet auf die Pairing-Bestätigung. "
-                    "Bitte die Bestätigung am Gerät vollständig abschließen."
-                ),
-                "confirmed": "Pairing bestätigt. Home Assistant wartet auf das neue Token.",
-                "result_received": "Pairing-Rückmeldung erhalten. Home Assistant wartet auf das neue Token.",
-                "token_received": "Neues Pairing-Token erhalten. Pairing-Status wird geprüft.",
-                "fallback_no_device_confirmation": (
-                    "Der DHE hat keine Geräte-Bestätigung angefordert. Anmeldung läuft mit Token."
-                ),
-                "authenticated_pending_confirmation": (
-                    "Anmeldung erhalten, warte auf Pairing-Bestätigung am DHE."
-                ),
-                "authenticated_without_device_confirmation": (
-                    "Anmeldung abgeschlossen. Der DHE hat keine Geräte-Bestätigung angefordert."
-                ),
-                "authenticated": "Pairing abgeschlossen. Home Assistant ist mit dem DHE verbunden.",
-                "failed": (
-                    "Pairing fehlgeschlagen. Bitte am DHE prüfen und danach "
-                    "'Pairing erneuern' erneut drücken."
-                ),
-            }
-            return title, messages.get(state, "Pairing-Status wurde aktualisiert.")
-
-        title = "DHE pairing"
-        messages = {
-            "setup_requested": (
-                "Home Assistant is starting pairing. Confirm the pairing request on the DHE."
-            ),
-            "repair_requested": (
-                "The local pairing token was discarded. Confirm the pairing request "
-                "on the DHE display if it appears."
-            ),
-            "requesting_token": (
-                "Home Assistant is requesting a new pairing token. Confirm pairing "
-                "on the DHE display if requested."
-            ),
-            "waiting_for_confirmation": (
-                "The DHE is waiting for pairing confirmation. Confirm the request "
-                "on the device and complete the confirmation there."
-            ),
-            "confirmed": "Pairing confirmed. Home Assistant is waiting for the new token.",
-            "result_received": "Pairing result received. Home Assistant is waiting for the new token.",
-            "token_received": "New pairing token received. Verifying pairing status.",
-            "fallback_no_device_confirmation": (
-                "The DHE did not request on-device confirmation. Continuing authentication with token."
-            ),
-            "authenticated_pending_confirmation": (
-                "Authentication received, waiting for pairing confirmation on the DHE."
-            ),
-            "authenticated_without_device_confirmation": (
-                "Authentication completed. The DHE did not request on-device confirmation."
-            ),
-            "authenticated": "Pairing complete. Home Assistant is connected to the DHE.",
-            "failed": (
-                "Pairing failed. Check the DHE display and press "
-                "'Repair pairing' again."
-            ),
-        }
-        return title, messages.get(state, "Pairing status was updated.")
+        return pairing_notification_text(state, language)
 
     def _record_runtime_message(self, command: Any, value: Any) -> None:
         if not isinstance(command, str):
@@ -3733,7 +3558,7 @@ class DHEClient:
             return _raw_to_water_heating_enabled(raw_value)
         if odb_id == ID_MAX_TEMPERATURE:
             value = _raw_to_float(raw_value)
-            if 300.0 <= value <= 500.0:
+            if 200.0 <= value <= 500.0:
                 return _raw_tenths_to_c(value)
             return value
         if odb_id == ID_ECO_FLOW_LIMIT:

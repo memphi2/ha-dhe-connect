@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+import unittest
 from pathlib import Path
 
 
@@ -106,12 +107,20 @@ def check_compile() -> None:
             _fail(f"Python syntax check failed for {path.relative_to(ROOT)}: {err}")
 
 
+def check_unit_tests() -> None:
+    suite = unittest.defaultTestLoader.discover(str(ROOT / "tests"))
+    result = unittest.TextTestRunner(stream=sys.stdout, verbosity=1).run(suite)
+    if not result.wasSuccessful():
+        _fail("unit tests failed")
+
+
 def main() -> None:
     version = check_manifest()
     check_hacs()
     check_repository_files(version)
     check_translations()
     check_compile()
+    check_unit_tests()
     print("integration checks ok")
 
 
