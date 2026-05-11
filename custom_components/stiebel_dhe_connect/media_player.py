@@ -17,7 +17,8 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .client import DHEClient, DHEError
-from .const import DOMAIN
+from .entity_helpers import build_device_info
+from .runtime_helpers import get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up DHE media players from a config entry."""
-    runtime = hass.data[DOMAIN][entry.entry_id]
+    runtime = get_runtime_data(hass, entry)
     async_add_entities([
         StiebelDHERadioMediaPlayer(
             entry_id=entry.entry_id,
@@ -63,12 +64,7 @@ class StiebelDHERadioMediaPlayer(MediaPlayerEntity):
     def __init__(self, entry_id: str, name: str, client: DHEClient) -> None:
         """Initialize the radio media player."""
         self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_radio"
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, client.host)},
-            "manufacturer": "STIEBEL ELTRON",
-            "model": "DHE Connect",
-            "name": name,
-        }
+        self._attr_device_info = build_device_info(client.host, client.port, name, client.legacy_device_identifier)
         self._attr_available = False
         self._attr_extra_state_attributes = {"radio_path": "ste.app.radio"}
         self._attr_state = None

@@ -2,6 +2,12 @@ search_weather_location:
   name: Search weather location
   description: Search DHE weather locations by city/name and country ID. Results are exposed on the weather entity attributes.
   fields:
+    entry_id:
+      required: false
+      name: Config entry ID
+      description: Optional. Required when multiple Stiebel DHE Connect devices are configured.
+      selector:
+        text:
     name:
       required: true
       name: Name
@@ -22,6 +28,12 @@ toggle_weather_favorite:
   name: Toggle weather favorite
   description: Toggle a DHE weather favorite from a search result, location ID or a fresh name/country search. The DHE uses the same command to add and remove favorites.
   fields:
+    entry_id:
+      required: false
+      name: Config entry ID
+      description: Optional. Required when multiple Stiebel DHE Connect devices are configured.
+      selector:
+        text:
     name:
       required: false
       name: Name
@@ -58,6 +70,12 @@ select_weather_location:
   name: Select weather location
   description: Select the active DHE weather location from a search result, favorite, exact LocationId or a fresh name/country search.
   fields:
+    entry_id:
+      required: false
+      name: Config entry ID
+      description: Optional. Required when multiple Stiebel DHE Connect devices are configured.
+      selector:
+        text:
     name:
       required: false
       name: Name

@@ -12,7 +12,8 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .client import DHEClient, DHEError
-from .const import DOMAIN
+from .entity_helpers import build_device_info
+from .runtime_helpers import get_runtime_data
 from .weather import weather_location_attributes, weather_location_name
 
 _LOGGER = logging.getLogger(__name__)
@@ -24,7 +25,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up DHE select entities from a config entry."""
-    runtime = hass.data[DOMAIN][entry.entry_id]
+    runtime = get_runtime_data(hass, entry)
     async_add_entities([
         StiebelDHEWeatherLocationSelect(
             entry_id=entry.entry_id,
@@ -51,12 +52,7 @@ class StiebelDHEWeatherLocationSelect(SelectEntity):
         self._attr_unique_id = (
             f"stiebel_dhe_connect_{entry_id}_weather_location_select"
         )
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, client.host)},
-            "manufacturer": "STIEBEL ELTRON",
-            "model": "DHE Connect",
-            "name": name,
-        }
+        self._attr_device_info = build_device_info(client.host, client.port, name, client.legacy_device_identifier)
         self._client = client
         self._locations_by_option: dict[str, dict[str, Any]] = {}
         self._have_weather_state = False

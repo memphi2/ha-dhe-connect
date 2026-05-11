@@ -18,7 +18,8 @@ from .client import (
     MeasurementValue,
     TEMPERATURE_MEMORY_SLOT_MEASUREMENTS,
 )
-from .const import DOMAIN
+from .entity_helpers import build_device_info
+from .runtime_helpers import get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -62,7 +63,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up DHE text entities from a config entry."""
-    runtime = hass.data[DOMAIN][entry.entry_id]
+    runtime = get_runtime_data(hass, entry)
     client: DHEClient = runtime.client
     async_add_entities(
         [
@@ -101,12 +102,7 @@ class StiebelDHEText(TextEntity, RestoreEntity):
         self._attr_entity_registry_enabled_default = (
             description.entity_registry_enabled_default
         )
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, client.host)},
-            "manufacturer": "STIEBEL ELTRON",
-            "model": "DHE Connect",
-            "name": name,
-        }
+        self._attr_device_info = build_device_info(client.host, client.port, name, client.legacy_device_identifier)
         self._client = client
         self._attr_available = False
         self._attr_native_value: str | None = None

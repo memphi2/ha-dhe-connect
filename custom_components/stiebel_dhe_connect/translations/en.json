@@ -120,6 +120,7 @@
     },
     "error": {
       "cannot_connect": "Could not connect to the DHE. Check the IP address and port.",
+      "already_configured": "Stiebel DHE Connect is already configured.",
       "invalid_host": "Invalid host. Enter only an IP address or hostname, without path, username or port.",
       "embedded_port_not_supported": "Do not include the port in the host field (for example \"192.168.1.10\"). Enter the port only in the port field.",
       "pairing_not_confirmed": "Pairing was not confirmed on the DHE. Confirm it on the device and try again.",
@@ -439,7 +440,15 @@
         "name": "Reconnects"
       },
       "connection_state": {
-        "name": "Connection state"
+        "name": "Connection state",
+        "state": {
+          "starting": "Starting",
+          "connected": "Connected",
+          "reconnecting": "Reconnecting",
+          "pairing_failed_waiting_manual_retry": "Pairing failed (manual retry required)",
+          "stopping": "Stopping",
+          "stopped": "Stopped"
+        }
       },
       "last_reconnect_reason": {
         "name": "Last reconnect reason"

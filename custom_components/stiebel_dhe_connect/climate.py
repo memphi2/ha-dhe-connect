@@ -22,7 +22,8 @@ from .client import (
     DHEError,
     MeasurementValue,
 )
-from .const import DOMAIN
+from .entity_helpers import build_device_info
+from .runtime_helpers import get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the climate entity from a config entry."""
-    runtime = hass.data[DOMAIN][entry.entry_id]
+    runtime = get_runtime_data(hass, entry)
     async_add_entities([
         StiebelDHEClimate(
             entry_id=entry.entry_id,
@@ -60,12 +61,7 @@ class StiebelDHEClimate(ClimateEntity):
     def __init__(self, entry_id: str, name: str, client: DHEClient) -> None:
         """Initialize the entity."""
         self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_setpoint"
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, client.host)},
-            "manufacturer": "STIEBEL ELTRON",
-            "model": "DHE Connect",
-            "name": name,
-        }
+        self._attr_device_info = build_device_info(client.host, client.port, name, client.legacy_device_identifier)
         self._client = client
         self._attr_target_temperature: float | None = None
         self._attr_current_temperature: float | None = None

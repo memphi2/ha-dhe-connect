@@ -780,6 +780,7 @@ class DHEClient:
         self._url_host = _host_for_url(self.host)
         self.port = int(port)
         self.name = name
+        self.legacy_device_identifier: str | None = None
         self.base_url = f"http://{self._url_host}:{self.port}"
         self.token_path = token_file if os.path.isabs(token_file) else hass.config.path(token_file)
         self._session = async_get_clientsession(hass)
