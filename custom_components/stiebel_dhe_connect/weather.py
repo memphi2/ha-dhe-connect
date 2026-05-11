@@ -18,7 +18,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from .client import DHEClient
-from .const import DOMAIN
+from .entity_helpers import build_device_info
+from .runtime_helpers import get_runtime_data
 
 SUPPORT_FORECAST_DAILY = (
     WeatherEntityFeature.FORECAST_DAILY if WeatherEntityFeature is not None else 0
@@ -53,7 +54,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up DHE weather entities from a config entry."""
-    runtime = hass.data[DOMAIN][entry.entry_id]
+    runtime = get_runtime_data(hass, entry)
     async_add_entities([
         StiebelDHEWeather(
             entry_id=entry.entry_id,
@@ -75,12 +76,7 @@ class StiebelDHEWeather(WeatherEntity):
     def __init__(self, entry_id: str, name: str, client: DHEClient) -> None:
         """Initialize the DHE weather entity."""
         self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_weather"
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, f"{client.host}:{client.port}")},
-            "manufacturer": "STIEBEL ELTRON",
-            "model": "DHE Connect",
-            "name": name,
-        }
+        self._attr_device_info = build_device_info(client.host, client.port, name)
         self._attr_available = False
         self._attr_condition = None
         self._attr_name = None
@@ -131,24 +127,12 @@ class StiebelDHEWeather(WeatherEntity):
 
     def _apply_weather_state(self, state: dict[str, Any]) -> None:
         if not state:
-            self._have_weather_state = False
-            self._attr_available = False
-            self._attr_condition = None
-            self._attr_name = None
-            self._attr_native_temperature = None
-            self._forecast = []
-            self._attr_extra_state_attributes = {"weather_path": "ste.app.weather"}
+            self._reset_weather_state()
             return
 
         days = _forecast_source_days(state)
         if not days and not isinstance(state.get("location"), dict):
-            self._have_weather_state = False
-            self._attr_available = False
-            self._attr_condition = None
-            self._attr_name = None
-            self._attr_native_temperature = None
-            self._forecast = []
-            self._attr_extra_state_attributes = {"weather_path": "ste.app.weather"}
+            self._reset_weather_state()
             return
 
         today = days[0] if days else {}
@@ -167,6 +151,16 @@ class StiebelDHEWeather(WeatherEntity):
             or bool(self._forecast)
         )
         self._attr_available = self._client_available and self._have_weather_state
+
+    def _reset_weather_state(self) -> None:
+        """Reset entity state to unavailable."""
+        self._have_weather_state = False
+        self._attr_available = False
+        self._attr_condition = None
+        self._attr_name = None
+        self._attr_native_temperature = None
+        self._forecast = []
+        self._attr_extra_state_attributes = {"weather_path": "ste.app.weather"}
 
 
 def _forecast_source_days(state: dict[str, Any]) -> list[dict[str, Any]]:

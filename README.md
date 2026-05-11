@@ -528,6 +528,7 @@ It checks the manifest, HACS metadata, required repository files, translation ke
 | Symptom | Check |
 |---|---|
 | Integration cannot connect | Verify host, port and browser access to `http://<host>:<port>/` |
+| Device appears twice after update | This can happen once when upgrading from older host-only device identifiers. Remove the stale duplicate device entry in Home Assistant (or remove and re-add the integration entry once) |
 | Pairing repeats | Enable and use the disabled-by-default `Repair pairing` button first. If needed, delete the matching `/config/.storage/stiebel_dhe_connect_token_<host>_<port>.txt` file and pair again |
 | Entities stay unavailable | Check the `Connection state` / `Temperature error status` diagnostic sensors and Home Assistant logs for DHE session errors |
 | Reconnect counter increases often | Confirm the WebSocket connection is not blocked and no second client is fighting for the DHE session |

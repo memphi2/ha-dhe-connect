@@ -19,6 +19,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 
 from .client import DHEClient
+from .config_entry_helpers import merged_entry_data
 from .const import (
     DEFAULT_NAME,
     DEFAULT_PORT,
@@ -103,7 +104,7 @@ def _token_file_for_target(host: str, port: int) -> str:
 
 
 def _token_file_for_entry(entry: ConfigEntry) -> str:
-    merged = {**entry.data, **entry.options}
+    merged = merged_entry_data(entry)
     host = str(merged.get(CONF_HOST, "")).strip()
     port = int(merged.get(CONF_PORT, DEFAULT_PORT))
     if not host:
@@ -140,7 +141,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Stiebel DHE Connect from a config entry."""
     hass.data.setdefault(DOMAIN, {})
 
-    data = {**entry.data, **entry.options}
+    data = merged_entry_data(entry)
     host = data[CONF_HOST]
     port = int(data.get(CONF_PORT, DEFAULT_PORT))
     name = data.get(CONF_NAME, DEFAULT_NAME)
@@ -271,17 +272,13 @@ def _async_register_services(hass: HomeAssistant) -> None:
         runtime = _resolve_runtime(hass, call.data.get(ATTR_ENTRY_ID))
         client = runtime.client
         data = call.data
-        if data.get(ATTR_NAME):
-            if ATTR_COUNTRY_ID not in data:
-                raise HomeAssistantError(
-                    "country_id is required when toggling a weather favorite by name"
-                )
-            results = await client.search_weather_locations(
-                data[ATTR_NAME],
-                data[ATTR_COUNTRY_ID],
-            )
-        else:
-            results = _weather_locations(client.last_weather_state.get("forecast_results"))
+        results = await _weather_results_from_service_input(
+            client,
+            data,
+            missing_country_error=(
+                "country_id is required when toggling a weather favorite by name"
+            ),
+        )
 
         location = _select_weather_location(
             client.last_weather_state,
@@ -295,17 +292,13 @@ def _async_register_services(hass: HomeAssistant) -> None:
         runtime = _resolve_runtime(hass, call.data.get(ATTR_ENTRY_ID))
         client = runtime.client
         data = call.data
-        if data.get(ATTR_NAME):
-            if ATTR_COUNTRY_ID not in data:
-                raise HomeAssistantError(
-                    "country_id is required when selecting a weather location by name"
-                )
-            results = await client.search_weather_locations(
-                data[ATTR_NAME],
-                data[ATTR_COUNTRY_ID],
-            )
-        else:
-            results = _weather_locations(client.last_weather_state.get("forecast_results"))
+        results = await _weather_results_from_service_input(
+            client,
+            data,
+            missing_country_error=(
+                "country_id is required when selecting a weather location by name"
+            ),
+        )
 
         location = _select_weather_location(
             client.last_weather_state,
@@ -316,26 +309,31 @@ def _async_register_services(hass: HomeAssistant) -> None:
         )
         await client.select_weather_location(location)
 
-    if not hass.services.has_service(DOMAIN, SERVICE_SEARCH_WEATHER_LOCATION):
-        hass.services.async_register(
-            DOMAIN,
+    service_registrations = (
+        (
             SERVICE_SEARCH_WEATHER_LOCATION,
             async_search_weather_location,
-            schema=WEATHER_SEARCH_SCHEMA,
-        )
-    if not hass.services.has_service(DOMAIN, SERVICE_TOGGLE_WEATHER_FAVORITE):
-        hass.services.async_register(
-            DOMAIN,
+            WEATHER_SEARCH_SCHEMA,
+        ),
+        (
             SERVICE_TOGGLE_WEATHER_FAVORITE,
             async_toggle_weather_favorite,
-            schema=WEATHER_TOGGLE_FAVORITE_SCHEMA,
-        )
-    if not hass.services.has_service(DOMAIN, SERVICE_SELECT_WEATHER_LOCATION):
-        hass.services.async_register(
-            DOMAIN,
+            WEATHER_TOGGLE_FAVORITE_SCHEMA,
+        ),
+        (
             SERVICE_SELECT_WEATHER_LOCATION,
             async_select_weather_location,
-            schema=WEATHER_SELECT_LOCATION_SCHEMA,
+            WEATHER_SELECT_LOCATION_SCHEMA,
+        ),
+    )
+    for service_name, service_handler, service_schema in service_registrations:
+        if hass.services.has_service(DOMAIN, service_name):
+            continue
+        hass.services.async_register(
+            DOMAIN,
+            service_name,
+            service_handler,
+            schema=service_schema,
         )
 
 
@@ -370,6 +368,23 @@ def _resolve_runtime(
     raise HomeAssistantError(
         "Multiple Stiebel DHE Connect devices are configured; set entry_id in the service call."
     )
+
+
+async def _weather_results_from_service_input(
+    client: DHEClient,
+    data: dict[str, Any],
+    *,
+    missing_country_error: str,
+) -> list[dict[str, Any]]:
+    """Resolve weather result candidates from service input."""
+    if data.get(ATTR_NAME):
+        if ATTR_COUNTRY_ID not in data:
+            raise HomeAssistantError(missing_country_error)
+        return await client.search_weather_locations(
+            data[ATTR_NAME],
+            data[ATTR_COUNTRY_ID],
+        )
+    return _weather_locations(client.last_weather_state.get("forecast_results"))
 
 
 def _select_weather_location(

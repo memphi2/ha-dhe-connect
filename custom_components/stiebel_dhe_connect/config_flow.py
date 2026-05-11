@@ -22,6 +22,7 @@ from .client import (
     ID_ELECTRICITY_PRICE,
     ID_WATER_PRICE,
 )
+from .config_entry_helpers import merged_entry_data
 from .const import (
     DEFAULT_NAME,
     DEFAULT_PORT,
@@ -41,7 +42,6 @@ CURRENCY_UNCHANGED = "__unchanged__"
 CURRENCY_OPTIONS = ("EUR", "GBP", "CZK", "PLN", "CNY", "USD", "AUD", "HKD")
 DEFAULT_RADIO_GENRE = "Dekaden/Dekade 1980s"
 DEFAULT_WEATHER_COUNTRY_ID = 34
-SETUP_TOKEN_FILE = ".storage/stiebel_dhe_connect_token.txt"
 SETUP_PAIRING_TIMEOUT_SECONDS = 180.0
 MAX_RADIO_RESULT_OPTIONS = 50
 MAX_WEATHER_RESULT_OPTIONS = 50
@@ -147,7 +147,7 @@ def _token_file_for_host_port(host: str, port: int) -> str:
 
 def _entry_target(entry: config_entries.ConfigEntry) -> tuple[str, int] | None:
     """Return normalized host/port from an existing config entry."""
-    merged = {**entry.data, **entry.options}
+    merged = merged_entry_data(entry)
     host_value = merged.get(CONF_HOST)
     if host_value is None:
         return None
@@ -699,7 +699,7 @@ class StiebelDHEConnectConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self.hass,
                 setup_data[CONF_HOST],
                 setup_data[CONF_PORT],
-                setup_data.get("token_file", SETUP_TOKEN_FILE),
+                setup_data["token_file"],
             )
             if error_key is None:
                 self._pending_setup_data = None
@@ -743,6 +743,20 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
             "remove_radio_favorite",
         ]
 
+    def _finish_options(self) -> config_entries.ConfigFlowResult:
+        """Return success result without changing options payload."""
+        return self.async_create_entry(
+            title="",
+            data=dict(self.config_entry.options),
+        )
+
+    def _client_or_mark_not_loaded(self, errors: dict[str, str]) -> Any | None:
+        """Return runtime client or mark the step as not loaded."""
+        client = self._client()
+        if client is None:
+            errors["base"] = "not_loaded"
+        return client
+
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
         """Show the options menu."""
         return self.async_show_menu(
@@ -752,7 +766,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_connection(self, user_input: dict[str, Any] | None = None):
         """Manage connection options."""
-        current = {**self.config_entry.data, **self.config_entry.options}
+        current = merged_entry_data(self.config_entry)
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -799,9 +813,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
     ):
         """Manage DHE cost and emission settings."""
         errors: dict[str, str] = {}
-        client = self._client()
-        if client is None:
-            errors["base"] = "not_loaded"
+        client = self._client_or_mark_not_loaded(errors)
 
         defaults = _device_settings_defaults(client) if client is not None else {}
         if user_input is not None and not errors:
@@ -838,10 +850,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
             except DHEError:
                 errors["base"] = "device_settings_failed"
             else:
-                return self.async_create_entry(
-                    title="",
-                    data=dict(self.config_entry.options),
-                )
+                return self._finish_options()
 
         return self.async_show_form(
             step_id="device_settings",
@@ -855,10 +864,8 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
     ):
         """Search DHE weather locations to add a favorite."""
         errors: dict[str, str] = {}
-        client = self._client()
-        if client is None:
-            errors["base"] = "not_loaded"
-        elif not self._weather_countries:
+        client = self._client_or_mark_not_loaded(errors)
+        if client is not None and not self._weather_countries:
             try:
                 self._weather_countries = await client.list_weather_countries()
             except DHEError:
@@ -903,12 +910,10 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
     ):
         """Select one weather search result and save it as favorite."""
         errors: dict[str, str] = {}
-        client = self._client()
+        client = self._client_or_mark_not_loaded(errors)
         result_options = _weather_result_options(self._weather_results)
 
-        if client is None:
-            errors["base"] = "not_loaded"
-        elif not result_options:
+        if not result_options and "base" not in errors:
             errors["base"] = "no_results"
 
         if user_input is not None and not errors:
@@ -921,10 +926,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
             except DHEError:
                 errors["base"] = "favorite_failed"
             else:
-                return self.async_create_entry(
-                    title="",
-                    data=dict(self.config_entry.options),
-                )
+                return self._finish_options()
 
         return self.async_show_form(
             step_id="weather_favorite_result",
@@ -938,10 +940,8 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
     ):
         """Remove a DHE weather favorite."""
         errors: dict[str, str] = {}
-        client = self._client()
-        if client is None:
-            errors["base"] = "not_loaded"
-        else:
+        client = self._client_or_mark_not_loaded(errors)
+        if client is not None:
             try:
                 self._weather_favorites = await client.list_weather_favorites()
             except DHEError:
@@ -961,10 +961,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
             except DHEError:
                 errors["base"] = "remove_favorite_failed"
             else:
-                return self.async_create_entry(
-                    title="",
-                    data=dict(self.config_entry.options),
-                )
+                return self._finish_options()
 
         return self.async_show_form(
             step_id="remove_weather_favorite",
@@ -1001,7 +998,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
     ):
         """Search DHE radio stations by a selected catalog value."""
         errors: dict[str, str] = {}
-        client = self._client()
+        client = self._client_or_mark_not_loaded(errors)
         defaults = user_input or {}
         search_type = (
             self._radio_search_type
@@ -1009,9 +1006,9 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
             else "text"
         )
 
-        if client is None:
-            errors["base"] = "not_loaded"
-        elif (
+        if (
+            client is not None
+            and
             search_type in RADIO_CATALOG_SEARCH_TYPES
             and search_type not in self._radio_catalogs
         ):
@@ -1087,12 +1084,10 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
     ):
         """Select one radio station search result and save it as favorite."""
         errors: dict[str, str] = {}
-        client = self._client()
+        client = self._client_or_mark_not_loaded(errors)
         result_options = _radio_result_options(self._radio_results)
 
-        if client is None:
-            errors["base"] = "not_loaded"
-        elif not result_options:
+        if not result_options and "base" not in errors:
             errors["base"] = "no_results"
 
         if user_input is not None and not errors:
@@ -1105,10 +1100,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
             except DHEError:
                 errors["base"] = "radio_favorite_failed"
             else:
-                return self.async_create_entry(
-                    title="",
-                    data=dict(self.config_entry.options),
-                )
+                return self._finish_options()
 
         return self.async_show_form(
             step_id="radio_favorite_result",
@@ -1122,10 +1114,8 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
     ):
         """Remove a DHE radio favorite."""
         errors: dict[str, str] = {}
-        client = self._client()
-        if client is None:
-            errors["base"] = "not_loaded"
-        else:
+        client = self._client_or_mark_not_loaded(errors)
+        if client is not None:
             try:
                 self._radio_favorites = await client.list_radio_favorites()
             except DHEError:
@@ -1145,10 +1135,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
             except DHEError:
                 errors["base"] = "remove_radio_favorite_failed"
             else:
-                return self.async_create_entry(
-                    title="",
-                    data=dict(self.config_entry.options),
-                )
+                return self._finish_options()
 
         return self.async_show_form(
             step_id="remove_radio_favorite",
