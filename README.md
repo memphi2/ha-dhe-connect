@@ -75,6 +75,17 @@ The host field intentionally rejects URLs with paths, usernames, query strings o
 
 On first connection Home Assistant validates the DHE pairing before the integration entry is created.
 
+### Multiple devices
+
+Add one config entry per DHE device:
+
+1. `Settings` -> `Devices & services` -> `Add integration` -> `Stiebel DHE Connect`
+2. Enter host, port and name for that exact DHE
+3. Complete pairing on the device display
+4. Repeat for the next DHE
+
+Each config entry keeps its own runtime session, token file and entity set.
+
 ### First pairing flow
 
 1. Add `Stiebel DHE Connect` from `Settings` -> `Devices & services`.
@@ -91,6 +102,8 @@ After successful pairing the local token is stored per configured DHE target at:
 ```text
 /config/.storage/stiebel_dhe_connect_token_<host>_<port>.txt
 ```
+
+With multiple DHE devices, each host/port pair gets its own token file.
 
 Use the disabled-by-default `Repair pairing` button if you want to force a new pairing from Home Assistant.
 The button deletes the stored token, reconnects and shows a pairing notification while the DHE waits for confirmation.
@@ -145,6 +158,7 @@ Selecting the active weather location is a separate step. The service `stiebel_d
 ```yaml
 service: stiebel_dhe_connect.toggle_weather_favorite
 data:
+  entry_id: 01HXXXXXXXXXXXXXXX
   name: New York
   country_id: 143
   result_number: 1
@@ -155,6 +169,7 @@ Example for switching to an existing favorite by `LocationId`:
 ```yaml
 service: stiebel_dhe_connect.select_weather_location
 data:
+  entry_id: 01HXXXXXXXXXXXXXXX
   location_id: ID=320@ID2=84666@REGIO=5@COUNTRY_ID=34
 ```
 
@@ -529,6 +544,7 @@ It checks the manifest, HACS metadata, required repository files, translation ke
 |---|---|
 | Integration cannot connect | Verify host, port and browser access to `http://<host>:<port>/` |
 | Device appears twice after update | This can happen once when upgrading from older host-only device identifiers. Remove the stale duplicate device entry in Home Assistant (or remove and re-add the integration entry once) |
+| Service call hits the wrong DHE | In multi-device setups always include `entry_id` in service data |
 | Pairing repeats | Enable and use the disabled-by-default `Repair pairing` button first. If needed, delete the matching `/config/.storage/stiebel_dhe_connect_token_<host>_<port>.txt` file and pair again |
 | Entities stay unavailable | Check the `Connection state` / `Temperature error status` diagnostic sensors and Home Assistant logs for DHE session errors |
 | Reconnect counter increases often | Confirm the WebSocket connection is not blocked and no second client is fighting for the DHE session |
