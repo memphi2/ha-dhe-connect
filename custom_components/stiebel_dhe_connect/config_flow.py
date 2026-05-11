@@ -28,6 +28,7 @@ from .const import (
     DEFAULT_PORT,
     DOMAIN,
 )
+from .token_file_helpers import token_file_for_target
 
 ATTR_COUNTRY_ID = "country_id"
 ATTR_RADIO_SELECTION = "selection"
@@ -63,7 +64,6 @@ _HOST_RE = re.compile(
     r"^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)*"
     r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$"
 )
-_TOKEN_FILE_COMPONENT_RE = re.compile(r"[^A-Za-z0-9_.-]")
 
 
 def _normalize_host(host: str) -> str:
@@ -137,12 +137,6 @@ def _apply_validation_error(errors: dict[str, str], err: ValueError) -> None:
 def _target_unique_id(host: str, port: int) -> str:
     """Return stable unique_id for one DHE target."""
     return f"{DOMAIN}:{host}:{port}"
-
-
-def _token_file_for_host_port(host: str, port: int) -> str:
-    """Return per-target token path under Home Assistant .storage."""
-    safe_host = _TOKEN_FILE_COMPONENT_RE.sub("_", host)
-    return f".storage/stiebel_dhe_connect_token_{safe_host}_{port}.txt"
 
 
 def _entry_target(entry: config_entries.ConfigEntry) -> tuple[str, int] | None:
@@ -670,7 +664,7 @@ class StiebelDHEConnectConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if not await _can_connect(self.hass, host, port):
                     errors["base"] = "cannot_connect"
                 else:
-                    token_file = _token_file_for_host_port(host, port)
+                    token_file = token_file_for_target(host, port)
                     self._pending_setup_data = {
                         CONF_HOST: host,
                         CONF_PORT: port,

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import os
-import re
 import shutil
 from dataclasses import dataclass
 from typing import Any
@@ -26,6 +25,7 @@ from .const import (
     DOMAIN,
     PLATFORMS,
 )
+from .token_file_helpers import token_file_for_target
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -39,7 +39,6 @@ ATTR_LOCATION_ID = "location_id"
 ATTR_NAME = "name"
 ATTR_RESULT_NUMBER = "result_number"
 LEGACY_TOKEN_FILE = ".storage/stiebel_dhe_connect_token.txt"
-_TOKEN_FILE_COMPONENT_RE = re.compile(r"[^A-Za-z0-9_.-]")
 
 WEATHER_SEARCH_SCHEMA = vol.Schema({
     vol.Required(ATTR_NAME): cv.string,
@@ -93,23 +92,13 @@ class DHEConnectRuntimeData:
     name: str
 
 
-def _normalize_token_file_component(value: str) -> str:
-    safe = _TOKEN_FILE_COMPONENT_RE.sub("_", value.strip())
-    return safe or "device"
-
-
-def _token_file_for_target(host: str, port: int) -> str:
-    safe_host = _normalize_token_file_component(host)
-    return f".storage/stiebel_dhe_connect_token_{safe_host}_{port}.txt"
-
-
 def _token_file_for_entry(entry: ConfigEntry) -> str:
     merged = merged_entry_data(entry)
     host = str(merged.get(CONF_HOST, "")).strip()
     port = int(merged.get(CONF_PORT, DEFAULT_PORT))
     if not host:
         return f".storage/stiebel_dhe_connect_token_{entry.entry_id}.txt"
-    return _token_file_for_target(host, port)
+    return token_file_for_target(host, port)
 
 
 async def _async_migrate_legacy_token_if_needed(
