@@ -150,7 +150,7 @@ class StiebelDHEEcoModeSwitch(SwitchEntity, RestoreEntity):
         """Initialize the switch."""
         self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_eco_mode"
         self._attr_device_info = {
-            "identifiers": {(DOMAIN, client.host)},
+            "identifiers": {(DOMAIN, f"{client.host}:{client.port}")},
             "manufacturer": "STIEBEL ELTRON",
             "model": "DHE Connect",
             "name": name,
@@ -228,7 +228,7 @@ class StiebelDHEBathFillSwitch(SwitchEntity, RestoreEntity):
         """Initialize the switch."""
         self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_bath_fill"
         self._attr_device_info = {
-            "identifiers": {(DOMAIN, client.host)},
+            "identifiers": {(DOMAIN, f"{client.host}:{client.port}")},
             "manufacturer": "STIEBEL ELTRON",
             "model": "DHE Connect",
             "name": name,
@@ -305,7 +305,7 @@ class StiebelDHEMaximumActiveSwitch(SwitchEntity, RestoreEntity):
         """Initialize the switch."""
         self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_maximum_active"
         self._attr_device_info = {
-            "identifiers": {(DOMAIN, client.host)},
+            "identifiers": {(DOMAIN, f"{client.host}:{client.port}")},
             "manufacturer": "STIEBEL ELTRON",
             "model": "DHE Connect",
             "name": name,
@@ -389,7 +389,7 @@ class StiebelDHEAppTimerSwitch(SwitchEntity, RestoreEntity):
         self._attr_icon = description.icon
         self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_{description.key}"
         self._attr_device_info = {
-            "identifiers": {(DOMAIN, client.host)},
+            "identifiers": {(DOMAIN, f"{client.host}:{client.port}")},
             "manufacturer": "STIEBEL ELTRON",
             "model": "DHE Connect",
             "name": name,
@@ -465,7 +465,7 @@ class StiebelDHEWellnessShowerProgramSwitch(SwitchEntity, RestoreEntity):
         self._attr_icon = description.icon
         self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_{description.key}"
         self._attr_device_info = {
-            "identifiers": {(DOMAIN, client.host)},
+            "identifiers": {(DOMAIN, f"{client.host}:{client.port}")},
             "manufacturer": "STIEBEL ELTRON",
             "model": "DHE Connect",
             "name": name,

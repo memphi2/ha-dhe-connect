@@ -76,7 +76,7 @@ class StiebelDHEWeather(WeatherEntity):
         """Initialize the DHE weather entity."""
         self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_weather"
         self._attr_device_info = {
-            "identifiers": {(DOMAIN, client.host)},
+            "identifiers": {(DOMAIN, f"{client.host}:{client.port}")},
             "manufacturer": "STIEBEL ELTRON",
             "model": "DHE Connect",
             "name": name,

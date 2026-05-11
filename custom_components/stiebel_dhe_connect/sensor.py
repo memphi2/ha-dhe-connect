@@ -532,7 +532,7 @@ class StiebelDHESensor(SensorEntity):
         if description.key in DEFAULT_DISABLED_SENSOR_KEYS:
             self._attr_entity_registry_enabled_default = False
         self._attr_device_info = {
-            "identifiers": {(DOMAIN, client.host)},
+            "identifiers": {(DOMAIN, f"{client.host}:{client.port}")},
             "manufacturer": "STIEBEL ELTRON",
             "model": "DHE Connect",
             "name": name,
@@ -627,7 +627,7 @@ class StiebelDHEReconnectCountSensor(SensorEntity):
         """Initialize the reconnect count sensor."""
         self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_reconnect_count"
         self._attr_device_info = {
-            "identifiers": {(DOMAIN, client.host)},
+            "identifiers": {(DOMAIN, f"{client.host}:{client.port}")},
             "manufacturer": "STIEBEL ELTRON",
             "model": "DHE Connect",
             "name": name,
@@ -663,7 +663,7 @@ class StiebelDHEErrorStatusSensor(SensorEntity):
         """Initialize the general error status sensor."""
         self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_temperature_error_status"
         self._attr_device_info = {
-            "identifiers": {(DOMAIN, client.host)},
+            "identifiers": {(DOMAIN, f"{client.host}:{client.port}")},
             "manufacturer": "STIEBEL ELTRON",
             "model": "DHE Connect",
             "name": name,
@@ -787,7 +787,7 @@ class StiebelDHEDiagnosticSensor(SensorEntity):
         self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_{description.key}"
         self._attr_should_poll = description.polls
         self._attr_device_info = {
-            "identifiers": {(DOMAIN, client.host)},
+            "identifiers": {(DOMAIN, f"{client.host}:{client.port}")},
             "manufacturer": "STIEBEL ELTRON",
             "model": "DHE Connect",
             "name": name,

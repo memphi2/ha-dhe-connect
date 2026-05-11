@@ -64,7 +64,7 @@ class StiebelDHERadioMediaPlayer(MediaPlayerEntity):
         """Initialize the radio media player."""
         self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_radio"
         self._attr_device_info = {
-            "identifiers": {(DOMAIN, client.host)},
+            "identifiers": {(DOMAIN, f"{client.host}:{client.port}")},
             "manufacturer": "STIEBEL ELTRON",
             "model": "DHE Connect",
             "name": name,
