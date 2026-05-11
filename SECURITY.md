@@ -24,4 +24,5 @@ The file is written atomically and the integration attempts to set permissions t
 
 ## Reporting issues
 
-Bitte Issues über GitHub melden: https://github.com/memphi2/ha-dhe-connect/issues
+Please report security-related issues through GitHub issues:
+[https://github.com/memphi2/ha-dhe-connect/issues](https://github.com/memphi2/ha-dhe-connect/issues)

@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.0.5 - 2026-05-11 (compared to v1.0.4)
+
+### Changed
+
+- Pairing flow was hardened for setup and repair: Home Assistant now requires explicit on-device confirmation before finishing authentication.
+- Pairing retries are now bounded to 3 automatic attempts; after that, manual retry is required to avoid reconnect loops.
+- Setup pairing/token retrieval now respects the configured setup timeout window (for example 180s).
+- Availability behavior is now strict live across core entities (no stale "available" state while runtime data is missing).
+- Connection validation was tightened, including IPv6-safe host handling and clearer host/port validation feedback.
+
+### Fixed
+
+- Fixed CI syntax failure caused by a UTF-8 BOM in `config_flow.py`.
+- Updated setup/runtime pairing texts to clearly instruct the required device confirmation step.
+- Refreshed README and SECURITY documentation for the current pairing and availability behavior.
+
 ## v1.0.4 - 2026-05-10
 
 ### Added

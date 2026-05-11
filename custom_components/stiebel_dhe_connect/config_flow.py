@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import ipaddress
 import re
 from typing import Any
@@ -15,6 +16,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .client import (
+    DHEClient,
     DHEError,
     ID_CO2_EMISSION,
     ID_ELECTRICITY_PRICE,
@@ -39,6 +41,8 @@ CURRENCY_UNCHANGED = "__unchanged__"
 CURRENCY_OPTIONS = ("EUR", "GBP", "CZK", "PLN", "CNY", "USD", "AUD", "HKD")
 DEFAULT_RADIO_GENRE = "Dekaden/Dekade 1980s"
 DEFAULT_WEATHER_COUNTRY_ID = 34
+SETUP_TOKEN_FILE = ".storage/stiebel_dhe_connect_token.txt"
+SETUP_PAIRING_TIMEOUT_SECONDS = 180.0
 MAX_RADIO_RESULT_OPTIONS = 50
 MAX_WEATHER_RESULT_OPTIONS = 50
 RADIO_CATALOG_SEARCH_TYPES = ("genre", "country", "city")
@@ -75,26 +79,39 @@ def _normalize_host(host: str) -> str:
             raise ValueError("invalid_host")
         value = parsed.hostname or ""
 
-    value = value.strip().rstrip(".")
+    value = value.strip()
+    if value.startswith("[") and value.endswith("]"):
+        value = value[1:-1].strip()
+    value = value.rstrip(".")
 
     if not value or any(char in value for char in "/?#@\\"):
         raise ValueError("invalid_host")
 
+    try:
+        return str(ipaddress.ip_address(value))
+    except ValueError:
+        pass
+
     # The port has a dedicated config field. Reject host:port to keep URL
     # construction deterministic and avoid ambiguity.
     if ":" in value:
-        raise ValueError("embedded_port_or_ipv6_not_supported")
-
-    try:
-        ipaddress.ip_address(value)
-        return value
-    except ValueError:
-        pass
+        raise ValueError("embedded_port_not_supported")
 
     if not _HOST_RE.fullmatch(value):
         raise ValueError("invalid_host")
 
     return value.lower()
+
+
+def _host_for_url(host: str) -> str:
+    """Return host part suitable for URL construction (wrap IPv6 in brackets)."""
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return host
+    if ip.version == 6:
+        return f"[{host}]"
+    return host
 
 
 def _validate_port(port: int) -> int:
@@ -110,6 +127,8 @@ def _apply_validation_error(errors: dict[str, str], err: ValueError) -> None:
     code = str(err) or "invalid_host"
     if code == "invalid_port":
         errors[CONF_PORT] = code
+    elif code == "embedded_port_not_supported":
+        errors[CONF_HOST] = code
     else:
         errors[CONF_HOST] = "invalid_host"
 
@@ -468,7 +487,7 @@ def _filter_radio_results_by_text(
 async def _can_connect(hass: HomeAssistant, host: str, port: int) -> bool:
     """Check if the DHE web endpoint is reachable before creating the config entry."""
     session = async_get_clientsession(hass)
-    url = f"http://{host}:{port}/"
+    url = f"http://{_host_for_url(host)}:{port}/"
 
     try:
         async with session.get(url, timeout=8) as resp:
@@ -478,10 +497,110 @@ async def _can_connect(hass: HomeAssistant, host: str, port: int) -> bool:
         return False
 
 
+def _map_pairing_error(error: BaseException, pairing_state: str) -> str:
+    """Map setup pairing/auth failures to config-flow error keys."""
+    message = str(error).casefold()
+    state = pairing_state.casefold()
+
+    if state == "failed":
+        if "reject" in message:
+            return "pairing_rejected"
+        if any(
+            part in message
+            for part in (
+                "connection refused",
+                "cannot connect",
+                "get ",
+                "post ",
+                "socket",
+                "session",
+                "websocket",
+            )
+        ):
+            return "cannot_connect"
+        if "timeout" in message:
+            return "pairing_timeout"
+        return "pairing_failed"
+
+    if any(
+        part in message
+        for part in (
+            "connection refused",
+            "cannot connect",
+            "get ",
+            "post ",
+            "socket",
+            "session",
+            "websocket",
+        )
+    ):
+        return "cannot_connect"
+
+    if "pairing confirmation rejected" in message or "rejected on dhe" in message:
+        return "pairing_rejected"
+
+    if "auth timeout: no authenticated event received" in message:
+        return "auth_timeout"
+
+    if "token request timeout" in message:
+        return "pairing_token_timeout"
+
+    if (
+        "authenticated, but dhe pairing confirmation was not completed in time"
+        in message
+    ) or (
+        "token received but dhe pairing confirmation did not complete in time"
+        in message
+    ):
+        return "pairing_confirm_after_auth_timeout"
+
+    if state == "waiting_for_confirmation":
+        return "pairing_not_confirmed"
+
+    if state in {"requesting_token", "token_received", "confirmed", "result_received"}:
+        return "pairing_token_timeout"
+
+    if state == "authenticated_pending_confirmation":
+        return "pairing_confirm_after_auth_timeout"
+
+    if isinstance(error, TimeoutError) or "timeout" in message:
+        return "pairing_timeout"
+
+    if "authenticated" in message or "authenticate" in message:
+        return "auth_failed"
+
+    return "pairing_failed"
+
+
+async def _validate_setup_pairing(hass: HomeAssistant, host: str, port: int) -> str | None:
+    """Run one-shot pairing/auth validation before creating the config entry."""
+    probe_client = DHEClient(
+        hass=hass,
+        host=host,
+        port=port,
+        token_file=SETUP_TOKEN_FILE,
+        name="Home Assistant",
+    )
+    try:
+        await probe_client.validate_setup_authentication(
+            timeout_seconds=SETUP_PAIRING_TIMEOUT_SECONDS
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception as err:  # noqa: BLE001
+        pairing_state = str(probe_client.diagnostic_state.get("pairing_state") or "")
+        return _map_pairing_error(err, pairing_state)
+    return None
+
+
 class StiebelDHEConnectConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Stiebel DHE Connect."""
 
     VERSION = 1
+    _pending_setup_data: dict[str, Any] | None
+
+    def __init__(self) -> None:
+        self._pending_setup_data = None
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
         """Handle the initial step."""
@@ -502,18 +621,45 @@ class StiebelDHEConnectConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if not await _can_connect(self.hass, host, port):
                     errors["base"] = "cannot_connect"
                 else:
-                    return self.async_create_entry(
-                        title=name,
-                        data={
-                            CONF_HOST: host,
-                            CONF_PORT: port,
-                            CONF_NAME: name,
-                        },
-                    )
+                    self._pending_setup_data = {
+                        CONF_HOST: host,
+                        CONF_PORT: port,
+                        CONF_NAME: name,
+                    }
+                    return await self.async_step_pairing_confirm()
 
         return self.async_show_form(
             step_id="user",
             data_schema=_schema(),
+            errors=errors,
+        )
+
+    async def async_step_pairing_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ):
+        """Validate pairing/authentication before creating the entry."""
+        if self._pending_setup_data is None:
+            return await self.async_step_user()
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            setup_data = dict(self._pending_setup_data)
+            error_key = await _validate_setup_pairing(
+                self.hass,
+                setup_data[CONF_HOST],
+                setup_data[CONF_PORT],
+            )
+            if error_key is None:
+                self._pending_setup_data = None
+                return self.async_create_entry(
+                    title=setup_data[CONF_NAME],
+                    data=setup_data,
+                )
+            errors["base"] = error_key
+
+        return self.async_show_form(
+            step_id="pairing_confirm",
+            data_schema=vol.Schema({}),
             errors=errors,
         )
 
@@ -950,3 +1096,4 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
         """Return the runtime DHE client for this config entry."""
         runtime = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
         return getattr(runtime, "client", None)
+

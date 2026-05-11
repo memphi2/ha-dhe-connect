@@ -3,17 +3,30 @@
     "step": {
       "user": {
         "title": "Set up Stiebel DHE Connect",
-        "description": "Configure the local connection to your DHE Connect. Confirm pairing on the DHE when prompted during the first connection.",
+        "description": "Configure the local connection to your DHE Connect. The pairing request starts in the next step.",
         "data": {
           "host": "IP address or hostname",
           "port": "Port",
           "name": "Device name"
         }
+      },
+      "pairing_confirm": {
+        "title": "Confirm pairing",
+        "description": "Click OK now. The pairing request appears on the DHE afterwards, and confirmation on the device must be completed there. The integration is only created after successful pairing and login."
       }
     },
     "error": {
+      "pairing_timeout": "Pairing was not confirmed on the DHE in time. Please try again.",
+      "pairing_not_confirmed": "Pairing was not confirmed on the DHE. Confirm it on the device and try again.",
+      "pairing_token_timeout": "Pairing was confirmed, but the token could not be retrieved in time.",
+      "pairing_confirm_after_auth_timeout": "Authentication was received, but pairing confirmation on the DHE did not complete in time.",
+      "pairing_rejected": "Pairing was rejected on the DHE. Please confirm it again.",
+      "pairing_failed": "Pairing with the DHE failed.",
+      "auth_failed": "Pairing succeeded, but login on the DHE failed.",
+      "auth_timeout": "Authentication on the DHE timed out. Please try again.",
       "cannot_connect": "Could not connect to the DHE. Check the IP address and port.",
       "invalid_host": "Invalid host. Enter only an IP address or hostname, without path, username or port.",
+      "embedded_port_not_supported": "Do not include the port in the host field (for example \"192.168.1.10\"). Enter the port only in the port field.",
       "invalid_port": "Invalid port. The port must be between 1 and 65535."
     },
     "abort": {
@@ -108,6 +121,11 @@
     "error": {
       "cannot_connect": "Could not connect to the DHE. Check the IP address and port.",
       "invalid_host": "Invalid host. Enter only an IP address or hostname, without path, username or port.",
+      "embedded_port_not_supported": "Do not include the port in the host field (for example \"192.168.1.10\"). Enter the port only in the port field.",
+      "pairing_not_confirmed": "Pairing was not confirmed on the DHE. Confirm it on the device and try again.",
+      "pairing_token_timeout": "Pairing was confirmed, but the token could not be retrieved in time.",
+      "pairing_confirm_after_auth_timeout": "Authentication was received, but pairing confirmation on the DHE did not complete in time.",
+      "auth_timeout": "Authentication on the DHE timed out. Please try again.",
       "invalid_port": "Invalid port. The port must be between 1 and 65535.",
       "not_loaded": "The integration is not loaded yet.",
       "no_countries": "No weather countries received from the DHE.",
@@ -138,6 +156,9 @@
       },
       "reset_shower_timer": {
         "name": "Reset shower timer"
+      },
+      "repair_pairing": {
+        "name": "Repair pairing"
       },
       "disconnect_radio_pairing": {
         "name": "Disconnect radio pairing"
@@ -336,18 +357,6 @@
       "internal_temperature_2": {
         "name": "Outlet temperature"
       },
-      "unknown_odb_22": {
-        "name": "Unknown ODB value 22"
-      },
-      "unknown_temperature_24": {
-        "name": "Unknown temperature 24"
-      },
-      "water_heating_enabled": {
-        "name": "Water heating enabled"
-      },
-      "unknown_odb_34": {
-        "name": "Unknown ODB value 34"
-      },
       "water_consumption_week": {
         "name": "Water consumption week"
       },
@@ -434,12 +443,6 @@
       },
       "last_reconnect_reason": {
         "name": "Last reconnect reason"
-      },
-      "last_message_command": {
-        "name": "Last received command"
-      },
-      "last_message_age": {
-        "name": "Time since last message"
       },
       "device_info": {
         "name": "Device info"

@@ -36,6 +36,7 @@ class StiebelDHEButtonEntityDescription(ButtonEntityDescription):
     timer_path: str | None = None
     timer_property: str | None = None
     extra_state_attributes: dict[str, Any] | None = None
+    available_without_connection: bool = False
 
 
 STATIC_BUTTON_DESCRIPTIONS: tuple[StiebelDHEButtonEntityDescription, ...] = (
@@ -56,6 +57,17 @@ STATIC_BUTTON_DESCRIPTIONS: tuple[StiebelDHEButtonEntityDescription, ...] = (
         availability_measurement_id=ID_SHOWER_TIMER_ACTIVATION,
         timer_path=SHOWER_TIMER_PATH,
         timer_property="reset",
+    ),
+    StiebelDHEButtonEntityDescription(
+        key="repair_pairing",
+        translation_key="repair_pairing",
+        method="repair_pairing",
+        icon="mdi:refresh",
+        entity_registry_enabled_default=False,
+        available_without_connection=True,
+        extra_state_attributes={
+            "pairing_action": "delete_token_and_reconnect",
+        },
     ),
     StiebelDHEButtonEntityDescription(
         key="disconnect_radio_pairing",
@@ -235,6 +247,8 @@ class StiebelDHEButton(ButtonEntity):
         self.async_write_ha_state()
 
     def _button_available(self, client_available: bool) -> bool:
+        if self.entity_description.available_without_connection:
+            return True
         if self.entity_description.availability_measurement_id is None:
             return client_available
         return client_available and self._has_seen_availability_state

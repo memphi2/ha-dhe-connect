@@ -46,7 +46,11 @@ class StiebelDHEWeatherLocationSelect(SelectEntity):
 
     def __init__(self, entry_id: str, name: str, client: DHEClient) -> None:
         """Initialize the weather location select."""
-        self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_weather_location"
+        # Use a dedicated unique_id to avoid clashes with legacy sensor entries
+        # from older revisions that used `..._weather_location`.
+        self._attr_unique_id = (
+            f"stiebel_dhe_connect_{entry_id}_weather_location_select"
+        )
         self._attr_device_info = {
             "identifiers": {(DOMAIN, client.host)},
             "manufacturer": "STIEBEL ELTRON",
@@ -80,7 +84,7 @@ class StiebelDHEWeatherLocationSelect(SelectEntity):
         try:
             await self._client.select_weather_location(location)
         except DHEError as err:
-            self._attr_available = self._have_weather_state
+            self._attr_available = self._client.available and self._have_weather_state
             self.async_write_ha_state()
             _LOGGER.error("Could not select DHE weather location: %s", err)
             raise
@@ -97,7 +101,7 @@ class StiebelDHEWeatherLocationSelect(SelectEntity):
     @callback
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
-        self._attr_available = available or self._have_weather_state
+        self._attr_available = available and self._have_weather_state
         self.async_write_ha_state()
 
     def _apply_weather_state(self, state: dict[str, Any]) -> None:
@@ -114,7 +118,7 @@ class StiebelDHEWeatherLocationSelect(SelectEntity):
             self._locations_by_option,
         )
         self._have_weather_state = current_location is not None or bool(self._attr_options)
-        self._attr_available = self._have_weather_state
+        self._attr_available = self._client.available and self._have_weather_state
 
         attributes: dict[str, Any] = {
             "weather_path": "ste.app.weather",

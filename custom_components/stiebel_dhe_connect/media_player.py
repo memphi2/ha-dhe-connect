@@ -187,13 +187,12 @@ class StiebelDHERadioMediaPlayer(MediaPlayerEntity):
     @callback
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
-        self._attr_available = available or self._have_radio_state
+        self._attr_available = available and self._have_radio_state
         self.async_write_ha_state()
 
     def _apply_radio_state(self, state: dict[str, Any]) -> None:
         if state:
             self._have_radio_state = True
-            self._attr_available = True
 
         play = state.get("play")
         if play is True:
@@ -224,6 +223,7 @@ class StiebelDHERadioMediaPlayer(MediaPlayerEntity):
         self._attr_source = _source_for_station(station, self._sources_by_option)
 
         self._attr_extra_state_attributes = _radio_attributes(state)
+        self._attr_available = self._client.available and self._have_radio_state
 
 
 def _radio_attributes(state: dict[str, Any]) -> dict[str, Any]:

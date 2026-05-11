@@ -293,5 +293,5 @@ class StiebelDHENumber(RestoreNumber):
             self._attr_available = available
             self.async_write_ha_state()
             return
-        self._attr_available = available or self._attr_native_value is not None
+        self._attr_available = available and self._attr_native_value is not None
         self.async_write_ha_state()
