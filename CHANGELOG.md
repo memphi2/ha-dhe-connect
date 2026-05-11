@@ -14,6 +14,7 @@
 
 - Fixed CI syntax failure caused by a UTF-8 BOM in `config_flow.py`.
 - Updated setup/runtime pairing texts to clearly instruct the required device confirmation step.
+- Refreshed README and SECURITY documentation for the current pairing and availability behavior.
 
 ## v1.0.4 - 2026-05-10
 

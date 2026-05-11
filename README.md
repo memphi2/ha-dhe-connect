@@ -80,7 +80,7 @@ On first connection Home Assistant validates the DHE pairing before the integrat
 1. Add `Stiebel DHE Connect` from `Settings` -> `Devices & services`.
 2. Enter only the DHE host/IP, port and a provisional device name.
 3. Submit the form, then click `OK` on the pairing confirmation step.
-4. Confirm the pairing request on the DHE display or DHE web UI.
+4. Confirm the pairing request on the DHE display or DHE web UI and complete the confirmation there.
 5. Home Assistant creates the integration entry only after pairing and login have completed.
 6. Assign the device to an area and adjust entity names as desired.
 
@@ -94,6 +94,7 @@ After successful pairing the local token is stored at:
 
 Use the disabled-by-default `Repair pairing` button if you want to force a new pairing from Home Assistant.
 The button deletes the stored token, reconnects and shows a pairing notification while the DHE waits for confirmation.
+If pairing fails repeatedly, the integration pauses automatic retries after three attempts; use `Repair pairing` again after checking the DHE.
 Manual token deletion is only needed if Home Assistant cannot load the integration far enough to expose the button.
 
 The integration attempts to store the token file with `0600` permissions where the Home Assistant filesystem supports it.
@@ -500,7 +501,7 @@ ODB ID `66` is command-only and is not read at startup.
 
 The client runs a single persistent session loop. Home Assistant entities subscribe to cached setpoint, measurement, online, availability and reconnect callbacks. When an entity is added after a value was already received, the current cached value is delivered immediately.
 
-Short reconnects do not immediately drop every entity to unavailable. Entities with a known valid value stay available during brief reconnect phases where this is safe, while the diagnostic status sensors and reconnect counter still show the real connection state.
+Availability is strict live. If the runtime connection drops, entities become unavailable until fresh runtime data is received again.
 
 Diagnostic sensors expose the current client connection state and the last reconnect reason. These are intended for troubleshooting connection stalls, WebSocket churn and device-side session closes.
 
@@ -527,7 +528,7 @@ It checks the manifest, HACS metadata, required repository files, translation ke
 | Symptom | Check |
 |---|---|
 | Integration cannot connect | Verify host, port and browser access to `http://<host>:<port>/` |
-| Pairing repeats | Delete `/config/.storage/stiebel_dhe_connect_token.txt` and pair again |
+| Pairing repeats | Enable and use the disabled-by-default `Repair pairing` button first. If needed, delete `/config/.storage/stiebel_dhe_connect_token.txt` and pair again |
 | Entities stay unavailable | Check the `Connection state` / `Temperature error status` diagnostic sensors and Home Assistant logs for DHE session errors |
 | Reconnect counter increases often | Confirm the WebSocket connection is not blocked and no second client is fighting for the DHE session |
 | Radio entity has no station/title | Open or change the radio once on the DHE UI so the device publishes station metadata |
