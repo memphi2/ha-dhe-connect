@@ -85,6 +85,28 @@ class TestWeatherForecastMapping(unittest.TestCase):
             "evening",
         )
 
+    def test_current_temperature_uses_supplied_weather_period(self) -> None:
+        day = {
+            "temp_morning": 8,
+            "temp_midday": 14,
+            "temp_evening": 10,
+        }
+
+        self.assertEqual(
+            self.weather.current_temperature(day, now=datetime(2026, 5, 10, 19, 0)),
+            10.0,
+        )
+
+    def test_weather_attributes_use_supplied_weather_period(self) -> None:
+        attributes = self.weather.weather_attributes(
+            {},
+            {},
+            [],
+            now=datetime(2026, 5, 10, 19, 0),
+        )
+
+        self.assertEqual(attributes["current_period"], "evening")
+
 
 class TestWeatherLocationMapping(unittest.TestCase):
     """Validate weather location labels and attributes."""

@@ -15,6 +15,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from .client import DHEClient
 from .entity_helpers import StiebelDHEEntityMixin
@@ -123,8 +124,9 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
             return
 
         today = days[0] if days else {}
-        self._attr_condition = weather_model.current_condition_from_day(today)
-        self._attr_native_temperature = weather_model.current_temperature(today)
+        now = dt_util.now()
+        self._attr_condition = weather_model.current_condition_from_day(today, now=now)
+        self._attr_native_temperature = weather_model.current_temperature(today, now=now)
         self._forecast = [
             forecast
             for day in days
@@ -135,6 +137,7 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
             state,
             today,
             self._forecast,
+            now=now,
         )
         self._have_weather_state = (
             has_location

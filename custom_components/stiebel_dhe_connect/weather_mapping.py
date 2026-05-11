@@ -81,12 +81,15 @@ def weather_attributes(
     state: dict[str, Any],
     today: dict[str, Any],
     forecast: list[dict[str, Any]],
+    *,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     """Build HA weather attributes from normalized DHE weather state."""
+    current_period = current_weather_period(now)
     attributes: dict[str, Any] = {
         "weather_path": "ste.app.weather",
         "forecast_days": len(forecast),
-        "current_period": current_weather_period(),
+        "current_period": current_period,
     }
     location = state.get("location")
     if isinstance(location, dict):
@@ -285,9 +288,13 @@ def location_identifier(location: dict[str, Any]) -> str | None:
     return name
 
 
-def current_temperature(day: dict[str, Any]) -> float | None:
+def current_temperature(
+    day: dict[str, Any],
+    *,
+    now: datetime | None = None,
+) -> float | None:
     """Return best current temperature from a DHE day payload."""
-    for key in ordered_period_keys("temp"):
+    for key in ordered_period_keys("temp", now=now):
         value = number(day.get(key))
         if value is not None:
             return value
@@ -299,9 +306,14 @@ def current_temperature(day: dict[str, Any]) -> float | None:
     return tmax if tmax is not None else tmin
 
 
-def current_condition_from_day(day: dict[str, Any]) -> str | None:
+def current_condition_from_day(
+    day: dict[str, Any],
+    *,
+    now: datetime | None = None,
+) -> str | None:
     """Return best current HA weather condition from a DHE day payload."""
-    for key in ordered_period_keys("icon_id", include_day=True):
+    current_period = current_weather_period(now)
+    for key in ordered_period_keys("icon_id", include_day=True, now=now):
         condition = condition_from_icon_id(
             int_value(day.get(key)),
             precipitation=period_precipitation_probability(day, key),
@@ -309,7 +321,7 @@ def current_condition_from_day(day: dict[str, Any]) -> str | None:
         if condition is not None:
             return condition
 
-    precipitation = precipitation_probability(day, period=current_weather_period())
+    precipitation = precipitation_probability(day, period=current_period)
     return condition_from_precipitation(
         precipitation if precipitation is not None else precipitation_probability(day)
     )
@@ -377,9 +389,14 @@ def precipitation_probability(
     return int(round(max(values)))
 
 
-def ordered_period_keys(prefix: str, *, include_day: bool = False) -> tuple[str, ...]:
+def ordered_period_keys(
+    prefix: str,
+    *,
+    include_day: bool = False,
+    now: datetime | None = None,
+) -> tuple[str, ...]:
     """Return period keys in display-priority order."""
-    keys = [f"{prefix}_{current_weather_period()}"]
+    keys = [f"{prefix}_{current_weather_period(now)}"]
     if include_day:
         keys.append(f"{prefix}_day")
     for period in ("midday", "morning", "evening"):
