@@ -104,6 +104,7 @@ After successful pairing the local token is stored per configured DHE target at:
 ```
 
 With multiple DHE devices, each host/port pair gets its own token file.
+On upgrade from older single-device versions, the legacy global token file is moved once to the new per-target file and then consumed.
 
 Use the disabled-by-default `Repair pairing` button if you want to force a new pairing from Home Assistant.
 The button deletes the stored token, reconnects and shows a pairing notification while the DHE waits for confirmation.

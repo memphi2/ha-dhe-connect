@@ -10,7 +10,7 @@
 ### Changed
 
 - Pairing token storage was split per DHE target (`host`/`port`) instead of one global token file.
-- Legacy single-device token handling is migrated automatically for existing setups.
+- Legacy single-device token handling is migrated automatically for existing setups, and the old global token file is consumed during migration.
 - Upgrade note: on some existing installs a one-time stale duplicate device entry can remain in Home Assistant device registry and should be removed once.
 - Connection state is now exposed as translated enum states in Home Assistant (for example `Verbunden` instead of raw `connected`).
 - Integration consistency check no longer requires `single_config_entry` in `manifest.json`.
