@@ -195,7 +195,7 @@ class StiebelDHENumber(RestoreNumber):
         self._attr_entity_registry_enabled_default = (
             description.entity_registry_enabled_default
         )
-        self._attr_device_info = build_device_info(client.host, client.port, name)
+        self._attr_device_info = build_device_info(client.host, client.port, name, client.legacy_device_identifier)
         if description.timer_path:
             self._attr_extra_state_attributes = {
                 "timer_path": description.timer_path,

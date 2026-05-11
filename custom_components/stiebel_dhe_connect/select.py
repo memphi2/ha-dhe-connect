@@ -52,7 +52,7 @@ class StiebelDHEWeatherLocationSelect(SelectEntity):
         self._attr_unique_id = (
             f"stiebel_dhe_connect_{entry_id}_weather_location_select"
         )
-        self._attr_device_info = build_device_info(client.host, client.port, name)
+        self._attr_device_info = build_device_info(client.host, client.port, name, client.legacy_device_identifier)
         self._client = client
         self._locations_by_option: dict[str, dict[str, Any]] = {}
         self._have_weather_state = False

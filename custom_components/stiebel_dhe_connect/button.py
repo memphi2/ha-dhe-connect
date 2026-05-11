@@ -190,7 +190,7 @@ class StiebelDHEButton(ButtonEntity):
         self._attr_entity_registry_enabled_default = (
             description.entity_registry_enabled_default
         )
-        self._attr_device_info = build_device_info(client.host, client.port, name)
+        self._attr_device_info = build_device_info(client.host, client.port, name, client.legacy_device_identifier)
         extra_state_attributes = dict(description.extra_state_attributes or {})
         if description.timer_path is not None:
             extra_state_attributes["timer_path"] = description.timer_path

@@ -198,7 +198,7 @@ class StiebelDHEODBSwitch(SwitchEntity, RestoreEntity):
         self._attr_icon = description.icon
         self._attr_entity_category = description.entity_category
         self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_{description.key}"
-        self._attr_device_info = build_device_info(client.host, client.port, name)
+        self._attr_device_info = build_device_info(client.host, client.port, name, client.legacy_device_identifier)
         self._attr_extra_state_attributes = {"odb_id": description.measurement_id}
         self._client = client
         self._attr_available = False
@@ -289,7 +289,7 @@ class StiebelDHEAppTimerSwitch(SwitchEntity, RestoreEntity):
         self._attr_translation_key = description.translation_key
         self._attr_icon = description.icon
         self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_{description.key}"
-        self._attr_device_info = build_device_info(client.host, client.port, name)
+        self._attr_device_info = build_device_info(client.host, client.port, name, client.legacy_device_identifier)
         self._attr_extra_state_attributes = {
             "timer_path": description.timer_path,
             "timer_property": "activation",
@@ -360,7 +360,7 @@ class StiebelDHEWellnessShowerProgramSwitch(SwitchEntity, RestoreEntity):
         self._attr_translation_key = description.translation_key
         self._attr_icon = description.icon
         self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_{description.key}"
-        self._attr_device_info = build_device_info(client.host, client.port, name)
+        self._attr_device_info = build_device_info(client.host, client.port, name, client.legacy_device_identifier)
         self._attr_extra_state_attributes = {"odb_id": ID_WELLNESS_SHOWER_PROGRAM, "program_value": description.program_id}
         self._client = client
         self._attr_available = False

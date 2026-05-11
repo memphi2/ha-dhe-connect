@@ -120,6 +120,7 @@
     },
     "error": {
       "cannot_connect": "Verbindung zum DHE nicht möglich. IP-Adresse und Port prüfen.",
+      "already_configured": "Stiebel DHE Connect ist bereits konfiguriert.",
       "invalid_host": "Ungültiger Host. Bitte nur IP-Adresse oder Hostname ohne Pfad, Benutzername oder Port eingeben.",
       "embedded_port_not_supported": "Bitte Port nicht im Hostfeld angeben (z. B. \"192.168.1.10\"). Den Port nur im Port-Feld eintragen.",
       "pairing_not_confirmed": "Pairing wurde am DHE nicht bestätigt. Bitte am Gerät bestätigen und erneut versuchen.",

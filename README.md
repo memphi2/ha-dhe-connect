@@ -81,7 +81,7 @@ Add one config entry per DHE device:
 
 1. `Settings` -> `Devices & services` -> `Add integration` -> `Stiebel DHE Connect`
 2. Enter host, port and name for that exact DHE
-3. Complete pairing on the device display
+3. Complete pairing on the device display (required)
 4. Repeat for the next DHE
 
 Each config entry keeps its own runtime session, token file and entity set.
@@ -91,7 +91,7 @@ Each config entry keeps its own runtime session, token file and entity set.
 1. Add `Stiebel DHE Connect` from `Settings` -> `Devices & services`.
 2. Enter only the DHE host/IP, port and a provisional device name.
 3. Submit the form, then click `OK` on the pairing confirmation step.
-4. Confirm the pairing request on the DHE device display and complete the confirmation there.
+4. Confirm the pairing request on the DHE device display and complete the confirmation there (required).
 5. Home Assistant creates the integration entry only after pairing and login have completed.
 6. Assign the device to an area and adjust entity names as desired.
 
@@ -545,7 +545,7 @@ It checks the manifest, HACS metadata, required repository files, translation ke
 | Symptom | Check |
 |---|---|
 | Integration cannot connect | Verify host, port and browser access to `http://<host>:<port>/` |
-| Device appears twice after update | This can happen once when upgrading from older host-only device identifiers. Remove the stale duplicate device entry in Home Assistant (or remove and re-add the integration entry once) |
+| Device appears twice after update | Current `1.0.6` keeps legacy host identifiers during upgrade. If a stale duplicate already exists from older test builds, remove only the stale device entry once |
 | Service call hits the wrong DHE | In multi-device setups always include `entry_id` in service data |
 | Pairing repeats | Enable and use the disabled-by-default `Repair pairing` button first. If needed, delete the matching `/config/.storage/stiebel_dhe_connect_token_<host>_<port>.txt` file and pair again |
 | Entities stay unavailable | Check the `Connection state` / `Temperature error status` diagnostic sensors and Home Assistant logs for DHE session errors |

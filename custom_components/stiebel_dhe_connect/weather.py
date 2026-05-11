@@ -76,7 +76,7 @@ class StiebelDHEWeather(WeatherEntity):
     def __init__(self, entry_id: str, name: str, client: DHEClient) -> None:
         """Initialize the DHE weather entity."""
         self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_weather"
-        self._attr_device_info = build_device_info(client.host, client.port, name)
+        self._attr_device_info = build_device_info(client.host, client.port, name, client.legacy_device_identifier)
         self._attr_available = False
         self._attr_condition = None
         self._attr_name = None
@@ -131,7 +131,9 @@ class StiebelDHEWeather(WeatherEntity):
             return
 
         days = _forecast_source_days(state)
-        if not days and not isinstance(state.get("location"), dict):
+        location = state.get("location")
+        has_location = isinstance(location, dict) and bool(location)
+        if not days and not has_location:
             self._reset_weather_state()
             return
 
@@ -146,7 +148,8 @@ class StiebelDHEWeather(WeatherEntity):
         self._attr_name = _weather_entity_name(state)
         self._attr_extra_state_attributes = _weather_attributes(state, today, self._forecast)
         self._have_weather_state = (
-            self._attr_condition is not None
+            has_location
+            or self._attr_condition is not None
             or self._attr_native_temperature is not None
             or bool(self._forecast)
         )

@@ -64,7 +64,7 @@ class StiebelDHERadioMediaPlayer(MediaPlayerEntity):
     def __init__(self, entry_id: str, name: str, client: DHEClient) -> None:
         """Initialize the radio media player."""
         self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_radio"
-        self._attr_device_info = build_device_info(client.host, client.port, name)
+        self._attr_device_info = build_device_info(client.host, client.port, name, client.legacy_device_identifier)
         self._attr_available = False
         self._attr_extra_state_attributes = {"radio_path": "ste.app.radio"}
         self._attr_state = None

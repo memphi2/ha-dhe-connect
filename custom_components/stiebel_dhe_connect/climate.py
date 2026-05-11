@@ -61,7 +61,7 @@ class StiebelDHEClimate(ClimateEntity):
     def __init__(self, entry_id: str, name: str, client: DHEClient) -> None:
         """Initialize the entity."""
         self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_setpoint"
-        self._attr_device_info = build_device_info(client.host, client.port, name)
+        self._attr_device_info = build_device_info(client.host, client.port, name, client.legacy_device_identifier)
         self._client = client
         self._attr_target_temperature: float | None = None
         self._attr_current_temperature: float | None = None

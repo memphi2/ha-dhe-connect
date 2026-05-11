@@ -15,6 +15,7 @@ from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 
 from .client import DHEClient
@@ -145,6 +146,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         token_file=token_file,
         name="Home Assistant",
     )
+    client.legacy_device_identifier = _legacy_device_identifier_for_entry(
+        hass,
+        entry,
+        host,
+    )
 
     hass.data[DOMAIN][entry.entry_id] = DHEConnectRuntimeData(
         client=client,
@@ -163,6 +169,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
+
+
+def _legacy_device_identifier_for_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    host: str,
+) -> str | None:
+    """Return legacy host identifier only for upgraded installs.
+
+    We keep `(DOMAIN, host)` only when this config entry already has a device
+    with that old identifier in the registry. New installs keep only the
+    host:port identifier to avoid cross-port device merges.
+    """
+    device_registry = dr.async_get(hass)
+    legacy_identifier = (DOMAIN, host)
+    for device in dr.async_entries_for_config_entry(device_registry, entry.entry_id):
+        if legacy_identifier in device.identifiers:
+            return host
+    return None
 
 
 def _async_cleanup_legacy_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:

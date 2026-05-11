@@ -532,7 +532,7 @@ class StiebelDHESensor(SensorEntity):
         self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_{description.key}"
         if description.key in DEFAULT_DISABLED_SENSOR_KEYS:
             self._attr_entity_registry_enabled_default = False
-        self._attr_device_info = build_device_info(client.host, client.port, name)
+        self._attr_device_info = build_device_info(client.host, client.port, name, client.legacy_device_identifier)
         if description.timer_path:
             self._base_extra_state_attributes = {
                 "timer_path": description.timer_path,
@@ -622,7 +622,7 @@ class StiebelDHEReconnectCountSensor(SensorEntity):
     def __init__(self, entry_id: str, name: str, client: DHEClient) -> None:
         """Initialize the reconnect count sensor."""
         self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_reconnect_count"
-        self._attr_device_info = build_device_info(client.host, client.port, name)
+        self._attr_device_info = build_device_info(client.host, client.port, name, client.legacy_device_identifier)
         self._client = client
         self._attr_available = True
         self._attr_native_value = client.reconnect_count
@@ -653,7 +653,7 @@ class StiebelDHEErrorStatusSensor(SensorEntity):
     def __init__(self, entry_id: str, name: str, client: DHEClient) -> None:
         """Initialize the general error status sensor."""
         self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_temperature_error_status"
-        self._attr_device_info = build_device_info(client.host, client.port, name)
+        self._attr_device_info = build_device_info(client.host, client.port, name, client.legacy_device_identifier)
         self._client = client
         self._setpoint: float | None = None
         self._inlet_temperature: float | None = None
@@ -772,7 +772,7 @@ class StiebelDHEDiagnosticSensor(SensorEntity):
         self._attr_icon = description.icon
         self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_{description.key}"
         self._attr_should_poll = description.polls
-        self._attr_device_info = build_device_info(client.host, client.port, name)
+        self._attr_device_info = build_device_info(client.host, client.port, name, client.legacy_device_identifier)
         self._client = client
         self._attr_available = False
         self._attr_native_value: int | str | None = None

@@ -778,7 +778,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
                     port,
                     exclude_entry_id=self.config_entry.entry_id,
                 ):
-                    errors["base"] = "cannot_connect"
+                    errors["base"] = "already_configured"
                 elif not await _can_connect(self.hass, host, port):
                     errors["base"] = "cannot_connect"
                 else:
@@ -1141,4 +1141,3 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
         """Return the runtime DHE client for this config entry."""
         runtime = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
         return getattr(runtime, "client", None)
-
