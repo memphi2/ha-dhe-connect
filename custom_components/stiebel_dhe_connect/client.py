@@ -122,6 +122,7 @@ WEATHER_CATALOG_TIMEOUT = 8.0
 AVAILABILITY_DROP_GRACE_SECONDS = 20.0
 WEBSOCKET_UPGRADE_TIMEOUT = 8.0
 AUTH_POLL_TIMEOUT_SECONDS = 10.0
+MAX_PAIRING_AUTO_RETRIES = 3
 DEFAULT_ENGINEIO_PING_INTERVAL_SECONDS = 25.0
 PAIRING_NOTIFICATION_ID_PREFIX = "stiebel_dhe_connect_pairing"
 PAIRING_CONFIRM_HINT_NOTIFICATION_ID_PREFIX = (
@@ -841,6 +842,7 @@ class DHEClient:
         self._pairing_failed_explicit = False
         self._manual_pairing_requested = False
         self._pause_auto_reconnect_for_pairing = False
+        self._pairing_retry_attempts = 0
         self._pending_setpoint_future: asyncio.Future[float] | None = None
         self._pending_expected_setpoint: float | None = None
         self._pending_write_future: asyncio.Future[ODBValue] | None = None
@@ -1024,7 +1026,9 @@ class DHEClient:
             )
             await self._clear_token()
             ctx = await asyncio.wait_for(
-                self._open_authenticated_session(),
+                self._open_authenticated_session(
+                    token_request_timeout_seconds=timeout_seconds,
+                ),
                 timeout=timeout_seconds,
             )
         finally:
@@ -1066,6 +1070,7 @@ class DHEClient:
         self._pairing_failed_explicit = False
         self._manual_pairing_requested = True
         self._pause_auto_reconnect_for_pairing = False
+        self._pairing_retry_attempts = 0
         self._record_pairing_progress(
             state,
             message,
@@ -2147,7 +2152,11 @@ class DHEClient:
                 except TimeoutError:
                     pass
 
-    async def _open_authenticated_session(self) -> DHESession:
+    async def _open_authenticated_session(
+        self,
+        *,
+        token_request_timeout_seconds: float = 120.0,
+    ) -> DHESession:
         token = await self._load_token()
         if self._require_pairing_confirmation and token:
             _LOGGER.warning(
@@ -2167,7 +2176,9 @@ class DHEClient:
                 "No stored DHE token; requesting a new pairing token.",
                 notify=True,
             )
-            token = await self._request_initial_token()
+            token = await self._request_initial_token(
+                timeout_seconds=token_request_timeout_seconds,
+            )
             if not token:
                 raise DHEError("No token received. Pairing may be required on the DHE.")
         ctx = await self._open_session(token)
@@ -2277,7 +2288,7 @@ class DHEClient:
             await self._close_session(ctx)
             raise
 
-    async def _request_initial_token(self) -> str:
+    async def _request_initial_token(self, *, timeout_seconds: float = 120.0) -> str:
         ctx = await self._open_session("")
         require_confirmation = self._require_pairing_confirmation
         pairing_confirmed = not require_confirmation
@@ -2291,7 +2302,8 @@ class DHEClient:
                 require_confirmation,
             )
             await self._post_packet(ctx, self._event_packet("token_request", {"token": "", "name": self.name}))
-            deadline = time.monotonic() + (35.0 if self._manual_pairing_requested else 120.0)
+            token_timeout = max(1.0, float(timeout_seconds))
+            deadline = time.monotonic() + token_timeout
             while time.monotonic() < deadline and not self._stopped.is_set():
                 try:
                     if ctx.websocket is not None:
@@ -2388,19 +2400,10 @@ class DHEClient:
                                     "waiting for explicit pairing_result from DHE."
                                 )
                                 continue
-                            # Automatic startup fallback (non-manual pairing).
-                            _LOGGER.warning(
-                                "Token received without pairing_request; "
-                                "continuing with token-based authentication fallback."
+                            _LOGGER.debug(
+                                "Token received without pairing_request; waiting for explicit pairing confirmation events."
                             )
-                            self._require_pairing_confirmation = False
-                            self._record_pairing_progress(
-                                "fallback_no_device_confirmation",
-                                "DHE returned a token without device pairing request; continuing authentication.",
-                                notify=True,
-                            )
-                            await self._save_token(candidate_token)
-                            return candidate_token
+                            continue
                         if not pairing_confirmed:
                             _LOGGER.debug(
                                 "Token received, waiting for DHE pairing confirmation."
@@ -2501,6 +2504,8 @@ class DHEClient:
         await asyncio.wait_for(self._ready.wait(), timeout=timeout)
 
     def _record_session_connected(self) -> None:
+        self._pairing_retry_attempts = 0
+        self._pause_auto_reconnect_for_pairing = False
         if not self._has_connected:
             self._has_connected = True
             return
@@ -2894,14 +2899,23 @@ class DHEClient:
 
     def _record_pairing_failed(self, error: BaseException) -> None:
         self._manual_pairing_requested = False
+        self._pairing_retry_attempts += 1
+        attempts = self._pairing_retry_attempts
+        auto_retry_allowed = attempts < MAX_PAIRING_AUTO_RETRIES
+        retry_hint = (
+            f"Pairing attempt {attempts}/{MAX_PAIRING_AUTO_RETRIES} failed; retrying automatically."
+            if auto_retry_allowed
+            else (
+                f"Pairing attempt {attempts}/{MAX_PAIRING_AUTO_RETRIES} failed; waiting for manual retry."
+            )
+        )
         self._record_pairing_progress(
             "failed",
-            _diagnostic_error(error),
+            f"{_diagnostic_error(error)} ({retry_hint})",
             notify=True,
         )
-        # Avoid endless reconnect loops after a manual repair attempt
-        # or a no-token startup pairing failure.
-        self._pause_auto_reconnect_for_pairing = True
+        # Allow bounded automatic retries before switching to manual-only mode.
+        self._pause_auto_reconnect_for_pairing = not auto_retry_allowed
         self._pairing_active = False
 
     def _notify_pairing_progress(self, state: str) -> None:
@@ -2949,7 +2963,7 @@ class DHEClient:
                 ),
                 "waiting_for_confirmation": (
                     "Der DHE wartet auf die Pairing-Bestätigung. "
-                    "Bitte die Anfrage am Gerät bestätigen."
+                    "Bitte die Bestätigung am Gerät vollständig abschließen."
                 ),
                 "confirmed": "Pairing bestätigt. Home Assistant wartet auf das neue Token.",
                 "result_received": "Pairing-Rückmeldung erhalten. Home Assistant wartet auf das neue Token.",
@@ -2986,7 +3000,7 @@ class DHEClient:
             ),
             "waiting_for_confirmation": (
                 "The DHE is waiting for pairing confirmation. Confirm the request "
-                "on the device."
+                "on the device and complete the confirmation there."
             ),
             "confirmed": "Pairing confirmed. Home Assistant is waiting for the new token.",
             "result_received": "Pairing result received. Home Assistant is waiting for the new token.",

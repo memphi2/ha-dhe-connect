@@ -1,4 +1,4 @@
-﻿"""Config flow for Stiebel DHE Connect."""
+"""Config flow for Stiebel DHE Connect."""
 
 from __future__ import annotations
 

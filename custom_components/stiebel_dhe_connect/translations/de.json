@@ -12,7 +12,7 @@
       },
       "pairing_confirm": {
         "title": "Pairing bestätigen",
-        "description": "Jetzt OK klicken. Danach erscheint die Pairing-Anfrage am DHE und muss dort bestätigt werden. Die Integration wird erst nach erfolgreichem Pairing und Login angelegt."
+        "description": "Jetzt OK klicken. Danach erscheint die Pairing-Anfrage am DHE und die Bestätigung muss dort vollständig abgeschlossen werden. Die Integration wird erst nach erfolgreichem Pairing und Login angelegt."
       }
     },
     "error": {

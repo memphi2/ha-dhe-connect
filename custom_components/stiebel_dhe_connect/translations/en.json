@@ -12,7 +12,7 @@
       },
       "pairing_confirm": {
         "title": "Confirm pairing",
-        "description": "Click OK now. The pairing request appears on the DHE afterwards and must be confirmed there. The integration is only created after successful pairing and login."
+        "description": "Click OK now. The pairing request appears on the DHE afterwards, and confirmation on the device must be completed there. The integration is only created after successful pairing and login."
       }
     },
     "error": {
