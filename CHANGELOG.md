@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.0.5 - 2026-05-11
+
+### Fixed
+
+- Pairing setup/repair now waits for explicit on-device confirmation and does not accept token-only fallback in manual pairing.
+- Pairing retry loop is bounded to 3 automatic attempts, then switches to manual retry to avoid endless reconnect loops.
+- Setup token retrieval now honors the configured setup timeout window (for example 180s) instead of a shorter manual hard-cap.
+- Removed UTF-8 BOM from `config_flow.py` to fix Python syntax checks in CI.
+- Clarified pairing confirmation wording in setup and runtime notifications.
+
 ## v1.0.4 - 2026-05-10
 
 ### Added
