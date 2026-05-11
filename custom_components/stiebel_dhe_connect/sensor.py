@@ -18,7 +18,6 @@ from homeassistant.const import (
     UnitOfMass,
     UnitOfPower,
     UnitOfTemperature,
-    UnitOfTime,
     UnitOfVolume,
     UnitOfVolumeFlowRate,
 )
@@ -56,10 +55,6 @@ from .client import (
     ID_SAVING_MONITOR_REAL_WATER,
     ID_SAVING_MONITOR_WATER,
     ID_SHOWER_TIMER_REMAINING,
-    ID_UNKNOWN_ODB_22,
-    ID_UNKNOWN_ODB_34,
-    ID_UNKNOWN_TEMPERATURE_24,
-    ID_WATER_HEATING_ENABLED,
     ID_WATER_CONSUMPTION_WEEK,
     ID_WATER_CONSUMPTION_YEAR,
     ID_WATER_CONSUMPTION_YEARS,
@@ -125,23 +120,7 @@ DIAGNOSTIC_SENSOR_DESCRIPTIONS: tuple[StiebelDHEDiagnosticSensorEntityDescriptio
         translation_key="last_reconnect_reason",
         icon="mdi:alert-circle-outline",
         diagnostic_key="last_reconnect_reason",
-    ),
-    StiebelDHEDiagnosticSensorEntityDescription(
-        key="last_message_command",
-        translation_key="last_message_command",
-        icon="mdi:message-text-clock-outline",
-        diagnostic_key="last_message_command",
-    ),
-    StiebelDHEDiagnosticSensorEntityDescription(
-        key="last_message_age",
-        translation_key="last_message_age",
-        native_unit_of_measurement=UnitOfTime.SECONDS,
-        device_class=SensorDeviceClass.DURATION,
-        state_class=SensorStateClass.MEASUREMENT,
-        suggested_display_precision=0,
-        icon="mdi:timer-sync-outline",
-        diagnostic_key="last_message_age_seconds",
-        polls=True,
+        entity_registry_enabled_default=False,
     ),
 )
 
@@ -171,15 +150,6 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         odb_id=ID_CONFIGURED_POWER,
     ),
     StiebelDHESensorEntityDescription(
-        key="unknown_odb_22",
-        translation_key="unknown_odb_22",
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:database-question",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-        odb_id=ID_UNKNOWN_ODB_22,
-    ),
-    StiebelDHESensorEntityDescription(
         key="internal_temperature_1",
         translation_key="internal_temperature_1",
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
@@ -200,34 +170,6 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         odb_id=ID_INTERNAL_TEMPERATURE_2,
-    ),
-    StiebelDHESensorEntityDescription(
-        key="unknown_temperature_24",
-        translation_key="unknown_temperature_24",
-        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-        device_class=SensorDeviceClass.TEMPERATURE,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:thermometer-alert",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-        odb_id=ID_UNKNOWN_TEMPERATURE_24,
-    ),
-    StiebelDHESensorEntityDescription(
-        key="water_heating_enabled",
-        translation_key="water_heating_enabled",
-        icon="mdi:water-boiler",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-        odb_id=ID_WATER_HEATING_ENABLED,
-    ),
-    StiebelDHESensorEntityDescription(
-        key="unknown_odb_34",
-        translation_key="unknown_odb_34",
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:database-question",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-        odb_id=ID_UNKNOWN_ODB_34,
     ),
     StiebelDHESensorEntityDescription(
         key="water_consumption_week",
@@ -655,7 +597,7 @@ class StiebelDHESensor(SensorEntity):
     @callback
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
-        self._attr_available = available or self._attr_native_value is not None
+        self._attr_available = available and self._attr_native_value is not None
         self.async_write_ha_state()
 
 
@@ -818,7 +760,6 @@ class StiebelDHEDiagnosticSensor(SensorEntity):
 
     entity_description: StiebelDHEDiagnosticSensorEntityDescription
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_entity_registry_enabled_default = False
     _attr_has_entity_name = True
 
     def __init__(

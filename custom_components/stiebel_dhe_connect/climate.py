@@ -115,8 +115,8 @@ class StiebelDHEClimate(ClimateEntity):
         self._sync_max_temperature_from_measurements()
         if self._client.last_setpoint is not None:
             self._attr_target_temperature = self._client.last_setpoint
-            self._attr_available = True
-            self._connection_state = "connected" if self._client.available else "reconnecting"
+            self._attr_available = self._client.available
+            self._connection_state = "connected" if self._client.available else "unavailable"
             self._update_extra_state_attributes()
 
     @callback
@@ -156,21 +156,15 @@ class StiebelDHEClimate(ClimateEntity):
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates.
 
-        The DHE may close and reopen sessions during normal operation.
-        Once a valid setpoint has been read, keep the entity available during short
-        reconnect phases to avoid Home Assistant UI flapping between available and
-        unavailable. The diagnostic connection_state attribute still shows the
-        reconnecting state.
+        Strict live availability: expose this entity only while the DHE connection
+        is active.
         """
         if available:
             self._attr_available = True
             self._connection_state = "connected"
-        elif self._attr_target_temperature is None:
+        else:
             self._attr_available = False
             self._connection_state = "unavailable"
-        else:
-            self._attr_available = True
-            self._connection_state = "reconnecting"
 
         self._update_extra_state_attributes()
         self.async_write_ha_state()

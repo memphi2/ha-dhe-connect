@@ -73,17 +73,16 @@ The config flow asks for:
 
 The host field intentionally rejects URLs with paths, usernames, query strings or embedded ports. The port must be between `1` and `65535`.
 
-On first connection the DHE may request pairing. Confirm the request on the DHE if prompted.
+On first connection Home Assistant validates the DHE pairing before the integration entry is created.
 
 ### First pairing flow
 
 1. Add `Stiebel DHE Connect` from `Settings` -> `Devices & services`.
 2. Enter only the DHE host/IP, port and a provisional device name.
-3. Submit the form and watch the DHE display or DHE web UI.
-4. Confirm pairing on the DHE before assigning the Home Assistant area or renaming entities.
-5. When Home Assistant finishes setup, assign the device to an area and adjust entity names as desired.
-
-Home Assistant does not yet show a dedicated pairing prompt for this integration, so the important pairing confirmation currently happens on the DHE side.
+3. Submit the form, then click `OK` on the pairing confirmation step.
+4. Confirm the pairing request on the DHE display or DHE web UI.
+5. Home Assistant creates the integration entry only after pairing and login have completed.
+6. Assign the device to an area and adjust entity names as desired.
 
 ## Pairing token
 
@@ -93,7 +92,9 @@ After successful pairing the local token is stored at:
 /config/.storage/stiebel_dhe_connect_token.txt
 ```
 
-Delete this file and reload the integration if you want to force a new pairing.
+Use the disabled-by-default `Repair pairing` button if you want to force a new pairing from Home Assistant.
+The button deletes the stored token, reconnects and shows a pairing notification while the DHE waits for confirmation.
+Manual token deletion is only needed if Home Assistant cannot load the integration far enough to expose the button.
 
 The integration attempts to store the token file with `0600` permissions where the Home Assistant filesystem supports it.
 
@@ -163,12 +164,8 @@ data:
 | Current water flow | `L/min` | `volume_flow_rate` | `measurement` | ODB ID `15 / 10` |
 | Current power consumption | `kW` | `power` | `measurement` | ODB ID `16 / 100 * configured_power_kw` |
 | Configured power | `kW` | `power`, disabled by default | none | ODB ID `20` |
-| Unknown ODB value 22 | none | diagnostic, disabled by default | `measurement` | ODB ID `22`, raw numeric value |
 | Inlet temperature | `C` | `temperature`, diagnostic | `measurement` | ODB ID `13 / 10` |
 | Outlet temperature | `C` | `temperature`, diagnostic | `measurement` | ODB ID `14 / 10` |
-| Unknown temperature 24 | `C` | `temperature`, diagnostic, disabled by default | `measurement` | ODB ID `24 / 10` |
-| Water heating enabled | none | diagnostic, disabled by default | none | ODB ID `33`, boolean `water_heating_enabled` state |
-| Unknown ODB value 34 | none | diagnostic, disabled by default | `measurement` | ODB ID `34`, raw numeric value |
 | Water consumption week | `L` | `water`, disabled by default | `total_increasing` | `set:ste.app.consumption:waterWeek` |
 | Water consumption year | `m3` | `water`, disabled by default | `total_increasing` | `set:ste.app.consumption:waterYear` |
 | Water consumption years | `m3` | `water`, disabled by default | `total_increasing` | `set:ste.app.consumption:waterYears` |
@@ -194,11 +191,9 @@ data:
 | Saving monitor real cost saving | `EUR` | `monetary`, disabled by default | none | `set:ste.app.savingMonitor:real.value_E`, rounded to 2 decimals |
 | Brush timer remaining | `M:SS` | none | none | `set:ste.app.brushTimer:remainingMilliseconds` |
 | Shower timer remaining | `M:SS` | none | none | `set:ste.app.showerTimer:remainingMilliseconds` |
-| Reconnects | count | diagnostic, disabled by default | `total_increasing` | Successful reconnect count after the initial connection |
-| Connection state | text | diagnostic, disabled by default | none | Client session state such as `starting`, `connected`, `reconnecting` or `stopped` |
-| Last reconnect reason | text | diagnostic, disabled by default | none | Last recorded session failure or forced reconnect reason |
-| Last received command | text | diagnostic, disabled by default | none | Last DHE app command received from the persistent session |
-| Time since last message | `s` | duration, diagnostic, disabled by default | `measurement` | Seconds since the last received DHE app command |
+| Reconnects | count | diagnostic | `total_increasing` | Successful reconnect count after the initial connection |
+| Connection state | text | diagnostic | none | Client session state such as `starting`, `connected`, `reconnecting` or `stopped` |
+| Last reconnect reason | text | diagnostic | none | Last recorded session failure or forced reconnect reason |
 | Device info | text | diagnostic | none | DHE version and device information commands |
 | Product ID | text | diagnostic, disabled by default | none | `set:ste.common.version:gadgetData.id` |
 | WLAN MAC | text | diagnostic, disabled by default | none | `set:ste.common.version:gadgetData.wlan` |
@@ -257,6 +252,7 @@ Wellness programs are triggered by writing the program ID and then sending the D
 |---|---|---|
 | Reset brush timer | `assign:ste.app.brushTimer:reset` | Resets brush timer remaining time and activation state |
 | Reset shower timer | `assign:ste.app.showerTimer:reset` | Resets shower timer remaining time and activation state |
+| Repair pairing | local token reset and reconnect | Deletes the stored DHE token, starts a fresh pairing attempt and asks the user to confirm pairing on the DHE; disabled by default |
 | Disconnect radio pairing | `assign:ste.app.radio:paired` with `false` | Sends the observed DHE radio pairing disconnect action |
 | Temperature memory 1-12 | ODB ID `66` command | Sends the temperature stored in the matching memory slot; slots 3 to 12 disabled by default |
 | Delete temperature memory 3-12 | `assign:ste.common.temperature:memory` | Deletes the matching memory slot with `operation: delete`; disabled by default; memory slots 1 and 2 are fixed presets and are not deletable |
@@ -398,11 +394,11 @@ Required startup reads seed the interactive entities:
 | `15` | Water flow |
 | `16` | Current power fraction |
 | `20` | Configured power |
-| `22` | Unknown raw diagnostic value, disabled entity |
-| `24` | Unknown temperature, disabled entity |
+| `22` | Known noisy diagnostic value, not exposed as an entity |
+| `24` | Known noisy temperature value, not exposed as an entity |
 | `31` | Current bath fill volume |
-| `33` | Unknown raw diagnostic value, disabled entity |
-| `34` | Unknown raw diagnostic value, disabled entity |
+| `33` | Water heating enabled state, used by the climate entity |
+| `34` | Known noisy diagnostic value, not exposed as an entity |
 | `61` | Electricity price euros |
 | `62` | Water price euros |
 | `69` | CO2 emission |
@@ -506,7 +502,7 @@ The client runs a single persistent session loop. Home Assistant entities subscr
 
 Short reconnects do not immediately drop every entity to unavailable. Entities with a known valid value stay available during brief reconnect phases where this is safe, while the diagnostic status sensors and reconnect counter still show the real connection state.
 
-Disabled-by-default diagnostic sensors expose the current client connection state, the last reconnect reason, the last received command and the age of the last received message. These are intended for troubleshooting connection stalls, WebSocket churn and device-side session closes.
+Diagnostic sensors expose the current client connection state and the last reconnect reason. These are intended for troubleshooting connection stalls, WebSocket churn and device-side session closes.
 
 ## Validation
 

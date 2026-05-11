@@ -55,14 +55,24 @@ LEGACY_ENTITY_SUFFIXES_TO_REMOVE = (
     "electricity_price",
     "water_price",
     "co2_emission",
+    "weather_location",
     "unknown_odb_33",
+    "unknown_odb_22",
+    "unknown_odb_34",
+    "unknown_temperature_24",
+    "last_message_command",
+    "last_message_age",
     "setpoint_below_inlet",
+    "water_heating_enabled",
 )
 LEGACY_ENTITY_KEYWORDS_TO_REMOVE = (
     "currency",
     "electricity_price",
     "water_price",
     "co2_emission",
+)
+CURRENT_ENTITY_SUFFIXES_TO_ENABLE = (
+    "connection_state",
 )
 
 
@@ -98,6 +108,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         name=name,
     )
     _async_cleanup_legacy_entities(hass, entry)
+    _async_enable_current_entities(hass, entry)
 
     try:
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -135,6 +146,34 @@ def _async_cleanup_legacy_entities(hass: HomeAssistant, entry: ConfigEntry) -> N
                 entity_entry.entity_id,
             )
             entity_registry.async_remove(entity_entry.entity_id)
+
+
+def _async_enable_current_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Re-enable current entities that older revisions disabled by integration."""
+    entity_registry = er.async_get(hass)
+    unique_id_prefix = f"stiebel_dhe_connect_{entry.entry_id}_"
+    unique_ids_to_enable = {
+        f"{unique_id_prefix}{suffix}"
+        for suffix in CURRENT_ENTITY_SUFFIXES_TO_ENABLE
+    }
+    integration_disabler = getattr(er, "RegistryEntryDisabler", None)
+    integration_disabled_by = (
+        getattr(integration_disabler, "INTEGRATION", "integration")
+        if integration_disabler is not None
+        else "integration"
+    )
+
+    for entity_entry in er.async_entries_for_config_entry(entity_registry, entry.entry_id):
+        if (
+            entity_entry.unique_id in unique_ids_to_enable
+            and entity_entry.disabled_by in {integration_disabled_by, "integration"}
+        ):
+            _LOGGER.debug(
+                "Re-enabling current entity registry entry unique_id=%s entity_id=%s",
+                entity_entry.unique_id,
+                entity_entry.entity_id,
+            )
+            entity_registry.async_update_entity(entity_entry.entity_id, disabled_by=None)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

@@ -87,6 +87,7 @@ class StiebelDHEWeather(WeatherEntity):
         self._attr_extra_state_attributes = {"weather_path": "ste.app.weather"}
         self._attr_native_temperature = None
         self._client = client
+        self._client_available = client.available
         self._forecast: list[dict[str, Any]] = []
         self._have_weather_state = False
 
@@ -114,7 +115,8 @@ class StiebelDHEWeather(WeatherEntity):
     @callback
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
-        self._attr_available = available or self._have_weather_state
+        self._client_available = available
+        self._attr_available = self._client_available and self._have_weather_state
         self.async_write_ha_state()
 
     def _schedule_forecast_listener_update(self) -> None:
@@ -149,9 +151,6 @@ class StiebelDHEWeather(WeatherEntity):
             self._attr_extra_state_attributes = {"weather_path": "ste.app.weather"}
             return
 
-        self._have_weather_state = True
-        self._attr_available = True
-
         today = days[0] if days else {}
         self._attr_condition = _current_condition_from_day(today)
         self._attr_native_temperature = _current_temperature(today)
@@ -162,6 +161,12 @@ class StiebelDHEWeather(WeatherEntity):
         ]
         self._attr_name = _weather_entity_name(state)
         self._attr_extra_state_attributes = _weather_attributes(state, today, self._forecast)
+        self._have_weather_state = (
+            self._attr_condition is not None
+            or self._attr_native_temperature is not None
+            or bool(self._forecast)
+        )
+        self._attr_available = self._client_available and self._have_weather_state
 
 
 def _forecast_source_days(state: dict[str, Any]) -> list[dict[str, Any]]:

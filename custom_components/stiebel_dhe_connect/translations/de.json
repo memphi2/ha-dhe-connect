@@ -3,17 +3,30 @@
     "step": {
       "user": {
         "title": "Stiebel DHE Connect einrichten",
-        "description": "Lokale Verbindung zum DHE Connect konfigurieren. Beim ersten Verbindungsaufbau Pairing am DHE bestätigen, wenn es angefordert wird.",
+        "description": "Lokale Verbindung zum DHE Connect konfigurieren. Die Pairing-Anfrage wird im nächsten Schritt gestartet.",
         "data": {
           "host": "IP-Adresse oder Hostname",
           "port": "Port",
           "name": "Gerätename"
         }
+      },
+      "pairing_confirm": {
+        "title": "Pairing bestätigen",
+        "description": "Jetzt OK klicken. Danach erscheint die Pairing-Anfrage am DHE und muss dort bestätigt werden. Die Integration wird erst nach erfolgreichem Pairing und Login angelegt."
       }
     },
     "error": {
+      "pairing_timeout": "Pairing am DHE wurde nicht rechtzeitig bestätigt. Bitte erneut versuchen.",
+      "pairing_not_confirmed": "Pairing wurde am DHE nicht bestätigt. Bitte am Gerät bestätigen und erneut versuchen.",
+      "pairing_token_timeout": "Pairing wurde bestätigt, aber das Token konnte nicht rechtzeitig abgerufen werden.",
+      "pairing_confirm_after_auth_timeout": "Anmeldung erhalten, aber die Pairing-Bestätigung am DHE ist ausgeblieben.",
+      "pairing_rejected": "Pairing wurde am DHE abgelehnt. Bitte erneut bestätigen.",
+      "pairing_failed": "Pairing mit dem DHE ist fehlgeschlagen.",
+      "auth_failed": "Pairing war erfolgreich, aber die Anmeldung am DHE ist fehlgeschlagen.",
+      "auth_timeout": "Anmeldung am DHE hat zu lange gedauert. Bitte erneut versuchen.",
       "cannot_connect": "Verbindung zum DHE nicht möglich. IP-Adresse und Port prüfen.",
       "invalid_host": "Ungültiger Host. Bitte nur IP-Adresse oder Hostname ohne Pfad, Benutzername oder Port eingeben.",
+      "embedded_port_not_supported": "Bitte Port nicht im Hostfeld angeben (z. B. \"192.168.1.10\"). Den Port nur im Port-Feld eintragen.",
       "invalid_port": "Ungültiger Port. Der Port muss zwischen 1 und 65535 liegen."
     },
     "abort": {
@@ -108,6 +121,11 @@
     "error": {
       "cannot_connect": "Verbindung zum DHE nicht möglich. IP-Adresse und Port prüfen.",
       "invalid_host": "Ungültiger Host. Bitte nur IP-Adresse oder Hostname ohne Pfad, Benutzername oder Port eingeben.",
+      "embedded_port_not_supported": "Bitte Port nicht im Hostfeld angeben (z. B. \"192.168.1.10\"). Den Port nur im Port-Feld eintragen.",
+      "pairing_not_confirmed": "Pairing wurde am DHE nicht bestätigt. Bitte am Gerät bestätigen und erneut versuchen.",
+      "pairing_token_timeout": "Pairing wurde bestätigt, aber das Token konnte nicht rechtzeitig abgerufen werden.",
+      "pairing_confirm_after_auth_timeout": "Anmeldung erhalten, aber die Pairing-Bestätigung am DHE ist ausgeblieben.",
+      "auth_timeout": "Anmeldung am DHE hat zu lange gedauert. Bitte erneut versuchen.",
       "invalid_port": "Ungültiger Port. Der Port muss zwischen 1 und 65535 liegen.",
       "not_loaded": "Die Integration ist noch nicht geladen.",
       "no_countries": "Keine Wetter-Länder vom DHE erhalten.",
@@ -138,6 +156,9 @@
       },
       "reset_shower_timer": {
         "name": "Duschtimer zurücksetzen"
+      },
+      "repair_pairing": {
+        "name": "Pairing erneuern"
       },
       "disconnect_radio_pairing": {
         "name": "Radio-Kopplung trennen"
@@ -336,18 +357,6 @@
       "internal_temperature_2": {
         "name": "Auslauftemperatur"
       },
-      "unknown_odb_22": {
-        "name": "Unbekannter ODB-Wert 22"
-      },
-      "unknown_temperature_24": {
-        "name": "Unbekannte Temperatur 24"
-      },
-      "water_heating_enabled": {
-        "name": "Wassererwärmung aktiv"
-      },
-      "unknown_odb_34": {
-        "name": "Unbekannter ODB-Wert 34"
-      },
       "water_consumption_week": {
         "name": "Wasserverbrauch Woche"
       },
@@ -434,12 +443,6 @@
       },
       "last_reconnect_reason": {
         "name": "Letzter Reconnect-Grund"
-      },
-      "last_message_command": {
-        "name": "Letzte empfangene Nachricht"
-      },
-      "last_message_age": {
-        "name": "Zeit seit letzter Nachricht"
       },
       "device_info": {
         "name": "Geräteinfo"

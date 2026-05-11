@@ -212,7 +212,7 @@ class StiebelDHEEcoModeSwitch(SwitchEntity, RestoreEntity):
     @callback
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
-        self._attr_available = available or self._attr_is_on is not None
+        self._attr_available = available and self._attr_is_on is not None
         self.async_write_ha_state()
 
 
@@ -289,7 +289,7 @@ class StiebelDHEBathFillSwitch(SwitchEntity, RestoreEntity):
     @callback
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
-        self._attr_available = available or self._attr_is_on is not None
+        self._attr_available = available and self._attr_is_on is not None
         self.async_write_ha_state()
 
 
@@ -366,7 +366,7 @@ class StiebelDHEMaximumActiveSwitch(SwitchEntity, RestoreEntity):
     @callback
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
-        self._attr_available = available or self._attr_is_on is not None
+        self._attr_available = available and self._attr_is_on is not None
         self.async_write_ha_state()
 
 
@@ -442,7 +442,7 @@ class StiebelDHEAppTimerSwitch(SwitchEntity, RestoreEntity):
 
     @callback
     def _handle_availability_update(self, available: bool) -> None:
-        self._attr_available = available or self._attr_is_on is not None
+        self._attr_available = available and self._attr_is_on is not None
         self.async_write_ha_state()
 
 
@@ -535,5 +535,5 @@ class StiebelDHEWellnessShowerProgramSwitch(SwitchEntity, RestoreEntity):
 
     @callback
     def _handle_availability_update(self, available: bool) -> None:
-        self._attr_available = available or self._attr_is_on is not None
+        self._attr_available = available and self._attr_is_on is not None
         self.async_write_ha_state()
