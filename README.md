@@ -30,7 +30,7 @@ Development and protocol mapping for this release were assisted by OpenAI Codex.
 - Options-flow radio search by full text, DHE genre catalog, country catalog or city catalog.
 - Weather entity for the DHE forecast payload.
 - Brush timer and shower timer controls.
-- General diagnostic status, reconnect count, connection details, scald-protection diagnostics, ODB protocol diagnostics, device alarm and device information.
+- General diagnostic status, reconnect count, connection details, scald-protection diagnostics, ODB protocol diagnostics and device information.
 
 ## Installation
 
@@ -142,7 +142,6 @@ The climate entity keeps the last valid target temperature during short reconnec
 | Entity | Class / category | Source / behavior |
 |---|---|---|
 | Scald protection active | diagnostic, disabled by default | ODB ID `22`, true when the DHE reports the anti-scald protection as active |
-| Device alarm | `problem`, diagnostic, disabled by default | Derived from ODB ID `34`; turns on for status code `3`, matching the browser UI wrench indicator |
 
 ### Media player
 
@@ -193,7 +192,7 @@ data:
 | Inlet temperature | `C` | `temperature`, diagnostic, disabled by default | `measurement` | ODB ID `13 / 10` |
 | Outlet temperature | `C` | `temperature`, diagnostic, disabled by default | `measurement` | ODB ID `14 / 10` |
 | Scald protection temperature limit | `C` | `temperature`, diagnostic, disabled by default | none | ODB ID `24 / 10` |
-| Device status | text | `enum`, diagnostic, disabled by default | none | ODB ID `34`; status code `3` also drives the device alarm binary sensor |
+| Device status | text | `enum`, diagnostic, disabled by default | none | ODB ID `34`; status code `3` is also surfaced through the temperature error status sensor |
 | Protocol version | text | diagnostic, disabled by default | none | ODB ID `67` |
 | Water consumption week | `L` | `water`, disabled by default | `total_increasing` | `set:ste.app.consumption:waterWeek` |
 | Water consumption year | `m3` | `water`, disabled by default | `total_increasing` | `set:ste.app.consumption:waterYear` |
@@ -436,7 +435,7 @@ Required startup reads seed the interactive entities:
 | `30` | Total hot water volume |
 | `31` | Current bath fill volume |
 | `33` | Water heating enabled state, used by the climate entity |
-| `34` | Device status; status code `3` is exposed as the device alarm |
+| `34` | Device status; status code `3` is exposed through the temperature error status sensor |
 | `61` | Electricity price euros |
 | `62` | Water price euros |
 | `63` | Possible energy saving |

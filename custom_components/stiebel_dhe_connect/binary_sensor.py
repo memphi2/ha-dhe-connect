@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from homeassistant.components.binary_sensor import (
-    BinarySensorDeviceClass,
     BinarySensorEntity,
     BinarySensorEntityDescription,
 )
@@ -16,11 +15,9 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .client import (
     DHEClient,
-    ID_DEVICE_STATUS,
     ID_SCALD_PROTECTION_ACTIVE,
     MeasurementValue,
 )
-from .client_mapping import DEVICE_STATUS_SERVICE_REQUIRED
 from .entity_helpers import StiebelDHEEntityMixin
 from .entity_state_helpers import coerce_float, merge_state_attributes, value_available
 from .runtime_helpers import get_runtime_data
@@ -41,15 +38,6 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[StiebelDHEBinarySensorEntityDescription, ...] 
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         odb_id=ID_SCALD_PROTECTION_ACTIVE,
-    ),
-    StiebelDHEBinarySensorEntityDescription(
-        key="device_alarm",
-        translation_key="device_alarm",
-        icon="mdi:wrench-alert",
-        device_class=BinarySensorDeviceClass.PROBLEM,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-        odb_id=ID_DEVICE_STATUS,
     ),
 )
 
@@ -122,8 +110,6 @@ class StiebelDHEBinarySensor(StiebelDHEEntityMixin, BinarySensorEntity):
             self._update_state(last_value)
 
     def _convert_value(self, value: MeasurementValue) -> bool | None:
-        if self.entity_description.key == "device_alarm":
-            return value == DEVICE_STATUS_SERVICE_REQUIRED
         if isinstance(value, bool):
             return value
         numeric_value = coerce_float(value)

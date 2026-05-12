@@ -5,7 +5,7 @@
 ### Added
 
 - Added focused unit coverage for weather, radio, pairing, config-flow and entity helper mappings.
-- Added disabled-by-default diagnostics for scald protection status, scald protection limit, device status and a device alarm binary sensor.
+- Added disabled-by-default diagnostics for scald protection status, scald protection limit and device status.
 - Added ODB diagnostics for operating duration, hot water volume, heating energy, possible saving values and protocol version.
 
 ### Changed
@@ -13,6 +13,7 @@
 - Refactored weather, radio, pairing, config-flow and shared entity state mapping into smaller helper modules.
 - Aligned ODB names, scaling and limits with the DHE Webfrontend table, including child safety, bath fill, eco flow, price and CO2 ranges.
 - Debug logging for unknown ODB values now includes the known Webfrontend ODB name when available, and known unexposed IDs are filtered out of discovery noise.
+- Removed the duplicate device alarm binary sensor; service-required device status is surfaced through the temperature error status sensor.
 - General error status now shows a `Service nötig` / `Service required` message when DHE status code `34` reports the service-required state.
 - Timer duration controls now use the original duration entities as seconds in Home Assistant.
 - Bath fill target and remaining volume values now display as whole liters.

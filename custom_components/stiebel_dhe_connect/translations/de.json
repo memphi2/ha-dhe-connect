@@ -154,9 +154,6 @@
     "binary_sensor": {
       "scald_protection_active": {
         "name": "Verbrühschutz aktiv"
-      },
-      "device_alarm": {
-        "name": "Gerätealarm"
       }
     },
     "button": {

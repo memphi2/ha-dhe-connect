@@ -154,9 +154,6 @@
     "binary_sensor": {
       "scald_protection_active": {
         "name": "Scald protection active"
-      },
-      "device_alarm": {
-        "name": "Device alarm"
       }
     },
     "button": {
