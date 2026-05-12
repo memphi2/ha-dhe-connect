@@ -42,6 +42,12 @@ class TestEntityHelpers(unittest.TestCase):
             "stiebel_dhe_connect_entry-1_setpoint",
         )
 
+    def test_build_entry_signal_uses_entry_prefix(self) -> None:
+        self.assertEqual(
+            self.helpers.build_entry_signal("entry-1", "changed"),
+            "stiebel_dhe_connect_entry-1_changed",
+        )
+
     def test_build_device_info_uses_host_port_identifier(self) -> None:
         self.assertEqual(
             self.helpers.build_device_info("10.0.0.5", 8443, "Bathroom DHE"),

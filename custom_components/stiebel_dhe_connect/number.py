@@ -14,6 +14,7 @@ from homeassistant.components.number import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature, UnitOfTime, UnitOfVolume, UnitOfVolumeFlowRate
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -30,12 +31,20 @@ from .client import (
     SHOWER_TIMER_PATH,
     TEMPERATURE_MEMORY_SLOT_MEASUREMENTS,
 )
-from .entity_helpers import StiebelDHEEntityMixin
+from .entity_helpers import (
+    SIGNAL_INTERNAL_SCALD_PROTECTION_CHANGED,
+    StiebelDHEEntityMixin,
+    build_entry_signal,
+)
 from .entity_state_helpers import (
+    CONF_INTERNAL_SCALD_PROTECTION,
+    bounded_child_safety_temperature_limit,
+    child_safety_temperature_limit_max,
     clamp_duration_seconds,
     coerce_float,
     format_minutes_duration,
     minutes_to_seconds,
+    normalize_internal_scald_protection,
     seconds_to_minutes,
     value_available,
 )
@@ -163,6 +172,7 @@ async def async_setup_entry(
     async_add_entities(
         [
             StiebelDHENumber(
+                entry=entry,
                 entry_id=entry.entry_id,
                 name=runtime.name,
                 client=client,
@@ -172,6 +182,7 @@ async def async_setup_entry(
         ]
         + [
             StiebelDHENumber(
+                entry=entry,
                 entry_id=entry.entry_id,
                 name=runtime.name,
                 client=client,
@@ -194,6 +205,7 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
 
     def __init__(
         self,
+        entry: ConfigEntry,
         entry_id: str,
         name: str,
         client: DHEClient,
@@ -201,6 +213,13 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
     ) -> None:
         """Initialize the number entity."""
         self.entity_description = description
+        self._internal_scald_protection = normalize_internal_scald_protection(
+            entry.options.get(CONF_INTERNAL_SCALD_PROTECTION)
+        )
+        self._internal_scald_signal = build_entry_signal(
+            entry_id,
+            SIGNAL_INTERNAL_SCALD_PROTECTION_CHANGED,
+        )
         self._attr_translation_key = description.translation_key
         self._init_dhe_entity(
             entry_id=entry_id,
@@ -227,11 +246,47 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
         self._attr_available = False
         self._attr_native_value: float | None = None
         self._timer_duration_seconds: int | None = None
+        self._child_safety_temperature_limit_raw: float | None = None
+        self._apply_dynamic_limits()
 
     @property
     def _is_timer_duration(self) -> bool:
         """Return whether this number controls a timer duration."""
         return self.entity_description.timer_property == "durationMilliseconds"
+
+    @property
+    def _is_child_safety_temperature_limit(self) -> bool:
+        """Return whether this number controls the child-safety limit."""
+        return self.entity_description.odb_id == ID_CHILD_SAFETY_TEMPERATURE_LIMIT
+
+    def _apply_dynamic_limits(self) -> None:
+        """Apply local dynamic limits for number entities."""
+        if not self._is_child_safety_temperature_limit:
+            return
+        self._attr_native_max_value = child_safety_temperature_limit_max(
+            self._internal_scald_protection,
+            maximum=float(self.entity_description.native_max_value or 60.0),
+        )
+
+    @callback
+    def _handle_internal_scald_protection_update(self, option: str) -> None:
+        """Handle local jumper config changes from the config select."""
+        if not self._is_child_safety_temperature_limit:
+            return
+        self._internal_scald_protection = normalize_internal_scald_protection(option)
+        self._apply_dynamic_limits()
+        value = self._child_safety_temperature_limit_raw
+        if value is None:
+            value = self._attr_native_value
+        if value is not None:
+            self._attr_native_value = bounded_child_safety_temperature_limit(
+                value,
+                internal_scald_protection=self._internal_scald_protection,
+                minimum=float(self.entity_description.native_min_value or 20.0),
+                maximum=float(self.entity_description.native_max_value or 60.0),
+            )
+        self._update_extra_state_attributes()
+        self.async_write_ha_state()
 
     def _client_value_to_native(self, value: object) -> float | None:
         """Convert the client measurement value to the HA number value."""
@@ -245,6 +300,14 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
         if self.entity_description.odb_id == ID_BATH_FILL_TARGET_VOLUME:
             volume = coerce_float(value)
             return int(round(volume)) if volume is not None else None
+        if self._is_child_safety_temperature_limit:
+            self._child_safety_temperature_limit_raw = coerce_float(value)
+            return bounded_child_safety_temperature_limit(
+                self._child_safety_temperature_limit_raw,
+                internal_scald_protection=self._internal_scald_protection,
+                minimum=float(self.entity_description.native_min_value or 20.0),
+                maximum=float(self.entity_description.native_max_value or 60.0),
+            )
         return coerce_float(value)
 
     def _native_value_to_client(self, value: object) -> float | None:
@@ -254,6 +317,13 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
             if total_seconds is None:
                 return None
             return seconds_to_minutes(total_seconds)
+        if self._is_child_safety_temperature_limit:
+            return bounded_child_safety_temperature_limit(
+                value,
+                internal_scald_protection=self._internal_scald_protection,
+                minimum=float(self.entity_description.native_min_value or 20.0),
+                maximum=float(self.entity_description.native_max_value or 60.0),
+            )
         return coerce_float(value)
 
     def _restore_native_value(self, value: object) -> float | None:
@@ -263,6 +333,14 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
             return None
         if self._is_timer_duration:
             return self._restore_timer_native_value(restored_value)
+        if self._is_child_safety_temperature_limit:
+            self._child_safety_temperature_limit_raw = restored_value
+            return bounded_child_safety_temperature_limit(
+                restored_value,
+                internal_scald_protection=self._internal_scald_protection,
+                minimum=float(self.entity_description.native_min_value or 20.0),
+                maximum=float(self.entity_description.native_max_value or 60.0),
+            )
         return restored_value
 
     def _restore_timer_native_value(self, restored_value: float) -> float | None:
@@ -311,6 +389,14 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
             if display_value is not None:
                 attributes["duration"] = display_value
                 attributes["duration_seconds"] = self._timer_duration_seconds
+        if self._is_child_safety_temperature_limit:
+            attributes["internal_scald_protection"] = self._internal_scald_protection
+            attributes["internal_scald_protection_temperature_limit"] = (
+                self._attr_native_max_value
+            )
+            attributes["child_safety_temperature_limit_raw"] = (
+                self._child_safety_temperature_limit_raw
+            )
         self._attr_extra_state_attributes = attributes
 
     async def async_added_to_hass(self) -> None:
@@ -321,6 +407,14 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
         self.async_on_remove(
             self._client.add_availability_callback(self._handle_availability_update)
         )
+        if self._is_child_safety_temperature_limit:
+            self.async_on_remove(
+                async_dispatcher_connect(
+                    self.hass,
+                    self._internal_scald_signal,
+                    self._handle_internal_scald_protection_update,
+                )
+            )
 
         last_value = self._client.last_measurements.get(self.entity_description.odb_id)
         native_value = self._client_value_to_native(last_value)

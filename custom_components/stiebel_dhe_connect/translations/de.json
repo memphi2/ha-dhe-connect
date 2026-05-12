@@ -305,6 +305,16 @@
       }
     },
     "select": {
+      "internal_scald_protection": {
+        "name": "Interner Verbr\u00fchschutz",
+        "state": {
+          "43": "43 \u00b0C",
+          "50": "50 \u00b0C",
+          "55": "55 \u00b0C",
+          "60": "60 \u00b0C",
+          "no_jumper": "ohne Jumper (43 \u00b0C)"
+        }
+      },
       "weather_location": {
         "name": "Wetter-Standort"
       }

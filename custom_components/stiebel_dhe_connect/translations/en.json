@@ -305,6 +305,16 @@
       }
     },
     "select": {
+      "internal_scald_protection": {
+        "name": "Internal scald protection",
+        "state": {
+          "43": "43 \u00b0C",
+          "50": "50 \u00b0C",
+          "55": "55 \u00b0C",
+          "60": "60 \u00b0C",
+          "no_jumper": "No jumper (43 \u00b0C)"
+        }
+      },
       "weather_location": {
         "name": "Weather location"
       }

@@ -7,6 +7,7 @@
 - Added focused unit coverage for weather, radio, pairing, config-flow and entity helper mappings.
 - Added disabled-by-default diagnostics for scald protection status, scald protection limit and device status.
 - Added ODB diagnostics for operating duration, hot water volume, heating energy, possible saving values and protocol version.
+- Added a local device config select for the internal scald-protection jumper positions `43`, `50`, `55`, `60` and `no_jumper`.
 
 ### Changed
 
@@ -18,6 +19,7 @@
 - Timer duration controls now use the original duration entities as seconds in Home Assistant.
 - Bath fill target and remaining volume values now display as whole liters.
 - Radio media title now falls back to the station short description before the station name.
+- Child safety temperature limit now respects the configured internal scald-protection jumper limit, defaulting to `60` C; the Climate maximum continues to follow the child-safety limit.
 - Child safety temperature configuration now supports the full `20` to `60` C device range.
 - Weather location selection is enabled by default for new setups.
 - Weather period selection now uses Home Assistant's configured timezone.

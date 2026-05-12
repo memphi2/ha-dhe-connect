@@ -8,12 +8,23 @@ from typing import Any
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .client import DHEClient, DHEError
-from .entity_helpers import StiebelDHEEntityMixin
-from .entity_state_helpers import connected_and_ready
+from .entity_helpers import (
+    SIGNAL_INTERNAL_SCALD_PROTECTION_CHANGED,
+    StiebelDHEEntityMixin,
+    build_entry_signal,
+)
+from .entity_state_helpers import (
+    CONF_INTERNAL_SCALD_PROTECTION,
+    INTERNAL_SCALD_PROTECTION_OPTIONS,
+    connected_and_ready,
+    internal_scald_protection_temperature,
+    normalize_internal_scald_protection,
+)
 from .runtime_helpers import get_runtime_data
 from .weather_mapping import weather_location_attributes, weather_location_name
 
@@ -27,13 +38,96 @@ async def async_setup_entry(
 ) -> None:
     """Set up DHE select entities from a config entry."""
     runtime = get_runtime_data(hass, entry)
-    async_add_entities([
-        StiebelDHEWeatherLocationSelect(
-            entry_id=entry.entry_id,
-            name=runtime.name,
-            client=runtime.client,
+    async_add_entities(
+        [
+            StiebelDHEInternalScaldProtectionSelect(
+                entry=entry,
+                entry_id=entry.entry_id,
+                name=runtime.name,
+                client=runtime.client,
+            ),
+            StiebelDHEWeatherLocationSelect(
+                entry_id=entry.entry_id,
+                name=runtime.name,
+                client=runtime.client,
+            ),
+        ]
+    )
+
+
+class StiebelDHEInternalScaldProtectionSelect(StiebelDHEEntityMixin, SelectEntity):
+    """Local configuration for the physical internal scald-protection jumper."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:thermometer-alert"
+    _attr_options = list(INTERNAL_SCALD_PROTECTION_OPTIONS)
+    _attr_should_poll = False
+    _attr_translation_key = "internal_scald_protection"
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        entry_id: str,
+        name: str,
+        client: DHEClient,
+    ) -> None:
+        """Initialize the internal scald-protection select."""
+        self._entry = entry
+        self._signal = build_entry_signal(
+            entry_id,
+            SIGNAL_INTERNAL_SCALD_PROTECTION_CHANGED,
         )
-    ])
+        self._init_dhe_entity(
+            entry_id=entry_id,
+            key="internal_scald_protection",
+            name=name,
+            client=client,
+        )
+        self._attr_available = True
+        self._attr_current_option = self._current_config_option()
+        self._update_extra_state_attributes()
+
+    async def async_added_to_hass(self) -> None:
+        """Refresh the state from stored config-entry options."""
+        self._attr_current_option = self._current_config_option()
+        self._update_extra_state_attributes()
+
+    async def async_select_option(self, option: str) -> None:
+        """Store the physical jumper position selected by the user."""
+        option = str(option or "").strip()
+        if option not in INTERNAL_SCALD_PROTECTION_OPTIONS:
+            raise ValueError(f"Unknown internal scald-protection option: {option}")
+        if option == self._current_config_option():
+            self._attr_current_option = option
+            self._update_extra_state_attributes()
+            self.async_write_ha_state()
+            return
+
+        updated_options = dict(self._entry.options)
+        updated_options[CONF_INTERNAL_SCALD_PROTECTION] = option
+
+        self._attr_current_option = option
+        self._update_extra_state_attributes()
+        self.hass.config_entries.async_update_entry(
+            self._entry,
+            options=updated_options,
+        )
+        async_dispatcher_send(self.hass, self._signal, option)
+        self.async_write_ha_state()
+
+    def _current_config_option(self) -> str:
+        return normalize_internal_scald_protection(
+            self._entry.options.get(CONF_INTERNAL_SCALD_PROTECTION)
+        )
+
+    def _update_extra_state_attributes(self) -> None:
+        option = self._attr_current_option or self._current_config_option()
+        self._attr_extra_state_attributes = {
+            "configuration_source": "local_home_assistant",
+            "temperature_limit": internal_scald_protection_temperature(option),
+            "affects_child_safety_temperature_limit_max": True,
+        }
 
 
 class StiebelDHEWeatherLocationSelect(StiebelDHEEntityMixin, SelectEntity):

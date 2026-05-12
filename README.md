@@ -125,6 +125,8 @@ Home Assistant entity names are translated through `translations/en.json` and `t
 
 The climate entity keeps the last valid target temperature during short reconnect phases and exposes diagnostic attributes:
 
+Its maximum settable target temperature follows the DHE child-safety limit when child safety is active. The local `Internal scald protection` config select sets the absolute maximum of the `Child safety temperature limit` number entity. The default internal scald-protection option is `60`.
+
 | Attribute | Meaning |
 |---|---|
 | `communication_model` | `persistent_socketio_websocket` |
@@ -135,7 +137,9 @@ The climate entity keeps the last valid target temperature during short reconnec
 | `outlet_temperature` | Latest outlet/hot-water temperature from ODB ID `14` |
 | `water_heating_enabled` | Decoded heating state from inverted ODB ID `33` |
 | `child_safety_active` | Child-safety state from ODB ID `4` |
-| `child_safety_temperature_limit` | Child-safety limit from ODB ID `5` |
+| `child_safety_temperature_limit` | Effective child-safety limit from ODB ID `5`, capped by the configured internal scald-protection jumper |
+| `child_safety_temperature_limit_raw` | Raw child-safety limit read from ODB ID `5` before the local jumper cap |
+| `internal_scald_protection` | Locally configured physical jumper position |
 
 ### Binary sensors
 
@@ -240,7 +244,7 @@ Consumption sensors expose the DHE chart array as a `chart` attribute and the re
 | Entity | Unit | Range | Mode | Source / command |
 |---|---:|---:|---|---|
 | Bath fill target volume | `L` | `5` to `200`, step `1` | slider | ODB ID `3`, shown as whole liters |
-| Child safety temperature limit | `C` | `20` to `60`, step `0.5` | slider | ODB ID `5`, sent as raw tenths |
+| Child safety temperature limit | `C` | `20` to configured internal scald-protection limit, step `0.5` | slider | ODB ID `5`, sent as raw tenths |
 | Eco flow limit | `L/min` | `4` to `15`, step `0.5` | slider | ODB ID `7`, sent as raw tenths |
 | Brush timer duration | `s` | `60` to `1200`, step `1` | box | `assign:ste.app.brushTimer:durationMilliseconds`; shown in Home Assistant as seconds |
 | Shower timer duration | `s` | `60` to `1200`, step `1` | box | `assign:ste.app.showerTimer:durationMilliseconds`; shown in Home Assistant as seconds |
@@ -254,6 +258,7 @@ Currency, electricity price, water price and CO2 emission are configured from th
 
 | Entity | Options | Source / command | Behavior |
 |---|---|---|---|
+| Internal scald protection | `43`, `50`, `55`, `60`, `no_jumper` | Local config entry option, default `60` | Describes the physical `Tmax` jumper and caps the child-safety temperature limit number |
 | Weather location | weather favorites | `get:ste.app.weather:location` with a `LocationId` value | Selects the active DHE weather favorite |
 
 ### Texts

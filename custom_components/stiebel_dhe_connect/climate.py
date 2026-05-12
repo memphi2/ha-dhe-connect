@@ -10,6 +10,7 @@ from homeassistant.components.climate.const import ClimateEntityFeature, HVACMod
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .client import (
@@ -22,7 +23,18 @@ from .client import (
     DHEError,
     MeasurementValue,
 )
-from .entity_helpers import StiebelDHEEntityMixin
+from .entity_helpers import (
+    SIGNAL_INTERNAL_SCALD_PROTECTION_CHANGED,
+    StiebelDHEEntityMixin,
+    build_entry_signal,
+)
+from .entity_state_helpers import (
+    CONF_INTERNAL_SCALD_PROTECTION,
+    bounded_child_safety_temperature_limit,
+    clamp_temperature,
+    climate_max_temperature,
+    normalize_internal_scald_protection,
+)
 from .runtime_helpers import get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
@@ -37,6 +49,7 @@ async def async_setup_entry(
     runtime = get_runtime_data(hass, entry)
     async_add_entities([
         StiebelDHEClimate(
+            entry=entry,
             entry_id=entry.entry_id,
             name=runtime.name,
             client=runtime.client,
@@ -58,8 +71,21 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
     _attr_should_poll = False
     _attr_translation_key = "water_heating"
 
-    def __init__(self, entry_id: str, name: str, client: DHEClient) -> None:
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        entry_id: str,
+        name: str,
+        client: DHEClient,
+    ) -> None:
         """Initialize the entity."""
+        self._internal_scald_protection = normalize_internal_scald_protection(
+            entry.options.get(CONF_INTERNAL_SCALD_PROTECTION)
+        )
+        self._internal_scald_signal = build_entry_signal(
+            entry_id,
+            SIGNAL_INTERNAL_SCALD_PROTECTION_CHANGED,
+        )
         self._init_dhe_entity(
             entry_id=entry_id,
             key="setpoint",
@@ -75,12 +101,14 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
         self._water_heating_enabled: bool | None = None
         self._child_safety_active: bool | None = None
         self._child_safety_temperature_limit: float | None = None
+        self._child_safety_temperature_limit_raw: float | None = None
         self._target_before_heating_off: float | None = None
         self._update_extra_state_attributes()
 
     def _update_extra_state_attributes(self) -> None:
         """Update diagnostic attributes without doing I/O in properties."""
         target_below_inlet = self._target_below_inlet()
+        internal_scald_protection = self._internal_scald_protection_option()
         self._attr_extra_state_attributes = {
             "communication_model": "persistent_socketio_websocket",
             "connection_state": self._connection_state,
@@ -92,6 +120,10 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
             "water_heating_enabled": self._water_heating_enabled,
             "child_safety_active": self._child_safety_active,
             "child_safety_temperature_limit": self._child_safety_temperature_limit,
+            "internal_scald_protection": internal_scald_protection,
+            "child_safety_temperature_limit_raw": (
+                self._child_safety_temperature_limit_raw
+            ),
         }
         if target_below_inlet:
             self._attr_extra_state_attributes["inlet_minus_setpoint"] = round(
@@ -108,6 +140,13 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
         )
         self.async_on_remove(
             self._client.add_measurement_callback(self._handle_measurement_update)
+        )
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                self._internal_scald_signal,
+                self._handle_internal_scald_protection_update,
+            )
         )
         self._sync_temperatures_from_measurements()
         self._sync_hvac_mode_from_measurements()
@@ -132,6 +171,17 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
         self.async_write_ha_state()
 
     @callback
+    def _handle_internal_scald_protection_update(self, option: str) -> None:
+        """Handle local jumper config changes from the config select."""
+        self._internal_scald_protection = normalize_internal_scald_protection(option)
+        self._apply_child_safety_temperature_limit(
+            self._child_safety_temperature_limit_raw
+        )
+        self._apply_dynamic_max_temperature()
+        self._update_extra_state_attributes()
+        self.async_write_ha_state()
+
+    @callback
     def _handle_measurement_update(self, odb_id: int, value: MeasurementValue) -> None:
         """Handle measurement updates for inlet and outlet temperatures."""
         if odb_id == ID_INLET_TEMPERATURE:
@@ -147,7 +197,7 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
             self._child_safety_active = bool(value)
             self._apply_dynamic_max_temperature()
         elif odb_id == ID_CHILD_SAFETY_TEMPERATURE_LIMIT:
-            self._child_safety_temperature_limit = self._coerce_temperature(value)
+            self._apply_child_safety_temperature_limit(value)
             self._apply_dynamic_max_temperature()
         else:
             return
@@ -201,23 +251,34 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
         configured_maximum = self._client.last_measurements.get(
             ID_CHILD_SAFETY_TEMPERATURE_LIMIT
         )
-        self._child_safety_temperature_limit = self._coerce_temperature(
-            configured_maximum
-        )
+        self._apply_child_safety_temperature_limit(configured_maximum)
         self._apply_dynamic_max_temperature()
 
     def _apply_dynamic_max_temperature(self) -> None:
         """Apply max temperature depending on configured limit override."""
-        max_temp = 60.0
-        if (
-            self._child_safety_active
-            and self._child_safety_temperature_limit is not None
-        ):
-            max_temp = max(
-                self._attr_min_temp,
-                min(60.0, self._child_safety_temperature_limit),
-            )
-        self._attr_max_temp = max_temp
+        self._attr_max_temp = climate_max_temperature(
+            child_safety_active=self._child_safety_active,
+            child_safety_temperature_limit=self._child_safety_temperature_limit,
+            minimum=self._attr_min_temp,
+            maximum=60.0,
+        )
+
+    def _apply_child_safety_temperature_limit(
+        self,
+        value: MeasurementValue,
+    ) -> None:
+        """Store raw and effective child-safety temperature limits."""
+        self._child_safety_temperature_limit_raw = self._coerce_temperature(value)
+        self._child_safety_temperature_limit = bounded_child_safety_temperature_limit(
+            self._child_safety_temperature_limit_raw,
+            internal_scald_protection=self._internal_scald_protection_option(),
+            minimum=self._attr_min_temp,
+            maximum=60.0,
+        )
+
+    def _internal_scald_protection_option(self) -> str:
+        """Return the configured local jumper option."""
+        return self._internal_scald_protection
 
     @staticmethod
     def _coerce_temperature(value: MeasurementValue) -> float | None:
@@ -240,7 +301,13 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
         if ATTR_TEMPERATURE not in kwargs:
             return
 
-        temperature = float(kwargs[ATTR_TEMPERATURE])
+        temperature = clamp_temperature(
+            kwargs[ATTR_TEMPERATURE],
+            minimum=self._attr_min_temp,
+            maximum=self._attr_max_temp,
+        )
+        if temperature is None:
+            return
 
         try:
             if self._attr_hvac_mode == HVACMode.OFF or self._water_heating_enabled is False:
@@ -292,6 +359,12 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
                 restore_target = self._target_before_heating_off
                 if restore_target is None:
                     restore_target = self._attr_target_temperature or self._client.last_setpoint
+                if restore_target is not None:
+                    restore_target = clamp_temperature(
+                        restore_target,
+                        minimum=self._attr_min_temp,
+                        maximum=self._attr_max_temp,
+                    )
                 if restore_target is not None:
                     try:
                         self._attr_target_temperature = await self._client.set_temperature(
