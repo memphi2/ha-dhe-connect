@@ -238,6 +238,7 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
         if self._is_timer_duration:
             total_seconds = self._timer_total_seconds_from_client(value)
             if total_seconds is None:
+                self._timer_duration_seconds = None
                 return None
             self._timer_duration_seconds = total_seconds
             return total_seconds
@@ -297,7 +298,11 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
     def _update_extra_state_attributes(self) -> None:
         """Refresh static and display-only attributes."""
         attributes = dict(self._base_extra_state_attributes)
-        if self._is_timer_duration and self._timer_duration_seconds is not None:
+        if (
+            self._is_timer_duration
+            and self._attr_native_value is not None
+            and self._timer_duration_seconds is not None
+        ):
             minutes_value = seconds_to_minutes(self._timer_duration_seconds)
             display_value = format_minutes_duration(minutes_value)
             if display_value is not None:
