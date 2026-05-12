@@ -79,45 +79,6 @@ class TestValueConversionHelpers(unittest.TestCase):
         self.assertIsNone(self.helpers.minutes_to_seconds("abc"))
         self.assertIsNone(self.helpers.seconds_to_minutes(None))
 
-    def test_duration_part_helpers_split_whole_seconds(self) -> None:
-        self.assertEqual(self.helpers.duration_minutes_part(305), 5)
-        self.assertEqual(self.helpers.duration_seconds_part(305), 5)
-        self.assertEqual(self.helpers.duration_minutes_part(1200), 20)
-        self.assertEqual(self.helpers.duration_seconds_part(1200), 0)
-
-    def test_replace_duration_part_clamps_total_duration(self) -> None:
-        self.assertEqual(
-            self.helpers.replace_duration_part(
-                300,
-                "minutes",
-                4,
-                minimum=60,
-                maximum=1200,
-            ),
-            240,
-        )
-        self.assertEqual(
-            self.helpers.replace_duration_part(
-                305,
-                "seconds",
-                30,
-                minimum=60,
-                maximum=1200,
-            ),
-            330,
-        )
-        self.assertEqual(
-            self.helpers.replace_duration_part(
-                1200,
-                "seconds",
-                30,
-                minimum=60,
-                maximum=1200,
-            ),
-            1200,
-        )
-
-
 class TestAvailabilityHelpers(unittest.TestCase):
     """Validate shared availability decisions."""
 

@@ -256,16 +256,10 @@
       "eco_flow_limit": {
         "name": "Eco-Durchflussbegrenzung"
       },
-      "brush_timer_duration_minutes": {
-        "name": "Zahnputz-Timer Minuten"
-      },
-      "brush_timer_duration_seconds": {
+      "brush_timer_duration": {
         "name": "Zahnputz-Timer Sekunden"
       },
-      "shower_timer_duration_minutes": {
-        "name": "Duschtimer Minuten"
-      },
-      "shower_timer_duration_seconds": {
+      "shower_timer_duration": {
         "name": "Duschtimer Sekunden"
       },
       "temperature_memory_1_temperature": {

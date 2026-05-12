@@ -55,55 +55,6 @@ def clamp_duration_seconds(
     return max(minimum, min(int(round(seconds_value)), maximum))
 
 
-def duration_minutes_part(value: Any) -> int | None:
-    """Return the minute component from a whole-second duration."""
-    seconds_value = coerce_float(value)
-    if seconds_value is None:
-        return None
-    return max(0, int(round(seconds_value)) // 60)
-
-
-def duration_seconds_part(value: Any) -> int | None:
-    """Return the second component from a whole-second duration."""
-    seconds_value = coerce_float(value)
-    if seconds_value is None:
-        return None
-    return max(0, int(round(seconds_value)) % 60)
-
-
-def replace_duration_part(
-    current_total_seconds: Any,
-    part: str,
-    value: Any,
-    *,
-    minimum: int,
-    maximum: int,
-) -> int | None:
-    """Return a duration with one minute/second component replaced."""
-    requested = coerce_float(value)
-    current = clamp_duration_seconds(
-        current_total_seconds,
-        minimum=minimum,
-        maximum=maximum,
-    )
-    if requested is None or current is None:
-        return None
-
-    minutes, seconds = divmod(current, 60)
-    if part == "minutes":
-        minutes = max(0, int(round(requested)))
-    elif part == "seconds":
-        seconds = max(0, min(int(round(requested)), 59))
-    else:
-        return None
-
-    return clamp_duration_seconds(
-        minutes * 60 + seconds,
-        minimum=minimum,
-        maximum=maximum,
-    )
-
-
 def value_available(connected: bool, value: Any) -> bool:
     """Return whether an entity is connected and has a known value."""
     return bool(connected) and value is not None

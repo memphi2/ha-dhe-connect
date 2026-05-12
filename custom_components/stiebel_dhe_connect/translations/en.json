@@ -256,16 +256,10 @@
       "eco_flow_limit": {
         "name": "Eco flow limit"
       },
-      "brush_timer_duration_minutes": {
-        "name": "Brush timer minutes"
-      },
-      "brush_timer_duration_seconds": {
+      "brush_timer_duration": {
         "name": "Brush timer seconds"
       },
-      "shower_timer_duration_minutes": {
-        "name": "Shower timer minutes"
-      },
-      "shower_timer_duration_seconds": {
+      "shower_timer_duration": {
         "name": "Shower timer seconds"
       },
       "temperature_memory_1_temperature": {

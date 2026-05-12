@@ -34,11 +34,8 @@ from .entity_helpers import StiebelDHEEntityMixin
 from .entity_state_helpers import (
     clamp_duration_seconds,
     coerce_float,
-    duration_minutes_part,
-    duration_seconds_part,
     format_minutes_duration,
     minutes_to_seconds,
-    replace_duration_part,
     seconds_to_minutes,
     value_available,
 )
@@ -48,8 +45,6 @@ _LOGGER = logging.getLogger(__name__)
 
 TIMER_DURATION_MIN_SECONDS = 60
 TIMER_DURATION_MAX_SECONDS = 1200
-TIMER_DURATION_PART_MINUTES = "minutes"
-TIMER_DURATION_PART_SECONDS = "seconds"
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -59,7 +54,6 @@ class StiebelDHENumberEntityDescription(NumberEntityDescription):
     odb_id: int
     timer_path: str | None = None
     timer_property: str | None = None
-    timer_duration_part: str | None = None
     temperature_memory_slot: int | None = None
 
 
@@ -99,59 +93,29 @@ STATIC_NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
     ),
     StiebelDHENumberEntityDescription(
         key="brush_timer_duration",
-        translation_key="brush_timer_duration_minutes",
-        native_unit_of_measurement=UnitOfTime.MINUTES,
-        icon="mdi:toothbrush",
-        native_min_value=1,
-        native_max_value=20,
-        native_step=1,
-        mode=NumberMode.BOX,
-        odb_id=ID_BRUSH_TIMER_DURATION,
-        timer_path=BRUSH_TIMER_PATH,
-        timer_property="durationMilliseconds",
-        timer_duration_part=TIMER_DURATION_PART_MINUTES,
-    ),
-    StiebelDHENumberEntityDescription(
-        key="brush_timer_duration_seconds",
-        translation_key="brush_timer_duration_seconds",
+        translation_key="brush_timer_duration",
         native_unit_of_measurement=UnitOfTime.SECONDS,
         icon="mdi:toothbrush",
-        native_min_value=0,
-        native_max_value=59,
+        native_min_value=TIMER_DURATION_MIN_SECONDS,
+        native_max_value=TIMER_DURATION_MAX_SECONDS,
         native_step=1,
         mode=NumberMode.BOX,
         odb_id=ID_BRUSH_TIMER_DURATION,
         timer_path=BRUSH_TIMER_PATH,
         timer_property="durationMilliseconds",
-        timer_duration_part=TIMER_DURATION_PART_SECONDS,
     ),
     StiebelDHENumberEntityDescription(
         key="shower_timer_duration",
-        translation_key="shower_timer_duration_minutes",
-        native_unit_of_measurement=UnitOfTime.MINUTES,
-        icon="mdi:timer-edit",
-        native_min_value=1,
-        native_max_value=20,
-        native_step=1,
-        mode=NumberMode.BOX,
-        odb_id=ID_SHOWER_TIMER_DURATION,
-        timer_path=SHOWER_TIMER_PATH,
-        timer_property="durationMilliseconds",
-        timer_duration_part=TIMER_DURATION_PART_MINUTES,
-    ),
-    StiebelDHENumberEntityDescription(
-        key="shower_timer_duration_seconds",
-        translation_key="shower_timer_duration_seconds",
+        translation_key="shower_timer_duration",
         native_unit_of_measurement=UnitOfTime.SECONDS,
         icon="mdi:timer-edit",
-        native_min_value=0,
-        native_max_value=59,
+        native_min_value=TIMER_DURATION_MIN_SECONDS,
+        native_max_value=TIMER_DURATION_MAX_SECONDS,
         native_step=1,
         mode=NumberMode.BOX,
         odb_id=ID_SHOWER_TIMER_DURATION,
         timer_path=SHOWER_TIMER_PATH,
         timer_property="durationMilliseconds",
-        timer_duration_part=TIMER_DURATION_PART_SECONDS,
     ),
 )
 
@@ -276,7 +240,7 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
             if total_seconds is None:
                 return None
             self._timer_duration_seconds = total_seconds
-            return self._timer_part_native_value(total_seconds)
+            return total_seconds
         return coerce_float(value)
 
     def _native_value_to_client(self, value: object) -> float | None:
@@ -298,18 +262,21 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
         return restored_value
 
     def _restore_timer_native_value(self, restored_value: float) -> float | None:
-        """Return a timer part value, accepting old total-second timer state."""
-        if restored_value > self.entity_description.native_max_value:
-            total_seconds = clamp_duration_seconds(
-                restored_value,
-                minimum=TIMER_DURATION_MIN_SECONDS,
-                maximum=TIMER_DURATION_MAX_SECONDS,
-            )
-            if total_seconds is None:
-                return None
-            self._timer_duration_seconds = total_seconds
-            return self._timer_part_native_value(total_seconds)
-        return int(round(restored_value))
+        """Return seconds, accepting old minute-based timer state."""
+        candidate = (
+            minutes_to_seconds(restored_value)
+            if 0 < restored_value < TIMER_DURATION_MIN_SECONDS
+            else restored_value
+        )
+        total_seconds = clamp_duration_seconds(
+            candidate,
+            minimum=TIMER_DURATION_MIN_SECONDS,
+            maximum=TIMER_DURATION_MAX_SECONDS,
+        )
+        if total_seconds is None:
+            return None
+        self._timer_duration_seconds = total_seconds
+        return total_seconds
 
     def _timer_total_seconds_from_client(self, value: object) -> int | None:
         """Return whole timer seconds from the client minute value."""
@@ -320,32 +287,12 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
         )
 
     def _timer_total_seconds_for_write(self, value: object) -> int | None:
-        """Return the full timer duration after replacing one UI part."""
-        current_total_seconds = self._timer_duration_seconds
-        if current_total_seconds is None:
-            if self.entity_description.timer_duration_part == TIMER_DURATION_PART_MINUTES:
-                requested = coerce_float(value)
-                if requested is None:
-                    return None
-                current_total_seconds = int(round(requested)) * 60
-            else:
-                current_total_seconds = TIMER_DURATION_MIN_SECONDS
-
-        return replace_duration_part(
-            current_total_seconds,
-            self.entity_description.timer_duration_part or "",
+        """Return the requested whole-second timer duration."""
+        return clamp_duration_seconds(
             value,
             minimum=TIMER_DURATION_MIN_SECONDS,
             maximum=TIMER_DURATION_MAX_SECONDS,
         )
-
-    def _timer_part_native_value(self, total_seconds: int) -> int | None:
-        """Return the configured timer UI part from a total duration."""
-        if self.entity_description.timer_duration_part == TIMER_DURATION_PART_MINUTES:
-            return duration_minutes_part(total_seconds) or 0
-        if self.entity_description.timer_duration_part == TIMER_DURATION_PART_SECONDS:
-            return duration_seconds_part(total_seconds) or 0
-        return None
 
     def _update_extra_state_attributes(self) -> None:
         """Refresh static and display-only attributes."""
@@ -356,13 +303,6 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
             if display_value is not None:
                 attributes["duration"] = display_value
                 attributes["duration_seconds"] = self._timer_duration_seconds
-                attributes["duration_minutes_part"] = duration_minutes_part(
-                    self._timer_duration_seconds
-                )
-                attributes["duration_seconds_part"] = duration_seconds_part(
-                    self._timer_duration_seconds
-                )
-                attributes["duration_part"] = self.entity_description.timer_duration_part
         self._attr_extra_state_attributes = attributes
 
     async def async_added_to_hass(self) -> None:
