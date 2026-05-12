@@ -263,6 +263,8 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.WATER,
         state_class=SensorStateClass.TOTAL_INCREASING,
         icon="mdi:water",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
         odb_id=ID_HOT_WATER_VOLUME_TOTAL,
     ),
     StiebelDHESensorEntityDescription(
@@ -282,6 +284,8 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
         icon="mdi:lightning-bolt",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
         odb_id=ID_HEATING_ENERGY_TOTAL,
     ),
     StiebelDHESensorEntityDescription(
