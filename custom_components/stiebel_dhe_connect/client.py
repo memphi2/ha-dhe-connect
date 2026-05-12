@@ -140,6 +140,41 @@ ID_TEMPERATURE_MEMORY_9 = 1117
 ID_TEMPERATURE_MEMORY_10 = 1118
 ID_TEMPERATURE_MEMORY_11 = 1119
 ID_TEMPERATURE_MEMORY_12 = 1120
+ODB_DEBUG_NAMES = {
+    ID_SETPOINT: "ODB_So_WW_T",
+    ID_BATH_FILL_ACTIVE: "ODB_VolBegr_Aktiv",
+    ID_WELLNESS_SHOWER_PROGRAM: "ODB_Wellness_Ba",
+    ID_BATH_FILL_TARGET_VOLUME: "ODB_VolBegr_Volumen_Grenz",
+    ID_CHILD_SAFETY_ACTIVE: "ODB_KinderSich_Aktiv",
+    ID_CHILD_SAFETY_TEMPERATURE_LIMIT: "ODB_KinderSich_T_Grenz",
+    ID_ECO_MODE: "ODB_Eco_Aktiv",
+    ID_ECO_FLOW_LIMIT: "ODB_Eco_VS_Grenz",
+    ID_WELLNESS_ACTIVE: "ODB_Wellness_Aktiv",
+    ID_INLET_TEMPERATURE: "ODB_Is_KW_T",
+    ID_OUTLET_TEMPERATURE: "ODB_Is_WW_T",
+    ID_WATER_FLOW: "ODB_Is_VS",
+    ID_POWER_PERCENT: "ODB_Is_P_Norm",
+    ID_OPERATING_DURATION: "ODB_Bdauer",
+    ID_NOMINAL_POWER: "ODB_P_Nenn",
+    ID_SCALD_PROTECTION_ACTIVE: "ODB_VerbrSchutz_Aktiv",
+    ID_SCALD_PROTECTION_TEMPERATURE_LIMIT: "ODB_VerbrSchutz_T_Grenz",
+    ID_HEATING_ENERGY_TOTAL: "ODB_Heizen_Energie",
+    ID_HOT_WATER_VOLUME_TOTAL: "ODB_WW_Volumen",
+    ID_BATH_FILL_CURRENT_VOLUME: "ODB_VolBegr_Volumen",
+    ID_WELLNESS_TIME_NORMALIZED: "ODB_Wellness_Zeit_Norm",
+    ID_WATER_HEATING_ENABLED: "ODB_Heizen_DeAktiv",
+    ID_DEVICE_STATUS: "ODB_St_Geraet_Ba",
+    ID_ELECTRICITY_PRICE_EUROS: "ODB_GZ_KWh_Energie_Kost",
+    ID_WATER_PRICE_EUROS: "ODB_GZ_KW_Volumen_Kost",
+    ID_POSSIBLE_ENERGY_SAVING: "ODB_Gsprt_Energie",
+    ID_POSSIBLE_WATER_SAVING: "ODB_Gsprt_KW_Volumen",
+    ID_SETPOINT_REQUEST: "ODB_So_WW_T_Anf",
+    ID_PROTOCOL_VERSION: "ODB_Protokoll_Ver",
+    ID_CURRENCY_MODE: "ODB_Waehrung_Ba",
+    ID_CO2_EMISSION_RAW: "ODB_CO2_Energie",
+    ID_ELECTRICITY_PRICE_CENTS: "ODB_Ct_KWh_Energie_Kost",
+    ID_WATER_PRICE_CENTS: "ODB_Ct_KW_Volumen_Kost",
+}
 DEFAULT_NOMINAL_POWER_KW = 24.0
 COMMAND_CONFIRMATION_TIMEOUT = 12.0
 COMMAND_READBACK_INTERVAL = 1.0
@@ -3396,10 +3431,18 @@ class DHEClient:
         return round(_clamp(float(raw_value), 0.0, CO2_EMISSION_RAW_MAX) / 1000.0, 3)
 
     @staticmethod
+    def _odb_debug_name(odb_id: Any) -> str:
+        try:
+            return ODB_DEBUG_NAMES.get(int(odb_id), "unknown")
+        except (TypeError, ValueError):
+            return "unknown"
+
+    @staticmethod
     def _log_unknown_odb_value(odb_id: int, raw_value: Any, *, is_valid: Any = None) -> None:
         _LOGGER.debug(
-            "Unknown DHE ODB value id=%s value=%r is_valid=%r",
+            "Unknown DHE ODB value id=%s name=%s value=%r is_valid=%r",
             odb_id,
+            DHEClient._odb_debug_name(odb_id),
             raw_value,
             is_valid,
         )
