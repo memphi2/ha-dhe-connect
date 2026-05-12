@@ -259,7 +259,7 @@
       "bath_fill_target_volume": {
         "name": "Bath fill target volume"
       },
-      "maximum_temperature": {
+      "child_safety_temperature_limit": {
         "name": "Child safety temperature limit"
       },
       "eco_flow_limit": {
@@ -358,16 +358,16 @@
       "power": {
         "name": "Current power consumption"
       },
-      "configured_power": {
+      "nominal_power": {
         "name": "Nominal power"
       },
       "operating_duration": {
         "name": "Operating duration"
       },
-      "internal_temperature_1": {
+      "inlet_temperature": {
         "name": "Inlet temperature"
       },
-      "internal_temperature_2": {
+      "outlet_temperature": {
         "name": "Outlet temperature"
       },
       "scald_protection_temperature_limit": {
@@ -397,8 +397,8 @@
       "water_consumption_year": {
         "name": "Water consumption year"
       },
-      "water_consumption_years": {
-        "name": "Water consumption years"
+      "water_consumption_total": {
+        "name": "Total water consumption"
       },
       "hot_water_volume_total": {
         "name": "Total hot water volume"
@@ -418,8 +418,8 @@
       "energy_consumption_year": {
         "name": "Energy consumption year"
       },
-      "energy_consumption_years": {
-        "name": "Energy consumption years"
+      "energy_consumption_total": {
+        "name": "Total energy consumption"
       },
       "last_usage_water": {
         "name": "Last usage water"
@@ -439,13 +439,13 @@
       "bath_fill_current_volume": {
         "name": "Current bath fill volume"
       },
-      "saving_monitor_water": {
+      "saving_monitor_consumption_water": {
         "name": "Saving monitor consumption water"
       },
-      "saving_monitor_energy": {
+      "saving_monitor_consumption_energy": {
         "name": "Saving monitor consumption energy"
       },
-      "saving_monitor_co2": {
+      "saving_monitor_consumption_co2": {
         "name": "Saving monitor consumption CO2"
       },
       "saving_monitor_activation_rate": {
@@ -460,7 +460,7 @@
       "saving_monitor_possible_co2": {
         "name": "Saving monitor possible CO2 saving"
       },
-      "saving_monitor_possible_value": {
+      "saving_monitor_possible_cost": {
         "name": "Saving monitor possible cost saving"
       },
       "saving_monitor_real_water": {
@@ -472,7 +472,7 @@
       "saving_monitor_real_co2": {
         "name": "Saving monitor real CO2 saving"
       },
-      "saving_monitor_real_value": {
+      "saving_monitor_real_cost": {
         "name": "Saving monitor real cost saving"
       },
       "brush_timer_remaining": {
@@ -481,7 +481,7 @@
       "shower_timer_remaining": {
         "name": "Shower timer remaining"
       },
-      "temperature_error_status": {
+      "error_status": {
         "name": "Error status"
       },
       "reconnect_count": {
@@ -518,28 +518,28 @@
       "eco_mode": {
         "name": "Eco mode"
       },
-      "bath_fill": {
+      "bath_fill_active": {
         "name": "Bath fill"
       },
-      "maximum_active": {
+      "child_safety_active": {
         "name": "Child safety"
       },
-      "brush_timer_activation": {
+      "brush_timer_active": {
         "name": "Brush timer"
       },
-      "shower_timer_activation": {
+      "shower_timer_active": {
         "name": "Shower timer"
       },
       "wellness_cold_prevention": {
         "name": "Cold prevention"
       },
-      "winter_refresh": {
+      "wellness_winter_refresh": {
         "name": "Winter refresh"
       },
-      "summer_fitness": {
+      "wellness_summer_fitness": {
         "name": "Summer fitness"
       },
-      "circulation_support": {
+      "wellness_circulation_support": {
         "name": "Circulation support"
       }
     }

@@ -42,6 +42,31 @@ class TestEntityHelpers(unittest.TestCase):
             "stiebel_dhe_connect_entry-1_setpoint",
         )
 
+    def test_build_entity_suggested_object_id_uses_device_name_and_key(self) -> None:
+        self.assertEqual(
+            self.helpers.build_entity_suggested_object_id("Bathroom DHE", "water_flow"),
+            "Bathroom DHE_water_flow",
+        )
+
+    def test_build_entity_suggested_object_id_falls_back_to_domain(self) -> None:
+        self.assertEqual(
+            self.helpers.build_entity_suggested_object_id("", "water_flow"),
+            "stiebel_dhe_connect_water_flow",
+        )
+
+    def test_temperature_memory_enabled_default_keeps_first_two_slots_enabled(
+        self,
+    ) -> None:
+        self.assertTrue(self.helpers.temperature_memory_enabled_default(1))
+        self.assertTrue(self.helpers.temperature_memory_enabled_default(2))
+        self.assertFalse(self.helpers.temperature_memory_enabled_default(3))
+
+    def test_temperature_memory_measurement_slots_inverts_slot_mapping(self) -> None:
+        self.assertEqual(
+            self.helpers.temperature_memory_measurement_slots({1: 66, 2: 70}),
+            {66: 1, 70: 2},
+        )
+
     def test_build_device_info_uses_host_port_identifier(self) -> None:
         self.assertEqual(
             self.helpers.build_device_info("10.0.0.5", 8443, "Bathroom DHE"),
@@ -89,6 +114,7 @@ class TestEntityHelpers(unittest.TestCase):
 
         self.assertIs(entity._client, client)
         self.assertEqual(entity._attr_unique_id, "stiebel_dhe_connect_entry-1_radio")
+        self.assertEqual(entity._attr_suggested_object_id, "Kitchen DHE_radio")
         self.assertEqual(
             entity._attr_device_info["identifiers"],
             {

@@ -47,11 +47,9 @@ class StiebelDHEWeatherLocationSelect(StiebelDHEEntityMixin, SelectEntity):
 
     def __init__(self, entry_id: str, name: str, client: DHEClient) -> None:
         """Initialize the weather location select."""
-        # Use a dedicated unique_id to avoid clashes with legacy sensor entries
-        # from older revisions that used `..._weather_location`.
         self._init_dhe_entity(
             entry_id=entry_id,
-            key="weather_location_select",
+            key="weather_location",
             name=name,
             client=client,
         )

@@ -21,7 +21,11 @@ from .client import (
     SHOWER_TIMER_PATH,
     TEMPERATURE_MEMORY_SLOT_MEASUREMENTS,
 )
-from .entity_helpers import StiebelDHEEntityMixin
+from .entity_helpers import (
+    StiebelDHEEntityMixin,
+    temperature_memory_enabled_default,
+    temperature_memory_measurement_slots,
+)
 from .runtime_helpers import get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
@@ -86,14 +90,9 @@ STATIC_BUTTON_DESCRIPTIONS: tuple[StiebelDHEButtonEntityDescription, ...] = (
     ),
 )
 
-TEMPERATURE_MEMORY_MEASUREMENT_SLOTS = {
-    measurement_id: slot for slot, measurement_id in TEMPERATURE_MEMORY_SLOT_MEASUREMENTS.items()
-}
-
-
-def _temperature_memory_enabled_default(slot: int) -> bool:
-    """Return whether a temperature memory slot is enabled by default."""
-    return slot <= 2
+TEMPERATURE_MEMORY_MEASUREMENT_SLOTS = temperature_memory_measurement_slots(
+    TEMPERATURE_MEMORY_SLOT_MEASUREMENTS
+)
 
 
 def _temperature_memory_button_descriptions(
@@ -109,7 +108,7 @@ def _temperature_memory_button_descriptions(
             method_args=(slot,),
             icon=icon,
             availability_measurement_id=measurement_id,
-            entity_registry_enabled_default=_temperature_memory_enabled_default(slot),
+            entity_registry_enabled_default=temperature_memory_enabled_default(slot),
             extra_state_attributes={
                 "temperature_memory_slot": slot,
                 "temperature_memory_id": slot - 1,
