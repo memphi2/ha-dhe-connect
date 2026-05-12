@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 DOMAIN = "stiebel_dhe_connect"
@@ -10,6 +11,27 @@ DOMAIN = "stiebel_dhe_connect"
 def build_entity_unique_id(entry_id: str, key: str) -> str:
     """Build a stable unique_id for one entity within a config entry."""
     return f"{DOMAIN}_{entry_id}_{key}"
+
+
+def build_entity_suggested_object_id(name: str, key: str) -> str:
+    """Build a stable suggested entity object id from device name and entity key."""
+    device_name = str(name or "").strip() or DOMAIN
+    return f"{device_name}_{key}"
+
+
+def temperature_memory_enabled_default(slot: int) -> bool:
+    """Return whether a temperature memory slot is enabled by default."""
+    return slot <= 2
+
+
+def temperature_memory_measurement_slots(
+    slot_measurements: Mapping[int, int],
+) -> dict[int, int]:
+    """Return a measurement-id-to-slot lookup for temperature memory entities."""
+    return {
+        measurement_id: slot
+        for slot, measurement_id in slot_measurements.items()
+    }
 
 
 def build_device_info(
@@ -45,6 +67,7 @@ class StiebelDHEEntityMixin:
         """Initialize common entity identity attributes."""
         self._client = client
         self._attr_unique_id = build_entity_unique_id(entry_id, key)
+        self._attr_suggested_object_id = build_entity_suggested_object_id(name, key)
         self._attr_device_info = build_device_info(
             client.host,
             client.port,

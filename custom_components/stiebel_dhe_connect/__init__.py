@@ -16,7 +16,6 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers import entity_registry as er
 
 from .client import DHEClient
 from .config_entry_helpers import merged_entry_data
@@ -58,32 +57,6 @@ WEATHER_LOCATION_ACTION_SCHEMA = vol.Schema({
 })
 WEATHER_TOGGLE_FAVORITE_SCHEMA = WEATHER_LOCATION_ACTION_SCHEMA
 WEATHER_SELECT_LOCATION_SCHEMA = WEATHER_LOCATION_ACTION_SCHEMA
-LEGACY_ENTITY_SUFFIXES_TO_REMOVE = (
-    "online",
-    "currency",
-    "electricity_price",
-    "water_price",
-    "co2_emission",
-    "weather_location",
-    "unknown_odb_33",
-    "unknown_odb_22",
-    "unknown_odb_34",
-    "device_alarm",
-    "unknown_temperature_24",
-    "last_message_command",
-    "last_message_age",
-    "setpoint_below_inlet",
-    "water_heating_enabled",
-)
-LEGACY_ENTITY_KEYWORDS_TO_REMOVE = (
-    "currency",
-    "electricity_price",
-    "water_price",
-    "co2_emission",
-)
-CURRENT_ENTITY_SUFFIXES_TO_ENABLE = (
-    "connection_state",
-)
 
 
 @dataclass
@@ -157,8 +130,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         client=client,
         name=name,
     )
-    _async_cleanup_legacy_entities(hass, entry)
-    _async_enable_current_entities(hass, entry)
 
     try:
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -189,60 +160,6 @@ def _legacy_device_identifier_for_entry(
         if legacy_identifier in device.identifiers:
             return host
     return None
-
-
-def _async_cleanup_legacy_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Remove stale registry entities from older integration revisions."""
-    entity_registry = er.async_get(hass)
-    unique_id_prefix = f"stiebel_dhe_connect_{entry.entry_id}_"
-    unique_ids_to_remove = {
-        f"{unique_id_prefix}{suffix}"
-        for suffix in LEGACY_ENTITY_SUFFIXES_TO_REMOVE
-    }
-
-    for entity_entry in er.async_entries_for_config_entry(entity_registry, entry.entry_id):
-        unique_id = str(entity_entry.unique_id or "")
-        is_explicit_legacy_id = unique_id in unique_ids_to_remove
-        is_legacy_cost_entity = (
-            unique_id.startswith(unique_id_prefix)
-            and entity_entry.platform in {"number", "select"}
-            and any(keyword in unique_id for keyword in LEGACY_ENTITY_KEYWORDS_TO_REMOVE)
-        )
-        if is_explicit_legacy_id or is_legacy_cost_entity:
-            _LOGGER.debug(
-                "Removing stale entity registry entry unique_id=%s entity_id=%s",
-                unique_id,
-                entity_entry.entity_id,
-            )
-            entity_registry.async_remove(entity_entry.entity_id)
-
-
-def _async_enable_current_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Re-enable current entities that older revisions disabled by integration."""
-    entity_registry = er.async_get(hass)
-    unique_id_prefix = f"stiebel_dhe_connect_{entry.entry_id}_"
-    unique_ids_to_enable = {
-        f"{unique_id_prefix}{suffix}"
-        for suffix in CURRENT_ENTITY_SUFFIXES_TO_ENABLE
-    }
-    integration_disabler = getattr(er, "RegistryEntryDisabler", None)
-    integration_disabled_by = (
-        getattr(integration_disabler, "INTEGRATION", "integration")
-        if integration_disabler is not None
-        else "integration"
-    )
-
-    for entity_entry in er.async_entries_for_config_entry(entity_registry, entry.entry_id):
-        if (
-            entity_entry.unique_id in unique_ids_to_enable
-            and entity_entry.disabled_by in {integration_disabled_by, "integration"}
-        ):
-            _LOGGER.debug(
-                "Re-enabling current entity registry entry unique_id=%s entity_id=%s",
-                entity_entry.unique_id,
-                entity_entry.entity_id,
-            )
-            entity_registry.async_update_entity(entity_entry.entity_id, disabled_by=None)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

@@ -24,6 +24,7 @@
 - Weather location selection is enabled by default for new setups.
 - Weather period selection now uses Home Assistant's configured timezone.
 - German naming now uses `Durchlauferhitzer` for water heating.
+- Entity object IDs were normalized around stable internal keys. Existing installs should remove the DHE Connect device/integration entry and add it again after updating so Home Assistant creates the new entity registry entries cleanly.
 
 ## v1.0.6 - 2026-05-11 (compared to v1.0.5)
 
