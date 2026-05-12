@@ -10,6 +10,7 @@
 
 - Refactored weather, radio, pairing, config-flow and shared entity state mapping into smaller helper modules.
 - Timer duration controls now use the original duration entities as seconds in Home Assistant.
+- Bath fill target and remaining volume values now display as whole liters.
 - Radio media title now falls back to the station short description before the station name.
 - Maximum temperature configuration now supports the full `20` to `50` C device range.
 - Weather location selection is enabled by default for new setups.

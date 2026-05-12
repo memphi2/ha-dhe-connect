@@ -193,7 +193,7 @@ data:
 | Last usage energy | `kWh` | disabled by default | `measurement` | `set:ste.app.consumption:lastUsage.energy` |
 | Last usage duration | `M:SS` | disabled by default | none | `set:ste.app.consumption:lastUsage.time`, rendered like timer remaining values |
 | Last usage cost | `EUR` | `monetary`, disabled by default | none | `set:ste.app.consumption:lastUsage.costs` |
-| Bath fill remaining | `L` | disabled by default | `measurement` | Derived from target volume ODB ID `3` minus current bath fill ODB ID `31` |
+| Bath fill remaining | `L` | disabled by default | `measurement` | Derived as whole liters from target volume ODB ID `3` minus current bath fill ODB ID `31` |
 | Saving monitor consumption water | `L` | disabled by default | `measurement` | `set:ste.app.savingMonitor:consumption.water_l`, rounded to 2 decimals |
 | Saving monitor consumption energy | `kWh` | disabled by default | `measurement` | `set:ste.app.savingMonitor:consumption.energy_Wh / 1000`, rounded to 2 decimals |
 | Saving monitor consumption CO2 | `kg` | disabled by default | `measurement` | `set:ste.app.savingMonitor:consumption.emission_Co2Kg`, rounded to 2 decimals |
@@ -223,7 +223,7 @@ Consumption sensors expose the DHE chart array as a `chart` attribute and the re
 
 | Entity | Unit | Range | Mode | Source / command |
 |---|---:|---:|---|---|
-| Bath fill target volume | `L` | `1` to `300` | slider | ODB ID `3` |
+| Bath fill target volume | `L` | `1` to `300`, step `1` | slider | ODB ID `3`, shown as whole liters |
 | Maximum temperature | `C` | `20` to `50` | slider | ODB ID `5`, accepts raw tenths or degrees |
 | Eco flow limit | `L/min` | `6` to `8` | slider | ODB ID `7`, sent as raw tenths |
 | Brush timer duration | `s` | `60` to `1200`, step `1` | box | `assign:ste.app.brushTimer:durationMilliseconds`; shown in Home Assistant as seconds |

@@ -3255,7 +3255,7 @@ class DHEClient:
         self._last_measurement_attributes[ID_BATH_FILL_REMAINING_VOLUME] = attributes
         self._handle_measurement(
             ID_BATH_FILL_REMAINING_VOLUME,
-            max(target_l - current_l, 0.0),
+            int(round(max(target_l - current_l, 0.0))),
             force_update=previous_attributes != attributes,
         )
 

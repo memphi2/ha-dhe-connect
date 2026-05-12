@@ -64,9 +64,9 @@ STATIC_NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfVolume.LITERS,
         device_class=NumberDeviceClass.VOLUME,
         icon="mdi:bathtub",
-        native_min_value=1.0,
-        native_max_value=300.0,
-        native_step=1.0,
+        native_min_value=1,
+        native_max_value=300,
+        native_step=1,
         odb_id=ID_BATH_FILL_TARGET_VOLUME,
     ),
     StiebelDHENumberEntityDescription(
@@ -242,6 +242,9 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
                 return None
             self._timer_duration_seconds = total_seconds
             return total_seconds
+        if self.entity_description.odb_id == ID_BATH_FILL_TARGET_VOLUME:
+            volume = coerce_float(value)
+            return int(round(volume)) if volume is not None else None
         return coerce_float(value)
 
     def _native_value_to_client(self, value: object) -> float | None:
