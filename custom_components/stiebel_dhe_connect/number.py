@@ -110,7 +110,6 @@ STATIC_NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         timer_path=BRUSH_TIMER_PATH,
         timer_property="durationMilliseconds",
         timer_duration_part=TIMER_DURATION_PART_MINUTES,
-        entity_registry_enabled_default=False,
     ),
     StiebelDHENumberEntityDescription(
         key="brush_timer_duration_seconds",
@@ -125,7 +124,6 @@ STATIC_NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         timer_path=BRUSH_TIMER_PATH,
         timer_property="durationMilliseconds",
         timer_duration_part=TIMER_DURATION_PART_SECONDS,
-        entity_registry_enabled_default=False,
     ),
     StiebelDHENumberEntityDescription(
         key="shower_timer_duration",
@@ -140,7 +138,6 @@ STATIC_NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         timer_path=SHOWER_TIMER_PATH,
         timer_property="durationMilliseconds",
         timer_duration_part=TIMER_DURATION_PART_MINUTES,
-        entity_registry_enabled_default=False,
     ),
     StiebelDHENumberEntityDescription(
         key="shower_timer_duration_seconds",
@@ -155,7 +152,6 @@ STATIC_NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         timer_path=SHOWER_TIMER_PATH,
         timer_property="durationMilliseconds",
         timer_duration_part=TIMER_DURATION_PART_SECONDS,
-        entity_registry_enabled_default=False,
     ),
 )
 
