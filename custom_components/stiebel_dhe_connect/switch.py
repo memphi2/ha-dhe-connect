@@ -18,9 +18,9 @@ from .client import (
     DHEError,
     ID_BATH_FILL_ACTIVE,
     ID_BRUSH_TIMER_ACTIVATION,
+    ID_CHILD_SAFETY_ACTIVE,
     ID_ECO_MODE,
-    ID_MAXIMUM_ACTIVE,
-    ID_STOP_PROGRAM,
+    ID_WELLNESS_ACTIVE,
     ID_WELLNESS_SHOWER_PROGRAM,
     ID_SHOWER_TIMER_ACTIVATION,
     ODBValue,
@@ -76,10 +76,10 @@ ODB_SWITCHES: tuple[StiebelDHEODBSwitchDescription, ...] = (
         key="maximum_active",
         translation_key="maximum_active",
         icon="mdi:thermometer-check",
-        measurement_id=ID_MAXIMUM_ACTIVE,
-        turn_on_setter="set_maximum_active",
+        measurement_id=ID_CHILD_SAFETY_ACTIVE,
+        turn_on_setter="set_child_safety_active",
         turn_on_args=(True,),
-        turn_off_setter="set_maximum_active",
+        turn_off_setter="set_child_safety_active",
         turn_off_args=(False,),
     ),
 )
@@ -384,7 +384,7 @@ class StiebelDHEWellnessShowerProgramSwitch(
         self.async_on_remove(self._client.add_measurement_callback(self._handle_measurement_update))
         self.async_on_remove(self._client.add_availability_callback(self._handle_availability_update))
         last_value = self._client.last_measurements.get(ID_WELLNESS_SHOWER_PROGRAM)
-        last_stop_value = self._client.last_measurements.get(ID_STOP_PROGRAM)
+        last_stop_value = self._client.last_measurements.get(ID_WELLNESS_ACTIVE)
         if last_stop_value is not None:
             self._program_active = bool(last_stop_value)
         if last_value is not None:
@@ -425,7 +425,7 @@ class StiebelDHEWellnessShowerProgramSwitch(
     def _handle_measurement_update(self, odb_id: int, value: ODBValue) -> None:
         if odb_id == ID_WELLNESS_SHOWER_PROGRAM:
             self._last_program_value = float(value)
-        elif odb_id == ID_STOP_PROGRAM:
+        elif odb_id == ID_WELLNESS_ACTIVE:
             self._program_active = bool(value)
         else:
             return

@@ -55,29 +55,36 @@ ID_SETPOINT = 0
 ID_BATH_FILL_ACTIVE = 1
 ID_WELLNESS_SHOWER_PROGRAM = 2
 ID_BATH_FILL_TARGET_VOLUME = 3
-ID_MAXIMUM_ACTIVE = 4
-ID_MAX_TEMPERATURE = 5
+ID_CHILD_SAFETY_ACTIVE = 4
+ID_CHILD_SAFETY_TEMPERATURE_LIMIT = 5
 ID_ECO_MODE = 6
 ID_ECO_FLOW_LIMIT = 7
-ID_WELLNESS_SHOWER_TRIGGER = 10
+ID_WELLNESS_ACTIVE = 10
 WINTER_REFRESH_PROGRAM_ID = 2
 WELLNESS_COLD_PREVENTION_PROGRAM_ID = 1
 SUMMER_FITNESS_PROGRAM_ID = 3
 CIRCULATION_SUPPORT_PROGRAM_ID = 4
-ID_STOP_PROGRAM = 10
-ID_INTERNAL_TEMPERATURE_1 = 13
-ID_INTERNAL_TEMPERATURE_2 = 14
+ID_INLET_TEMPERATURE = 13
+ID_OUTLET_TEMPERATURE = 14
 ID_WATER_FLOW = 15
-ID_POWER = 16
-ID_CONFIGURED_POWER = 20
+ID_POWER_PERCENT = 16
+ID_OPERATING_DURATION = 18
+ID_NOMINAL_POWER = 20
 ID_SCALD_PROTECTION_ACTIVE = 22
 ID_SCALD_PROTECTION_TEMPERATURE_LIMIT = 24
+ID_HEATING_ENERGY_TOTAL = 29
+ID_HOT_WATER_VOLUME_TOTAL = 30
 ID_BATH_FILL_CURRENT_VOLUME = 31
+ID_WELLNESS_TIME_NORMALIZED = 32
 ID_WATER_HEATING_ENABLED = 33
 ID_DEVICE_STATUS = 34
 ID_ELECTRICITY_PRICE_EUROS = 61
 ID_WATER_PRICE_EUROS = 62
-ID_SET_REQ = 66
+ID_POSSIBLE_ENERGY_SAVING = 63
+ID_POSSIBLE_WATER_SAVING = 64
+ID_SETPOINT_REQUEST = 66
+ID_PROTOCOL_VERSION = 67
+ID_CURRENCY_MODE = 68
 SET_REQ_OFF_VALUE = 10440
 # Observed device behavior in field tests:
 # - id 33 raw 1 => water heating OFF
@@ -133,7 +140,7 @@ ID_TEMPERATURE_MEMORY_9 = 1117
 ID_TEMPERATURE_MEMORY_10 = 1118
 ID_TEMPERATURE_MEMORY_11 = 1119
 ID_TEMPERATURE_MEMORY_12 = 1120
-DEFAULT_CONFIGURED_POWER_KW = 24.0
+DEFAULT_NOMINAL_POWER_KW = 24.0
 COMMAND_CONFIRMATION_TIMEOUT = 12.0
 COMMAND_READBACK_INTERVAL = 1.0
 APP_COMMAND_CONFIRMATION_TIMEOUT = 3.0
@@ -147,6 +154,19 @@ PAIRING_NOTIFICATION_ID_PREFIX = "stiebel_dhe_connect_pairing"
 PAIRING_CONFIRM_HINT_NOTIFICATION_ID_PREFIX = (
     "stiebel_dhe_connect_pairing_confirm"
 )
+PRICE_CENTS_COMPONENT_MAX = 99
+ELECTRICITY_PRICE_EUROS_COMPONENT_MAX = 32767
+WATER_PRICE_EUROS_COMPONENT_MAX = 32767
+ELECTRICITY_PRICE_MAX = (
+    ELECTRICITY_PRICE_EUROS_COMPONENT_MAX + PRICE_CENTS_COMPONENT_MAX / 100.0
+)
+WATER_PRICE_MAX = WATER_PRICE_EUROS_COMPONENT_MAX + PRICE_CENTS_COMPONENT_MAX / 100.0
+PRICE_EUROS_COMPONENT_MAX_BY_ID = {
+    ID_ELECTRICITY_PRICE_EUROS: ELECTRICITY_PRICE_EUROS_COMPONENT_MAX,
+    ID_WATER_PRICE_EUROS: WATER_PRICE_EUROS_COMPONENT_MAX,
+}
+CO2_EMISSION_RAW_MAX = 32767
+CO2_EMISSION_MAX = CO2_EMISSION_RAW_MAX / 1000.0
 PRICE_COMPONENT_IDS = {
     ID_ELECTRICITY_PRICE_EUROS: (
         ID_ELECTRICITY_PRICE,
@@ -193,19 +213,22 @@ INITIAL_VALUE_IDS = (
     ID_SETPOINT,
     ID_BATH_FILL_ACTIVE,
     ID_BATH_FILL_TARGET_VOLUME,
-    ID_MAXIMUM_ACTIVE,
+    ID_CHILD_SAFETY_ACTIVE,
     ID_WELLNESS_SHOWER_PROGRAM,
-    ID_MAX_TEMPERATURE,
+    ID_CHILD_SAFETY_TEMPERATURE_LIMIT,
     ID_ECO_MODE,
     ID_ECO_FLOW_LIMIT,
-    ID_STOP_PROGRAM,
-    ID_INTERNAL_TEMPERATURE_1,
-    ID_INTERNAL_TEMPERATURE_2,
+    ID_WELLNESS_ACTIVE,
+    ID_INLET_TEMPERATURE,
+    ID_OUTLET_TEMPERATURE,
     ID_WATER_FLOW,
-    ID_POWER,
-    ID_CONFIGURED_POWER,
+    ID_POWER_PERCENT,
+    ID_OPERATING_DURATION,
+    ID_NOMINAL_POWER,
     ID_SCALD_PROTECTION_ACTIVE,
     ID_SCALD_PROTECTION_TEMPERATURE_LIMIT,
+    ID_HEATING_ENERGY_TOTAL,
+    ID_HOT_WATER_VOLUME_TOTAL,
     ID_BATH_FILL_CURRENT_VOLUME,
     ID_WATER_HEATING_ENABLED,
     ID_DEVICE_STATUS,
@@ -213,24 +236,29 @@ INITIAL_VALUE_IDS = (
     ID_ELECTRICITY_PRICE_CENTS,
     ID_WATER_PRICE_EUROS,
     ID_WATER_PRICE_CENTS,
+    ID_POSSIBLE_ENERGY_SAVING,
+    ID_POSSIBLE_WATER_SAVING,
+    ID_PROTOCOL_VERSION,
     ID_CO2_EMISSION_RAW,
 )
 WRITABLE_OPTION_IDS = {
     ID_BATH_FILL_ACTIVE,
     ID_BATH_FILL_TARGET_VOLUME,
-    ID_MAXIMUM_ACTIVE,
+    ID_CHILD_SAFETY_ACTIVE,
     ID_WELLNESS_SHOWER_PROGRAM,
-    ID_MAX_TEMPERATURE,
+    ID_CHILD_SAFETY_TEMPERATURE_LIMIT,
     ID_ECO_MODE,
     ID_ECO_FLOW_LIMIT,
-    ID_STOP_PROGRAM,
+    ID_WELLNESS_ACTIVE,
 }
 KNOWN_ODB_VALUE_IDS = (
     *INITIAL_VALUE_IDS,
     *WRITABLE_OPTION_IDS,
     *PRICE_COMPONENT_IDS,
-    ID_SET_REQ,
+    ID_SETPOINT_REQUEST,
     ID_BATH_FILL_CURRENT_VOLUME,
+    ID_WELLNESS_TIME_NORMALIZED,
+    ID_CURRENCY_MODE,
 )
 
 BRUSH_TIMER_PATH = "ste.app.brushTimer"
@@ -729,7 +757,7 @@ class DHEClient:
         self._temperature_memory_ids_seen: set[int] = set()
         self._temperature_memory_generation = 0
         self._temperature_memory_full_list_seen = False
-        self._configured_power_kw = DEFAULT_CONFIGURED_POWER_KW
+        self._nominal_power_kw = DEFAULT_NOMINAL_POWER_KW
         self._last_power_fraction: float | None = None
         self._pairing_active = False
         self._require_pairing_confirmation = False
@@ -987,7 +1015,7 @@ class DHEClient:
                     future = self._new_setpoint_future(requested)
                     await self._post_packet(ctx, self._message_packet({
                         "command": ODB_ASSIGN_COMMAND,
-                        "value": {"id": ID_SET_REQ, "value": req_value},
+                        "value": {"id": ID_SETPOINT_REQUEST, "value": req_value},
                     }))
                     readback = await self._wait_for_setpoint_confirmation(ctx, future)
                     if abs(readback - requested) < 0.01:
@@ -1032,7 +1060,10 @@ class DHEClient:
                         self._message_packet(
                             {
                                 "command": ODB_ASSIGN_COMMAND,
-                                "value": {"id": ID_SET_REQ, "value": SET_REQ_OFF_VALUE},
+                                "value": {
+                                    "id": ID_SETPOINT_REQUEST,
+                                    "value": SET_REQ_OFF_VALUE,
+                                },
                             }
                         ),
                     )
@@ -1079,22 +1110,27 @@ class DHEClient:
         return bool(await self.write_odb_value(ID_BATH_FILL_ACTIVE, False))
 
     async def set_bath_fill_target_volume(self, liters: float) -> float:
-        requested = int(round(_clamp(float(liters), 1.0, 300.0)))
+        requested = int(round(_clamp(float(liters), 5.0, 200.0)))
         return float(await self.write_odb_value(ID_BATH_FILL_TARGET_VOLUME, requested))
 
-    async def set_maximum_temperature(self, temperature: float) -> float:
-        requested = _round_to_half_c(_clamp(float(temperature), 20.0, 50.0))
-        return float(await self.write_odb_value(ID_MAX_TEMPERATURE, _c_to_raw_tenths(requested)))
+    async def set_child_safety_temperature_limit(self, temperature: float) -> float:
+        requested = _round_to_half_c(_clamp(float(temperature), 20.0, 60.0))
+        return float(
+            await self.write_odb_value(
+                ID_CHILD_SAFETY_TEMPERATURE_LIMIT,
+                _c_to_raw_tenths(requested),
+            )
+        )
 
-    async def set_maximum_active(self, enabled: bool) -> bool:
-        return bool(await self.write_odb_value(ID_MAXIMUM_ACTIVE, bool(enabled)))
+    async def set_child_safety_active(self, enabled: bool) -> bool:
+        return bool(await self.write_odb_value(ID_CHILD_SAFETY_ACTIVE, bool(enabled)))
 
     async def set_eco_mode(self, enabled: bool) -> bool:
         return bool(await self.write_odb_value(ID_ECO_MODE, bool(enabled)))
 
     async def set_eco_flow_limit(self, liters_per_minute: float) -> float:
-        requested_l_min = int(round(_clamp(float(liters_per_minute), 6.0, 8.0)))
-        raw_value = requested_l_min * 10
+        requested_l_min = _round_to_half_c(_clamp(float(liters_per_minute), 4.0, 15.0))
+        raw_value = int(round(requested_l_min * 10.0))
         return float(await self.write_odb_value(ID_ECO_FLOW_LIMIT, raw_value))
 
     async def set_electricity_price(self, euros_per_kwh: float) -> float:
@@ -1102,6 +1138,7 @@ class DHEClient:
             euros_per_kwh,
             ID_ELECTRICITY_PRICE_EUROS,
             ID_ELECTRICITY_PRICE_CENTS,
+            max_value=ELECTRICITY_PRICE_MAX,
         )
 
     async def set_water_price(self, euros_per_m3: float) -> float:
@@ -1109,10 +1146,11 @@ class DHEClient:
             euros_per_m3,
             ID_WATER_PRICE_EUROS,
             ID_WATER_PRICE_CENTS,
+            max_value=WATER_PRICE_MAX,
         )
 
     async def set_co2_emission(self, kg_per_kwh: float) -> float:
-        value = round(_clamp(float(kg_per_kwh), 0.0, 99.99), 2)
+        value = round(_clamp(float(kg_per_kwh), 0.0, CO2_EMISSION_MAX), 3)
         raw_value = self._co2_emission_to_raw(value)
         await self.write_odb_value(ID_CO2_EMISSION_RAW, raw_value)
         return value
@@ -1628,8 +1666,15 @@ class DHEClient:
                     raise DHEError(f"Could not write DHE radio {field}: {err}") from err
         raise DHEError(f"Could not write DHE radio {field}")
 
-    async def _set_price(self, value: float, euros_odb_id: int, cents_odb_id: int) -> float:
-        total_cents = int(round(_clamp(float(value), 0.0, 9.99) * 100))
+    async def _set_price(
+        self,
+        value: float,
+        euros_odb_id: int,
+        cents_odb_id: int,
+        *,
+        max_value: float,
+    ) -> float:
+        total_cents = int(round(_clamp(float(value), 0.0, max_value) * 100))
         euros, cents = divmod(total_cents, 100)
         await self.write_odb_value(euros_odb_id, euros)
         await self.write_odb_value(cents_odb_id, cents)
@@ -1657,7 +1702,7 @@ class DHEClient:
                     request_value = _build_temperature_memory_button_value(temperature)
                     await self._post_packet(ctx, self._message_packet({
                         "command": ODB_ASSIGN_COMMAND,
-                        "value": {"id": ID_SET_REQ, "value": request_value},
+                        "value": {"id": ID_SETPOINT_REQUEST, "value": request_value},
                     }))
                     try:
                         await self._request_setpoint(ctx)
@@ -1859,22 +1904,22 @@ class DHEClient:
     async def set_wellness_cold_prevention(self, enabled: bool) -> bool:
         if enabled:
             await self.write_odb_value(ID_WELLNESS_SHOWER_PROGRAM, WELLNESS_COLD_PREVENTION_PROGRAM_ID)
-            await self.write_odb_value(ID_WELLNESS_SHOWER_TRIGGER, True)
+            await self.write_odb_value(ID_WELLNESS_ACTIVE, True)
             return True
 
-        await self.write_odb_value(ID_STOP_PROGRAM, False)
-        self._handle_measurement(ID_STOP_PROGRAM, False, force_update=True)
+        await self.write_odb_value(ID_WELLNESS_ACTIVE, False)
+        self._handle_measurement(ID_WELLNESS_ACTIVE, False, force_update=True)
         self._handle_measurement(ID_WELLNESS_SHOWER_PROGRAM, 0.0, force_update=True)
         return False
 
     async def set_wellness_shower_program(self, program_id: int) -> bool:
         await self.write_odb_value(ID_WELLNESS_SHOWER_PROGRAM, int(program_id))
-        await self.write_odb_value(ID_WELLNESS_SHOWER_TRIGGER, True)
+        await self.write_odb_value(ID_WELLNESS_ACTIVE, True)
         return True
 
     async def stop_wellness_shower_program(self) -> bool:
-        await self.write_odb_value(ID_STOP_PROGRAM, False)
-        self._handle_measurement(ID_STOP_PROGRAM, False, force_update=True)
+        await self.write_odb_value(ID_WELLNESS_ACTIVE, False)
+        self._handle_measurement(ID_WELLNESS_ACTIVE, False, force_update=True)
         self._handle_measurement(ID_WELLNESS_SHOWER_PROGRAM, 0.0, force_update=True)
         return False
 
@@ -1924,21 +1969,21 @@ class DHEClient:
         """Trigger the wellness shower program 'Winter refresh'."""
         for _ in range(2):
             await self.write_odb_value(ID_WELLNESS_SHOWER_PROGRAM, WINTER_REFRESH_PROGRAM_ID)
-            await self.write_odb_value(ID_WELLNESS_SHOWER_TRIGGER, True)
+            await self.write_odb_value(ID_WELLNESS_ACTIVE, True)
         return True
 
     async def run_wellness_shower_program_summer_fitness(self) -> bool:
         """Trigger the wellness shower program 'Summer fitness'."""
         for _ in range(2):
             await self.write_odb_value(ID_WELLNESS_SHOWER_PROGRAM, SUMMER_FITNESS_PROGRAM_ID)
-            await self.write_odb_value(ID_WELLNESS_SHOWER_TRIGGER, True)
+            await self.write_odb_value(ID_WELLNESS_ACTIVE, True)
         return True
 
     async def run_wellness_shower_program_circulation_support(self) -> bool:
         """Trigger the wellness shower program 'Circulation support'."""
         for _ in range(2):
             await self.write_odb_value(ID_WELLNESS_SHOWER_PROGRAM, CIRCULATION_SUPPORT_PROGRAM_ID)
-            await self.write_odb_value(ID_WELLNESS_SHOWER_TRIGGER, True)
+            await self.write_odb_value(ID_WELLNESS_ACTIVE, True)
         return True
 
     async def _set_app_timer_duration_minutes(
@@ -3181,27 +3226,44 @@ class DHEClient:
                 self._handle_setpoint(_raw_tenths_to_c(_raw_to_float(raw_value)))
             elif odb_id == ID_WATER_FLOW:
                 self._handle_measurement(odb_id, _raw_to_float(raw_value) / 10.0)
-            elif odb_id == ID_POWER:
+            elif odb_id == ID_POWER_PERCENT:
                 self._last_power_fraction = _raw_to_float(raw_value) / 100.0
-                self._handle_measurement(odb_id, self._last_power_fraction * self._configured_power_kw)
-            elif odb_id == ID_CONFIGURED_POWER:
-                self._configured_power_kw = self._raw_configured_power_to_kw(_raw_to_float(raw_value))
-                self._handle_measurement(odb_id, self._configured_power_kw)
+                self._handle_measurement(odb_id, self._last_power_fraction * self._nominal_power_kw)
+            elif odb_id == ID_OPERATING_DURATION:
+                self._handle_measurement(odb_id, max(0.0, _raw_to_float(raw_value)))
+            elif odb_id == ID_NOMINAL_POWER:
+                self._nominal_power_kw = self._raw_nominal_power_to_kw(_raw_to_float(raw_value))
+                self._handle_measurement(odb_id, self._nominal_power_kw)
                 if self._last_power_fraction is not None:
-                    self._handle_measurement(ID_POWER, self._last_power_fraction * self._configured_power_kw)
+                    self._handle_measurement(
+                        ID_POWER_PERCENT,
+                        self._last_power_fraction * self._nominal_power_kw,
+                    )
             elif odb_id == ID_BATH_FILL_TARGET_VOLUME:
                 self._handle_measurement(odb_id, self._convert_odb_value(odb_id, raw_value))
                 self._refresh_bath_fill_remaining()
             elif odb_id == ID_BATH_FILL_CURRENT_VOLUME:
                 self._handle_measurement(odb_id, max(0.0, _raw_to_float(raw_value)))
                 self._refresh_bath_fill_remaining()
+            elif odb_id == ID_WELLNESS_TIME_NORMALIZED:
+                self._handle_measurement(odb_id, max(0.0, _raw_to_float(raw_value)))
             elif odb_id in {
-                ID_INTERNAL_TEMPERATURE_1,
-                ID_INTERNAL_TEMPERATURE_2,
+                ID_INLET_TEMPERATURE,
+                ID_OUTLET_TEMPERATURE,
             }:
                 self._handle_measurement(odb_id, _raw_tenths_to_c(_raw_to_float(raw_value)))
             elif odb_id == ID_SCALD_PROTECTION_TEMPERATURE_LIMIT:
                 self._handle_measurement(odb_id, _raw_tenths_to_c(_raw_to_float(raw_value)))
+            elif odb_id == ID_HEATING_ENERGY_TOTAL:
+                self._handle_measurement(odb_id, max(0.0, _raw_to_float(raw_value)))
+            elif odb_id == ID_HOT_WATER_VOLUME_TOTAL:
+                self._handle_measurement(odb_id, max(0.0, _raw_to_float(raw_value)) / 10.0)
+            elif odb_id == ID_POSSIBLE_ENERGY_SAVING:
+                self._handle_measurement(odb_id, max(0.0, _raw_to_float(raw_value)))
+            elif odb_id == ID_POSSIBLE_WATER_SAVING:
+                self._handle_measurement(odb_id, max(0.0, _raw_to_float(raw_value)) / 10.0)
+            elif odb_id == ID_PROTOCOL_VERSION:
+                self._handle_measurement(odb_id, int(round(max(0.0, _raw_to_float(raw_value)))))
             elif odb_id == ID_WATER_HEATING_ENABLED:
                 self._handle_measurement(odb_id, _raw_to_water_heating_enabled(raw_value))
             elif odb_id == ID_SCALD_PROTECTION_ACTIVE:
@@ -3212,9 +3274,11 @@ class DHEClient:
                 self._handle_price_component(odb_id, raw_value)
             elif odb_id == ID_CO2_EMISSION_RAW:
                 self._handle_co2_emission(raw_value)
-            elif odb_id == ID_MAXIMUM_ACTIVE:
+            elif odb_id == ID_CHILD_SAFETY_ACTIVE:
                 self._handle_measurement(odb_id, _raw_to_bool(raw_value))
-            elif odb_id == ID_SET_REQ:
+            elif odb_id == ID_CURRENCY_MODE:
+                return
+            elif odb_id == ID_SETPOINT_REQUEST:
                 return
             elif odb_id in WRITABLE_OPTION_IDS:
                 self._handle_measurement(odb_id, self._convert_odb_value(odb_id, raw_value))
@@ -3264,9 +3328,10 @@ class DHEClient:
         value = int(round(_raw_to_float(raw_value)))
         measurement_id, euros_odb_id, cents_odb_id = PRICE_COMPONENT_IDS[odb_id]
         if odb_id == cents_odb_id:
-            value = int(_clamp(value, 0, 99))
+            value = int(_clamp(value, 0, PRICE_CENTS_COMPONENT_MAX))
         else:
-            value = int(_clamp(value, 0, 9))
+            max_euros = PRICE_EUROS_COMPONENT_MAX_BY_ID.get(euros_odb_id, 9)
+            value = int(_clamp(value, 0, max_euros))
         self._handle_measurement(odb_id, float(value))
 
         euros_value = self._last_measurements.get(euros_odb_id)
@@ -3328,7 +3393,7 @@ class DHEClient:
 
     @staticmethod
     def _raw_to_co2_emission(raw_value: float) -> float:
-        return round(max(0.0, float(raw_value) / 1000.0), 2)
+        return round(_clamp(float(raw_value), 0.0, CO2_EMISSION_RAW_MAX) / 1000.0, 3)
 
     @staticmethod
     def _log_unknown_odb_value(odb_id: int, raw_value: Any, *, is_valid: Any = None) -> None:
@@ -3564,40 +3629,40 @@ class DHEClient:
 
     @staticmethod
     def _convert_odb_value(odb_id: int, raw_value: Any) -> ODBValue:
-        if odb_id in {ID_BATH_FILL_ACTIVE, ID_MAXIMUM_ACTIVE, ID_ECO_MODE, ID_STOP_PROGRAM}:
+        if odb_id in {ID_BATH_FILL_ACTIVE, ID_CHILD_SAFETY_ACTIVE, ID_ECO_MODE, ID_WELLNESS_ACTIVE}:
             return _raw_to_bool(raw_value)
         if odb_id == ID_WATER_HEATING_ENABLED:
             return _raw_to_water_heating_enabled(raw_value)
-        if odb_id == ID_MAX_TEMPERATURE:
+        if odb_id == ID_CHILD_SAFETY_TEMPERATURE_LIMIT:
             value = _raw_to_float(raw_value)
-            if 200.0 <= value <= 500.0:
+            if 200.0 <= value <= 600.0:
                 return _raw_tenths_to_c(value)
             return value
         if odb_id == ID_ECO_FLOW_LIMIT:
             value = _raw_to_float(raw_value)
-            if 60.0 <= value <= 80.0:
+            if 40.0 <= value <= 150.0:
                 return value / 10.0
             return value
         return _raw_to_float(raw_value)
 
     @staticmethod
-    def _raw_configured_power_to_kw(raw: int | float) -> float:
+    def _raw_nominal_power_to_kw(raw: int | float) -> float:
         value = float(raw)
-        if 18.0 <= value <= 24.0:
+        if 12.0 <= value <= 36.0:
             return value
-        if 180.0 <= value <= 240.0:
+        if 120.0 <= value <= 360.0:
             return value / 10.0
-        if 1800.0 <= value <= 2400.0:
+        if 1200.0 <= value <= 3600.0:
             return value / 100.0
-        _LOGGER.warning("Ignoring unexpected configured DHE power value from ODB id 20: %s", raw)
-        return DEFAULT_CONFIGURED_POWER_KW
+        _LOGGER.warning("Ignoring unexpected nominal DHE power value from ODB id 20: %s", raw)
+        return DEFAULT_NOMINAL_POWER_KW
 
     async def _request_setpoint(self, ctx: DHESession) -> None:
         await self._request_odb_value(ctx, ID_SETPOINT)
 
     async def _request_initial_values(self, ctx: DHESession) -> None:
         for odb_id in INITIAL_VALUE_IDS:
-            if odb_id != ID_CONFIGURED_POWER or odb_id not in self._last_measurements:
+            if odb_id != ID_NOMINAL_POWER or odb_id not in self._last_measurements:
                 await self._request_odb_value(ctx, odb_id)
         for command in APP_TIMER_REQUEST_COMMANDS:
             await self._request_app_value(ctx, command)

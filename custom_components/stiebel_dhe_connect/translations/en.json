@@ -259,7 +259,7 @@
         "name": "Bath fill target volume"
       },
       "maximum_temperature": {
-        "name": "Maximum temperature"
+        "name": "Child safety temperature limit"
       },
       "eco_flow_limit": {
         "name": "Eco flow limit"
@@ -358,7 +358,10 @@
         "name": "Current power consumption"
       },
       "configured_power": {
-        "name": "Configured power"
+        "name": "Nominal power"
+      },
+      "operating_duration": {
+        "name": "Operating duration"
       },
       "internal_temperature_1": {
         "name": "Inlet temperature"
@@ -384,6 +387,9 @@
           "unknown": "Unknown"
         }
       },
+      "protocol_version": {
+        "name": "Protocol version"
+      },
       "water_consumption_week": {
         "name": "Water consumption week"
       },
@@ -393,8 +399,20 @@
       "water_consumption_years": {
         "name": "Water consumption years"
       },
+      "hot_water_volume_total": {
+        "name": "Total hot water volume"
+      },
       "energy_consumption_week": {
         "name": "Energy consumption week"
+      },
+      "heating_energy_total": {
+        "name": "Total heating energy"
+      },
+      "possible_energy_saving": {
+        "name": "Possible energy saving"
+      },
+      "possible_water_saving": {
+        "name": "Possible water saving"
       },
       "energy_consumption_year": {
         "name": "Energy consumption year"
@@ -416,6 +434,9 @@
       },
       "bath_fill_remaining_volume": {
         "name": "Bath fill remaining"
+      },
+      "bath_fill_current_volume": {
+        "name": "Current bath fill volume"
       },
       "saving_monitor_water": {
         "name": "Saving monitor consumption water"
@@ -500,7 +521,7 @@
         "name": "Bath fill"
       },
       "maximum_active": {
-        "name": "Maximum temperature limit"
+        "name": "Child safety"
       },
       "brush_timer_activation": {
         "name": "Brush timer"

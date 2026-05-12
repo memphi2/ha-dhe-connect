@@ -23,8 +23,8 @@ from .client import (
     DHEError,
     ID_BATH_FILL_TARGET_VOLUME,
     ID_BRUSH_TIMER_DURATION,
+    ID_CHILD_SAFETY_TEMPERATURE_LIMIT,
     ID_ECO_FLOW_LIMIT,
-    ID_MAX_TEMPERATURE,
     ID_SHOWER_TIMER_DURATION,
     MeasurementValue,
     SHOWER_TIMER_PATH,
@@ -64,8 +64,8 @@ STATIC_NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfVolume.LITERS,
         device_class=NumberDeviceClass.VOLUME,
         icon="mdi:bathtub",
-        native_min_value=1,
-        native_max_value=300,
+        native_min_value=5,
+        native_max_value=200,
         native_step=1,
         odb_id=ID_BATH_FILL_TARGET_VOLUME,
     ),
@@ -76,9 +76,9 @@ STATIC_NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         device_class=NumberDeviceClass.TEMPERATURE,
         icon="mdi:thermometer-high",
         native_min_value=20.0,
-        native_max_value=50.0,
+        native_max_value=60.0,
         native_step=0.5,
-        odb_id=ID_MAX_TEMPERATURE,
+        odb_id=ID_CHILD_SAFETY_TEMPERATURE_LIMIT,
     ),
     StiebelDHENumberEntityDescription(
         key="eco_flow_limit",
@@ -86,9 +86,9 @@ STATIC_NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfVolumeFlowRate.LITERS_PER_MINUTE,
         device_class=NumberDeviceClass.VOLUME_FLOW_RATE,
         icon="mdi:water-pump",
-        native_min_value=6.0,
-        native_max_value=8.0,
-        native_step=1.0,
+        native_min_value=4.0,
+        native_max_value=15.0,
+        native_step=0.5,
         odb_id=ID_ECO_FLOW_LIMIT,
     ),
     StiebelDHENumberEntityDescription(
@@ -346,8 +346,10 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
         try:
             if self.entity_description.odb_id == ID_BATH_FILL_TARGET_VOLUME:
                 confirmed = await self._client.set_bath_fill_target_volume(client_value)
-            elif self.entity_description.odb_id == ID_MAX_TEMPERATURE:
-                confirmed = await self._client.set_maximum_temperature(client_value)
+            elif self.entity_description.odb_id == ID_CHILD_SAFETY_TEMPERATURE_LIMIT:
+                confirmed = await self._client.set_child_safety_temperature_limit(
+                    client_value
+                )
             elif self.entity_description.odb_id == ID_ECO_FLOW_LIMIT:
                 confirmed = await self._client.set_eco_flow_limit(client_value)
             elif self.entity_description.odb_id == ID_BRUSH_TIMER_DURATION:

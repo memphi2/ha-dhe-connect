@@ -16,11 +16,14 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .client import (
+    CO2_EMISSION_MAX,
     DHEClient,
     DHEError,
+    ELECTRICITY_PRICE_MAX,
     ID_CO2_EMISSION,
     ID_ELECTRICITY_PRICE,
     ID_WATER_PRICE,
+    WATER_PRICE_MAX,
 )
 from .config_flow_mapping import (
     default_radio_catalog_value as _default_radio_catalog_value,
@@ -226,14 +229,14 @@ def _currency_options(hass: HomeAssistant, current: str = "") -> dict[str, str]:
     return options
 
 
-def _format_number_default(value: Any) -> str:
+def _format_number_default(value: Any, *, precision: int = 2) -> str:
     try:
         numeric = float(value)
     except (TypeError, ValueError):
         return ""
     if numeric.is_integer():
         return str(int(numeric))
-    return f"{numeric:.2f}".rstrip("0").rstrip(".")
+    return f"{numeric:.{precision}f}".rstrip("0").rstrip(".")
 
 
 def _device_settings_defaults(client: Any) -> dict[str, Any]:
@@ -245,7 +248,10 @@ def _device_settings_defaults(client: Any) -> dict[str, Any]:
             measurements.get(ID_ELECTRICITY_PRICE)
         ),
         ATTR_WATER_PRICE: _format_number_default(measurements.get(ID_WATER_PRICE)),
-        ATTR_CO2_EMISSION: _format_number_default(measurements.get(ID_CO2_EMISSION)),
+        ATTR_CO2_EMISSION: _format_number_default(
+            measurements.get(ID_CO2_EMISSION),
+            precision=3,
+        ),
     }
 
 
@@ -624,17 +630,17 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
                 electricity_price = _optional_float(
                     user_input.get(ATTR_ELECTRICITY_PRICE),
                     0.0,
-                    9.99,
+                    ELECTRICITY_PRICE_MAX,
                 )
                 water_price = _optional_float(
                     user_input.get(ATTR_WATER_PRICE),
                     0.0,
-                    9.99,
+                    WATER_PRICE_MAX,
                 )
                 co2_emission = _optional_float(
                     user_input.get(ATTR_CO2_EMISSION),
                     0.0,
-                    99.99,
+                    CO2_EMISSION_MAX,
                 )
 
                 if currency and currency != CURRENCY_UNCHANGED:

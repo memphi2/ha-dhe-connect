@@ -13,10 +13,10 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .client import (
-    ID_INTERNAL_TEMPERATURE_1,
-    ID_INTERNAL_TEMPERATURE_2,
-    ID_MAXIMUM_ACTIVE,
-    ID_MAX_TEMPERATURE,
+    ID_CHILD_SAFETY_ACTIVE,
+    ID_CHILD_SAFETY_TEMPERATURE_LIMIT,
+    ID_INLET_TEMPERATURE,
+    ID_OUTLET_TEMPERATURE,
     ID_WATER_HEATING_ENABLED,
     DHEClient,
     DHEError,
@@ -73,8 +73,8 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
         self._inlet_temperature: float | None = None
         self._outlet_temperature: float | None = None
         self._water_heating_enabled: bool | None = None
-        self._maximum_active: bool | None = None
-        self._configured_max_temperature: float | None = None
+        self._child_safety_active: bool | None = None
+        self._child_safety_temperature_limit: float | None = None
         self._target_before_heating_off: float | None = None
         self._update_extra_state_attributes()
 
@@ -90,8 +90,8 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
             "outlet_temperature": self._outlet_temperature,
             "setpoint_below_inlet_temperature": target_below_inlet,
             "water_heating_enabled": self._water_heating_enabled,
-            "maximum_temperature_limit_active": self._maximum_active,
-            "configured_maximum_temperature": self._configured_max_temperature,
+            "child_safety_active": self._child_safety_active,
+            "child_safety_temperature_limit": self._child_safety_temperature_limit,
         }
         if target_below_inlet:
             self._attr_extra_state_attributes["inlet_minus_setpoint"] = round(
@@ -115,7 +115,9 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
         if self._client.last_setpoint is not None:
             self._attr_target_temperature = self._client.last_setpoint
             self._attr_available = self._client.available
-            self._connection_state = "connected" if self._client.available else "unavailable"
+            self._connection_state = (
+                "connected" if self._client.available else "unavailable"
+            )
             self._update_extra_state_attributes()
 
     @callback
@@ -132,18 +134,20 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
     @callback
     def _handle_measurement_update(self, odb_id: int, value: MeasurementValue) -> None:
         """Handle measurement updates for inlet and outlet temperatures."""
-        if odb_id == ID_INTERNAL_TEMPERATURE_1:
+        if odb_id == ID_INLET_TEMPERATURE:
             self._inlet_temperature = self._coerce_temperature(value)
-        elif odb_id == ID_INTERNAL_TEMPERATURE_2:
+        elif odb_id == ID_OUTLET_TEMPERATURE:
             self._outlet_temperature = self._coerce_temperature(value)
         elif odb_id == ID_WATER_HEATING_ENABLED:
             self._water_heating_enabled = bool(value)
-            self._attr_hvac_mode = HVACMode.HEAT if self._water_heating_enabled else HVACMode.OFF
-        elif odb_id == ID_MAXIMUM_ACTIVE:
-            self._maximum_active = bool(value)
+            self._attr_hvac_mode = (
+                HVACMode.HEAT if self._water_heating_enabled else HVACMode.OFF
+            )
+        elif odb_id == ID_CHILD_SAFETY_ACTIVE:
+            self._child_safety_active = bool(value)
             self._apply_dynamic_max_temperature()
-        elif odb_id == ID_MAX_TEMPERATURE:
-            self._configured_max_temperature = self._coerce_temperature(value)
+        elif odb_id == ID_CHILD_SAFETY_TEMPERATURE_LIMIT:
+            self._child_safety_temperature_limit = self._coerce_temperature(value)
             self._apply_dynamic_max_temperature()
         else:
             return
@@ -171,10 +175,10 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
     def _sync_temperatures_from_measurements(self) -> None:
         """Initialize inlet/outlet values from the last known measurements."""
         self._inlet_temperature = self._coerce_temperature(
-            self._client.last_measurements.get(ID_INTERNAL_TEMPERATURE_1)
+            self._client.last_measurements.get(ID_INLET_TEMPERATURE)
         )
         self._outlet_temperature = self._coerce_temperature(
-            self._client.last_measurements.get(ID_INTERNAL_TEMPERATURE_2)
+            self._client.last_measurements.get(ID_OUTLET_TEMPERATURE)
         )
 
     def _sync_hvac_mode_from_measurements(self) -> None:
@@ -184,25 +188,34 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
             self._water_heating_enabled = None
             return
         self._water_heating_enabled = bool(value)
-        self._attr_hvac_mode = HVACMode.HEAT if self._water_heating_enabled else HVACMode.OFF
+        self._attr_hvac_mode = (
+            HVACMode.HEAT if self._water_heating_enabled else HVACMode.OFF
+        )
 
     def _sync_max_temperature_from_measurements(self) -> None:
         """Initialize dynamic max temperature from ODB ids 4/5."""
-        maximum_active = self._client.last_measurements.get(ID_MAXIMUM_ACTIVE)
-        if maximum_active is not None:
-            self._maximum_active = bool(maximum_active)
+        child_safety_active = self._client.last_measurements.get(ID_CHILD_SAFETY_ACTIVE)
+        if child_safety_active is not None:
+            self._child_safety_active = bool(child_safety_active)
 
-        configured_maximum = self._client.last_measurements.get(ID_MAX_TEMPERATURE)
-        self._configured_max_temperature = self._coerce_temperature(configured_maximum)
+        configured_maximum = self._client.last_measurements.get(
+            ID_CHILD_SAFETY_TEMPERATURE_LIMIT
+        )
+        self._child_safety_temperature_limit = self._coerce_temperature(
+            configured_maximum
+        )
         self._apply_dynamic_max_temperature()
 
     def _apply_dynamic_max_temperature(self) -> None:
         """Apply max temperature depending on configured limit override."""
         max_temp = 60.0
-        if self._maximum_active and self._configured_max_temperature is not None:
+        if (
+            self._child_safety_active
+            and self._child_safety_temperature_limit is not None
+        ):
             max_temp = max(
                 self._attr_min_temp,
-                min(60.0, self._configured_max_temperature),
+                min(60.0, self._child_safety_temperature_limit),
             )
         self._attr_max_temp = max_temp
 

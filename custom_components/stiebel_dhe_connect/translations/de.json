@@ -259,7 +259,7 @@
         "name": "Wannenfüllmenge"
       },
       "maximum_temperature": {
-        "name": "Maximaltemperatur"
+        "name": "Kindersicherung Temperaturgrenze"
       },
       "eco_flow_limit": {
         "name": "Eco-Durchflussbegrenzung"
@@ -358,7 +358,10 @@
         "name": "Aktueller Stromverbrauch"
       },
       "configured_power": {
-        "name": "Eingestellte Leistung"
+        "name": "Nennleistung"
+      },
+      "operating_duration": {
+        "name": "Betriebsdauer"
       },
       "internal_temperature_1": {
         "name": "Zulauftemperatur"
@@ -384,6 +387,9 @@
           "unknown": "Unbekannt"
         }
       },
+      "protocol_version": {
+        "name": "Protokollversion"
+      },
       "water_consumption_week": {
         "name": "Wasserverbrauch Woche"
       },
@@ -393,8 +399,20 @@
       "water_consumption_years": {
         "name": "Gesamtwasserverbrauch"
       },
+      "hot_water_volume_total": {
+        "name": "Warmwasservolumen gesamt"
+      },
       "energy_consumption_week": {
         "name": "Energieverbrauch Woche"
+      },
+      "heating_energy_total": {
+        "name": "Heizenergie gesamt"
+      },
+      "possible_energy_saving": {
+        "name": "Mögliche Energieeinsparung"
+      },
+      "possible_water_saving": {
+        "name": "Mögliche Wassereinsparung"
       },
       "energy_consumption_year": {
         "name": "Energieverbrauch Jahr"
@@ -416,6 +434,9 @@
       },
       "bath_fill_remaining_volume": {
         "name": "Wannenfüllung verbleibend"
+      },
+      "bath_fill_current_volume": {
+        "name": "Wannenfüllmenge aktuell"
       },
       "saving_monitor_water": {
         "name": "Sparmonitor Verbrauch Wasser"
@@ -500,7 +521,7 @@
         "name": "Wannenfüllung"
       },
       "maximum_active": {
-        "name": "Maximaltemperatur-Begrenzung"
+        "name": "Kindersicherung"
       },
       "brush_timer_activation": {
         "name": "Zahnputz-Timer"

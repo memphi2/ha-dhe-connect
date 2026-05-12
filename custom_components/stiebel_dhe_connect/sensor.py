@@ -18,6 +18,7 @@ from homeassistant.const import (
     UnitOfMass,
     UnitOfPower,
     UnitOfTemperature,
+    UnitOfTime,
     UnitOfVolume,
     UnitOfVolumeFlowRate,
 )
@@ -30,19 +31,25 @@ from .client import (
     DHEClient,
     ID_BATH_FILL_REMAINING_VOLUME,
     ID_BRUSH_TIMER_REMAINING,
-    ID_CONFIGURED_POWER,
     ID_DEVICE_INFO,
     ID_DEVICE_STATUS,
     ID_ENERGY_CONSUMPTION_WEEK,
     ID_ENERGY_CONSUMPTION_YEAR,
     ID_ENERGY_CONSUMPTION_YEARS,
-    ID_INTERNAL_TEMPERATURE_1,
-    ID_INTERNAL_TEMPERATURE_2,
+    ID_HEATING_ENERGY_TOTAL,
+    ID_HOT_WATER_VOLUME_TOTAL,
+    ID_INLET_TEMPERATURE,
     ID_LAST_USAGE_COST,
     ID_LAST_USAGE_ENERGY,
     ID_LAST_USAGE_TIME,
     ID_LAST_USAGE_WATER,
-    ID_POWER,
+    ID_NOMINAL_POWER,
+    ID_OPERATING_DURATION,
+    ID_OUTLET_TEMPERATURE,
+    ID_POSSIBLE_ENERGY_SAVING,
+    ID_POSSIBLE_WATER_SAVING,
+    ID_POWER_PERCENT,
+    ID_PROTOCOL_VERSION,
     ID_SAVING_MONITOR_ACTIVATION_RATE,
     ID_SAVING_MONITOR_CO2,
     ID_SAVING_MONITOR_ENERGY,
@@ -145,14 +152,25 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
-        odb_id=ID_POWER,
+        odb_id=ID_POWER_PERCENT,
     ),
     StiebelDHESensorEntityDescription(
         key="configured_power",
         translation_key="configured_power",
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         device_class=SensorDeviceClass.POWER,
-        odb_id=ID_CONFIGURED_POWER,
+        odb_id=ID_NOMINAL_POWER,
+    ),
+    StiebelDHESensorEntityDescription(
+        key="operating_duration",
+        translation_key="operating_duration",
+        native_unit_of_measurement=UnitOfTime.HOURS,
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        icon="mdi:clock-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        odb_id=ID_OPERATING_DURATION,
     ),
     StiebelDHESensorEntityDescription(
         key="internal_temperature_1",
@@ -163,7 +181,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         icon="mdi:thermometer",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
-        odb_id=ID_INTERNAL_TEMPERATURE_1,
+        odb_id=ID_INLET_TEMPERATURE,
     ),
     StiebelDHESensorEntityDescription(
         key="internal_temperature_2",
@@ -174,7 +192,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         icon="mdi:thermometer",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
-        odb_id=ID_INTERNAL_TEMPERATURE_2,
+        odb_id=ID_OUTLET_TEMPERATURE,
     ),
     StiebelDHESensorEntityDescription(
         key="scald_protection_temperature_limit",
@@ -195,6 +213,14 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         odb_id=ID_DEVICE_STATUS,
+    ),
+    StiebelDHESensorEntityDescription(
+        key="protocol_version",
+        translation_key="protocol_version",
+        icon="mdi:counter",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        odb_id=ID_PROTOCOL_VERSION,
     ),
     StiebelDHESensorEntityDescription(
         key="water_consumption_week",
@@ -230,6 +256,15 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         period="years",
     ),
     StiebelDHESensorEntityDescription(
+        key="hot_water_volume_total",
+        translation_key="hot_water_volume_total",
+        native_unit_of_measurement=UnitOfVolume.CUBIC_METERS,
+        device_class=SensorDeviceClass.WATER,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        icon="mdi:water",
+        odb_id=ID_HOT_WATER_VOLUME_TOTAL,
+    ),
+    StiebelDHESensorEntityDescription(
         key="energy_consumption_week",
         translation_key="energy_consumption_week",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
@@ -238,6 +273,37 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         odb_id=ID_ENERGY_CONSUMPTION_WEEK,
         source_command="set:ste.app.consumption:energyWeek",
         period="week",
+    ),
+    StiebelDHESensorEntityDescription(
+        key="heating_energy_total",
+        translation_key="heating_energy_total",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        icon="mdi:lightning-bolt",
+        odb_id=ID_HEATING_ENERGY_TOTAL,
+    ),
+    StiebelDHESensorEntityDescription(
+        key="possible_energy_saving",
+        translation_key="possible_energy_saving",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:lightning-bolt-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        odb_id=ID_POSSIBLE_ENERGY_SAVING,
+    ),
+    StiebelDHESensorEntityDescription(
+        key="possible_water_saving",
+        translation_key="possible_water_saving",
+        native_unit_of_measurement=UnitOfVolume.CUBIC_METERS,
+        device_class=SensorDeviceClass.WATER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:water-percent",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        odb_id=ID_POSSIBLE_WATER_SAVING,
     ),
     StiebelDHESensorEntityDescription(
         key="energy_consumption_year",
@@ -425,6 +491,17 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         icon="mdi:bathtub",
         odb_id=ID_BATH_FILL_REMAINING_VOLUME,
         source_command="derived:bath_fill_remaining",
+    ),
+    StiebelDHESensorEntityDescription(
+        key="bath_fill_current_volume",
+        translation_key="bath_fill_current_volume",
+        native_unit_of_measurement=UnitOfVolume.LITERS,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        icon="mdi:bathtub",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        odb_id=ID_BATH_FILL_CURRENT_VOLUME,
     ),
     StiebelDHESensorEntityDescription(
         key="brush_timer_remaining",
@@ -700,7 +777,7 @@ class StiebelDHEErrorStatusSensor(StiebelDHEEntityMixin, SensorEntity):
         )
         self._setpoint = self._coerce_temperature(self._client.last_setpoint)
         self._inlet_temperature = self._coerce_temperature(
-            self._client.last_measurements.get(ID_INTERNAL_TEMPERATURE_1)
+            self._client.last_measurements.get(ID_INLET_TEMPERATURE)
         )
         device_status = self._client.last_measurements.get(ID_DEVICE_STATUS)
         self._device_status = str(device_status) if isinstance(device_status, str) else None
@@ -715,7 +792,7 @@ class StiebelDHEErrorStatusSensor(StiebelDHEEntityMixin, SensorEntity):
 
     @callback
     def _handle_measurement_update(self, odb_id: int, value: MeasurementValue) -> None:
-        if odb_id == ID_INTERNAL_TEMPERATURE_1:
+        if odb_id == ID_INLET_TEMPERATURE:
             self._inlet_temperature = self._coerce_temperature(value)
         elif odb_id == ID_DEVICE_STATUS:
             self._device_status = str(value) if isinstance(value, str) else None
