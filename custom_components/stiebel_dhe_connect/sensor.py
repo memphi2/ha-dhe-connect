@@ -62,7 +62,15 @@ from .client import (
     MeasurementValue,
     SHOWER_TIMER_PATH,
 )
-from .entity_helpers import build_device_info
+from .entity_helpers import StiebelDHEEntityMixin
+from .entity_state_helpers import (
+    coerce_float,
+    connected_or_known_available,
+    format_minutes_duration,
+    measurement_attribute_text,
+    merge_state_attributes,
+    value_available,
+)
 from .runtime_helpers import get_runtime_data
 
 
@@ -512,7 +520,7 @@ async def async_setup_entry(
     )
 
 
-class StiebelDHESensor(SensorEntity):
+class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
     """Converted DHE value sensor."""
 
     entity_description: StiebelDHESensorEntityDescription
@@ -529,10 +537,14 @@ class StiebelDHESensor(SensorEntity):
         """Initialize the sensor."""
         self.entity_description = description
         self._attr_translation_key = description.translation_key
-        self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_{description.key}"
+        self._init_dhe_entity(
+            entry_id=entry_id,
+            key=description.key,
+            name=name,
+            client=client,
+        )
         if description.key in DEFAULT_DISABLED_SENSOR_KEYS:
             self._attr_entity_registry_enabled_default = False
-        self._attr_device_info = build_device_info(client.host, client.port, name, client.legacy_device_identifier)
         if description.timer_path:
             self._base_extra_state_attributes = {
                 "timer_path": description.timer_path,
@@ -547,7 +559,6 @@ class StiebelDHESensor(SensorEntity):
         else:
             self._base_extra_state_attributes = {"odb_id": description.odb_id}
         self._attr_extra_state_attributes = dict(self._base_extra_state_attributes)
-        self._client = client
         self._attr_available = False
         self._attr_native_value: float | str | None = None
 
@@ -569,26 +580,29 @@ class StiebelDHESensor(SensorEntity):
     def _convert_value(self, value: MeasurementValue) -> MeasurementValue:
         """Convert the raw client value for display."""
         if self.entity_description.attribute_key is not None:
-            attribute_value = self._client.last_measurement_attributes.get(
+            attributes = self._client.last_measurement_attributes.get(
                 self.entity_description.odb_id,
                 {},
-            ).get(self.entity_description.attribute_key)
-            if attribute_value in (None, ""):
-                return None
-            return str(attribute_value)
+            )
+            return measurement_attribute_text(
+                attributes,
+                self.entity_description.attribute_key,
+            )
 
         if not self.entity_description.timer_path and self.entity_description.key != "last_usage_time":
             return value
 
-        total_seconds = max(0, int(round(float(value) * 60)))
-        minutes, seconds = divmod(total_seconds, 60)
-        return f"{minutes}:{seconds:02d}"
+        return format_minutes_duration(value)
 
     def _update_extra_state_attributes(self) -> None:
         """Update static and dynamic sensor attributes."""
-        attributes = dict(self._base_extra_state_attributes)
-        attributes.update(self._client.last_measurement_attributes.get(self.entity_description.odb_id, {}))
-        self._attr_extra_state_attributes = attributes
+        self._attr_extra_state_attributes = merge_state_attributes(
+            self._base_extra_state_attributes,
+            self._client.last_measurement_attributes.get(
+                self.entity_description.odb_id,
+                {},
+            ),
+        )
 
     @callback
     def _handle_measurement_update(self, odb_id: int, value: MeasurementValue) -> None:
@@ -604,11 +618,11 @@ class StiebelDHESensor(SensorEntity):
     @callback
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
-        self._attr_available = available and self._attr_native_value is not None
+        self._attr_available = value_available(available, self._attr_native_value)
         self.async_write_ha_state()
 
 
-class StiebelDHEReconnectCountSensor(SensorEntity):
+class StiebelDHEReconnectCountSensor(StiebelDHEEntityMixin, SensorEntity):
     """DHE reconnect count diagnostic sensor."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
@@ -621,9 +635,12 @@ class StiebelDHEReconnectCountSensor(SensorEntity):
 
     def __init__(self, entry_id: str, name: str, client: DHEClient) -> None:
         """Initialize the reconnect count sensor."""
-        self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_reconnect_count"
-        self._attr_device_info = build_device_info(client.host, client.port, name, client.legacy_device_identifier)
-        self._client = client
+        self._init_dhe_entity(
+            entry_id=entry_id,
+            key="reconnect_count",
+            name=name,
+            client=client,
+        )
         self._attr_available = True
         self._attr_native_value = client.reconnect_count
 
@@ -641,7 +658,7 @@ class StiebelDHEReconnectCountSensor(SensorEntity):
         self.async_write_ha_state()
 
 
-class StiebelDHEErrorStatusSensor(SensorEntity):
+class StiebelDHEErrorStatusSensor(StiebelDHEEntityMixin, SensorEntity):
     """Human-readable general error status."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
@@ -652,9 +669,12 @@ class StiebelDHEErrorStatusSensor(SensorEntity):
 
     def __init__(self, entry_id: str, name: str, client: DHEClient) -> None:
         """Initialize the general error status sensor."""
-        self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_temperature_error_status"
-        self._attr_device_info = build_device_info(client.host, client.port, name, client.legacy_device_identifier)
-        self._client = client
+        self._init_dhe_entity(
+            entry_id=entry_id,
+            key="temperature_error_status",
+            name=name,
+            client=client,
+        )
         self._setpoint: float | None = None
         self._inlet_temperature: float | None = None
         self._attr_available = False
@@ -695,10 +715,10 @@ class StiebelDHEErrorStatusSensor(SensorEntity):
 
     @callback
     def _handle_availability_update(self, available: bool) -> None:
-        self._attr_available = (
-            available
-            or self._setpoint is not None
-            or self._inlet_temperature is not None
+        self._attr_available = connected_or_known_available(
+            available,
+            self._setpoint,
+            self._inlet_temperature,
         )
         self._update_status()
         self.async_write_ha_state()
@@ -724,10 +744,10 @@ class StiebelDHEErrorStatusSensor(SensorEntity):
             self._attr_native_value = "OK"
             active_error = None
 
-        self._attr_available = (
-            self._client.available
-            or self._setpoint is not None
-            or self._inlet_temperature is not None
+        self._attr_available = connected_or_known_available(
+            self._client.available,
+            self._setpoint,
+            self._inlet_temperature,
         )
         self._attr_extra_state_attributes = {
             "online": self._client.online,
@@ -744,15 +764,10 @@ class StiebelDHEErrorStatusSensor(SensorEntity):
 
     @staticmethod
     def _coerce_temperature(value: MeasurementValue) -> float | None:
-        if value is None or isinstance(value, bool):
-            return None
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            return None
+        return coerce_float(value)
 
 
-class StiebelDHEDiagnosticSensor(SensorEntity):
+class StiebelDHEDiagnosticSensor(StiebelDHEEntityMixin, SensorEntity):
     """DHE client diagnostic sensor."""
 
     entity_description: StiebelDHEDiagnosticSensorEntityDescription
@@ -770,10 +785,13 @@ class StiebelDHEDiagnosticSensor(SensorEntity):
         self.entity_description = description
         self._attr_translation_key = description.translation_key
         self._attr_icon = description.icon
-        self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_{description.key}"
+        self._init_dhe_entity(
+            entry_id=entry_id,
+            key=description.key,
+            name=name,
+            client=client,
+        )
         self._attr_should_poll = description.polls
-        self._attr_device_info = build_device_info(client.host, client.port, name, client.legacy_device_identifier)
-        self._client = client
         self._attr_available = False
         self._attr_native_value: int | str | None = None
         self._attr_extra_state_attributes = {}

@@ -22,7 +22,7 @@ from .client import (
     DHEError,
     MeasurementValue,
 )
-from .entity_helpers import build_device_info
+from .entity_helpers import StiebelDHEEntityMixin
 from .runtime_helpers import get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ async def async_setup_entry(
     ])
 
 
-class StiebelDHEClimate(ClimateEntity):
+class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
     """Stiebel DHE setpoint entity with persistent local WebSocket session."""
 
     _attr_has_entity_name = True
@@ -60,9 +60,12 @@ class StiebelDHEClimate(ClimateEntity):
 
     def __init__(self, entry_id: str, name: str, client: DHEClient) -> None:
         """Initialize the entity."""
-        self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_setpoint"
-        self._attr_device_info = build_device_info(client.host, client.port, name, client.legacy_device_identifier)
-        self._client = client
+        self._init_dhe_entity(
+            entry_id=entry_id,
+            key="setpoint",
+            name=name,
+            client=client,
+        )
         self._attr_target_temperature: float | None = None
         self._attr_current_temperature: float | None = None
         self._attr_available = False

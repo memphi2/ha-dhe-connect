@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.0.7-beta - 2026-05-12 (compared to v1.0.6)
+
+### Added
+
+- Added focused unit coverage for weather, radio, pairing, config-flow and entity helper mappings.
+
+### Changed
+
+- Refactored weather, radio, pairing, config-flow and shared entity state mapping into smaller helper modules.
+- Timer duration controls now use seconds in Home Assistant and preserve second-level writes to the DHE.
+- Maximum temperature configuration now supports the full `20` to `50` C device range.
+- Weather location selection is enabled by default for new setups.
+- Weather period selection now uses Home Assistant's configured timezone.
+- German naming now uses `Durchlauferhitzer` for water heating.
+
 ## v1.0.6 - 2026-05-11 (compared to v1.0.5)
 
 ### Added

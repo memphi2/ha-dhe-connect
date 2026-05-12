@@ -17,7 +17,9 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .client import DHEClient, DHEError
-from .entity_helpers import build_device_info
+from .entity_helpers import StiebelDHEEntityMixin
+from .entity_state_helpers import connected_and_ready
+from . import radio_mapping as radio
 from .runtime_helpers import get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
@@ -43,7 +45,7 @@ async def async_setup_entry(
     ])
 
 
-class StiebelDHERadioMediaPlayer(MediaPlayerEntity):
+class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
     """Radio media player backed by the DHE app radio protocol."""
 
     _attr_has_entity_name = True
@@ -63,13 +65,16 @@ class StiebelDHERadioMediaPlayer(MediaPlayerEntity):
 
     def __init__(self, entry_id: str, name: str, client: DHEClient) -> None:
         """Initialize the radio media player."""
-        self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_radio"
-        self._attr_device_info = build_device_info(client.host, client.port, name, client.legacy_device_identifier)
+        self._init_dhe_entity(
+            entry_id=entry_id,
+            key="radio",
+            name=name,
+            client=client,
+        )
         self._attr_available = False
         self._attr_extra_state_attributes = {"radio_path": "ste.app.radio"}
         self._attr_state = None
         self._attr_volume_level = None
-        self._client = client
         self._have_radio_state = False
         self._sources_by_option: dict[str, dict[str, Any]] = {}
 
@@ -183,7 +188,7 @@ class StiebelDHERadioMediaPlayer(MediaPlayerEntity):
     @callback
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
-        self._attr_available = available and self._have_radio_state
+        self._attr_available = connected_and_ready(available, self._have_radio_state)
         self.async_write_ha_state()
 
     def _apply_radio_state(self, state: dict[str, Any]) -> None:
@@ -204,138 +209,22 @@ class StiebelDHERadioMediaPlayer(MediaPlayerEntity):
 
         station = state.get("station")
         if isinstance(station, dict):
-            station_id = _station_id(station)
+            current_station_id = radio.station_id(station)
             self._attr_media_content_id = (
-                str(station_id) if station_id is not None else None
+                str(current_station_id) if current_station_id is not None else None
             )
             self._attr_media_content_type = "music"
-            self._attr_media_image_url = _station_logo_url(station)
-            self._attr_media_title = _media_title(state, station)
-            self._attr_media_artist = _station_name(station)
+            self._attr_media_image_url = radio.station_logo_url(station)
+            self._attr_media_title = radio.media_title(state, station)
+            self._attr_media_artist = radio.station_name(station)
 
-        favorites = _stations(state.get("favorites"))
-        self._sources_by_option = _source_option_map(favorites)
+        favorites = radio.stations(state.get("favorites"))
+        self._sources_by_option = radio.source_option_map(favorites)
         self._attr_source_list = list(self._sources_by_option)
-        self._attr_source = _source_for_station(station, self._sources_by_option)
+        self._attr_source = radio.source_for_station(station, self._sources_by_option)
 
-        self._attr_extra_state_attributes = _radio_attributes(state)
-        self._attr_available = self._client.available and self._have_radio_state
-
-
-def _radio_attributes(state: dict[str, Any]) -> dict[str, Any]:
-    station = state.get("station")
-    attributes: dict[str, Any] = {"radio_path": "ste.app.radio"}
-
-    if isinstance(station, dict):
-        attributes["station_id"] = _station_id(station)
-        attributes["station_name"] = _station_name(station)
-        station_city = _station_text(station, "City")
-        station_country = _station_text(station, "Country")
-        station_genres = station.get("Genres", station.get("genres"))
-        if station_city:
-            attributes["station_city"] = station_city
-        if station_country:
-            attributes["station_country"] = station_country
-        if isinstance(station_genres, list):
-            attributes["station_genres"] = [str(genre) for genre in station_genres]
-
-    for key in ("title", "paired"):
-        value = state.get(key)
-        if value not in (None, ""):
-            attributes[key] = value
-
-    favorites = _stations(state.get("favorites"))
-    if favorites:
-        attributes["favorite_count"] = len(favorites)
-        attributes["favorites"] = [
-            {
-                "id": _station_id(favorite),
-                "name": _station_name(favorite),
-            }
-            for favorite in favorites
-        ]
-
-    return attributes
-
-
-def _source_option_map(stations: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    labels = [_source_label(station) for station in stations]
-    duplicated = {label for label in labels if labels.count(label) > 1}
-    options: dict[str, dict[str, Any]] = {}
-
-    for station, label in zip(stations, labels, strict=True):
-        station_id = _station_id(station)
-        option = label
-        if label in duplicated and station_id is not None:
-            option = f"{label} ({station_id})"
-        options[option] = station
-    return options
-
-
-def _source_for_station(
-    station: Any,
-    sources_by_option: dict[str, dict[str, Any]],
-) -> str | None:
-    station_id = _station_id(station)
-    if station_id is None:
-        return _station_name(station)
-
-    for option, source_station in sources_by_option.items():
-        if _station_id(source_station) == station_id:
-            return option
-    return _station_name(station)
-
-
-def _source_label(station: dict[str, Any]) -> str:
-    return _station_name(station) or "Unknown station"
-
-
-def _stations(value: Any) -> list[dict[str, Any]]:
-    if not isinstance(value, list):
-        return []
-    return [dict(item) for item in value if isinstance(item, dict)]
-
-
-def _media_title(state: dict[str, Any], station: dict[str, Any]) -> str | None:
-    title = state.get("title")
-    if isinstance(title, str) and title.strip():
-        return title.strip()
-    return _station_name(station)
-
-
-def _station_name(station: Any) -> str | None:
-    if not isinstance(station, dict):
-        return None
-    name = _station_text(station, "Name")
-    if name:
-        return name
-    station_id = _station_id(station)
-    return str(station_id) if station_id is not None else None
-
-
-def _station_id(station: Any) -> int | None:
-    if not isinstance(station, dict):
-        return None
-    station_id = station.get("Id", station.get("id"))
-    try:
-        return int(station_id)
-    except (TypeError, ValueError):
-        return None
-
-
-def _station_logo_url(station: dict[str, Any]) -> str | None:
-    url = (
-        _station_text(station, "Logo175Url")
-        or _station_text(station, "Logo100Url")
-        or _station_text(station, "Logo44Url")
-    )
-    if url and url.startswith("//"):
-        return f"https:{url}"
-    return url
-
-
-def _station_text(station: dict[str, Any], key: str) -> str | None:
-    value = station.get(key, station.get(key[:1].lower() + key[1:]))
-    if value in (None, ""):
-        return None
-    return str(value)
+        self._attr_extra_state_attributes = radio.radio_attributes(state)
+        self._attr_available = connected_and_ready(
+            self._client.available,
+            self._have_radio_state,
+        )

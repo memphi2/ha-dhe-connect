@@ -27,7 +27,8 @@ from .client import (
     ODBValue,
     SHOWER_TIMER_PATH,
 )
-from .entity_helpers import build_device_info
+from .entity_helpers import StiebelDHEEntityMixin
+from .entity_state_helpers import value_available
 from .runtime_helpers import get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
@@ -179,7 +180,7 @@ async def async_setup_entry(
     ])
 
 
-class StiebelDHEODBSwitch(SwitchEntity, RestoreEntity):
+class StiebelDHEODBSwitch(StiebelDHEEntityMixin, SwitchEntity, RestoreEntity):
     """Generic boolean switch backed by one ODB measurement id."""
 
     entity_description: StiebelDHEODBSwitchDescription
@@ -197,10 +198,13 @@ class StiebelDHEODBSwitch(SwitchEntity, RestoreEntity):
         self._attr_translation_key = description.translation_key
         self._attr_icon = description.icon
         self._attr_entity_category = description.entity_category
-        self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_{description.key}"
-        self._attr_device_info = build_device_info(client.host, client.port, name, client.legacy_device_identifier)
+        self._init_dhe_entity(
+            entry_id=entry_id,
+            key=description.key,
+            name=name,
+            client=client,
+        )
         self._attr_extra_state_attributes = {"odb_id": description.measurement_id}
-        self._client = client
         self._attr_available = False
         self._attr_is_on: bool | None = None
 
@@ -267,11 +271,11 @@ class StiebelDHEODBSwitch(SwitchEntity, RestoreEntity):
     @callback
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
-        self._attr_available = available and self._attr_is_on is not None
+        self._attr_available = value_available(available, self._attr_is_on)
         self.async_write_ha_state()
 
 
-class StiebelDHEAppTimerSwitch(SwitchEntity, RestoreEntity):
+class StiebelDHEAppTimerSwitch(StiebelDHEEntityMixin, SwitchEntity, RestoreEntity):
     """App timer activation switch."""
 
     entity_description: StiebelDHEAppTimerSwitchDescription
@@ -288,13 +292,16 @@ class StiebelDHEAppTimerSwitch(SwitchEntity, RestoreEntity):
         self.entity_description = description
         self._attr_translation_key = description.translation_key
         self._attr_icon = description.icon
-        self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_{description.key}"
-        self._attr_device_info = build_device_info(client.host, client.port, name, client.legacy_device_identifier)
+        self._init_dhe_entity(
+            entry_id=entry_id,
+            key=description.key,
+            name=name,
+            client=client,
+        )
         self._attr_extra_state_attributes = {
             "timer_path": description.timer_path,
             "timer_property": "activation",
         }
-        self._client = client
         self._attr_available = False
         self._attr_is_on: bool | None = None
 
@@ -338,11 +345,15 @@ class StiebelDHEAppTimerSwitch(SwitchEntity, RestoreEntity):
 
     @callback
     def _handle_availability_update(self, available: bool) -> None:
-        self._attr_available = available and self._attr_is_on is not None
+        self._attr_available = value_available(available, self._attr_is_on)
         self.async_write_ha_state()
 
 
-class StiebelDHEWellnessShowerProgramSwitch(SwitchEntity, RestoreEntity):
+class StiebelDHEWellnessShowerProgramSwitch(
+    StiebelDHEEntityMixin,
+    SwitchEntity,
+    RestoreEntity,
+):
     """Wellness program switch based on ODB id 2."""
 
     entity_description: StiebelDHEWellnessShowerProgramSwitchDescription
@@ -359,10 +370,13 @@ class StiebelDHEWellnessShowerProgramSwitch(SwitchEntity, RestoreEntity):
         self.entity_description = description
         self._attr_translation_key = description.translation_key
         self._attr_icon = description.icon
-        self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_{description.key}"
-        self._attr_device_info = build_device_info(client.host, client.port, name, client.legacy_device_identifier)
+        self._init_dhe_entity(
+            entry_id=entry_id,
+            key=description.key,
+            name=name,
+            client=client,
+        )
         self._attr_extra_state_attributes = {"odb_id": ID_WELLNESS_SHOWER_PROGRAM, "program_value": description.program_id}
-        self._client = client
         self._attr_available = False
         self._attr_is_on: bool | None = None
         self._last_program_value: float | None = None
@@ -426,5 +440,5 @@ class StiebelDHEWellnessShowerProgramSwitch(SwitchEntity, RestoreEntity):
 
     @callback
     def _handle_availability_update(self, available: bool) -> None:
-        self._attr_available = available and self._attr_is_on is not None
+        self._attr_available = value_available(available, self._attr_is_on)
         self.async_write_ha_state()

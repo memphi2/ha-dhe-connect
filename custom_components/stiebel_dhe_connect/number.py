@@ -30,7 +30,14 @@ from .client import (
     SHOWER_TIMER_PATH,
     TEMPERATURE_MEMORY_SLOT_MEASUREMENTS,
 )
-from .entity_helpers import build_device_info
+from .entity_helpers import StiebelDHEEntityMixin
+from .entity_state_helpers import (
+    coerce_float,
+    format_minutes_duration,
+    minutes_to_seconds,
+    seconds_to_minutes,
+    value_available,
+)
 from .runtime_helpers import get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
@@ -64,7 +71,7 @@ STATIC_NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         device_class=NumberDeviceClass.TEMPERATURE,
         icon="mdi:thermometer-high",
-        native_min_value=30.0,
+        native_min_value=20.0,
         native_max_value=50.0,
         native_step=0.5,
         odb_id=ID_MAX_TEMPERATURE,
@@ -83,10 +90,10 @@ STATIC_NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
     StiebelDHENumberEntityDescription(
         key="brush_timer_duration",
         translation_key="brush_timer_duration",
-        native_unit_of_measurement=UnitOfTime.MINUTES,
+        native_unit_of_measurement=UnitOfTime.SECONDS,
         icon="mdi:toothbrush",
-        native_min_value=1.0,
-        native_max_value=20.0,
+        native_min_value=60.0,
+        native_max_value=1200.0,
         native_step=1.0,
         mode=NumberMode.BOX,
         odb_id=ID_BRUSH_TIMER_DURATION,
@@ -96,10 +103,10 @@ STATIC_NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
     StiebelDHENumberEntityDescription(
         key="shower_timer_duration",
         translation_key="shower_timer_duration",
-        native_unit_of_measurement=UnitOfTime.MINUTES,
+        native_unit_of_measurement=UnitOfTime.SECONDS,
         icon="mdi:timer-edit",
-        native_min_value=1.0,
-        native_max_value=20.0,
+        native_min_value=60.0,
+        native_max_value=1200.0,
         native_step=1.0,
         mode=NumberMode.BOX,
         odb_id=ID_SHOWER_TIMER_DURATION,
@@ -173,7 +180,7 @@ async def async_setup_entry(
     )
 
 
-class StiebelDHENumber(RestoreNumber):
+class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
     """Writable DHE setting represented as a Home Assistant number."""
 
     entity_description: StiebelDHENumberEntityDescription
@@ -191,25 +198,70 @@ class StiebelDHENumber(RestoreNumber):
         """Initialize the number entity."""
         self.entity_description = description
         self._attr_translation_key = description.translation_key
-        self._attr_unique_id = f"stiebel_dhe_connect_{entry_id}_{description.key}"
+        self._init_dhe_entity(
+            entry_id=entry_id,
+            key=description.key,
+            name=name,
+            client=client,
+        )
         self._attr_entity_registry_enabled_default = (
             description.entity_registry_enabled_default
         )
-        self._attr_device_info = build_device_info(client.host, client.port, name, client.legacy_device_identifier)
         if description.timer_path:
-            self._attr_extra_state_attributes = {
+            base_attributes = {
                 "timer_path": description.timer_path,
                 "timer_property": description.timer_property,
             }
         elif description.temperature_memory_slot is not None:
-            self._attr_extra_state_attributes = {
+            base_attributes = {
                 "temperature_memory_slot": description.temperature_memory_slot,
             }
         else:
-            self._attr_extra_state_attributes = {"odb_id": description.odb_id}
-        self._client = client
+            base_attributes = {"odb_id": description.odb_id}
+        self._base_extra_state_attributes = base_attributes
+        self._attr_extra_state_attributes = dict(base_attributes)
         self._attr_available = False
         self._attr_native_value: float | None = None
+
+    @property
+    def _is_timer_duration(self) -> bool:
+        """Return whether this number controls a timer duration."""
+        return self.entity_description.timer_property == "durationMilliseconds"
+
+    def _client_value_to_native(self, value: object) -> float | None:
+        """Convert the client measurement value to the HA number value."""
+        if self._is_timer_duration:
+            return minutes_to_seconds(value)
+        return coerce_float(value)
+
+    def _native_value_to_client(self, value: object) -> float | None:
+        """Convert the HA number value to the client write value."""
+        if self._is_timer_duration:
+            return seconds_to_minutes(value)
+        return coerce_float(value)
+
+    def _restore_native_value(self, value: object) -> float | None:
+        """Return a restored native value, accepting old minute-based timer state."""
+        restored_value = coerce_float(value)
+        if restored_value is None:
+            return None
+        if (
+            self._is_timer_duration
+            and restored_value < self.entity_description.native_min_value
+        ):
+            return minutes_to_seconds(restored_value)
+        return restored_value
+
+    def _update_extra_state_attributes(self) -> None:
+        """Refresh static and display-only attributes."""
+        attributes = dict(self._base_extra_state_attributes)
+        if self._is_timer_duration and self._attr_native_value is not None:
+            minutes_value = seconds_to_minutes(self._attr_native_value)
+            display_value = format_minutes_duration(minutes_value)
+            if display_value is not None:
+                attributes["duration"] = display_value
+                attributes["duration_seconds"] = int(round(self._attr_native_value))
+        self._attr_extra_state_attributes = attributes
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE updates and start the persistent session."""
@@ -221,37 +273,50 @@ class StiebelDHENumber(RestoreNumber):
         )
 
         last_value = self._client.last_measurements.get(self.entity_description.odb_id)
-        if last_value is not None and not isinstance(last_value, bool):
-            self._attr_native_value = float(last_value)
+        native_value = self._client_value_to_native(last_value)
+        if native_value is not None:
+            self._attr_native_value = native_value
             self._attr_available = True
         else:
             last_number_data = await self.async_get_last_number_data()
-            if last_number_data and last_number_data.native_value is not None:
-                self._attr_native_value = float(last_number_data.native_value)
+            restored_value = self._restore_native_value(
+                last_number_data.native_value if last_number_data else None
+            )
+            if restored_value is not None:
+                self._attr_native_value = restored_value
                 self._attr_available = True
+        self._update_extra_state_attributes()
 
     async def async_set_native_value(self, value: float) -> None:
         """Set the DHE ODB value and update state from confirmed writeback."""
+        client_value = self._native_value_to_client(value)
+        if client_value is None:
+            return
+
         try:
             if self.entity_description.odb_id == ID_BATH_FILL_TARGET_VOLUME:
-                confirmed = await self._client.set_bath_fill_target_volume(value)
+                confirmed = await self._client.set_bath_fill_target_volume(client_value)
             elif self.entity_description.odb_id == ID_MAX_TEMPERATURE:
-                confirmed = await self._client.set_maximum_temperature(value)
+                confirmed = await self._client.set_maximum_temperature(client_value)
             elif self.entity_description.odb_id == ID_ECO_FLOW_LIMIT:
-                confirmed = await self._client.set_eco_flow_limit(value)
+                confirmed = await self._client.set_eco_flow_limit(client_value)
             elif self.entity_description.odb_id == ID_BRUSH_TIMER_DURATION:
-                confirmed = await self._client.set_brush_timer_duration_minutes(value)
+                confirmed = await self._client.set_brush_timer_duration_minutes(
+                    client_value
+                )
             elif self.entity_description.odb_id == ID_SHOWER_TIMER_DURATION:
-                confirmed = await self._client.set_shower_timer_duration_minutes(value)
+                confirmed = await self._client.set_shower_timer_duration_minutes(
+                    client_value
+                )
             elif self.entity_description.temperature_memory_slot is not None:
                 confirmed = await self._client.set_temperature_memory(
                     self.entity_description.temperature_memory_slot,
-                    value,
+                    client_value,
                 )
             else:
                 confirmed = await self._client.write_odb_value(
                     self.entity_description.odb_id,
-                    value,
+                    client_value,
                 )
         except DHEError as err:
             self._attr_available = self._attr_native_value is not None
@@ -259,27 +324,31 @@ class StiebelDHENumber(RestoreNumber):
             _LOGGER.error("Could not set DHE number %s: %s", self.entity_description.key, err)
             raise
 
-        self._attr_native_value = float(confirmed)
+        self._attr_native_value = self._client_value_to_native(confirmed)
         self._attr_available = True
+        self._update_extra_state_attributes()
         self.async_write_ha_state()
 
     @callback
     def _handle_measurement_update(self, odb_id: int, value: MeasurementValue) -> None:
         """Handle converted ODB value updates from the persistent client."""
-        if odb_id != self.entity_description.odb_id or isinstance(value, bool):
+        if odb_id != self.entity_description.odb_id:
             return
-        if value is None:
+        native_value = self._client_value_to_native(value)
+        if native_value is None:
             self._attr_native_value = None
             self._attr_available = (
                 self._client.available
                 if self.entity_description.temperature_memory_slot is not None
                 else False
             )
+            self._update_extra_state_attributes()
             self.async_write_ha_state()
             return
 
-        self._attr_native_value = float(value)
+        self._attr_native_value = native_value
         self._attr_available = True
+        self._update_extra_state_attributes()
         self.async_write_ha_state()
 
     @callback
@@ -289,5 +358,5 @@ class StiebelDHENumber(RestoreNumber):
             self._attr_available = available
             self.async_write_ha_state()
             return
-        self._attr_available = available and self._attr_native_value is not None
+        self._attr_available = value_available(available, self._attr_native_value)
         self.async_write_ha_state()

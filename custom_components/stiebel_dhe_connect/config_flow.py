@@ -22,12 +22,22 @@ from .client import (
     ID_ELECTRICITY_PRICE,
     ID_WATER_PRICE,
 )
+from .config_flow_mapping import (
+    default_radio_catalog_value as _default_radio_catalog_value,
+    default_weather_country_id as _default_weather_country_id,
+    filter_radio_results_by_text as _filter_radio_results_by_text,
+    radio_catalog_options as _radio_catalog_options,
+    radio_result_options as _radio_result_options,
+    weather_country_options as _weather_country_options,
+    weather_result_options as _weather_result_options,
+)
 from .config_entry_helpers import merged_entry_data
 from .const import (
     DEFAULT_NAME,
     DEFAULT_PORT,
     DOMAIN,
 )
+from .pairing_helpers import map_pairing_error
 from .token_file_helpers import token_file_for_target
 
 ATTR_COUNTRY_ID = "country_id"
@@ -268,32 +278,6 @@ def _device_settings_schema(
     )
 
 
-def _weather_country_options(countries: list[dict[str, Any]]) -> dict[str, str]:
-    """Build a sorted select list for DHE weather countries."""
-    options: dict[str, str] = {}
-    for country in countries:
-        country_id = country.get("CountryId")
-        name = str(country.get("Country") or "").strip()
-        if country_id is None or not name:
-            continue
-        try:
-            country_id_key = str(int(country_id))
-        except (TypeError, ValueError):
-            continue
-        options[country_id_key] = f"{name} ({country_id_key})"
-    return dict(sorted(options.items(), key=lambda item: item[1].casefold()))
-
-
-def _default_weather_country_id(country_options: dict[str, str]) -> str:
-    """Return a sensible default country id for the weather favorite search."""
-    preferred = str(DEFAULT_WEATHER_COUNTRY_ID)
-    if preferred in country_options:
-        return preferred
-    if country_options:
-        return next(iter(country_options))
-    return preferred
-
-
 def _weather_search_schema(
     country_options: dict[str, str],
     defaults: dict[str, Any] | None = None,
@@ -301,10 +285,14 @@ def _weather_search_schema(
     """Build the weather favorite search form."""
     defaults = defaults or {}
     default_country = str(
-        defaults.get(ATTR_COUNTRY_ID) or _default_weather_country_id(country_options)
+        defaults.get(ATTR_COUNTRY_ID)
+        or _default_weather_country_id(country_options, DEFAULT_WEATHER_COUNTRY_ID)
     )
     if country_options and default_country not in country_options:
-        default_country = _default_weather_country_id(country_options)
+        default_country = _default_weather_country_id(
+            country_options,
+            DEFAULT_WEATHER_COUNTRY_ID,
+        )
 
     country_validator: Any
     if country_options:
@@ -318,29 +306,6 @@ def _weather_search_schema(
             vol.Required(CONF_NAME, default=defaults.get(CONF_NAME, "")): str,
         }
     )
-
-
-def _weather_location_label(location: dict[str, Any]) -> str:
-    """Return a readable label for a weather search result."""
-    name = str(location.get("Name") or "").strip()
-    country = str(location.get("Country") or "").strip()
-    location_id = str(location.get("LocationId") or "").strip()
-
-    if name and country:
-        return f"{name}, {country}"
-    if name:
-        return name
-    if location_id:
-        return location_id
-    return "Unknown location"
-
-
-def _weather_result_options(results: list[dict[str, Any]]) -> dict[str, str]:
-    """Build a select list for weather search results."""
-    options: dict[str, str] = {}
-    for index, location in enumerate(results[:MAX_WEATHER_RESULT_OPTIONS]):
-        options[str(index)] = _weather_location_label(location)
-    return options
 
 
 def _radio_search_type_options(hass: HomeAssistant) -> dict[str, str]:
@@ -382,29 +347,6 @@ def _radio_search_type_schema(
     )
 
 
-def _radio_catalog_options(values: list[str]) -> dict[str, str]:
-    """Build a select list for a DHE radio search catalog."""
-    options: dict[str, str] = {}
-    for item in values:
-        value = str(item).strip()
-        if value:
-            options[value] = value
-    return options
-
-
-def _default_radio_catalog_value(
-    search_type: str,
-    catalog_options: dict[str, str],
-) -> str:
-    """Return a sensible default value for radio station search."""
-    preferred = DEFAULT_RADIO_CATALOG_VALUES.get(search_type, "")
-    if preferred in catalog_options:
-        return preferred
-    if catalog_options:
-        return next(iter(catalog_options))
-    return preferred
-
-
 def _radio_catalog_schema(
     search_type: str,
     catalog_options: dict[str, str],
@@ -415,14 +357,22 @@ def _radio_catalog_schema(
     schema: dict[Any, Any] = {}
     default_value = str(
         defaults.get(ATTR_RADIO_SELECTION)
-        or _default_radio_catalog_value(search_type, catalog_options)
+        or _default_radio_catalog_value(
+            search_type,
+            catalog_options,
+            DEFAULT_RADIO_CATALOG_VALUES,
+        )
     )
     if (
         search_type in RADIO_CATALOG_SEARCH_TYPES
         and catalog_options
         and default_value not in catalog_options
     ):
-        default_value = _default_radio_catalog_value(search_type, catalog_options)
+        default_value = _default_radio_catalog_value(
+            search_type,
+            catalog_options,
+            DEFAULT_RADIO_CATALOG_VALUES,
+        )
 
     value_validator: Any
     if search_type in RADIO_CATALOG_SEARCH_TYPES and catalog_options:
@@ -452,75 +402,6 @@ def _radio_catalog_schema(
     return vol.Schema(schema)
 
 
-def _radio_station_label(station: dict[str, Any]) -> str:
-    """Return a readable label for a radio station search result."""
-    name = str(station.get("Name") or station.get("name") or "").strip()
-    station_id = station.get("Id", station.get("id"))
-    city = str(station.get("City") or station.get("city") or "").strip()
-    country = str(station.get("Country") or station.get("country") or "").strip()
-    description = str(
-        station.get("ShortDescription")
-        or station.get("shortDescription")
-        or ""
-    ).strip()
-
-    label = name or (str(station_id) if station_id is not None else "Unknown station")
-    details = ", ".join(part for part in (city, country) if part)
-    if details:
-        label = f"{label} - {details}"
-    elif description:
-        label = f"{label} - {description}"
-    if station_id is not None:
-        label = f"{label} ({station_id})"
-    return label[:255]
-
-
-def _radio_result_options(results: list[dict[str, Any]]) -> dict[str, str]:
-    """Build a select list for radio station search results."""
-    options: dict[str, str] = {}
-    for index, station in enumerate(results[:MAX_RADIO_RESULT_OPTIONS]):
-        options[str(index)] = _radio_station_label(station)
-    return options
-
-
-def _filter_radio_results_by_text(
-    results: list[dict[str, Any]],
-    search_text: str,
-) -> list[dict[str, Any]]:
-    """Return station results matching the entered text when possible."""
-    needle = search_text.casefold().strip()
-    if needle == "*":
-        return results
-    if not needle:
-        return results
-
-    filtered: list[dict[str, Any]] = []
-    for station in results:
-        genres = station.get("Genres", station.get("genres", []))
-        genre_text = (
-            " ".join(str(genre) for genre in genres)
-            if isinstance(genres, list)
-            else str(genres or "")
-        )
-        searchable_parts = [
-            station.get("Name"),
-            station.get("name"),
-            station.get("ShortDescription"),
-            station.get("shortDescription"),
-            station.get("City"),
-            station.get("city"),
-            station.get("Country"),
-            station.get("country"),
-            genre_text,
-        ]
-        searchable = " ".join(
-            str(part).casefold() for part in searchable_parts if part
-        )
-        if needle in searchable:
-            filtered.append(station)
-    return filtered
-
-
 async def _can_connect(hass: HomeAssistant, host: str, port: int) -> bool:
     """Check if the DHE web endpoint is reachable before creating the config entry."""
     session = async_get_clientsession(hass)
@@ -532,81 +413,6 @@ async def _can_connect(hass: HomeAssistant, host: str, port: int) -> bool:
             return 200 <= resp.status < 500
     except Exception:  # noqa: BLE001
         return False
-
-
-def _map_pairing_error(error: BaseException, pairing_state: str) -> str:
-    """Map setup pairing/auth failures to config-flow error keys."""
-    message = str(error).casefold()
-    state = pairing_state.casefold()
-
-    if state == "failed":
-        if "reject" in message:
-            return "pairing_rejected"
-        if any(
-            part in message
-            for part in (
-                "connection refused",
-                "cannot connect",
-                "get ",
-                "post ",
-                "socket",
-                "session",
-                "websocket",
-            )
-        ):
-            return "cannot_connect"
-        if "timeout" in message:
-            return "pairing_timeout"
-        return "pairing_failed"
-
-    if any(
-        part in message
-        for part in (
-            "connection refused",
-            "cannot connect",
-            "get ",
-            "post ",
-            "socket",
-            "session",
-            "websocket",
-        )
-    ):
-        return "cannot_connect"
-
-    if "pairing confirmation rejected" in message or "rejected on dhe" in message:
-        return "pairing_rejected"
-
-    if "auth timeout: no authenticated event received" in message:
-        return "auth_timeout"
-
-    if "token request timeout" in message:
-        return "pairing_token_timeout"
-
-    if (
-        "authenticated, but dhe pairing confirmation was not completed in time"
-        in message
-    ) or (
-        "token received but dhe pairing confirmation did not complete in time"
-        in message
-    ):
-        return "pairing_confirm_after_auth_timeout"
-
-    if state == "waiting_for_confirmation":
-        return "pairing_not_confirmed"
-
-    if state in {"requesting_token", "token_received", "confirmed", "result_received"}:
-        return "pairing_token_timeout"
-
-    if state == "authenticated_pending_confirmation":
-        return "pairing_confirm_after_auth_timeout"
-
-    if isinstance(error, TimeoutError) or "timeout" in message:
-        return "pairing_timeout"
-
-    if "authenticated" in message or "authenticate" in message:
-        return "auth_failed"
-
-    return "pairing_failed"
 
 
 async def _validate_setup_pairing(
@@ -631,7 +437,7 @@ async def _validate_setup_pairing(
         raise
     except Exception as err:  # noqa: BLE001
         pairing_state = str(probe_client.diagnostic_state.get("pairing_state") or "")
-        return _map_pairing_error(err, pairing_state)
+        return map_pairing_error(err, pairing_state)
     return None
 
 
@@ -905,7 +711,10 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
         """Select one weather search result and save it as favorite."""
         errors: dict[str, str] = {}
         client = self._client_or_mark_not_loaded(errors)
-        result_options = _weather_result_options(self._weather_results)
+        result_options = _weather_result_options(
+            self._weather_results,
+            max_options=MAX_WEATHER_RESULT_OPTIONS,
+        )
 
         if not result_options and "base" not in errors:
             errors["base"] = "no_results"
@@ -941,7 +750,10 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
             except DHEError:
                 errors["base"] = "cannot_connect"
 
-        favorite_options = _weather_result_options(self._weather_favorites)
+        favorite_options = _weather_result_options(
+            self._weather_favorites,
+            max_options=MAX_WEATHER_RESULT_OPTIONS,
+        )
         if not favorite_options and not errors:
             errors["base"] = "no_favorites"
 
@@ -1079,7 +891,10 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
         """Select one radio station search result and save it as favorite."""
         errors: dict[str, str] = {}
         client = self._client_or_mark_not_loaded(errors)
-        result_options = _radio_result_options(self._radio_results)
+        result_options = _radio_result_options(
+            self._radio_results,
+            max_options=MAX_RADIO_RESULT_OPTIONS,
+        )
 
         if not result_options and "base" not in errors:
             errors["base"] = "no_results"
@@ -1115,7 +930,10 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
             except DHEError:
                 errors["base"] = "cannot_connect"
 
-        favorite_options = _radio_result_options(self._radio_favorites)
+        favorite_options = _radio_result_options(
+            self._radio_favorites,
+            max_options=MAX_RADIO_RESULT_OPTIONS,
+        )
         if not favorite_options and not errors:
             errors["base"] = "no_radio_favorites"
 
