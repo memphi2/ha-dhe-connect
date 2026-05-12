@@ -100,6 +100,25 @@ class TestRadioDisplayMapping(unittest.TestCase):
 
         self.assertEqual(list(options), ["WDR 2 Ruhrgebiet"])
 
+    def test_source_option_map_for_state_adds_station_to_existing_sources(self) -> None:
+        options = self.radio.source_option_map_for_state(
+            {"station": {"Id": 971, "Name": "Radio Essen"}},
+            {"WDR 2": {"Id": 3, "Name": "WDR 2"}},
+        )
+
+        self.assertEqual(list(options), ["WDR 2", "Radio Essen"])
+
+    def test_source_option_map_for_state_refreshes_matching_station(self) -> None:
+        options = self.radio.source_option_map_for_state(
+            {"station": {"Id": 3, "Name": "WDR 2 Ruhrgebiet"}},
+            {"WDR 2": {"Id": 3, "Name": "WDR 2"}},
+        )
+
+        self.assertEqual(
+            options,
+            {"WDR 2 Ruhrgebiet": {"Id": 3, "Name": "WDR 2 Ruhrgebiet"}},
+        )
+
     def test_source_option_map_for_state_replaces_sources_from_favorites(self) -> None:
         options = self.radio.source_option_map_for_state(
             {

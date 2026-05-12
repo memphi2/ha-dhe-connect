@@ -202,9 +202,7 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
         if isinstance(station, dict):
             self._apply_station_media(state, station)
 
-        fallback_station = self._apply_source_state(state, station)
-        if fallback_station is not None:
-            self._apply_station_media(state, fallback_station)
+        self._apply_source_state(state, station)
 
         self._attr_extra_state_attributes = radio.radio_attributes(state)
         self._attr_available = connected_and_ready(
@@ -232,8 +230,8 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
         self,
         state: dict[str, Any],
         station: Any,
-    ) -> dict[str, Any] | None:
-        """Apply source list and return a fallback station when needed."""
+    ) -> None:
+        """Apply source list and active source from the DHE radio state."""
         self._sources_by_option = radio.source_option_map_for_state(
             state,
             self._sources_by_option,
@@ -244,9 +242,6 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
             self._sources_by_option,
             self._attr_source,
         )
-        if not isinstance(station, dict) and self._attr_source is not None:
-            return self._sources_by_option.get(self._attr_source)
-        return None
 
     def _apply_station_media(
         self,

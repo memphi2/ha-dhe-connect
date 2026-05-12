@@ -62,22 +62,45 @@ def source_option_map_for_state(
     current_sources: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Build source options while keeping startup radio states usable."""
+    station = state.get("station")
     if "favorites" in state:
         favorites = stations(state.get("favorites"))
         if favorites:
             return source_option_map(favorites)
-        station = state.get("station")
         if isinstance(station, dict):
             return source_option_map([station])
         return {}
 
+    if isinstance(station, dict):
+        if current_sources:
+            return source_option_map(_merge_current_station(current_sources, station))
+        return source_option_map([station])
+
     if current_sources:
         return {option: dict(station) for option, station in current_sources.items()}
 
-    station = state.get("station")
-    if isinstance(station, dict):
-        return source_option_map([station])
     return {}
+
+
+def _merge_current_station(
+    current_sources: dict[str, dict[str, Any]],
+    station: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Return current sources with the latest station payload upserted."""
+    current_station_id = station_id(station)
+    current_station_name = station_name(station)
+    merged: list[dict[str, Any]] = []
+
+    for source_station in current_sources.values():
+        if current_station_id is not None:
+            if station_id(source_station) == current_station_id:
+                continue
+        elif station_name(source_station) == current_station_name:
+            continue
+        merged.append(dict(source_station))
+
+    merged.append(dict(station))
+    return merged
 
 
 def source_for_station(
