@@ -64,7 +64,7 @@ from .client import (
     MeasurementValue,
     SHOWER_TIMER_PATH,
 )
-from .client_mapping import DEVICE_STATUS_OPTIONS
+from .client_mapping import DEVICE_STATUS_OPTIONS, DEVICE_STATUS_SERVICE_REQUIRED
 from .entity_helpers import StiebelDHEEntityMixin
 from .entity_state_helpers import (
     coerce_float,
@@ -682,6 +682,7 @@ class StiebelDHEErrorStatusSensor(StiebelDHEEntityMixin, SensorEntity):
         )
         self._setpoint: float | None = None
         self._inlet_temperature: float | None = None
+        self._device_status: str | None = None
         self._attr_available = False
         self._attr_native_value: str | None = None
         self._update_status()
@@ -701,6 +702,8 @@ class StiebelDHEErrorStatusSensor(StiebelDHEEntityMixin, SensorEntity):
         self._inlet_temperature = self._coerce_temperature(
             self._client.last_measurements.get(ID_INTERNAL_TEMPERATURE_1)
         )
+        device_status = self._client.last_measurements.get(ID_DEVICE_STATUS)
+        self._device_status = str(device_status) if isinstance(device_status, str) else None
         self._update_status()
         self.async_write_ha_state()
 
@@ -712,9 +715,12 @@ class StiebelDHEErrorStatusSensor(StiebelDHEEntityMixin, SensorEntity):
 
     @callback
     def _handle_measurement_update(self, odb_id: int, value: MeasurementValue) -> None:
-        if odb_id != ID_INTERNAL_TEMPERATURE_1:
+        if odb_id == ID_INTERNAL_TEMPERATURE_1:
+            self._inlet_temperature = self._coerce_temperature(value)
+        elif odb_id == ID_DEVICE_STATUS:
+            self._device_status = str(value) if isinstance(value, str) else None
+        else:
             return
-        self._inlet_temperature = self._coerce_temperature(value)
         self._update_status()
         self.async_write_ha_state()
 
@@ -724,6 +730,7 @@ class StiebelDHEErrorStatusSensor(StiebelDHEEntityMixin, SensorEntity):
             available,
             self._setpoint,
             self._inlet_temperature,
+            self._device_status,
         )
         self._update_status()
         self.async_write_ha_state()
@@ -734,10 +741,18 @@ class StiebelDHEErrorStatusSensor(StiebelDHEEntityMixin, SensorEntity):
             and self._inlet_temperature is not None
             and self._setpoint < self._inlet_temperature
         )
+        service_required = self._device_status == DEVICE_STATUS_SERVICE_REQUIRED
         language = str(getattr(self.hass.config, "language", "") or "").lower() if self.hass else ""
         if not self._client.online:
             self._attr_native_value = "Nicht verbunden" if language.startswith("de") else "Disconnected"
             active_error = "disconnected"
+        elif service_required:
+            self._attr_native_value = (
+                "Service nötig"
+                if language.startswith("de")
+                else "Service required"
+            )
+            active_error = "service_required"
         elif below_inlet:
             self._attr_native_value = (
                 "Solltemperatur unter Zulauftemperatur"
@@ -753,6 +768,7 @@ class StiebelDHEErrorStatusSensor(StiebelDHEEntityMixin, SensorEntity):
             self._client.available,
             self._setpoint,
             self._inlet_temperature,
+            self._device_status,
         )
         self._attr_extra_state_attributes = {
             "online": self._client.online,
@@ -761,6 +777,8 @@ class StiebelDHEErrorStatusSensor(StiebelDHEEntityMixin, SensorEntity):
             "setpoint_temperature": self._setpoint,
             "inlet_temperature": self._inlet_temperature,
             "setpoint_below_inlet": below_inlet,
+            "device_status": self._device_status,
+            "device_service_required": service_required,
         }
         if below_inlet and self._setpoint is not None and self._inlet_temperature is not None:
             self._attr_extra_state_attributes["inlet_minus_setpoint"] = round(

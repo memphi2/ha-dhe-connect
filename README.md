@@ -216,7 +216,7 @@ data:
 | Reconnects | count | diagnostic | `total_increasing` | Successful reconnect count after the initial connection |
 | Connection state | text | diagnostic | none | Client session state such as `starting`, `connected`, `reconnecting` or `stopped` |
 | Last reconnect reason | text | diagnostic | none | Last recorded session failure or forced reconnect reason |
-| Temperature error status | text | diagnostic | none | General error status, including target temperature below inlet temperature |
+| Temperature error status | text | diagnostic | none | General error status, including target temperature below inlet temperature and DHE status code `34` service-required state |
 | Device info | text | diagnostic, disabled by default | none | DHE version and device information commands |
 | Product ID | text | diagnostic, disabled by default | none | `set:ste.common.version:gadgetData.id` |
 | WLAN MAC | text | diagnostic, disabled by default | none | `set:ste.common.version:gadgetData.wlan` |
