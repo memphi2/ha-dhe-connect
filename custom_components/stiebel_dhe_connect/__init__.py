@@ -74,7 +74,6 @@ LEGACY_ENTITY_SUFFIXES_TO_REMOVE = (
     "last_message_age",
     "setpoint_below_inlet",
     "water_heating_enabled",
-    "internal_scald_protection",
 )
 LEGACY_ENTITY_KEYWORDS_TO_REMOVE = (
     "currency",
