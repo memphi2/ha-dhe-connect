@@ -1,28 +1,25 @@
 # Changelog
 
-## v1.0.7-beta - 2026-05-12 (compared to v1.0.6)
+## v1.0.8 - 2026-05-12 (compared to v1.0.6)
 
 ### Added
 
-- Added focused unit coverage for weather, radio, pairing, config-flow and entity helper mappings.
-- Added disabled-by-default diagnostics for scald protection status, scald protection limit and device status.
-- Added ODB diagnostics for operating duration, hot water volume, heating energy, possible saving values and protocol version.
-- Added an initial setup and `Connection/device` option for the internal scald-protection jumper positions `43`, `50`, `55`, `60` and `no_jumper`.
+- Added setup and `Connection/device` options for the physical internal scald-protection `Tmax` jumper positions `43`, `50`, `55`, `60` and `no_jumper`.
+- Added disabled-by-default ODB diagnostics for operating duration, scald-protection status and limit, device status, protocol version, hot water volume, heating energy and possible saving values.
+- Added focused unit coverage for weather, radio, pairing, config flow and entity helper mappings.
 
 ### Changed
 
-- Refactored weather, radio, pairing, config-flow and shared entity state mapping into smaller helper modules.
-- Aligned ODB names, scaling and limits with the DHE Webfrontend table, including child safety, bath fill, eco flow, price and CO2 ranges.
-- Debug logging for unknown ODB values now includes the known Webfrontend ODB name when available, and known unexposed IDs are filtered out of discovery noise.
-- Removed the duplicate device alarm binary sensor; service-required device status is surfaced through the temperature error status sensor.
-- General error status now shows a `Service nötig` / `Service required` message when DHE status code `34` reports the service-required state.
-- Timer duration controls now use the original duration entities as seconds in Home Assistant.
+- Aligned ODB names, scaling and writable limits with the DHE Webfrontend table, including child safety, bath fill, eco flow, price and CO2 ranges.
+- Climate and child-safety limits now respect the configured physical `Tmax` jumper; when child safety is active, Climate uses the lower active limit.
+- Child safety temperature configuration now supports the full `20` to `60` C device range within the configured jumper maximum.
+- Timer duration controls now expose the original duration entities as seconds in Home Assistant.
 - Bath fill target and remaining volume values now display as whole liters.
 - Radio media title now falls back to the station short description before the station name.
-- Child safety temperature limit and Climate maximum target temperature now respect the configured internal scald-protection jumper, defaulting to `60` C; when child safety is active, Climate uses the lower active limit.
-- Child safety temperature configuration now supports the full `20` to `60` C device range.
-- Weather location selection is enabled by default for new setups.
-- Weather period selection now uses Home Assistant's configured timezone.
+- General error status now reports `Service required` when DHE status code `34` reports the service-required state; the duplicate alarm binary sensor was removed.
+- Debug logging for unknown ODB values now includes the known Webfrontend ODB name when available, and known unexposed IDs are filtered out of discovery noise.
+- Weather location selection is enabled by default for new setups, and weather period selection now uses Home Assistant's configured timezone.
+- Refactored weather, radio, pairing, config flow and shared entity state mapping into smaller helper modules.
 - German naming now uses `Durchlauferhitzer` for water heating.
 
 ## v1.0.6 - 2026-05-11 (compared to v1.0.5)
