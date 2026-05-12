@@ -126,7 +126,7 @@ Home Assistant entity names are translated through `translations/en.json` and `t
 
 The climate entity keeps the last valid target temperature during short reconnect phases and exposes diagnostic attributes:
 
-Its maximum settable target temperature follows the DHE child-safety limit when child safety is active. The `Internal scald protection (Tmax jumper)` integration option sets the absolute maximum of the `Child safety temperature limit` number entity. The default internal scald-protection option is `60`.
+Its maximum settable target temperature is capped by the `Internal scald protection (Tmax jumper)` integration option. When child safety is active, the Climate maximum uses the lower value of the `Tmax` jumper and the `Child safety temperature limit` number entity. The default internal scald-protection option is `60`.
 
 | Attribute | Meaning |
 |---|---|

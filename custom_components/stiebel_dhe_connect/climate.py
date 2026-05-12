@@ -231,6 +231,7 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
     def _apply_dynamic_max_temperature(self) -> None:
         """Apply max temperature depending on configured limit override."""
         self._attr_max_temp = climate_max_temperature(
+            internal_scald_protection=self._internal_scald_protection_option(),
             child_safety_active=self._child_safety_active,
             child_safety_temperature_limit=self._child_safety_temperature_limit,
             minimum=self._attr_min_temp,

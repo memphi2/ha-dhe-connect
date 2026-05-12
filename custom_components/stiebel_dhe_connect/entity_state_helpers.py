@@ -114,13 +114,17 @@ def bounded_child_safety_temperature_limit(
 
 def climate_max_temperature(
     *,
+    internal_scald_protection: Any,
     child_safety_active: bool | None,
     child_safety_temperature_limit: Any,
     minimum: float = 20.0,
     maximum: float = 60.0,
 ) -> float:
-    """Return the Climate max temperature from the child-safety limit."""
-    max_temp = maximum
+    """Return the Climate max temperature from Tmax and child-safety limits."""
+    max_temp = child_safety_temperature_limit_max(
+        internal_scald_protection,
+        maximum=maximum,
+    )
     child_limit = coerce_float(child_safety_temperature_limit)
     if child_safety_active and child_limit is not None:
         max_temp = min(max_temp, child_limit)

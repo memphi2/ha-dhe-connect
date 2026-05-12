@@ -19,7 +19,7 @@
 - Timer duration controls now use the original duration entities as seconds in Home Assistant.
 - Bath fill target and remaining volume values now display as whole liters.
 - Radio media title now falls back to the station short description before the station name.
-- Child safety temperature limit now respects the configured internal scald-protection jumper limit, defaulting to `60` C; the Climate maximum continues to follow the child-safety limit.
+- Child safety temperature limit and Climate maximum target temperature now respect the configured internal scald-protection jumper, defaulting to `60` C; when child safety is active, Climate uses the lower active limit.
 - Child safety temperature configuration now supports the full `20` to `60` C device range.
 - Weather location selection is enabled by default for new setups.
 - Weather period selection now uses Home Assistant's configured timezone.

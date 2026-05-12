@@ -133,24 +133,37 @@ class TestInternalScaldProtectionHelpers(unittest.TestCase):
     def test_climate_max_temperature_uses_active_child_safety_limit(self) -> None:
         self.assertEqual(
             self.helpers.climate_max_temperature(
+                internal_scald_protection="60",
                 child_safety_active=True,
                 child_safety_temperature_limit=50,
             ),
             50.0,
         )
 
-    def test_climate_max_temperature_ignores_inactive_child_safety_limit(self) -> None:
+    def test_climate_max_temperature_uses_tmax_when_child_safety_inactive(self) -> None:
         self.assertEqual(
             self.helpers.climate_max_temperature(
+                internal_scald_protection="43",
                 child_safety_active=False,
                 child_safety_temperature_limit=50,
             ),
-            60.0,
+            43.0,
+        )
+
+    def test_climate_max_temperature_uses_lowest_active_limit(self) -> None:
+        self.assertEqual(
+            self.helpers.climate_max_temperature(
+                internal_scald_protection="43",
+                child_safety_active=True,
+                child_safety_temperature_limit=50,
+            ),
+            43.0,
         )
 
     def test_climate_max_temperature_clamps_invalid_child_limit(self) -> None:
         self.assertEqual(
             self.helpers.climate_max_temperature(
+                internal_scald_protection="60",
                 child_safety_active=True,
                 child_safety_temperature_limit=10,
             ),
