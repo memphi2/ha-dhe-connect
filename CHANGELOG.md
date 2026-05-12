@@ -5,6 +5,7 @@
 ### Added
 
 - Added focused unit coverage for weather, radio, pairing, config-flow and entity helper mappings.
+- Added disabled-by-default diagnostics for scald protection status, scald protection limit, device status and a device alarm binary sensor.
 
 ### Changed
 

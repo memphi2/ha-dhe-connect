@@ -32,6 +32,7 @@ from .client import (
     ID_BRUSH_TIMER_REMAINING,
     ID_CONFIGURED_POWER,
     ID_DEVICE_INFO,
+    ID_DEVICE_STATUS,
     ID_ENERGY_CONSUMPTION_WEEK,
     ID_ENERGY_CONSUMPTION_YEAR,
     ID_ENERGY_CONSUMPTION_YEARS,
@@ -54,6 +55,7 @@ from .client import (
     ID_SAVING_MONITOR_REAL_VALUE,
     ID_SAVING_MONITOR_REAL_WATER,
     ID_SAVING_MONITOR_WATER,
+    ID_SCALD_PROTECTION_TEMPERATURE_LIMIT,
     ID_SHOWER_TIMER_REMAINING,
     ID_WATER_CONSUMPTION_WEEK,
     ID_WATER_CONSUMPTION_YEAR,
@@ -62,6 +64,7 @@ from .client import (
     MeasurementValue,
     SHOWER_TIMER_PATH,
 )
+from .client_mapping import DEVICE_STATUS_OPTIONS
 from .entity_helpers import StiebelDHEEntityMixin
 from .entity_state_helpers import (
     coerce_float,
@@ -172,6 +175,26 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         odb_id=ID_INTERNAL_TEMPERATURE_2,
+    ),
+    StiebelDHESensorEntityDescription(
+        key="scald_protection_temperature_limit",
+        translation_key="scald_protection_temperature_limit",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        icon="mdi:shield-thermometer",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        odb_id=ID_SCALD_PROTECTION_TEMPERATURE_LIMIT,
+    ),
+    StiebelDHESensorEntityDescription(
+        key="device_status",
+        translation_key="device_status",
+        icon="mdi:wrench",
+        device_class=SensorDeviceClass.ENUM,
+        options=DEVICE_STATUS_OPTIONS,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        odb_id=ID_DEVICE_STATUS,
     ),
     StiebelDHESensorEntityDescription(
         key="water_consumption_week",

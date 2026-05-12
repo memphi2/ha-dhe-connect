@@ -4,6 +4,22 @@ from __future__ import annotations
 
 from typing import Any
 
+DEVICE_STATUS_NORMAL = "normal"
+DEVICE_STATUS_SERVICE_REQUIRED = "service_required"
+DEVICE_STATUS_UNKNOWN = "unknown"
+DEVICE_STATUS_OPTIONS = (
+    "status_0",
+    DEVICE_STATUS_NORMAL,
+    "status_2",
+    DEVICE_STATUS_SERVICE_REQUIRED,
+    "status_4",
+    "status_5",
+    "status_6",
+    "status_7",
+    "status_8",
+    DEVICE_STATUS_UNKNOWN,
+)
+
 
 def copy_json_like_value(value: Any) -> Any:
     """Return a recursive copy of JSON-like data structures."""
@@ -114,3 +130,30 @@ def weather_location_in_list(
     if not location_id:
         return False
     return any(weather_location_id(candidate) == location_id for candidate in locations)
+
+
+def device_status_code(raw_value: Any) -> int | None:
+    """Return the DHE device status code as an integer."""
+    if raw_value is None or isinstance(raw_value, bool):
+        return None
+    try:
+        return int(float(raw_value))
+    except (TypeError, ValueError):
+        return None
+
+
+def device_status_key(raw_value: Any) -> str:
+    """Return the Home Assistant enum state for a DHE device status code."""
+    code = device_status_code(raw_value)
+    if code == 1:
+        return DEVICE_STATUS_NORMAL
+    if code == 3:
+        return DEVICE_STATUS_SERVICE_REQUIRED
+    if code is not None and 0 <= code <= 8:
+        return f"status_{code}"
+    return DEVICE_STATUS_UNKNOWN
+
+
+def device_status_problem(raw_value: Any) -> bool:
+    """Return whether the status code should be shown as a device problem."""
+    return device_status_key(raw_value) == DEVICE_STATUS_SERVICE_REQUIRED

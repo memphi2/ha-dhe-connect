@@ -151,6 +151,14 @@
     }
   },
   "entity": {
+    "binary_sensor": {
+      "scald_protection_active": {
+        "name": "Verbrühschutz aktiv"
+      },
+      "device_alarm": {
+        "name": "Gerätealarm"
+      }
+    },
     "button": {
       "reset_brush_timer": {
         "name": "Zahnputz-Timer zurücksetzen"
@@ -357,6 +365,24 @@
       },
       "internal_temperature_2": {
         "name": "Auslauftemperatur"
+      },
+      "scald_protection_temperature_limit": {
+        "name": "Verbrühschutz-Grenztemperatur"
+      },
+      "device_status": {
+        "name": "Gerätestatus",
+        "state": {
+          "status_0": "Status 0",
+          "normal": "Normal",
+          "status_2": "Status 2",
+          "service_required": "Service erforderlich",
+          "status_4": "Status 4",
+          "status_5": "Status 5",
+          "status_6": "Status 6",
+          "status_7": "Status 7",
+          "status_8": "Status 8",
+          "unknown": "Unbekannt"
+        }
       },
       "water_consumption_week": {
         "name": "Wasserverbrauch Woche"

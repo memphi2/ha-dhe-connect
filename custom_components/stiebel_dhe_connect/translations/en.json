@@ -151,6 +151,14 @@
     }
   },
   "entity": {
+    "binary_sensor": {
+      "scald_protection_active": {
+        "name": "Scald protection active"
+      },
+      "device_alarm": {
+        "name": "Device alarm"
+      }
+    },
     "button": {
       "reset_brush_timer": {
         "name": "Reset brush timer"
@@ -357,6 +365,24 @@
       },
       "internal_temperature_2": {
         "name": "Outlet temperature"
+      },
+      "scald_protection_temperature_limit": {
+        "name": "Scald protection temperature limit"
+      },
+      "device_status": {
+        "name": "Device status",
+        "state": {
+          "status_0": "Status 0",
+          "normal": "Normal",
+          "status_2": "Status 2",
+          "service_required": "Service required",
+          "status_4": "Status 4",
+          "status_5": "Status 5",
+          "status_6": "Status 6",
+          "status_7": "Status 7",
+          "status_8": "Status 8",
+          "unknown": "Unknown"
+        }
       },
       "water_consumption_week": {
         "name": "Water consumption week"
