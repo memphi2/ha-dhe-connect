@@ -61,10 +61,31 @@ class TestEntityHelpers(unittest.TestCase):
         self.assertTrue(self.helpers.temperature_memory_enabled_default(2))
         self.assertFalse(self.helpers.temperature_memory_enabled_default(3))
 
+    def test_temperature_memory_icon_uses_numeric_icon_for_visible_digits(self) -> None:
+        self.assertEqual(
+            self.helpers.temperature_memory_icon(1),
+            "mdi:numeric-1-box-outline",
+        )
+        self.assertEqual(
+            self.helpers.temperature_memory_icon(9),
+            "mdi:numeric-9-box-outline",
+        )
+
+    def test_temperature_memory_icon_uses_counter_icon_for_two_digit_slots(
+        self,
+    ) -> None:
+        self.assertEqual(self.helpers.temperature_memory_icon(10), "mdi:counter")
+
     def test_temperature_memory_measurement_slots_inverts_slot_mapping(self) -> None:
         self.assertEqual(
             self.helpers.temperature_memory_measurement_slots({1: 66, 2: 70}),
             {66: 1, 70: 2},
+        )
+
+    def test_temperature_memory_measurement_slot_items_are_sorted_by_slot(self) -> None:
+        self.assertEqual(
+            self.helpers.temperature_memory_measurement_slot_items({2: 70, 1: 66}),
+            ((66, 1), (70, 2)),
         )
 
     def test_build_device_info_uses_host_port_identifier(self) -> None:

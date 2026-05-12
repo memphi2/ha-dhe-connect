@@ -194,18 +194,18 @@ data:
 | Inlet temperature | `C` | `temperature`, diagnostic, disabled by default | `measurement` | ODB ID `13 / 10` |
 | Outlet temperature | `C` | `temperature`, diagnostic, disabled by default | `measurement` | ODB ID `14 / 10` |
 | Scald protection temperature limit | `C` | `temperature`, diagnostic, disabled by default | none | ODB ID `24 / 10` |
-| Device status | text | `enum`, diagnostic, disabled by default | none | ODB ID `34`; status code `3` is also surfaced through the temperature error status sensor |
+| Device status | text | `enum`, diagnostic, disabled by default | none | ODB ID `34`; status code `3` is also surfaced through the error status sensor |
 | Protocol version | text | diagnostic, disabled by default | none | ODB ID `67` |
 | Water consumption week | `L` | `water`, disabled by default | `total_increasing` | `set:ste.app.consumption:waterWeek` |
 | Water consumption year | `m3` | `water`, disabled by default | `total_increasing` | `set:ste.app.consumption:waterYear` |
-| Water consumption years | `m3` | `water` | `total_increasing` | `set:ste.app.consumption:waterYears` |
+| Total water consumption | `m3` | `water` | `total_increasing` | `set:ste.app.consumption:waterYears` |
 | Total hot water volume | `m3` | `water`, disabled by default | `total_increasing` | ODB ID `30 / 10` |
 | Energy consumption week | `kWh` | `energy`, disabled by default | `total` | `set:ste.app.consumption:energyWeek` |
 | Total heating energy | `kWh` | `energy`, disabled by default | `total_increasing` | ODB ID `29` |
 | Possible energy saving | `kWh` | `energy`, diagnostic, disabled by default | `measurement` | ODB ID `63` |
 | Possible water saving | `m3` | `water`, diagnostic, disabled by default | `measurement` | ODB ID `64 / 10` |
 | Energy consumption year | `kWh` | `energy`, disabled by default | `total` | `set:ste.app.consumption:energyYear` |
-| Energy consumption years | `kWh` | `energy` | `total` | `set:ste.app.consumption:energyYears` |
+| Total energy consumption | `kWh` | `energy` | `total` | `set:ste.app.consumption:energyYears` |
 | Last usage water | `L` | disabled by default | `measurement` | `set:ste.app.consumption:lastUsage.water` |
 | Last usage energy | `kWh` | disabled by default | `measurement` | `set:ste.app.consumption:lastUsage.energy` |
 | Last usage duration | `M:SS` | disabled by default | none | `set:ste.app.consumption:lastUsage.time`, rendered like timer remaining values |
@@ -439,7 +439,7 @@ Required startup reads seed the interactive entities:
 | `30` | Total hot water volume |
 | `31` | Current bath fill volume |
 | `33` | Water heating enabled state, used by the climate entity |
-| `34` | Device status; status code `3` is exposed through the temperature error status sensor |
+| `34` | Device status; status code `3` is exposed through the error status sensor |
 | `61` | Electricity price euros |
 | `62` | Water price euros |
 | `63` | Possible energy saving |

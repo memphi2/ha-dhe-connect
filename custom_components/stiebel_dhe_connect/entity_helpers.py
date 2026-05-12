@@ -24,6 +24,11 @@ def temperature_memory_enabled_default(slot: int) -> bool:
     return slot <= 2
 
 
+def temperature_memory_icon(slot: int) -> str:
+    """Return the icon for one temperature memory slot."""
+    return f"mdi:numeric-{slot}-box-outline" if slot < 10 else "mdi:counter"
+
+
 def temperature_memory_measurement_slots(
     slot_measurements: Mapping[int, int],
 ) -> dict[int, int]:
@@ -32,6 +37,18 @@ def temperature_memory_measurement_slots(
         measurement_id: slot
         for slot, measurement_id in slot_measurements.items()
     }
+
+
+def temperature_memory_measurement_slot_items(
+    slot_measurements: Mapping[int, int],
+) -> tuple[tuple[int, int], ...]:
+    """Return temperature memory measurement/slot items sorted by slot."""
+    return tuple(
+        sorted(
+            temperature_memory_measurement_slots(slot_measurements).items(),
+            key=lambda item: item[1],
+        )
+    )
 
 
 def build_device_info(

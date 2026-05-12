@@ -34,7 +34,8 @@ from .config_entry_helpers import merged_entry_data
 from .entity_helpers import (
     StiebelDHEEntityMixin,
     temperature_memory_enabled_default,
-    temperature_memory_measurement_slots,
+    temperature_memory_icon,
+    temperature_memory_measurement_slot_items,
 )
 from .entity_state_helpers import (
     CONF_INTERNAL_SCALD_PROTECTION,
@@ -129,7 +130,7 @@ STATIC_NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
 )
 
 
-TEMPERATURE_MEMORY_MEASUREMENT_SLOTS = temperature_memory_measurement_slots(
+TEMPERATURE_MEMORY_MEASUREMENT_SLOT_ITEMS = temperature_memory_measurement_slot_items(
     TEMPERATURE_MEMORY_SLOT_MEASUREMENTS
 )
 
@@ -144,7 +145,7 @@ def _temperature_memory_number_description(
         translation_key=f"temperature_memory_{slot}_temperature",
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         device_class=NumberDeviceClass.TEMPERATURE,
-        icon=f"mdi:numeric-{slot}-box-outline" if slot < 10 else "mdi:counter",
+        icon=temperature_memory_icon(slot),
         native_min_value=20.0,
         native_max_value=60.0,
         native_step=0.5,
@@ -183,9 +184,7 @@ async def async_setup_entry(
                 client=client,
                 description=_temperature_memory_number_description(slot, measurement_id),
             )
-            for measurement_id, slot in sorted(
-                TEMPERATURE_MEMORY_MEASUREMENT_SLOTS.items(), key=lambda item: item[1]
-            )
+            for measurement_id, slot in TEMPERATURE_MEMORY_MEASUREMENT_SLOT_ITEMS
         ]
     )
 
