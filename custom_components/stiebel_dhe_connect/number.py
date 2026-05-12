@@ -31,7 +31,12 @@ from .client import (
     TEMPERATURE_MEMORY_SLOT_MEASUREMENTS,
 )
 from .config_entry_helpers import merged_entry_data
-from .entity_helpers import StiebelDHEEntityMixin
+from .entity_helpers import (
+    StiebelDHEEntityMixin,
+    temperature_memory_enabled_default,
+    temperature_memory_icon,
+    temperature_memory_measurement_slot_items,
+)
 from .entity_state_helpers import (
     CONF_INTERNAL_SCALD_PROTECTION,
     bounded_child_safety_temperature_limit,
@@ -75,8 +80,8 @@ STATIC_NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         odb_id=ID_BATH_FILL_TARGET_VOLUME,
     ),
     StiebelDHENumberEntityDescription(
-        key="maximum_temperature",
-        translation_key="maximum_temperature",
+        key="child_safety_temperature_limit",
+        translation_key="child_safety_temperature_limit",
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         device_class=NumberDeviceClass.TEMPERATURE,
         icon="mdi:thermometer-high",
@@ -125,14 +130,9 @@ STATIC_NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
 )
 
 
-TEMPERATURE_MEMORY_MEASUREMENT_SLOTS = {
-    measurement_id: slot for slot, measurement_id in TEMPERATURE_MEMORY_SLOT_MEASUREMENTS.items()
-}
-
-
-def _temperature_memory_enabled_default(slot: int) -> bool:
-    """Return whether a temperature memory slot is enabled by default."""
-    return slot <= 2
+TEMPERATURE_MEMORY_MEASUREMENT_SLOT_ITEMS = temperature_memory_measurement_slot_items(
+    TEMPERATURE_MEMORY_SLOT_MEASUREMENTS
+)
 
 
 def _temperature_memory_number_description(
@@ -145,14 +145,14 @@ def _temperature_memory_number_description(
         translation_key=f"temperature_memory_{slot}_temperature",
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         device_class=NumberDeviceClass.TEMPERATURE,
-        icon=f"mdi:numeric-{slot}-box-outline" if slot < 10 else "mdi:counter",
+        icon=temperature_memory_icon(slot),
         native_min_value=20.0,
         native_max_value=60.0,
         native_step=0.5,
         mode=NumberMode.BOX,
         odb_id=measurement_id,
         temperature_memory_slot=slot,
-        entity_registry_enabled_default=_temperature_memory_enabled_default(slot),
+        entity_registry_enabled_default=temperature_memory_enabled_default(slot),
     )
 
 
@@ -184,9 +184,7 @@ async def async_setup_entry(
                 client=client,
                 description=_temperature_memory_number_description(slot, measurement_id),
             )
-            for measurement_id, slot in sorted(
-                TEMPERATURE_MEMORY_MEASUREMENT_SLOTS.items(), key=lambda item: item[1]
-            )
+            for measurement_id, slot in TEMPERATURE_MEMORY_MEASUREMENT_SLOT_ITEMS
         ]
     )
 

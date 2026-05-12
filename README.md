@@ -194,18 +194,18 @@ data:
 | Inlet temperature | `C` | `temperature`, diagnostic, disabled by default | `measurement` | ODB ID `13 / 10` |
 | Outlet temperature | `C` | `temperature`, diagnostic, disabled by default | `measurement` | ODB ID `14 / 10` |
 | Scald protection temperature limit | `C` | `temperature`, diagnostic, disabled by default | none | ODB ID `24 / 10` |
-| Device status | text | `enum`, diagnostic, disabled by default | none | ODB ID `34`; status code `3` is also surfaced through the temperature error status sensor |
+| Device status | text | `enum`, diagnostic, disabled by default | none | ODB ID `34`; status code `3` is also surfaced through the error status sensor |
 | Protocol version | text | diagnostic, disabled by default | none | ODB ID `67` |
 | Water consumption week | `L` | `water`, disabled by default | `total_increasing` | `set:ste.app.consumption:waterWeek` |
 | Water consumption year | `m3` | `water`, disabled by default | `total_increasing` | `set:ste.app.consumption:waterYear` |
-| Water consumption years | `m3` | `water` | `total_increasing` | `set:ste.app.consumption:waterYears` |
+| Total water consumption | `m3` | `water` | `total_increasing` | `set:ste.app.consumption:waterYears` |
 | Total hot water volume | `m3` | `water`, disabled by default | `total_increasing` | ODB ID `30 / 10` |
 | Energy consumption week | `kWh` | `energy`, disabled by default | `total` | `set:ste.app.consumption:energyWeek` |
 | Total heating energy | `kWh` | `energy`, disabled by default | `total_increasing` | ODB ID `29` |
 | Possible energy saving | `kWh` | `energy`, diagnostic, disabled by default | `measurement` | ODB ID `63` |
 | Possible water saving | `m3` | `water`, diagnostic, disabled by default | `measurement` | ODB ID `64 / 10` |
 | Energy consumption year | `kWh` | `energy`, disabled by default | `total` | `set:ste.app.consumption:energyYear` |
-| Energy consumption years | `kWh` | `energy` | `total` | `set:ste.app.consumption:energyYears` |
+| Total energy consumption | `kWh` | `energy` | `total` | `set:ste.app.consumption:energyYears` |
 | Last usage water | `L` | disabled by default | `measurement` | `set:ste.app.consumption:lastUsage.water` |
 | Last usage energy | `kWh` | disabled by default | `measurement` | `set:ste.app.consumption:lastUsage.energy` |
 | Last usage duration | `M:SS` | disabled by default | none | `set:ste.app.consumption:lastUsage.time`, rendered like timer remaining values |
@@ -229,7 +229,7 @@ data:
 | Reconnects | count | diagnostic | `total_increasing` | Successful reconnect count after the initial connection |
 | Connection state | text | diagnostic | none | Client session state such as `starting`, `connected`, `reconnecting` or `stopped` |
 | Last reconnect reason | text | diagnostic | none | Last recorded session failure or forced reconnect reason |
-| Temperature error status | text | diagnostic | none | General error status, including target temperature below inlet temperature and DHE status code `34` service-required state |
+| Error status | text | diagnostic | none | General error status, including target temperature below inlet temperature and DHE status code `34` service-required state |
 | Device info | text | diagnostic, disabled by default | none | DHE version and device information commands |
 | Product ID | text | diagnostic, disabled by default | none | `set:ste.common.version:gadgetData.id` |
 | WLAN MAC | text | diagnostic, disabled by default | none | `set:ste.common.version:gadgetData.wlan` |
@@ -439,7 +439,7 @@ Required startup reads seed the interactive entities:
 | `30` | Total hot water volume |
 | `31` | Current bath fill volume |
 | `33` | Water heating enabled state, used by the climate entity |
-| `34` | Device status; status code `3` is exposed through the temperature error status sensor |
+| `34` | Device status; status code `3` is exposed through the error status sensor |
 | `61` | Electricity price euros |
 | `62` | Water price euros |
 | `63` | Possible energy saving |
@@ -585,7 +585,7 @@ It checks the manifest, HACS metadata, required repository files, translation ke
 | Device appears twice after update | Current releases keep legacy host identifiers during upgrade. If a stale duplicate already exists from older test builds, remove only the stale device entry once |
 | Service call hits the wrong DHE | In multi-device setups always include `entry_id` in service data |
 | Pairing repeats | Enable and use the disabled-by-default `Repair pairing` button first. If needed, delete the matching `/config/.storage/stiebel_dhe_connect_token_<host>_<port>.txt` file and pair again |
-| Entities stay unavailable | Check the `Connection state` / `Temperature error status` diagnostic sensors and Home Assistant logs for DHE session errors |
+| Entities stay unavailable | Check the `Connection state` / `Error status` diagnostic sensors and Home Assistant logs for DHE session errors |
 | Reconnect counter increases often | Confirm the WebSocket connection is not blocked and no second client is fighting for the DHE session |
 | Radio entity has no station/title | Open or change the radio once on the DHE UI so the device publishes station metadata |
 | Water entity missing from dashboard | Wait for Home Assistant statistics discovery, which can take up to two hours |

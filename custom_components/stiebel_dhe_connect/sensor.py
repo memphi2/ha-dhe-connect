@@ -106,8 +106,8 @@ class StiebelDHEDiagnosticSensorEntityDescription(SensorEntityDescription):
 
 
 DEFAULT_ENABLED_SENSOR_KEYS = {
-    "water_consumption_years",
-    "energy_consumption_years",
+    "water_consumption_total",
+    "energy_consumption_total",
 }
 
 CONNECTION_STATE_OPTIONS = (
@@ -156,8 +156,8 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         odb_id=ID_POWER_PERCENT,
     ),
     StiebelDHESensorEntityDescription(
-        key="configured_power",
-        translation_key="configured_power",
+        key="nominal_power",
+        translation_key="nominal_power",
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         device_class=SensorDeviceClass.POWER,
         odb_id=ID_NOMINAL_POWER,
@@ -174,8 +174,8 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         odb_id=ID_OPERATING_DURATION,
     ),
     StiebelDHESensorEntityDescription(
-        key="internal_temperature_1",
-        translation_key="internal_temperature_1",
+        key="inlet_temperature",
+        translation_key="inlet_temperature",
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -185,8 +185,8 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         odb_id=ID_INLET_TEMPERATURE,
     ),
     StiebelDHESensorEntityDescription(
-        key="internal_temperature_2",
-        translation_key="internal_temperature_2",
+        key="outlet_temperature",
+        translation_key="outlet_temperature",
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -246,8 +246,8 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         period="year",
     ),
     StiebelDHESensorEntityDescription(
-        key="water_consumption_years",
-        translation_key="water_consumption_years",
+        key="water_consumption_total",
+        translation_key="water_consumption_total",
         native_unit_of_measurement=UnitOfVolume.CUBIC_METERS,
         device_class=SensorDeviceClass.WATER,
         state_class=SensorStateClass.TOTAL_INCREASING,
@@ -321,8 +321,8 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         period="year",
     ),
     StiebelDHESensorEntityDescription(
-        key="energy_consumption_years",
-        translation_key="energy_consumption_years",
+        key="energy_consumption_total",
+        translation_key="energy_consumption_total",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL,
@@ -368,8 +368,8 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         source_command="set:ste.app.consumption:lastUsage",
     ),
     StiebelDHESensorEntityDescription(
-        key="saving_monitor_water",
-        translation_key="saving_monitor_water",
+        key="saving_monitor_consumption_water",
+        translation_key="saving_monitor_consumption_water",
         native_unit_of_measurement=UnitOfVolume.LITERS,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
@@ -378,8 +378,8 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         source_command="set:ste.app.savingMonitor:consumption",
     ),
     StiebelDHESensorEntityDescription(
-        key="saving_monitor_energy",
-        translation_key="saving_monitor_energy",
+        key="saving_monitor_consumption_energy",
+        translation_key="saving_monitor_consumption_energy",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
@@ -388,8 +388,8 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         source_command="set:ste.app.savingMonitor:consumption",
     ),
     StiebelDHESensorEntityDescription(
-        key="saving_monitor_co2",
-        translation_key="saving_monitor_co2",
+        key="saving_monitor_consumption_co2",
+        translation_key="saving_monitor_consumption_co2",
         native_unit_of_measurement=UnitOfMass.KILOGRAMS,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
@@ -438,8 +438,8 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         source_command="set:ste.app.savingMonitor:possible",
     ),
     StiebelDHESensorEntityDescription(
-        key="saving_monitor_possible_value",
-        translation_key="saving_monitor_possible_value",
+        key="saving_monitor_possible_cost",
+        translation_key="saving_monitor_possible_cost",
         native_unit_of_measurement="EUR",
         device_class=SensorDeviceClass.MONETARY,
         suggested_display_precision=2,
@@ -478,8 +478,8 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         source_command="set:ste.app.savingMonitor:real",
     ),
     StiebelDHESensorEntityDescription(
-        key="saving_monitor_real_value",
-        translation_key="saving_monitor_real_value",
+        key="saving_monitor_real_cost",
+        translation_key="saving_monitor_real_cost",
         native_unit_of_measurement="EUR",
         device_class=SensorDeviceClass.MONETARY,
         suggested_display_precision=2,
@@ -751,14 +751,14 @@ class StiebelDHEErrorStatusSensor(StiebelDHEEntityMixin, SensorEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_has_entity_name = True
     _attr_should_poll = False
-    _attr_translation_key = "temperature_error_status"
+    _attr_translation_key = "error_status"
     _attr_icon = "mdi:alert-octagon-outline"
 
     def __init__(self, entry_id: str, name: str, client: DHEClient) -> None:
         """Initialize the general error status sensor."""
         self._init_dhe_entity(
             entry_id=entry_id,
-            key="temperature_error_status",
+            key="error_status",
             name=name,
             client=client,
         )

@@ -21,7 +21,12 @@ from .client import (
     SHOWER_TIMER_PATH,
     TEMPERATURE_MEMORY_SLOT_MEASUREMENTS,
 )
-from .entity_helpers import StiebelDHEEntityMixin
+from .entity_helpers import (
+    StiebelDHEEntityMixin,
+    temperature_memory_enabled_default,
+    temperature_memory_icon,
+    temperature_memory_measurement_slot_items,
+)
 from .runtime_helpers import get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
@@ -86,21 +91,16 @@ STATIC_BUTTON_DESCRIPTIONS: tuple[StiebelDHEButtonEntityDescription, ...] = (
     ),
 )
 
-TEMPERATURE_MEMORY_MEASUREMENT_SLOTS = {
-    measurement_id: slot for slot, measurement_id in TEMPERATURE_MEMORY_SLOT_MEASUREMENTS.items()
-}
-
-
-def _temperature_memory_enabled_default(slot: int) -> bool:
-    """Return whether a temperature memory slot is enabled by default."""
-    return slot <= 2
+TEMPERATURE_MEMORY_MEASUREMENT_SLOT_ITEMS = temperature_memory_measurement_slot_items(
+    TEMPERATURE_MEMORY_SLOT_MEASUREMENTS
+)
 
 
 def _temperature_memory_button_descriptions(
     slot: int,
     measurement_id: int,
 ) -> tuple[StiebelDHEButtonEntityDescription, ...]:
-    icon = f"mdi:numeric-{slot}-box-outline" if slot < 10 else "mdi:counter"
+    icon = temperature_memory_icon(slot)
     descriptions = [
         StiebelDHEButtonEntityDescription(
             key=f"temperature_memory_{slot}",
@@ -109,7 +109,7 @@ def _temperature_memory_button_descriptions(
             method_args=(slot,),
             icon=icon,
             availability_measurement_id=measurement_id,
-            entity_registry_enabled_default=_temperature_memory_enabled_default(slot),
+            entity_registry_enabled_default=temperature_memory_enabled_default(slot),
             extra_state_attributes={
                 "temperature_memory_slot": slot,
                 "temperature_memory_id": slot - 1,
@@ -163,9 +163,7 @@ async def async_setup_entry(
                 client=client,
                 description=description,
             )
-            for measurement_id, slot in sorted(
-                TEMPERATURE_MEMORY_MEASUREMENT_SLOTS.items(), key=lambda item: item[1]
-            )
+            for measurement_id, slot in TEMPERATURE_MEMORY_MEASUREMENT_SLOT_ITEMS
             for description in _temperature_memory_button_descriptions(slot, measurement_id)
         ]
     )
