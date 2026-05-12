@@ -60,7 +60,7 @@
         "title": "Geräteeinstellungen",
         "description": "Interne Verbrühschutz-Jumperposition festlegen und Währung, Strompreis, Wasserpreis sowie CO2-Emission am DHE setzen. Zahlenfelder sind mit aktuellen Gerätewerten vorbelegt, Währung standardmäßig auf EUR.",
         "data": {
-          "internal_scald_protection": "Interner Verbrühschutz",
+          "internal_scald_protection": "Interner Verbrühschutz (Tmax-Jumper)",
           "currency": "Währung",
           "electricity_price": "Strompreis (EUR/kWh)",
           "water_price": "Wasserpreis (EUR/m³)",

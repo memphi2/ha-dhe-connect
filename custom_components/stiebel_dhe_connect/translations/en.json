@@ -60,7 +60,7 @@
         "title": "Device settings",
         "description": "Set the internal scald-protection jumper position plus currency, electricity price, water price and CO2 emission on the DHE. Number fields are prefilled with current device values, currency defaults to EUR.",
         "data": {
-          "internal_scald_protection": "Internal scald protection",
+          "internal_scald_protection": "Internal scald protection (Tmax jumper)",
           "currency": "Currency",
           "electricity_price": "Electricity price (EUR/kWh)",
           "water_price": "Water price (EUR/m³)",
