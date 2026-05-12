@@ -22,6 +22,7 @@ from .client import (
     DHEError,
     MeasurementValue,
 )
+from .config_entry_helpers import merged_entry_data
 from .entity_helpers import StiebelDHEEntityMixin
 from .entity_state_helpers import (
     CONF_INTERNAL_SCALD_PROTECTION,
@@ -75,7 +76,7 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
     ) -> None:
         """Initialize the entity."""
         self._internal_scald_protection = normalize_internal_scald_protection(
-            entry.options.get(CONF_INTERNAL_SCALD_PROTECTION)
+            merged_entry_data(entry).get(CONF_INTERNAL_SCALD_PROTECTION)
         )
         self._init_dhe_entity(
             entry_id=entry_id,

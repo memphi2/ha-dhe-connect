@@ -3,11 +3,12 @@
     "step": {
       "user": {
         "title": "Stiebel DHE Connect einrichten",
-        "description": "Lokale Verbindung zum DHE Connect konfigurieren. Die Pairing-Anfrage wird im nächsten Schritt gestartet.",
+        "description": "Lokale Verbindung zum DHE Connect und physische Tmax-Jumperposition konfigurieren. Die Pairing-Anfrage wird im nächsten Schritt gestartet.",
         "data": {
           "host": "IP-Adresse oder Hostname",
           "port": "Port",
-          "name": "Gerätename"
+          "name": "Gerätename",
+          "internal_scald_protection": "Interner Verbrühschutz (Tmax-Jumper)"
         }
       },
       "pairing_confirm": {
@@ -27,7 +28,8 @@
       "cannot_connect": "Verbindung zum DHE nicht möglich. IP-Adresse und Port prüfen.",
       "invalid_host": "Ungültiger Host. Bitte nur IP-Adresse oder Hostname ohne Pfad, Benutzername oder Port eingeben.",
       "embedded_port_not_supported": "Bitte Port nicht im Hostfeld angeben (z. B. \"192.168.1.10\"). Den Port nur im Port-Feld eintragen.",
-      "invalid_port": "Ungültiger Port. Der Port muss zwischen 1 und 65535 liegen."
+      "invalid_port": "Ungültiger Port. Der Port muss zwischen 1 und 65535 liegen.",
+      "invalid_internal_scald_protection": "Ungültige Tmax-Jumperposition."
     },
     "abort": {
       "already_configured": "Stiebel DHE Connect ist bereits konfiguriert."
@@ -37,10 +39,10 @@
     "step": {
       "init": {
         "title": "Stiebel DHE Connect konfigurieren",
-        "description": "Verbindung, Geräteeinstellungen, Wetter-Favoriten oder Radio-Sender verwalten.",
+        "description": "Verbindung, Gerät, Kosten, Wetter-Favoriten oder Radio-Sender verwalten.",
         "menu_options": {
-          "connection": "Verbindung ändern",
-          "device_settings": "Geräteeinstellungen",
+          "connection": "Verbindung/Gerät",
+          "device_settings": "Kosten & Emissionen",
           "weather_favorite": "Wetter-Favorit hinzufügen",
           "remove_weather_favorite": "Wetter-Favorit entfernen",
           "radio_favorite": "Radio-Sender hinzufügen",
@@ -48,19 +50,19 @@
         }
       },
       "connection": {
-        "title": "Verbindung konfigurieren",
-        "description": "IP-Adresse, Port und Gerätename ändern.",
+        "title": "Verbindung/Gerät konfigurieren",
+        "description": "IP-Adresse, Port, Gerätename und physische Tmax-Jumperposition ändern.",
         "data": {
           "host": "IP-Adresse oder Hostname",
           "port": "Port",
-          "name": "Gerätename"
+          "name": "Gerätename",
+          "internal_scald_protection": "Interner Verbrühschutz (Tmax-Jumper)"
         }
       },
       "device_settings": {
-        "title": "Geräteeinstellungen",
-        "description": "Interne Verbrühschutz-Jumperposition festlegen und Währung, Strompreis, Wasserpreis sowie CO2-Emission am DHE setzen. Zahlenfelder sind mit aktuellen Gerätewerten vorbelegt, Währung standardmäßig auf EUR.",
+        "title": "Kosten & Emissionen",
+        "description": "Währung, Strompreis, Wasserpreis und CO2-Emission am DHE setzen. Zahlenfelder sind mit aktuellen Gerätewerten vorbelegt, Währung standardmäßig auf EUR.",
         "data": {
-          "internal_scald_protection": "Interner Verbrühschutz (Tmax-Jumper)",
           "currency": "Währung",
           "electricity_price": "Strompreis (EUR/kWh)",
           "water_price": "Wasserpreis (EUR/m³)",
@@ -136,8 +138,9 @@
       "search_failed": "Wettersuche fehlgeschlagen.",
       "favorite_failed": "Favorit konnte nicht gespeichert werden.",
       "remove_favorite_failed": "Favorit konnte nicht entfernt werden.",
-      "invalid_device_setting": "Ungültige Geräteeinstellung.",
-      "device_settings_failed": "Geräteeinstellungen konnten nicht gespeichert werden.",
+      "invalid_device_setting": "Ungültige Kosten- oder Emissionsangabe.",
+      "device_settings_failed": "Kosten und Emissionen konnten nicht gespeichert werden.",
+      "invalid_internal_scald_protection": "Ungültige Tmax-Jumperposition.",
       "no_radio_catalog": "Keinen Radio-Katalog vom DHE erhalten.",
       "radio_catalog_failed": "Radio-Katalog konnte nicht gelesen werden.",
       "radio_search_failed": "Radio-Suche fehlgeschlagen.",

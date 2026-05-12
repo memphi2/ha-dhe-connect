@@ -30,6 +30,7 @@ from .client import (
     SHOWER_TIMER_PATH,
     TEMPERATURE_MEMORY_SLOT_MEASUREMENTS,
 )
+from .config_entry_helpers import merged_entry_data
 from .entity_helpers import StiebelDHEEntityMixin
 from .entity_state_helpers import (
     CONF_INTERNAL_SCALD_PROTECTION,
@@ -209,7 +210,7 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
         """Initialize the number entity."""
         self.entity_description = description
         self._internal_scald_protection = normalize_internal_scald_protection(
-            entry.options.get(CONF_INTERNAL_SCALD_PROTECTION)
+            merged_entry_data(entry).get(CONF_INTERNAL_SCALD_PROTECTION)
         )
         self._attr_translation_key = description.translation_key
         self._init_dhe_entity(

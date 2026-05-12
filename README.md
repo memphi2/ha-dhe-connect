@@ -69,6 +69,7 @@ The config flow asks for:
 | Host | `192.168.1.100` | IP address or hostname only |
 | Port | `8443` | DHE web interface port |
 | Device name | `DHE Connect` | Name shown in Home Assistant |
+| Internal scald protection (Tmax jumper) | `60` | Physical `Tmax` jumper position; options are `43`, `50`, `55`, `60` and `no_jumper` |
 
 The host field intentionally rejects URLs with paths, usernames, query strings or embedded ports. The port must be between `1` and `65535`.
 
@@ -79,7 +80,7 @@ On first connection Home Assistant validates the DHE pairing before the integrat
 Add one config entry per DHE device:
 
 1. `Settings` -> `Devices & services` -> `Add integration` -> `Stiebel DHE Connect`
-2. Enter host, port and name for that exact DHE
+2. Enter host, port, name and physical `Tmax` jumper position for that exact DHE
 3. Complete pairing on the device display (required)
 4. Repeat for the next DHE
 
@@ -88,7 +89,7 @@ Each config entry keeps its own runtime session, token file and entity set.
 ### First pairing flow
 
 1. Add `Stiebel DHE Connect` from `Settings` -> `Devices & services`.
-2. Enter only the DHE host/IP, port and a provisional device name.
+2. Enter the DHE host/IP, port, a provisional device name and the physical `Tmax` jumper position.
 3. Submit the form, then click `OK` on the pairing confirmation step.
 4. Confirm the pairing request on the DHE device display and complete the confirmation there (required).
 5. Home Assistant creates the integration entry only after pairing and login have completed.
@@ -252,7 +253,9 @@ Consumption sensors expose the DHE chart array as a `chart` attribute and the re
 
 Temperature memory writes keep the existing memory name and send `operation: add_change`. Slots 1 and 2 are enabled by default. Slots 3 to 12 are created in the entity registry but disabled by default, so they can be enabled explicitly without cluttering the device configuration card.
 
-Internal scald protection, currency, electricity price, water price and CO2 emission are configured from the integration options under `Device settings` instead of being exposed as entities. The internal scald-protection option is local to Home Assistant and should match the physical `Tmax` jumper position. The DHE writes use the same protocol values as the browser UI: currency via `get:ste.common.currency:value`, electricity price via ODB IDs `61`/`70`, water price via ODB IDs `62`/`71` and CO2 emission via ODB ID `69`. Price euro components accept the browser ODB range `0` to `32767`, cent components accept `0` to `99`, and CO2 emission accepts raw `0` to `32767` (`0.000` to `32.767 kg/kWh`).
+Internal scald protection is configured during initial setup and from the integration options under `Connection/device`. The option is local to Home Assistant and should match the physical `Tmax` jumper position.
+
+Currency, electricity price, water price and CO2 emission are configured from the integration options under `Costs & emissions` instead of being exposed as entities. The DHE writes use the same protocol values as the browser UI: currency via `get:ste.common.currency:value`, electricity price via ODB IDs `61`/`70`, water price via ODB IDs `62`/`71` and CO2 emission via ODB ID `69`. Price euro components accept the browser ODB range `0` to `32767`, cent components accept `0` to `99`, and CO2 emission accepts raw `0` to `32767` (`0.000` to `32.767 kg/kWh`).
 
 ### Selects
 

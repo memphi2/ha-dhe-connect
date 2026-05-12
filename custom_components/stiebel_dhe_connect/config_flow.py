@@ -147,6 +147,8 @@ def _apply_validation_error(errors: dict[str, str], err: ValueError) -> None:
     code = str(err) or "invalid_host"
     if code == "invalid_port":
         errors[CONF_PORT] = code
+    elif code == "invalid_internal_scald_protection":
+        errors[CONF_INTERNAL_SCALD_PROTECTION] = code
     elif code == "embedded_port_not_supported":
         errors[CONF_HOST] = code
     else:
@@ -189,14 +191,27 @@ def _is_target_used_by_other_entry(
     return False
 
 
-def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
+def _schema(
+    hass: HomeAssistant,
+    defaults: dict[str, Any] | None = None,
+) -> vol.Schema:
     """Build config/options schema."""
     defaults = defaults or {}
+    internal_scald_protection = normalize_internal_scald_protection(
+        defaults.get(
+            CONF_INTERNAL_SCALD_PROTECTION,
+            INTERNAL_SCALD_PROTECTION_DEFAULT,
+        )
+    )
     return vol.Schema(
         {
             vol.Required(CONF_HOST, default=defaults.get(CONF_HOST, "")): str,
             vol.Optional(CONF_PORT, default=defaults.get(CONF_PORT, DEFAULT_PORT)): int,
             vol.Optional(CONF_NAME, default=defaults.get(CONF_NAME, DEFAULT_NAME)): str,
+            vol.Optional(
+                CONF_INTERNAL_SCALD_PROTECTION,
+                default=internal_scald_protection,
+            ): vol.In(_internal_scald_protection_options(hass)),
         }
     )
 
@@ -265,16 +280,9 @@ def _internal_scald_protection_options(hass: HomeAssistant) -> dict[str, str]:
     }
 
 
-def _device_settings_defaults(
-    client: Any,
-    options: dict[str, Any] | None = None,
-) -> dict[str, Any]:
+def _device_settings_defaults(client: Any) -> dict[str, Any]:
     measurements = getattr(client, "last_measurements", {})
-    options = options or {}
     return {
-        CONF_INTERNAL_SCALD_PROTECTION: normalize_internal_scald_protection(
-            options.get(CONF_INTERNAL_SCALD_PROTECTION)
-        ),
         # Requested UX: keep currency default at EUR.
         ATTR_CURRENCY: "EUR",
         ATTR_ELECTRICITY_PRICE: _format_number_default(
@@ -293,21 +301,11 @@ def _device_settings_schema(
     defaults: dict[str, Any] | None = None,
 ) -> vol.Schema:
     defaults = defaults or {}
-    internal_scald_protection = normalize_internal_scald_protection(
-        defaults.get(
-            CONF_INTERNAL_SCALD_PROTECTION,
-            INTERNAL_SCALD_PROTECTION_DEFAULT,
-        )
-    )
     currency = str(defaults.get(ATTR_CURRENCY) or CURRENCY_UNCHANGED).strip()
     if currency != CURRENCY_UNCHANGED:
         currency = currency.upper()
     return vol.Schema(
         {
-            vol.Optional(
-                CONF_INTERNAL_SCALD_PROTECTION,
-                default=internal_scald_protection,
-            ): vol.In(_internal_scald_protection_options(hass)),
             vol.Optional(ATTR_CURRENCY, default=currency): vol.In(
                 _currency_options(hass, currency)
             ),
@@ -507,6 +505,11 @@ class StiebelDHEConnectConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             try:
                 host = _normalize_host(user_input[CONF_HOST])
                 port = _validate_port(user_input.get(CONF_PORT, DEFAULT_PORT))
+                internal_scald_protection = str(
+                    user_input.get(CONF_INTERNAL_SCALD_PROTECTION) or ""
+                ).strip()
+                if internal_scald_protection not in INTERNAL_SCALD_PROTECTION_OPTIONS:
+                    raise ValueError("invalid_internal_scald_protection")
             except ValueError as err:
                 _apply_validation_error(errors, err)
             else:
@@ -524,13 +527,14 @@ class StiebelDHEConnectConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         CONF_HOST: host,
                         CONF_PORT: port,
                         CONF_NAME: name,
+                        CONF_INTERNAL_SCALD_PROTECTION: internal_scald_protection,
                         "token_file": token_file,
                     }
                     return await self.async_step_pairing_confirm()
 
         return self.async_show_form(
             step_id="user",
-            data_schema=_schema(),
+            data_schema=_schema(self.hass),
             errors=errors,
         )
 
@@ -622,6 +626,11 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
             try:
                 host = _normalize_host(user_input[CONF_HOST])
                 port = _validate_port(user_input.get(CONF_PORT, DEFAULT_PORT))
+                internal_scald_protection = str(
+                    user_input.get(CONF_INTERNAL_SCALD_PROTECTION) or ""
+                ).strip()
+                if internal_scald_protection not in INTERNAL_SCALD_PROTECTION_OPTIONS:
+                    raise ValueError("invalid_internal_scald_protection")
             except ValueError as err:
                 _apply_validation_error(errors, err)
             else:
@@ -647,12 +656,13 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
                             CONF_HOST: host,
                             CONF_PORT: port,
                             CONF_NAME: name,
+                            CONF_INTERNAL_SCALD_PROTECTION: internal_scald_protection,
                         },
                     )
 
         return self.async_show_form(
             step_id="connection",
-            data_schema=_schema(current),
+            data_schema=_schema(self.hass, current),
             errors=errors,
         )
 
@@ -664,18 +674,9 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
         errors: dict[str, str] = {}
         client = self._client_or_mark_not_loaded(errors)
 
-        defaults = (
-            _device_settings_defaults(client, dict(self.config_entry.options))
-            if client is not None
-            else dict(self.config_entry.options)
-        )
+        defaults = _device_settings_defaults(client) if client is not None else {}
         if user_input is not None and not errors:
             try:
-                internal_scald_protection = str(
-                    user_input.get(CONF_INTERNAL_SCALD_PROTECTION) or ""
-                ).strip()
-                if internal_scald_protection not in INTERNAL_SCALD_PROTECTION_OPTIONS:
-                    raise ValueError("invalid_internal_scald_protection")
                 currency = str(
                     user_input.get(ATTR_CURRENCY) or CURRENCY_UNCHANGED
                 ).strip()
@@ -708,11 +709,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
             except DHEError:
                 errors["base"] = "device_settings_failed"
             else:
-                updated_options = dict(self.config_entry.options)
-                updated_options[CONF_INTERNAL_SCALD_PROTECTION] = (
-                    internal_scald_protection
-                )
-                return self.async_create_entry(title="", data=updated_options)
+                return self._finish_options()
 
         return self.async_show_form(
             step_id="device_settings",

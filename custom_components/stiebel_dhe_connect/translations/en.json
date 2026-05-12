@@ -3,11 +3,12 @@
     "step": {
       "user": {
         "title": "Set up Stiebel DHE Connect",
-        "description": "Configure the local connection to your DHE Connect. The pairing request starts in the next step.",
+        "description": "Configure the local connection to your DHE Connect and the physical Tmax jumper position. The pairing request starts in the next step.",
         "data": {
           "host": "IP address or hostname",
           "port": "Port",
-          "name": "Device name"
+          "name": "Device name",
+          "internal_scald_protection": "Internal scald protection (Tmax jumper)"
         }
       },
       "pairing_confirm": {
@@ -27,7 +28,8 @@
       "cannot_connect": "Could not connect to the DHE. Check the IP address and port.",
       "invalid_host": "Invalid host. Enter only an IP address or hostname, without path, username or port.",
       "embedded_port_not_supported": "Do not include the port in the host field (for example \"192.168.1.10\"). Enter the port only in the port field.",
-      "invalid_port": "Invalid port. The port must be between 1 and 65535."
+      "invalid_port": "Invalid port. The port must be between 1 and 65535.",
+      "invalid_internal_scald_protection": "Invalid Tmax jumper position."
     },
     "abort": {
       "already_configured": "Stiebel DHE Connect is already configured."
@@ -37,10 +39,10 @@
     "step": {
       "init": {
         "title": "Configure Stiebel DHE Connect",
-        "description": "Manage connection settings, device settings, weather favorites or radio stations.",
+        "description": "Manage connection settings, device, costs, weather favorites or radio stations.",
         "menu_options": {
-          "connection": "Change connection",
-          "device_settings": "Device settings",
+          "connection": "Connection/device",
+          "device_settings": "Costs & emissions",
           "weather_favorite": "Add weather favorite",
           "remove_weather_favorite": "Remove weather favorite",
           "radio_favorite": "Add radio station",
@@ -48,19 +50,19 @@
         }
       },
       "connection": {
-        "title": "Configure connection",
-        "description": "Change IP address, port and device name.",
+        "title": "Configure connection/device",
+        "description": "Change IP address, port, device name and physical Tmax jumper position.",
         "data": {
           "host": "IP address or hostname",
           "port": "Port",
-          "name": "Device name"
+          "name": "Device name",
+          "internal_scald_protection": "Internal scald protection (Tmax jumper)"
         }
       },
       "device_settings": {
-        "title": "Device settings",
-        "description": "Set the internal scald-protection jumper position plus currency, electricity price, water price and CO2 emission on the DHE. Number fields are prefilled with current device values, currency defaults to EUR.",
+        "title": "Costs & emissions",
+        "description": "Set currency, electricity price, water price and CO2 emission on the DHE. Number fields are prefilled with current device values, currency defaults to EUR.",
         "data": {
-          "internal_scald_protection": "Internal scald protection (Tmax jumper)",
           "currency": "Currency",
           "electricity_price": "Electricity price (EUR/kWh)",
           "water_price": "Water price (EUR/m³)",
@@ -136,8 +138,9 @@
       "search_failed": "Weather search failed.",
       "favorite_failed": "Could not save favorite.",
       "remove_favorite_failed": "Could not remove favorite.",
-      "invalid_device_setting": "Invalid device setting.",
-      "device_settings_failed": "Could not save device settings.",
+      "invalid_device_setting": "Invalid cost or emission value.",
+      "device_settings_failed": "Could not save costs and emissions.",
+      "invalid_internal_scald_protection": "Invalid Tmax jumper position.",
       "no_radio_catalog": "No radio catalog received from the DHE.",
       "radio_catalog_failed": "Could not read radio catalog.",
       "radio_search_failed": "Radio search failed.",
