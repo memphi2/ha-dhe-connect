@@ -29,6 +29,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .client import (
     BRUSH_TIMER_PATH,
     DHEClient,
+    ID_BATH_FILL_CURRENT_VOLUME,
     ID_BATH_FILL_REMAINING_VOLUME,
     ID_BRUSH_TIMER_REMAINING,
     ID_DEVICE_INFO,
