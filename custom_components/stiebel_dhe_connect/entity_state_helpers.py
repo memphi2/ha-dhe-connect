@@ -5,6 +5,17 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+CONF_INTERNAL_SCALD_PROTECTION = "internal_scald_protection"
+INTERNAL_SCALD_PROTECTION_DEFAULT = "60"
+INTERNAL_SCALD_PROTECTION_OPTIONS = ("43", "50", "55", "60", "no_jumper")
+INTERNAL_SCALD_PROTECTION_LIMITS = {
+    "43": 43.0,
+    "50": 50.0,
+    "55": 55.0,
+    "60": 60.0,
+    "no_jumper": 43.0,
+}
+
 
 def coerce_float(value: Any) -> float | None:
     """Return value as float, ignoring bools and invalid values."""
@@ -53,6 +64,84 @@ def clamp_duration_seconds(
     if seconds_value is None:
         return None
     return max(minimum, min(int(round(seconds_value)), maximum))
+
+
+def normalize_internal_scald_protection(value: Any) -> str:
+    """Return a supported internal scald-protection jumper option."""
+    option = str(value or "").strip()
+    if option in INTERNAL_SCALD_PROTECTION_OPTIONS:
+        return option
+    return INTERNAL_SCALD_PROTECTION_DEFAULT
+
+
+def internal_scald_protection_temperature(value: Any) -> float:
+    """Return the effective temperature limit for the configured jumper option."""
+    option = normalize_internal_scald_protection(value)
+    return INTERNAL_SCALD_PROTECTION_LIMITS[option]
+
+
+def child_safety_temperature_limit_max(
+    internal_scald_protection: Any,
+    *,
+    maximum: float = 60.0,
+) -> float:
+    """Return the maximum child-safety limit allowed by the jumper."""
+    return min(maximum, internal_scald_protection_temperature(internal_scald_protection))
+
+
+def bounded_child_safety_temperature_limit(
+    value: Any,
+    *,
+    internal_scald_protection: Any,
+    minimum: float = 20.0,
+    maximum: float = 60.0,
+) -> float | None:
+    """Return a child-safety limit bounded by the physical jumper position."""
+    temperature = coerce_float(value)
+    if temperature is None:
+        return None
+    return max(
+        minimum,
+        min(
+            child_safety_temperature_limit_max(
+                internal_scald_protection,
+                maximum=maximum,
+            ),
+            temperature,
+        ),
+    )
+
+
+def climate_max_temperature(
+    *,
+    internal_scald_protection: Any,
+    child_safety_active: bool | None,
+    child_safety_temperature_limit: Any,
+    minimum: float = 20.0,
+    maximum: float = 60.0,
+) -> float:
+    """Return the Climate max temperature from Tmax and child-safety limits."""
+    max_temp = child_safety_temperature_limit_max(
+        internal_scald_protection,
+        maximum=maximum,
+    )
+    child_limit = coerce_float(child_safety_temperature_limit)
+    if child_safety_active and child_limit is not None:
+        max_temp = min(max_temp, child_limit)
+    return max(minimum, min(maximum, max_temp))
+
+
+def clamp_temperature(
+    value: Any,
+    *,
+    minimum: float,
+    maximum: float,
+) -> float | None:
+    """Return a temperature clamped to the supplied range."""
+    temperature = coerce_float(value)
+    if temperature is None:
+        return None
+    return max(minimum, min(maximum, temperature))
 
 
 def value_available(connected: bool, value: Any) -> bool:

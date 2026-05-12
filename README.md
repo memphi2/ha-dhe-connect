@@ -24,13 +24,13 @@ Development and protocol mapping for this release were assisted by OpenAI Codex.
 - Automatic reconnect and diagnostic reconnect counter.
 - Target temperature control through the DHE ODB command interface.
 - Temperature memory controls for all 12 supported slots; slots 3 to 12 are disabled by default.
-- Total water and energy consumption sensors are enabled by default; detailed live, last usage, timer and saving-monitor sensors start disabled to keep the device card tidy.
-- Eco mode, Eco flow limit, bath fill, maximum temperature and wellness controls; currency, cost and CO2 settings live in the integration options.
+- Total water and energy consumption sensors are enabled by default; detailed live, possible saving, last usage, timer and saving-monitor sensors start disabled to keep the device card tidy.
+- Eco mode, Eco flow limit, bath fill, child safety and wellness controls; currency, cost and CO2 settings live in the integration options.
 - Compact radio media player for station metadata, playback, volume and favorites.
 - Options-flow radio search by full text, DHE genre catalog, country catalog or city catalog.
 - Weather entity for the DHE forecast payload.
 - Brush timer and shower timer controls.
-- General diagnostic status, reconnect count, connection details, scald-protection diagnostics, device alarm and device information.
+- General diagnostic status, reconnect count, connection details, scald-protection diagnostics, ODB protocol diagnostics and device information.
 
 ## Installation
 
@@ -69,6 +69,7 @@ The config flow asks for:
 | Host | `192.168.1.100` | IP address or hostname only |
 | Port | `8443` | DHE web interface port |
 | Device name | `DHE Connect` | Name shown in Home Assistant |
+| Internal scald protection (Tmax jumper) | `60` | Physical `Tmax` jumper position; options are `43`, `50`, `55`, `60` and `no_jumper` |
 
 The host field intentionally rejects URLs with paths, usernames, query strings or embedded ports. The port must be between `1` and `65535`.
 
@@ -79,7 +80,7 @@ On first connection Home Assistant validates the DHE pairing before the integrat
 Add one config entry per DHE device:
 
 1. `Settings` -> `Devices & services` -> `Add integration` -> `Stiebel DHE Connect`
-2. Enter host, port and name for that exact DHE
+2. Enter host, port, name and physical `Tmax` jumper position for that exact DHE
 3. Complete pairing on the device display (required)
 4. Repeat for the next DHE
 
@@ -88,7 +89,7 @@ Each config entry keeps its own runtime session, token file and entity set.
 ### First pairing flow
 
 1. Add `Stiebel DHE Connect` from `Settings` -> `Devices & services`.
-2. Enter only the DHE host/IP, port and a provisional device name.
+2. Enter the DHE host/IP, port, a provisional device name and the physical `Tmax` jumper position.
 3. Submit the form, then click `OK` on the pairing confirmation step.
 4. Confirm the pairing request on the DHE device display and complete the confirmation there (required).
 5. Home Assistant creates the integration entry only after pairing and login have completed.
@@ -125,19 +126,27 @@ Home Assistant entity names are translated through `translations/en.json` and `t
 
 The climate entity keeps the last valid target temperature during short reconnect phases and exposes diagnostic attributes:
 
+Its maximum settable target temperature is capped by the `Internal scald protection (Tmax jumper)` integration option. When child safety is active, the Climate maximum uses the lower value of the `Tmax` jumper and the `Child safety temperature limit` number entity. The default internal scald-protection option is `60`.
+
 | Attribute | Meaning |
 |---|---|
 | `communication_model` | `persistent_socketio_websocket` |
 | `connection_state` | `starting`, `connected`, `reconnecting` or `unavailable` |
 | `readback_id` | ODB ID used for target temperature readback |
 | `write_id` | ODB ID used for setpoint commands |
+| `inlet_temperature` | Latest inlet/cold-water temperature from ODB ID `13` |
+| `outlet_temperature` | Latest outlet/hot-water temperature from ODB ID `14` |
+| `water_heating_enabled` | Decoded heating state from inverted ODB ID `33` |
+| `child_safety_active` | Child-safety state from ODB ID `4` |
+| `child_safety_temperature_limit` | Effective child-safety limit from ODB ID `5`, capped by the configured internal scald-protection jumper |
+| `child_safety_temperature_limit_raw` | Raw child-safety limit read from ODB ID `5` before the local jumper cap |
+| `internal_scald_protection` | Locally configured physical jumper position |
 
 ### Binary sensors
 
 | Entity | Class / category | Source / behavior |
 |---|---|---|
 | Scald protection active | diagnostic, disabled by default | ODB ID `22`, true when the DHE reports the anti-scald protection as active |
-| Device alarm | `problem`, diagnostic, disabled by default | Derived from ODB ID `34`; turns on for status code `3`, matching the browser UI wrench indicator |
 
 ### Media player
 
@@ -182,16 +191,22 @@ data:
 | Entity | Unit | Class / category | State class | Source / scaling |
 |---|---:|---|---|---|
 | Current water flow | `L/min` | `volume_flow_rate`, disabled by default | `measurement` | ODB ID `15 / 10` |
-| Current power consumption | `kW` | `power`, disabled by default | `measurement` | ODB ID `16 / 100 * configured_power_kw` |
-| Configured power | `kW` | `power`, disabled by default | none | ODB ID `20` |
+| Current power consumption | `kW` | `power`, disabled by default | `measurement` | ODB ID `16 / 100 * nominal_power_kw` |
+| Nominal power | `kW` | `power`, disabled by default | none | ODB ID `20` |
+| Operating duration | `h` | `duration`, diagnostic, disabled by default | `total_increasing` | ODB ID `18`, raw hours |
 | Inlet temperature | `C` | `temperature`, diagnostic, disabled by default | `measurement` | ODB ID `13 / 10` |
 | Outlet temperature | `C` | `temperature`, diagnostic, disabled by default | `measurement` | ODB ID `14 / 10` |
 | Scald protection temperature limit | `C` | `temperature`, diagnostic, disabled by default | none | ODB ID `24 / 10` |
-| Device status | text | `enum`, diagnostic, disabled by default | none | ODB ID `34`; status code `3` also drives the device alarm binary sensor |
+| Device status | text | `enum`, diagnostic, disabled by default | none | ODB ID `34`; status code `3` is also surfaced through the temperature error status sensor |
+| Protocol version | text | diagnostic, disabled by default | none | ODB ID `67` |
 | Water consumption week | `L` | `water`, disabled by default | `total_increasing` | `set:ste.app.consumption:waterWeek` |
 | Water consumption year | `m3` | `water`, disabled by default | `total_increasing` | `set:ste.app.consumption:waterYear` |
 | Water consumption years | `m3` | `water` | `total_increasing` | `set:ste.app.consumption:waterYears` |
+| Total hot water volume | `m3` | `water`, disabled by default | `total_increasing` | ODB ID `30 / 10` |
 | Energy consumption week | `kWh` | `energy`, disabled by default | `total` | `set:ste.app.consumption:energyWeek` |
+| Total heating energy | `kWh` | `energy`, disabled by default | `total_increasing` | ODB ID `29` |
+| Possible energy saving | `kWh` | `energy`, diagnostic, disabled by default | `measurement` | ODB ID `63` |
+| Possible water saving | `m3` | `water`, diagnostic, disabled by default | `measurement` | ODB ID `64 / 10` |
 | Energy consumption year | `kWh` | `energy`, disabled by default | `total` | `set:ste.app.consumption:energyYear` |
 | Energy consumption years | `kWh` | `energy` | `total` | `set:ste.app.consumption:energyYears` |
 | Last usage water | `L` | disabled by default | `measurement` | `set:ste.app.consumption:lastUsage.water` |
@@ -199,6 +214,7 @@ data:
 | Last usage duration | `M:SS` | disabled by default | none | `set:ste.app.consumption:lastUsage.time`, rendered like timer remaining values |
 | Last usage cost | `EUR` | `monetary`, disabled by default | none | `set:ste.app.consumption:lastUsage.costs` |
 | Bath fill remaining | `L` | disabled by default | `measurement` | Derived as whole liters from target volume ODB ID `3` minus current bath fill ODB ID `31` |
+| Current bath fill volume | `L` | diagnostic, disabled by default | `measurement` | ODB ID `31`, whole liters |
 | Saving monitor consumption water | `L` | disabled by default | `measurement` | `set:ste.app.savingMonitor:consumption.water_l`, rounded to 2 decimals |
 | Saving monitor consumption energy | `kWh` | disabled by default | `measurement` | `set:ste.app.savingMonitor:consumption.energy_Wh / 1000`, rounded to 2 decimals |
 | Saving monitor consumption CO2 | `kg` | disabled by default | `measurement` | `set:ste.app.savingMonitor:consumption.emission_Co2Kg`, rounded to 2 decimals |
@@ -228,16 +244,18 @@ Consumption sensors expose the DHE chart array as a `chart` attribute and the re
 
 | Entity | Unit | Range | Mode | Source / command |
 |---|---:|---:|---|---|
-| Bath fill target volume | `L` | `1` to `300`, step `1` | slider | ODB ID `3`, shown as whole liters |
-| Maximum temperature | `C` | `20` to `50` | slider | ODB ID `5`, accepts raw tenths or degrees |
-| Eco flow limit | `L/min` | `6` to `8` | slider | ODB ID `7`, sent as raw tenths |
+| Bath fill target volume | `L` | `5` to `200`, step `1` | slider | ODB ID `3`, shown as whole liters |
+| Child safety temperature limit | `C` | `20` to configured internal scald-protection limit, step `0.5` | slider | ODB ID `5`, sent as raw tenths |
+| Eco flow limit | `L/min` | `4` to `15`, step `0.5` | slider | ODB ID `7`, sent as raw tenths |
 | Brush timer duration | `s` | `60` to `1200`, step `1` | box | `assign:ste.app.brushTimer:durationMilliseconds`; shown in Home Assistant as seconds |
 | Shower timer duration | `s` | `60` to `1200`, step `1` | box | `assign:ste.app.showerTimer:durationMilliseconds`; shown in Home Assistant as seconds |
 | Temperature memory 1-12 temperature | `C` | `20` to `60` | box | `assign:ste.common.temperature:memory`, memory ID `0` to `11`; slots 3 to 12 disabled by default |
 
 Temperature memory writes keep the existing memory name and send `operation: add_change`. Slots 1 and 2 are enabled by default. Slots 3 to 12 are created in the entity registry but disabled by default, so they can be enabled explicitly without cluttering the device configuration card.
 
-Currency, electricity price, water price and CO2 emission are configured from the integration options under `Costs & emissions` instead of being exposed as entities. The DHE writes use the same protocol values as the browser UI: currency via `get:ste.common.currency:value`, electricity price via ODB IDs `61`/`70`, water price via ODB IDs `62`/`71` and CO2 emission via ODB ID `69`.
+Internal scald protection is configured during initial setup and from the integration options under `Connection/device`. The option is local to Home Assistant and should match the physical `Tmax` jumper position.
+
+Currency, electricity price, water price and CO2 emission are configured from the integration options under `Costs & emissions` instead of being exposed as entities. The DHE writes use the same protocol values as the browser UI: currency via `get:ste.common.currency:value`, electricity price via ODB IDs `61`/`70`, water price via ODB IDs `62`/`71` and CO2 emission via ODB ID `69`. Price euro components accept the browser ODB range `0` to `32767`, cent components accept `0` to `99`, and CO2 emission accepts raw `0` to `32767` (`0.000` to `32.767 kg/kWh`).
 
 ### Selects
 
@@ -259,7 +277,7 @@ Temperature memory name writes use the current cached or freshly read memory tem
 |---|---|---|
 | Eco mode | ODB ID `6` | Turns Eco mode on or off |
 | Bath fill | ODB ID `1` | Starts or stops bath filling |
-| Maximum temperature limit | ODB ID `4` | Enables or disables the maximum temperature limit |
+| Child safety | ODB ID `4` | Enables or disables the child-safety temperature limit |
 | Brush timer | `assign:ste.app.brushTimer:activation` | Starts or stops the brush timer |
 | Shower timer | `assign:ste.app.showerTimer:activation` | Starts or stops the shower timer |
 | Cold prevention | ODB ID `2` value `1`, trigger ODB ID `10` | Starts wellness cold prevention, off sends stop |
@@ -267,7 +285,7 @@ Temperature memory name writes use the current cached or freshly read memory tem
 | Summer fitness | ODB ID `2` value `3`, trigger ODB ID `10` | Starts summer fitness, off sends stop |
 | Circulation support | ODB ID `2` value `4`, trigger ODB ID `10` | Starts circulation support, off sends stop |
 
-Wellness programs are triggered by writing the program ID and then sending the DHE trigger value. The integration derives switch state from the latest program and stop/trigger readbacks.
+Wellness programs are triggered by writing the program ID and then sending ODB ID `10`. The integration derives switch state from the latest program and active-state readbacks.
 
 ### Buttons
 
@@ -407,23 +425,29 @@ Required startup reads seed the interactive entities:
 | `1` | Bath fill active |
 | `2` | Wellness shower program |
 | `3` | Bath fill target volume |
-| `4` | Maximum temperature limit active |
-| `5` | Maximum temperature |
+| `4` | Child safety active |
+| `5` | Child safety temperature limit |
 | `6` | Eco mode |
 | `7` | Eco flow limit |
-| `10` | Program stop/trigger state |
+| `10` | Wellness active state |
 | `13` | Inlet temperature |
 | `14` | Outlet temperature |
 | `15` | Water flow |
 | `16` | Current power fraction |
-| `20` | Configured power |
+| `18` | Operating duration |
+| `20` | Nominal power |
 | `22` | Scald protection active |
 | `24` | Scald protection temperature limit |
+| `29` | Total heating energy |
+| `30` | Total hot water volume |
 | `31` | Current bath fill volume |
 | `33` | Water heating enabled state, used by the climate entity |
-| `34` | Device status; status code `3` is exposed as the device alarm |
+| `34` | Device status; status code `3` is exposed through the temperature error status sensor |
 | `61` | Electricity price euros |
 | `62` | Water price euros |
+| `63` | Possible energy saving |
+| `64` | Possible water saving |
+| `67` | Protocol version |
 | `69` | CO2 emission |
 | `70` | Electricity price cents |
 | `71` | Water price cents |
@@ -504,18 +528,29 @@ Mapped ODB values are converted before publishing to Home Assistant:
 | ODB ID | Conversion |
 |---:|---|
 | `0` | Raw tenths to Celsius |
-| `4` | Raw truthy value to the `Maximum active` switch |
-| `5` | Raw tenths to Celsius when value is `200` to `500` |
-| `7` | Raw tenths to `L/min` when value is `60` to `80` |
+| `4` | Raw truthy value to the `Child safety` switch |
+| `5` | Raw tenths to Celsius when value is `200` to `600` |
+| `7` | Raw tenths to `L/min` when value is `40` to `150` |
 | `13` and `14` | Raw tenths to Celsius |
 | `15` | Raw value divided by `10` |
-| `16` | Raw percent divided by `100`, multiplied by configured power |
-| `20` | Accepts `18` to `24`, `180` to `240`, or `1800` to `2400` formats |
-| `61` and `70` | Combined to the electricity price options value as euros plus cents |
-| `62` and `71` | Combined to the water price options value as euros plus cents |
-| `69` | CO2 emission decoded as `raw / 1000` kg/kWh |
+| `16` | Raw percent divided by `100`, multiplied by nominal power |
+| `18` | Raw hours as operating duration |
+| `20` | Accepts `12` to `36`, `120` to `360`, or `1200` to `3600` formats |
+| `29` | Raw `kWh` total heating energy |
+| `30` | Raw value divided by `10` as `m3` total hot water volume |
+| `31` | Raw whole liters as current bath fill volume |
+| `32` | Known wellness normalized time value; cached when valid but not exposed as an entity |
+| `33` | Inverted heating-disabled flag: raw `0` means water heating enabled, raw `1` means off |
+| `34` | Device status enum; raw `1` = normal, raw `3` = service required |
+| `61` and `70` | Combined to the electricity price options value as euros plus cents; euros `0` to `32767`, cents `0` to `99` |
+| `62` and `71` | Combined to the water price options value as euros plus cents; euros `0` to `32767`, cents `0` to `99` |
+| `63` | Raw `kWh` possible energy saving |
+| `64` | Raw value divided by `10` as `m3` possible water saving |
+| `67` | Raw protocol version integer |
+| `68` | Known currency mode enum; ignored because currency is handled through `ste.common.currency:value` |
+| `69` | CO2 emission decoded as `raw / 1000` kg/kWh, raw range `0` to `32767` |
 
-If a DHE ODB readback is marked with `isValid: false`, it is not published as a normal entity state. Unknown ODB values are logged at debug level for protocol discovery.
+If a DHE ODB readback is marked with `isValid: false`, it is not published as a normal entity state. Unknown ODB values are logged at debug level for protocol discovery, including the numeric ID, the known Webfrontend ODB name when available, the raw value and the `isValid` flag. Known-but-unexposed values such as ODB IDs `32` and `68` are recognized so they do not pollute debug logs.
 
 ODB ID `66` is command-only and is not read at startup.
 

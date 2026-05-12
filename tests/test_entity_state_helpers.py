@@ -79,6 +79,115 @@ class TestValueConversionHelpers(unittest.TestCase):
         self.assertIsNone(self.helpers.minutes_to_seconds("abc"))
         self.assertIsNone(self.helpers.seconds_to_minutes(None))
 
+
+class TestInternalScaldProtectionHelpers(unittest.TestCase):
+    """Validate local scald-protection jumper limit behavior."""
+
+    def setUp(self) -> None:
+        self.helpers = _load_entity_state_helpers()
+
+    def test_normalize_internal_scald_protection_defaults_to_sixty(self) -> None:
+        self.assertEqual(self.helpers.normalize_internal_scald_protection(None), "60")
+        self.assertEqual(self.helpers.normalize_internal_scald_protection("bad"), "60")
+
+    def test_internal_scald_protection_temperature_maps_options(self) -> None:
+        self.assertEqual(
+            self.helpers.internal_scald_protection_temperature("43"),
+            43.0,
+        )
+        self.assertEqual(
+            self.helpers.internal_scald_protection_temperature("no_jumper"),
+            43.0,
+        )
+        self.assertEqual(
+            self.helpers.internal_scald_protection_temperature("60"),
+            60.0,
+        )
+
+    def test_child_safety_temperature_limit_max_uses_jumper(self) -> None:
+        self.assertEqual(
+            self.helpers.child_safety_temperature_limit_max("55"),
+            55.0,
+        )
+        self.assertEqual(
+            self.helpers.child_safety_temperature_limit_max("no_jumper"),
+            43.0,
+        )
+
+    def test_bounded_child_safety_temperature_limit_uses_jumper(self) -> None:
+        self.assertEqual(
+            self.helpers.bounded_child_safety_temperature_limit(
+                60,
+                internal_scald_protection="55",
+            ),
+            55.0,
+        )
+        self.assertEqual(
+            self.helpers.bounded_child_safety_temperature_limit(
+                10,
+                internal_scald_protection="43",
+            ),
+            20.0,
+        )
+
+    def test_climate_max_temperature_uses_active_child_safety_limit(self) -> None:
+        self.assertEqual(
+            self.helpers.climate_max_temperature(
+                internal_scald_protection="60",
+                child_safety_active=True,
+                child_safety_temperature_limit=50,
+            ),
+            50.0,
+        )
+
+    def test_climate_max_temperature_uses_tmax_when_child_safety_inactive(self) -> None:
+        self.assertEqual(
+            self.helpers.climate_max_temperature(
+                internal_scald_protection="43",
+                child_safety_active=False,
+                child_safety_temperature_limit=50,
+            ),
+            43.0,
+        )
+
+    def test_climate_max_temperature_uses_lowest_active_limit(self) -> None:
+        self.assertEqual(
+            self.helpers.climate_max_temperature(
+                internal_scald_protection="43",
+                child_safety_active=True,
+                child_safety_temperature_limit=50,
+            ),
+            43.0,
+        )
+
+    def test_climate_max_temperature_clamps_invalid_child_limit(self) -> None:
+        self.assertEqual(
+            self.helpers.climate_max_temperature(
+                internal_scald_protection="60",
+                child_safety_active=True,
+                child_safety_temperature_limit=10,
+            ),
+            20.0,
+        )
+
+    def test_clamp_temperature_rejects_invalid_and_clamps_range(self) -> None:
+        self.assertIsNone(
+            self.helpers.clamp_temperature(
+                "bad",
+                minimum=20.0,
+                maximum=43.0,
+            )
+        )
+        self.assertEqual(
+            self.helpers.clamp_temperature(
+                50,
+                minimum=20.0,
+                maximum=43.0,
+            ),
+            43.0,
+        )
+
+
 class TestAvailabilityHelpers(unittest.TestCase):
     """Validate shared availability decisions."""
 

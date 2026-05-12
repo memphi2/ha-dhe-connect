@@ -3,11 +3,12 @@
     "step": {
       "user": {
         "title": "Stiebel DHE Connect einrichten",
-        "description": "Lokale Verbindung zum DHE Connect konfigurieren. Die Pairing-Anfrage wird im nächsten Schritt gestartet.",
+        "description": "Lokale Verbindung zum DHE Connect und physische Tmax-Jumperposition konfigurieren. Die Pairing-Anfrage wird im nächsten Schritt gestartet.",
         "data": {
           "host": "IP-Adresse oder Hostname",
           "port": "Port",
-          "name": "Gerätename"
+          "name": "Gerätename",
+          "internal_scald_protection": "Interner Verbrühschutz (Tmax-Jumper)"
         }
       },
       "pairing_confirm": {
@@ -27,7 +28,8 @@
       "cannot_connect": "Verbindung zum DHE nicht möglich. IP-Adresse und Port prüfen.",
       "invalid_host": "Ungültiger Host. Bitte nur IP-Adresse oder Hostname ohne Pfad, Benutzername oder Port eingeben.",
       "embedded_port_not_supported": "Bitte Port nicht im Hostfeld angeben (z. B. \"192.168.1.10\"). Den Port nur im Port-Feld eintragen.",
-      "invalid_port": "Ungültiger Port. Der Port muss zwischen 1 und 65535 liegen."
+      "invalid_port": "Ungültiger Port. Der Port muss zwischen 1 und 65535 liegen.",
+      "invalid_internal_scald_protection": "Ungültige Tmax-Jumperposition."
     },
     "abort": {
       "already_configured": "Stiebel DHE Connect ist bereits konfiguriert."
@@ -37,9 +39,9 @@
     "step": {
       "init": {
         "title": "Stiebel DHE Connect konfigurieren",
-        "description": "Verbindung, Kosten, Wetter-Favoriten oder Radio-Sender verwalten.",
+        "description": "Verbindung, Gerät, Kosten, Wetter-Favoriten oder Radio-Sender verwalten.",
         "menu_options": {
-          "connection": "Verbindung ändern",
+          "connection": "Verbindung/Gerät",
           "device_settings": "Kosten & Emissionen",
           "weather_favorite": "Wetter-Favorit hinzufügen",
           "remove_weather_favorite": "Wetter-Favorit entfernen",
@@ -48,12 +50,13 @@
         }
       },
       "connection": {
-        "title": "Verbindung konfigurieren",
-        "description": "IP-Adresse, Port und Gerätename ändern.",
+        "title": "Verbindung/Gerät konfigurieren",
+        "description": "IP-Adresse, Port, Gerätename und physische Tmax-Jumperposition ändern.",
         "data": {
           "host": "IP-Adresse oder Hostname",
           "port": "Port",
-          "name": "Gerätename"
+          "name": "Gerätename",
+          "internal_scald_protection": "Interner Verbrühschutz (Tmax-Jumper)"
         }
       },
       "device_settings": {
@@ -137,6 +140,7 @@
       "remove_favorite_failed": "Favorit konnte nicht entfernt werden.",
       "invalid_device_setting": "Ungültige Kosten- oder Emissionsangabe.",
       "device_settings_failed": "Kosten und Emissionen konnten nicht gespeichert werden.",
+      "invalid_internal_scald_protection": "Ungültige Tmax-Jumperposition.",
       "no_radio_catalog": "Keinen Radio-Katalog vom DHE erhalten.",
       "radio_catalog_failed": "Radio-Katalog konnte nicht gelesen werden.",
       "radio_search_failed": "Radio-Suche fehlgeschlagen.",
@@ -154,9 +158,6 @@
     "binary_sensor": {
       "scald_protection_active": {
         "name": "Verbrühschutz aktiv"
-      },
-      "device_alarm": {
-        "name": "Gerätealarm"
       }
     },
     "button": {
@@ -259,7 +260,7 @@
         "name": "Wannenfüllmenge"
       },
       "maximum_temperature": {
-        "name": "Maximaltemperatur"
+        "name": "Kindersicherung Temperaturgrenze"
       },
       "eco_flow_limit": {
         "name": "Eco-Durchflussbegrenzung"
@@ -358,7 +359,10 @@
         "name": "Aktueller Stromverbrauch"
       },
       "configured_power": {
-        "name": "Eingestellte Leistung"
+        "name": "Nennleistung"
+      },
+      "operating_duration": {
+        "name": "Betriebsdauer"
       },
       "internal_temperature_1": {
         "name": "Zulauftemperatur"
@@ -384,6 +388,9 @@
           "unknown": "Unbekannt"
         }
       },
+      "protocol_version": {
+        "name": "Protokollversion"
+      },
       "water_consumption_week": {
         "name": "Wasserverbrauch Woche"
       },
@@ -393,8 +400,20 @@
       "water_consumption_years": {
         "name": "Gesamtwasserverbrauch"
       },
+      "hot_water_volume_total": {
+        "name": "Warmwasservolumen gesamt"
+      },
       "energy_consumption_week": {
         "name": "Energieverbrauch Woche"
+      },
+      "heating_energy_total": {
+        "name": "Heizenergie gesamt"
+      },
+      "possible_energy_saving": {
+        "name": "Mögliche Energieeinsparung"
+      },
+      "possible_water_saving": {
+        "name": "Mögliche Wassereinsparung"
       },
       "energy_consumption_year": {
         "name": "Energieverbrauch Jahr"
@@ -416,6 +435,9 @@
       },
       "bath_fill_remaining_volume": {
         "name": "Wannenfüllung verbleibend"
+      },
+      "bath_fill_current_volume": {
+        "name": "Wannenfüllmenge aktuell"
       },
       "saving_monitor_water": {
         "name": "Sparmonitor Verbrauch Wasser"
@@ -500,7 +522,7 @@
         "name": "Wannenfüllung"
       },
       "maximum_active": {
-        "name": "Maximaltemperatur-Begrenzung"
+        "name": "Kindersicherung"
       },
       "brush_timer_activation": {
         "name": "Zahnputz-Timer"

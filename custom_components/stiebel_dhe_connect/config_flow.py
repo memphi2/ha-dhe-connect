@@ -16,11 +16,14 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .client import (
+    CO2_EMISSION_MAX,
     DHEClient,
     DHEError,
+    ELECTRICITY_PRICE_MAX,
     ID_CO2_EMISSION,
     ID_ELECTRICITY_PRICE,
     ID_WATER_PRICE,
+    WATER_PRICE_MAX,
 )
 from .config_flow_mapping import (
     default_radio_catalog_value as _default_radio_catalog_value,
@@ -36,6 +39,12 @@ from .const import (
     DEFAULT_NAME,
     DEFAULT_PORT,
     DOMAIN,
+)
+from .entity_state_helpers import (
+    CONF_INTERNAL_SCALD_PROTECTION,
+    INTERNAL_SCALD_PROTECTION_DEFAULT,
+    INTERNAL_SCALD_PROTECTION_OPTIONS,
+    normalize_internal_scald_protection,
 )
 from .pairing_helpers import map_pairing_error
 from .token_file_helpers import token_file_for_target
@@ -138,6 +147,8 @@ def _apply_validation_error(errors: dict[str, str], err: ValueError) -> None:
     code = str(err) or "invalid_host"
     if code == "invalid_port":
         errors[CONF_PORT] = code
+    elif code == "invalid_internal_scald_protection":
+        errors[CONF_INTERNAL_SCALD_PROTECTION] = code
     elif code == "embedded_port_not_supported":
         errors[CONF_HOST] = code
     else:
@@ -180,14 +191,27 @@ def _is_target_used_by_other_entry(
     return False
 
 
-def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
+def _schema(
+    hass: HomeAssistant,
+    defaults: dict[str, Any] | None = None,
+) -> vol.Schema:
     """Build config/options schema."""
     defaults = defaults or {}
+    internal_scald_protection = normalize_internal_scald_protection(
+        defaults.get(
+            CONF_INTERNAL_SCALD_PROTECTION,
+            INTERNAL_SCALD_PROTECTION_DEFAULT,
+        )
+    )
     return vol.Schema(
         {
             vol.Required(CONF_HOST, default=defaults.get(CONF_HOST, "")): str,
             vol.Optional(CONF_PORT, default=defaults.get(CONF_PORT, DEFAULT_PORT)): int,
             vol.Optional(CONF_NAME, default=defaults.get(CONF_NAME, DEFAULT_NAME)): str,
+            vol.Optional(
+                CONF_INTERNAL_SCALD_PROTECTION,
+                default=internal_scald_protection,
+            ): vol.In(_internal_scald_protection_options(hass)),
         }
     )
 
@@ -226,14 +250,34 @@ def _currency_options(hass: HomeAssistant, current: str = "") -> dict[str, str]:
     return options
 
 
-def _format_number_default(value: Any) -> str:
+def _format_number_default(value: Any, *, precision: int = 2) -> str:
     try:
         numeric = float(value)
     except (TypeError, ValueError):
         return ""
     if numeric.is_integer():
         return str(int(numeric))
-    return f"{numeric:.2f}".rstrip("0").rstrip(".")
+    return f"{numeric:.{precision}f}".rstrip("0").rstrip(".")
+
+
+def _internal_scald_protection_options(hass: HomeAssistant) -> dict[str, str]:
+    """Build jumper position labels for the options flow."""
+    language = str(getattr(hass.config, "language", "") or "").lower()
+    if language.startswith("de"):
+        return {
+            "43": "43 \u00b0C",
+            "50": "50 \u00b0C",
+            "55": "55 \u00b0C",
+            "60": "60 \u00b0C",
+            "no_jumper": "ohne Jumper (43 \u00b0C)",
+        }
+    return {
+        "43": "43 \u00b0C",
+        "50": "50 \u00b0C",
+        "55": "55 \u00b0C",
+        "60": "60 \u00b0C",
+        "no_jumper": "No jumper (43 \u00b0C)",
+    }
 
 
 def _device_settings_defaults(client: Any) -> dict[str, Any]:
@@ -245,7 +289,10 @@ def _device_settings_defaults(client: Any) -> dict[str, Any]:
             measurements.get(ID_ELECTRICITY_PRICE)
         ),
         ATTR_WATER_PRICE: _format_number_default(measurements.get(ID_WATER_PRICE)),
-        ATTR_CO2_EMISSION: _format_number_default(measurements.get(ID_CO2_EMISSION)),
+        ATTR_CO2_EMISSION: _format_number_default(
+            measurements.get(ID_CO2_EMISSION),
+            precision=3,
+        ),
     }
 
 
@@ -458,6 +505,11 @@ class StiebelDHEConnectConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             try:
                 host = _normalize_host(user_input[CONF_HOST])
                 port = _validate_port(user_input.get(CONF_PORT, DEFAULT_PORT))
+                internal_scald_protection = str(
+                    user_input.get(CONF_INTERNAL_SCALD_PROTECTION) or ""
+                ).strip()
+                if internal_scald_protection not in INTERNAL_SCALD_PROTECTION_OPTIONS:
+                    raise ValueError("invalid_internal_scald_protection")
             except ValueError as err:
                 _apply_validation_error(errors, err)
             else:
@@ -475,13 +527,14 @@ class StiebelDHEConnectConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         CONF_HOST: host,
                         CONF_PORT: port,
                         CONF_NAME: name,
+                        CONF_INTERNAL_SCALD_PROTECTION: internal_scald_protection,
                         "token_file": token_file,
                     }
                     return await self.async_step_pairing_confirm()
 
         return self.async_show_form(
             step_id="user",
-            data_schema=_schema(),
+            data_schema=_schema(self.hass),
             errors=errors,
         )
 
@@ -573,6 +626,11 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
             try:
                 host = _normalize_host(user_input[CONF_HOST])
                 port = _validate_port(user_input.get(CONF_PORT, DEFAULT_PORT))
+                internal_scald_protection = str(
+                    user_input.get(CONF_INTERNAL_SCALD_PROTECTION) or ""
+                ).strip()
+                if internal_scald_protection not in INTERNAL_SCALD_PROTECTION_OPTIONS:
+                    raise ValueError("invalid_internal_scald_protection")
             except ValueError as err:
                 _apply_validation_error(errors, err)
             else:
@@ -598,12 +656,13 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
                             CONF_HOST: host,
                             CONF_PORT: port,
                             CONF_NAME: name,
+                            CONF_INTERNAL_SCALD_PROTECTION: internal_scald_protection,
                         },
                     )
 
         return self.async_show_form(
             step_id="connection",
-            data_schema=_schema(current),
+            data_schema=_schema(self.hass, current),
             errors=errors,
         )
 
@@ -624,17 +683,17 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
                 electricity_price = _optional_float(
                     user_input.get(ATTR_ELECTRICITY_PRICE),
                     0.0,
-                    9.99,
+                    ELECTRICITY_PRICE_MAX,
                 )
                 water_price = _optional_float(
                     user_input.get(ATTR_WATER_PRICE),
                     0.0,
-                    9.99,
+                    WATER_PRICE_MAX,
                 )
                 co2_emission = _optional_float(
                     user_input.get(ATTR_CO2_EMISSION),
                     0.0,
-                    99.99,
+                    CO2_EMISSION_MAX,
                 )
 
                 if currency and currency != CURRENCY_UNCHANGED:

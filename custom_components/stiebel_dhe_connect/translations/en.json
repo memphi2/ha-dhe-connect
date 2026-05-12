@@ -3,11 +3,12 @@
     "step": {
       "user": {
         "title": "Set up Stiebel DHE Connect",
-        "description": "Configure the local connection to your DHE Connect. The pairing request starts in the next step.",
+        "description": "Configure the local connection to your DHE Connect and the physical Tmax jumper position. The pairing request starts in the next step.",
         "data": {
           "host": "IP address or hostname",
           "port": "Port",
-          "name": "Device name"
+          "name": "Device name",
+          "internal_scald_protection": "Internal scald protection (Tmax jumper)"
         }
       },
       "pairing_confirm": {
@@ -27,7 +28,8 @@
       "cannot_connect": "Could not connect to the DHE. Check the IP address and port.",
       "invalid_host": "Invalid host. Enter only an IP address or hostname, without path, username or port.",
       "embedded_port_not_supported": "Do not include the port in the host field (for example \"192.168.1.10\"). Enter the port only in the port field.",
-      "invalid_port": "Invalid port. The port must be between 1 and 65535."
+      "invalid_port": "Invalid port. The port must be between 1 and 65535.",
+      "invalid_internal_scald_protection": "Invalid Tmax jumper position."
     },
     "abort": {
       "already_configured": "Stiebel DHE Connect is already configured."
@@ -37,9 +39,9 @@
     "step": {
       "init": {
         "title": "Configure Stiebel DHE Connect",
-        "description": "Manage connection settings, costs, weather favorites or radio stations.",
+        "description": "Manage connection settings, device, costs, weather favorites or radio stations.",
         "menu_options": {
-          "connection": "Change connection",
+          "connection": "Connection/device",
           "device_settings": "Costs & emissions",
           "weather_favorite": "Add weather favorite",
           "remove_weather_favorite": "Remove weather favorite",
@@ -48,12 +50,13 @@
         }
       },
       "connection": {
-        "title": "Configure connection",
-        "description": "Change IP address, port and device name.",
+        "title": "Configure connection/device",
+        "description": "Change IP address, port, device name and physical Tmax jumper position.",
         "data": {
           "host": "IP address or hostname",
           "port": "Port",
-          "name": "Device name"
+          "name": "Device name",
+          "internal_scald_protection": "Internal scald protection (Tmax jumper)"
         }
       },
       "device_settings": {
@@ -137,6 +140,7 @@
       "remove_favorite_failed": "Could not remove favorite.",
       "invalid_device_setting": "Invalid cost or emission value.",
       "device_settings_failed": "Could not save costs and emissions.",
+      "invalid_internal_scald_protection": "Invalid Tmax jumper position.",
       "no_radio_catalog": "No radio catalog received from the DHE.",
       "radio_catalog_failed": "Could not read radio catalog.",
       "radio_search_failed": "Radio search failed.",
@@ -154,9 +158,6 @@
     "binary_sensor": {
       "scald_protection_active": {
         "name": "Scald protection active"
-      },
-      "device_alarm": {
-        "name": "Device alarm"
       }
     },
     "button": {
@@ -259,7 +260,7 @@
         "name": "Bath fill target volume"
       },
       "maximum_temperature": {
-        "name": "Maximum temperature"
+        "name": "Child safety temperature limit"
       },
       "eco_flow_limit": {
         "name": "Eco flow limit"
@@ -358,7 +359,10 @@
         "name": "Current power consumption"
       },
       "configured_power": {
-        "name": "Configured power"
+        "name": "Nominal power"
+      },
+      "operating_duration": {
+        "name": "Operating duration"
       },
       "internal_temperature_1": {
         "name": "Inlet temperature"
@@ -384,6 +388,9 @@
           "unknown": "Unknown"
         }
       },
+      "protocol_version": {
+        "name": "Protocol version"
+      },
       "water_consumption_week": {
         "name": "Water consumption week"
       },
@@ -393,8 +400,20 @@
       "water_consumption_years": {
         "name": "Water consumption years"
       },
+      "hot_water_volume_total": {
+        "name": "Total hot water volume"
+      },
       "energy_consumption_week": {
         "name": "Energy consumption week"
+      },
+      "heating_energy_total": {
+        "name": "Total heating energy"
+      },
+      "possible_energy_saving": {
+        "name": "Possible energy saving"
+      },
+      "possible_water_saving": {
+        "name": "Possible water saving"
       },
       "energy_consumption_year": {
         "name": "Energy consumption year"
@@ -416,6 +435,9 @@
       },
       "bath_fill_remaining_volume": {
         "name": "Bath fill remaining"
+      },
+      "bath_fill_current_volume": {
+        "name": "Current bath fill volume"
       },
       "saving_monitor_water": {
         "name": "Saving monitor consumption water"
@@ -500,7 +522,7 @@
         "name": "Bath fill"
       },
       "maximum_active": {
-        "name": "Maximum temperature limit"
+        "name": "Child safety"
       },
       "brush_timer_activation": {
         "name": "Brush timer"

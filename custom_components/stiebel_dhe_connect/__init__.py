@@ -68,6 +68,7 @@ LEGACY_ENTITY_SUFFIXES_TO_REMOVE = (
     "unknown_odb_33",
     "unknown_odb_22",
     "unknown_odb_34",
+    "device_alarm",
     "unknown_temperature_24",
     "last_message_command",
     "last_message_age",
