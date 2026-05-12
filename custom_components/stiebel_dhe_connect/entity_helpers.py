@@ -5,16 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 DOMAIN = "stiebel_dhe_connect"
-SIGNAL_INTERNAL_SCALD_PROTECTION_CHANGED = "internal_scald_protection_changed"
 
 
 def build_entity_unique_id(entry_id: str, key: str) -> str:
     """Build a stable unique_id for one entity within a config entry."""
-    return f"{DOMAIN}_{entry_id}_{key}"
-
-
-def build_entry_signal(entry_id: str, key: str) -> str:
-    """Build a local dispatcher signal for one config entry."""
     return f"{DOMAIN}_{entry_id}_{key}"
 
 

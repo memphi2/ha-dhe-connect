@@ -40,6 +40,12 @@ from .const import (
     DEFAULT_PORT,
     DOMAIN,
 )
+from .entity_state_helpers import (
+    CONF_INTERNAL_SCALD_PROTECTION,
+    INTERNAL_SCALD_PROTECTION_DEFAULT,
+    INTERNAL_SCALD_PROTECTION_OPTIONS,
+    normalize_internal_scald_protection,
+)
 from .pairing_helpers import map_pairing_error
 from .token_file_helpers import token_file_for_target
 
@@ -239,9 +245,36 @@ def _format_number_default(value: Any, *, precision: int = 2) -> str:
     return f"{numeric:.{precision}f}".rstrip("0").rstrip(".")
 
 
-def _device_settings_defaults(client: Any) -> dict[str, Any]:
-    measurements = getattr(client, "last_measurements", {})
+def _internal_scald_protection_options(hass: HomeAssistant) -> dict[str, str]:
+    """Build jumper position labels for the options flow."""
+    language = str(getattr(hass.config, "language", "") or "").lower()
+    if language.startswith("de"):
+        return {
+            "43": "43 \u00b0C",
+            "50": "50 \u00b0C",
+            "55": "55 \u00b0C",
+            "60": "60 \u00b0C",
+            "no_jumper": "ohne Jumper (43 \u00b0C)",
+        }
     return {
+        "43": "43 \u00b0C",
+        "50": "50 \u00b0C",
+        "55": "55 \u00b0C",
+        "60": "60 \u00b0C",
+        "no_jumper": "No jumper (43 \u00b0C)",
+    }
+
+
+def _device_settings_defaults(
+    client: Any,
+    options: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    measurements = getattr(client, "last_measurements", {})
+    options = options or {}
+    return {
+        CONF_INTERNAL_SCALD_PROTECTION: normalize_internal_scald_protection(
+            options.get(CONF_INTERNAL_SCALD_PROTECTION)
+        ),
         # Requested UX: keep currency default at EUR.
         ATTR_CURRENCY: "EUR",
         ATTR_ELECTRICITY_PRICE: _format_number_default(
@@ -260,11 +293,21 @@ def _device_settings_schema(
     defaults: dict[str, Any] | None = None,
 ) -> vol.Schema:
     defaults = defaults or {}
+    internal_scald_protection = normalize_internal_scald_protection(
+        defaults.get(
+            CONF_INTERNAL_SCALD_PROTECTION,
+            INTERNAL_SCALD_PROTECTION_DEFAULT,
+        )
+    )
     currency = str(defaults.get(ATTR_CURRENCY) or CURRENCY_UNCHANGED).strip()
     if currency != CURRENCY_UNCHANGED:
         currency = currency.upper()
     return vol.Schema(
         {
+            vol.Optional(
+                CONF_INTERNAL_SCALD_PROTECTION,
+                default=internal_scald_protection,
+            ): vol.In(_internal_scald_protection_options(hass)),
             vol.Optional(ATTR_CURRENCY, default=currency): vol.In(
                 _currency_options(hass, currency)
             ),
@@ -621,9 +664,18 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
         errors: dict[str, str] = {}
         client = self._client_or_mark_not_loaded(errors)
 
-        defaults = _device_settings_defaults(client) if client is not None else {}
+        defaults = (
+            _device_settings_defaults(client, dict(self.config_entry.options))
+            if client is not None
+            else dict(self.config_entry.options)
+        )
         if user_input is not None and not errors:
             try:
+                internal_scald_protection = str(
+                    user_input.get(CONF_INTERNAL_SCALD_PROTECTION) or ""
+                ).strip()
+                if internal_scald_protection not in INTERNAL_SCALD_PROTECTION_OPTIONS:
+                    raise ValueError("invalid_internal_scald_protection")
                 currency = str(
                     user_input.get(ATTR_CURRENCY) or CURRENCY_UNCHANGED
                 ).strip()
@@ -656,7 +708,11 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
             except DHEError:
                 errors["base"] = "device_settings_failed"
             else:
-                return self._finish_options()
+                updated_options = dict(self.config_entry.options)
+                updated_options[CONF_INTERNAL_SCALD_PROTECTION] = (
+                    internal_scald_protection
+                )
+                return self.async_create_entry(title="", data=updated_options)
 
         return self.async_show_form(
             step_id="device_settings",

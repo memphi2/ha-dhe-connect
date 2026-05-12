@@ -37,10 +37,10 @@
     "step": {
       "init": {
         "title": "Stiebel DHE Connect konfigurieren",
-        "description": "Verbindung, Kosten, Wetter-Favoriten oder Radio-Sender verwalten.",
+        "description": "Verbindung, Geräteeinstellungen, Wetter-Favoriten oder Radio-Sender verwalten.",
         "menu_options": {
           "connection": "Verbindung ändern",
-          "device_settings": "Kosten & Emissionen",
+          "device_settings": "Geräteeinstellungen",
           "weather_favorite": "Wetter-Favorit hinzufügen",
           "remove_weather_favorite": "Wetter-Favorit entfernen",
           "radio_favorite": "Radio-Sender hinzufügen",
@@ -57,9 +57,10 @@
         }
       },
       "device_settings": {
-        "title": "Kosten & Emissionen",
-        "description": "Währung, Strompreis, Wasserpreis und CO2-Emission am DHE setzen. Zahlenfelder sind mit aktuellen Gerätewerten vorbelegt, Währung standardmäßig auf EUR.",
+        "title": "Geräteeinstellungen",
+        "description": "Interne Verbrühschutz-Jumperposition festlegen und Währung, Strompreis, Wasserpreis sowie CO2-Emission am DHE setzen. Zahlenfelder sind mit aktuellen Gerätewerten vorbelegt, Währung standardmäßig auf EUR.",
         "data": {
+          "internal_scald_protection": "Interner Verbrühschutz",
           "currency": "Währung",
           "electricity_price": "Strompreis (EUR/kWh)",
           "water_price": "Wasserpreis (EUR/m³)",
@@ -135,8 +136,8 @@
       "search_failed": "Wettersuche fehlgeschlagen.",
       "favorite_failed": "Favorit konnte nicht gespeichert werden.",
       "remove_favorite_failed": "Favorit konnte nicht entfernt werden.",
-      "invalid_device_setting": "Ungültige Kosten- oder Emissionsangabe.",
-      "device_settings_failed": "Kosten und Emissionen konnten nicht gespeichert werden.",
+      "invalid_device_setting": "Ungültige Geräteeinstellung.",
+      "device_settings_failed": "Geräteeinstellungen konnten nicht gespeichert werden.",
       "no_radio_catalog": "Keinen Radio-Katalog vom DHE erhalten.",
       "radio_catalog_failed": "Radio-Katalog konnte nicht gelesen werden.",
       "radio_search_failed": "Radio-Suche fehlgeschlagen.",
@@ -305,16 +306,6 @@
       }
     },
     "select": {
-      "internal_scald_protection": {
-        "name": "Interner Verbr\u00fchschutz",
-        "state": {
-          "43": "43 \u00b0C",
-          "50": "50 \u00b0C",
-          "55": "55 \u00b0C",
-          "60": "60 \u00b0C",
-          "no_jumper": "ohne Jumper (43 \u00b0C)"
-        }
-      },
       "weather_location": {
         "name": "Wetter-Standort"
       }

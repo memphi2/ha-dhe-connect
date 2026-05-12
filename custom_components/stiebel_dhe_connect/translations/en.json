@@ -37,10 +37,10 @@
     "step": {
       "init": {
         "title": "Configure Stiebel DHE Connect",
-        "description": "Manage connection settings, costs, weather favorites or radio stations.",
+        "description": "Manage connection settings, device settings, weather favorites or radio stations.",
         "menu_options": {
           "connection": "Change connection",
-          "device_settings": "Costs & emissions",
+          "device_settings": "Device settings",
           "weather_favorite": "Add weather favorite",
           "remove_weather_favorite": "Remove weather favorite",
           "radio_favorite": "Add radio station",
@@ -57,9 +57,10 @@
         }
       },
       "device_settings": {
-        "title": "Costs & emissions",
-        "description": "Set currency, electricity price, water price and CO2 emission on the DHE. Number fields are prefilled with current device values, currency defaults to EUR.",
+        "title": "Device settings",
+        "description": "Set the internal scald-protection jumper position plus currency, electricity price, water price and CO2 emission on the DHE. Number fields are prefilled with current device values, currency defaults to EUR.",
         "data": {
+          "internal_scald_protection": "Internal scald protection",
           "currency": "Currency",
           "electricity_price": "Electricity price (EUR/kWh)",
           "water_price": "Water price (EUR/m³)",
@@ -135,8 +136,8 @@
       "search_failed": "Weather search failed.",
       "favorite_failed": "Could not save favorite.",
       "remove_favorite_failed": "Could not remove favorite.",
-      "invalid_device_setting": "Invalid cost or emission value.",
-      "device_settings_failed": "Could not save costs and emissions.",
+      "invalid_device_setting": "Invalid device setting.",
+      "device_settings_failed": "Could not save device settings.",
       "no_radio_catalog": "No radio catalog received from the DHE.",
       "radio_catalog_failed": "Could not read radio catalog.",
       "radio_search_failed": "Radio search failed.",
@@ -305,16 +306,6 @@
       }
     },
     "select": {
-      "internal_scald_protection": {
-        "name": "Internal scald protection",
-        "state": {
-          "43": "43 \u00b0C",
-          "50": "50 \u00b0C",
-          "55": "55 \u00b0C",
-          "60": "60 \u00b0C",
-          "no_jumper": "No jumper (43 \u00b0C)"
-        }
-      },
       "weather_location": {
         "name": "Weather location"
       }

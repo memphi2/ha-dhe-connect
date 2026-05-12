@@ -125,7 +125,7 @@ Home Assistant entity names are translated through `translations/en.json` and `t
 
 The climate entity keeps the last valid target temperature during short reconnect phases and exposes diagnostic attributes:
 
-Its maximum settable target temperature follows the DHE child-safety limit when child safety is active. The local `Internal scald protection` config select sets the absolute maximum of the `Child safety temperature limit` number entity. The default internal scald-protection option is `60`.
+Its maximum settable target temperature follows the DHE child-safety limit when child safety is active. The `Internal scald protection` integration option sets the absolute maximum of the `Child safety temperature limit` number entity. The default internal scald-protection option is `60`.
 
 | Attribute | Meaning |
 |---|---|
@@ -252,13 +252,12 @@ Consumption sensors expose the DHE chart array as a `chart` attribute and the re
 
 Temperature memory writes keep the existing memory name and send `operation: add_change`. Slots 1 and 2 are enabled by default. Slots 3 to 12 are created in the entity registry but disabled by default, so they can be enabled explicitly without cluttering the device configuration card.
 
-Currency, electricity price, water price and CO2 emission are configured from the integration options under `Costs & emissions` instead of being exposed as entities. The DHE writes use the same protocol values as the browser UI: currency via `get:ste.common.currency:value`, electricity price via ODB IDs `61`/`70`, water price via ODB IDs `62`/`71` and CO2 emission via ODB ID `69`. Price euro components accept the browser ODB range `0` to `32767`, cent components accept `0` to `99`, and CO2 emission accepts raw `0` to `32767` (`0.000` to `32.767 kg/kWh`).
+Internal scald protection, currency, electricity price, water price and CO2 emission are configured from the integration options under `Device settings` instead of being exposed as entities. The internal scald-protection option is local to Home Assistant and should match the physical `Tmax` jumper position. The DHE writes use the same protocol values as the browser UI: currency via `get:ste.common.currency:value`, electricity price via ODB IDs `61`/`70`, water price via ODB IDs `62`/`71` and CO2 emission via ODB ID `69`. Price euro components accept the browser ODB range `0` to `32767`, cent components accept `0` to `99`, and CO2 emission accepts raw `0` to `32767` (`0.000` to `32.767 kg/kWh`).
 
 ### Selects
 
 | Entity | Options | Source / command | Behavior |
 |---|---|---|---|
-| Internal scald protection | `43`, `50`, `55`, `60`, `no_jumper` | Local config entry option, default `60` | Describes the physical `Tmax` jumper and caps the child-safety temperature limit number |
 | Weather location | weather favorites | `get:ste.app.weather:location` with a `LocationId` value | Selects the active DHE weather favorite |
 
 ### Texts

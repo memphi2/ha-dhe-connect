@@ -10,7 +10,6 @@ from homeassistant.components.climate.const import ClimateEntityFeature, HVACMod
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .client import (
@@ -23,11 +22,7 @@ from .client import (
     DHEError,
     MeasurementValue,
 )
-from .entity_helpers import (
-    SIGNAL_INTERNAL_SCALD_PROTECTION_CHANGED,
-    StiebelDHEEntityMixin,
-    build_entry_signal,
-)
+from .entity_helpers import StiebelDHEEntityMixin
 from .entity_state_helpers import (
     CONF_INTERNAL_SCALD_PROTECTION,
     bounded_child_safety_temperature_limit,
@@ -81,10 +76,6 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
         """Initialize the entity."""
         self._internal_scald_protection = normalize_internal_scald_protection(
             entry.options.get(CONF_INTERNAL_SCALD_PROTECTION)
-        )
-        self._internal_scald_signal = build_entry_signal(
-            entry_id,
-            SIGNAL_INTERNAL_SCALD_PROTECTION_CHANGED,
         )
         self._init_dhe_entity(
             entry_id=entry_id,
@@ -141,13 +132,6 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
         self.async_on_remove(
             self._client.add_measurement_callback(self._handle_measurement_update)
         )
-        self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass,
-                self._internal_scald_signal,
-                self._handle_internal_scald_protection_update,
-            )
-        )
         self._sync_temperatures_from_measurements()
         self._sync_hvac_mode_from_measurements()
         self._sync_max_temperature_from_measurements()
@@ -167,17 +151,6 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
             self._target_before_heating_off = value
         self._attr_available = True
         self._connection_state = "connected"
-        self._update_extra_state_attributes()
-        self.async_write_ha_state()
-
-    @callback
-    def _handle_internal_scald_protection_update(self, option: str) -> None:
-        """Handle local jumper config changes from the config select."""
-        self._internal_scald_protection = normalize_internal_scald_protection(option)
-        self._apply_child_safety_temperature_limit(
-            self._child_safety_temperature_limit_raw
-        )
-        self._apply_dynamic_max_temperature()
         self._update_extra_state_attributes()
         self.async_write_ha_state()
 

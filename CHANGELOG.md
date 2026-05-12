@@ -7,7 +7,7 @@
 - Added focused unit coverage for weather, radio, pairing, config-flow and entity helper mappings.
 - Added disabled-by-default diagnostics for scald protection status, scald protection limit and device status.
 - Added ODB diagnostics for operating duration, hot water volume, heating energy, possible saving values and protocol version.
-- Added a local device config select for the internal scald-protection jumper positions `43`, `50`, `55`, `60` and `no_jumper`.
+- Added an integration options setting for the internal scald-protection jumper positions `43`, `50`, `55`, `60` and `no_jumper`.
 
 ### Changed
 
