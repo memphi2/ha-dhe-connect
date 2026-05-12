@@ -145,10 +145,13 @@ def stations(value: Any) -> list[dict[str, Any]]:
 
 
 def media_title(state: dict[str, Any], station: dict[str, Any]) -> str | None:
-    """Return current media title, falling back to the station name."""
+    """Return current media title, falling back to station description/name."""
     title = state.get("title")
     if isinstance(title, str) and title.strip():
         return title.strip()
+    short_description = station_text(station, "ShortDescription")
+    if short_description:
+        return short_description
     return station_name(station)
 
 

@@ -140,7 +140,7 @@ No dedicated binary sensors are created by default in the current entity model.
 
 | Entity | Features | Source / command | Behavior |
 |---|---|---|---|
-| Radio | play/pause, volume, source selection, previous/next favorite | `get:ste.app.radio:station`, `volume`, `play`, `paired`, `title`, `favorites`; `assign:ste.app.radio:play`, `volume`, `station` | Shows the current radio station/title, controls playback/volume and switches between radio favorites |
+| Radio | play/pause, volume, source selection, previous/next favorite | `get:ste.app.radio:station`, `volume`, `play`, `paired`, `title`, `favorites`; `assign:ste.app.radio:play`, `volume`, `station` | Shows the current radio title, station short description or station name, controls playback/volume and switches between radio favorites |
 
 The radio entity intentionally does not request the full station catalog during startup. It does read the small favorites list so Home Assistant can expose radio favorites as media-player sources and use previous/next to cycle through them. The options flow can search stations by full text, DHE genre catalog, or by DHE country/city catalog plus a search term, then add the selected station as a DHE radio favorite and activate it. Genre searches send the selected genre directly; full-text search sends `{attribute: "text", value: "<query>"}`; country and city searches send the selected catalog value and include the entered search term as additional text. Existing radio favorites can also be removed from the options flow. Catalog, favorites and search payloads are treated as known protocol messages so they do not pollute debug logs.
 

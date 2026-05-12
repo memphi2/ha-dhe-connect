@@ -133,6 +133,34 @@ class TestRadioDisplayMapping(unittest.TestCase):
 
         self.assertEqual(list(options), ["Radio Essen", "WDR 2 Ruhrgebiet"])
 
+    def test_media_title_prefers_current_radio_title(self) -> None:
+        title = self.radio.media_title(
+            {"title": "Vitamin Z - Dont Stop And Listen to His Music - 1985"},
+            {
+                "Name": "Radio Essen",
+                "ShortDescription": "100% von hier. Der beste Mix.",
+            },
+        )
+
+        self.assertEqual(title, "Vitamin Z - Dont Stop And Listen to His Music - 1985")
+
+    def test_media_title_falls_back_to_short_description(self) -> None:
+        title = self.radio.media_title(
+            {},
+            {
+                "Name": "Radio Essen",
+                "ShortDescription": "100% von hier. Der beste Mix.",
+            },
+        )
+
+        self.assertEqual(title, "100% von hier. Der beste Mix.")
+
+    def test_media_title_falls_back_to_station_name(self) -> None:
+        self.assertEqual(
+            self.radio.media_title({}, {"Name": "Radio Essen"}),
+            "Radio Essen",
+        )
+
     def test_radio_attributes_summarize_station_and_favorites(self) -> None:
         attributes = self.radio.radio_attributes(
             {
