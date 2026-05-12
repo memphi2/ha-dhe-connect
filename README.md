@@ -6,7 +6,7 @@ The integration talks directly to the DHE web interface on your local network. I
 
 ## Status
 
-- Current version: `1.0.7-beta`
+- Current version: `1.0.8`
 - Home Assistant setup: UI config flow
 - HACS type: custom integration
 - IoT class: local push
@@ -19,17 +19,14 @@ Development and protocol mapping for this release were assisted by OpenAI Codex.
 
 ## Highlights
 
-- Local Socket.IO / Engine.IO v3 session with required WebSocket upgrade.
-- Browser-style Engine.IO heartbeat handling to keep the DHE session alive.
-- Automatic reconnect and diagnostic reconnect counter.
-- Target temperature control through the DHE ODB command interface.
+- Fully local Socket.IO / Engine.IO v3 session with browser-style heartbeat handling and automatic reconnect diagnostics.
+- Target temperature control through the DHE ODB command interface, including Climate limits that respect the physical `Tmax` jumper and the active child-safety limit.
 - Temperature memory controls for all 12 supported slots; slots 3 to 12 are disabled by default.
+- Eco mode, Eco flow limit, bath fill, child safety, wellness controls, brush timer and shower timer controls.
 - Total water and energy consumption sensors are enabled by default; detailed live, possible saving, last usage, timer and saving-monitor sensors start disabled to keep the device card tidy.
-- Eco mode, Eco flow limit, bath fill, child safety and wellness controls; currency, cost and CO2 settings live in the integration options.
-- Compact radio media player for station metadata, playback, volume and favorites.
+- Compact radio media player for station metadata, current title, short-description fallback, playback, volume and favorites.
 - Options-flow radio search by full text, DHE genre catalog, country catalog or city catalog.
-- Weather entity for the DHE forecast payload.
-- Brush timer and shower timer controls.
+- Weather entity for the DHE forecast payload with favorite location selection.
 - General diagnostic status, reconnect count, connection details, scald-protection diagnostics, ODB protocol diagnostics and device information.
 
 ## Installation
@@ -585,7 +582,7 @@ It checks the manifest, HACS metadata, required repository files, translation ke
 | Symptom | Check |
 |---|---|
 | Integration cannot connect | Verify host, port and browser access to `http://<host>:<port>/` |
-| Device appears twice after update | Current `1.0.6` keeps legacy host identifiers during upgrade. If a stale duplicate already exists from older test builds, remove only the stale device entry once |
+| Device appears twice after update | Current releases keep legacy host identifiers during upgrade. If a stale duplicate already exists from older test builds, remove only the stale device entry once |
 | Service call hits the wrong DHE | In multi-device setups always include `entry_id` in service data |
 | Pairing repeats | Enable and use the disabled-by-default `Repair pairing` button first. If needed, delete the matching `/config/.storage/stiebel_dhe_connect_token_<host>_<port>.txt` file and pair again |
 | Entities stay unavailable | Check the `Connection state` / `Temperature error status` diagnostic sensors and Home Assistant logs for DHE session errors |
