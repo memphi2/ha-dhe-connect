@@ -9,7 +9,6 @@ from homeassistant.components.switch import SwitchEntity, SwitchEntityDescriptio
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_OFF, STATE_ON
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
@@ -59,7 +58,6 @@ ODB_SWITCHES: tuple[StiebelDHEODBSwitchDescription, ...] = (
         key="eco_mode",
         translation_key="eco_mode",
         icon="mdi:leaf",
-        entity_category=EntityCategory.CONFIG,
         measurement_id=ID_ECO_MODE,
         turn_on_setter="set_eco_mode",
         turn_on_args=(True,),

@@ -63,6 +63,57 @@ class TestRadioDisplayMapping(unittest.TestCase):
 
         self.assertEqual(self.radio.source_for_station({"Id": "2"}, sources), "WDR 2 (2)")
 
+    def test_source_for_state_uses_first_source_when_station_is_unknown(self) -> None:
+        sources = {
+            "Radio Essen": {"Id": 971, "Name": "Radio Essen"},
+            "WDR 2": {"Id": 3, "Name": "WDR 2"},
+        }
+
+        self.assertEqual(self.radio.source_for_state(None, sources), "Radio Essen")
+
+    def test_source_for_state_preserves_current_source_without_station(self) -> None:
+        sources = {
+            "Radio Essen": {"Id": 971, "Name": "Radio Essen"},
+            "WDR 2": {"Id": 3, "Name": "WDR 2"},
+        }
+
+        self.assertEqual(
+            self.radio.source_for_state(None, sources, "WDR 2"),
+            "WDR 2",
+        )
+
+    def test_source_option_map_for_state_preserves_sources_without_favorites(self) -> None:
+        sources = {"WDR 2": {"Id": 3, "Name": "WDR 2"}}
+
+        options = self.radio.source_option_map_for_state(
+            {"play": True},
+            sources,
+        )
+
+        self.assertEqual(options, sources)
+        self.assertIsNot(options["WDR 2"], sources["WDR 2"])
+
+    def test_source_option_map_for_state_uses_current_station_before_favorites(self) -> None:
+        options = self.radio.source_option_map_for_state(
+            {"station": {"Id": 3, "Name": "WDR 2 Ruhrgebiet"}}
+        )
+
+        self.assertEqual(list(options), ["WDR 2 Ruhrgebiet"])
+
+    def test_source_option_map_for_state_replaces_sources_from_favorites(self) -> None:
+        options = self.radio.source_option_map_for_state(
+            {
+                "station": {"Id": 3, "Name": "WDR 2 Ruhrgebiet"},
+                "favorites": [
+                    {"Id": 971, "Name": "Radio Essen"},
+                    {"Id": 3, "Name": "WDR 2 Ruhrgebiet"},
+                ],
+            },
+            {"Old": {"Id": 1, "Name": "Old"}},
+        )
+
+        self.assertEqual(list(options), ["Radio Essen", "WDR 2 Ruhrgebiet"])
+
     def test_radio_attributes_summarize_station_and_favorites(self) -> None:
         attributes = self.radio.radio_attributes(
             {

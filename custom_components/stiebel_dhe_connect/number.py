@@ -32,15 +32,24 @@ from .client import (
 )
 from .entity_helpers import StiebelDHEEntityMixin
 from .entity_state_helpers import (
+    clamp_duration_seconds,
     coerce_float,
+    duration_minutes_part,
+    duration_seconds_part,
     format_minutes_duration,
     minutes_to_seconds,
+    replace_duration_part,
     seconds_to_minutes,
     value_available,
 )
 from .runtime_helpers import get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
+
+TIMER_DURATION_MIN_SECONDS = 60
+TIMER_DURATION_MAX_SECONDS = 1200
+TIMER_DURATION_PART_MINUTES = "minutes"
+TIMER_DURATION_PART_SECONDS = "seconds"
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -50,6 +59,7 @@ class StiebelDHENumberEntityDescription(NumberEntityDescription):
     odb_id: int
     timer_path: str | None = None
     timer_property: str | None = None
+    timer_duration_part: str | None = None
     temperature_memory_slot: int | None = None
 
 
@@ -89,29 +99,63 @@ STATIC_NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
     ),
     StiebelDHENumberEntityDescription(
         key="brush_timer_duration",
-        translation_key="brush_timer_duration",
-        native_unit_of_measurement=UnitOfTime.SECONDS,
+        translation_key="brush_timer_duration_minutes",
+        native_unit_of_measurement=UnitOfTime.MINUTES,
         icon="mdi:toothbrush",
-        native_min_value=60.0,
-        native_max_value=1200.0,
+        native_min_value=1.0,
+        native_max_value=20.0,
         native_step=1.0,
         mode=NumberMode.BOX,
         odb_id=ID_BRUSH_TIMER_DURATION,
         timer_path=BRUSH_TIMER_PATH,
         timer_property="durationMilliseconds",
+        timer_duration_part=TIMER_DURATION_PART_MINUTES,
+        entity_registry_enabled_default=False,
+    ),
+    StiebelDHENumberEntityDescription(
+        key="brush_timer_duration_seconds",
+        translation_key="brush_timer_duration_seconds",
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        icon="mdi:toothbrush",
+        native_min_value=0.0,
+        native_max_value=59.0,
+        native_step=1.0,
+        mode=NumberMode.BOX,
+        odb_id=ID_BRUSH_TIMER_DURATION,
+        timer_path=BRUSH_TIMER_PATH,
+        timer_property="durationMilliseconds",
+        timer_duration_part=TIMER_DURATION_PART_SECONDS,
+        entity_registry_enabled_default=False,
     ),
     StiebelDHENumberEntityDescription(
         key="shower_timer_duration",
-        translation_key="shower_timer_duration",
-        native_unit_of_measurement=UnitOfTime.SECONDS,
+        translation_key="shower_timer_duration_minutes",
+        native_unit_of_measurement=UnitOfTime.MINUTES,
         icon="mdi:timer-edit",
-        native_min_value=60.0,
-        native_max_value=1200.0,
+        native_min_value=1.0,
+        native_max_value=20.0,
         native_step=1.0,
         mode=NumberMode.BOX,
         odb_id=ID_SHOWER_TIMER_DURATION,
         timer_path=SHOWER_TIMER_PATH,
         timer_property="durationMilliseconds",
+        timer_duration_part=TIMER_DURATION_PART_MINUTES,
+        entity_registry_enabled_default=False,
+    ),
+    StiebelDHENumberEntityDescription(
+        key="shower_timer_duration_seconds",
+        translation_key="shower_timer_duration_seconds",
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        icon="mdi:timer-edit",
+        native_min_value=0.0,
+        native_max_value=59.0,
+        native_step=1.0,
+        mode=NumberMode.BOX,
+        odb_id=ID_SHOWER_TIMER_DURATION,
+        timer_path=SHOWER_TIMER_PATH,
+        timer_property="durationMilliseconds",
+        timer_duration_part=TIMER_DURATION_PART_SECONDS,
+        entity_registry_enabled_default=False,
     ),
 )
 
@@ -222,6 +266,7 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
         self._attr_extra_state_attributes = dict(base_attributes)
         self._attr_available = False
         self._attr_native_value: float | None = None
+        self._timer_duration_seconds: int | None = None
 
     @property
     def _is_timer_duration(self) -> bool:
@@ -231,13 +276,20 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
     def _client_value_to_native(self, value: object) -> float | None:
         """Convert the client measurement value to the HA number value."""
         if self._is_timer_duration:
-            return minutes_to_seconds(value)
+            total_seconds = self._timer_total_seconds_from_client(value)
+            if total_seconds is None:
+                return None
+            self._timer_duration_seconds = total_seconds
+            return self._timer_part_native_value(total_seconds)
         return coerce_float(value)
 
     def _native_value_to_client(self, value: object) -> float | None:
         """Convert the HA number value to the client write value."""
         if self._is_timer_duration:
-            return seconds_to_minutes(value)
+            total_seconds = self._timer_total_seconds_for_write(value)
+            if total_seconds is None:
+                return None
+            return seconds_to_minutes(total_seconds)
         return coerce_float(value)
 
     def _restore_native_value(self, value: object) -> float | None:
@@ -245,22 +297,76 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
         restored_value = coerce_float(value)
         if restored_value is None:
             return None
-        if (
-            self._is_timer_duration
-            and restored_value < self.entity_description.native_min_value
-        ):
-            return minutes_to_seconds(restored_value)
+        if self._is_timer_duration:
+            return self._restore_timer_native_value(restored_value)
         return restored_value
+
+    def _restore_timer_native_value(self, restored_value: float) -> float | None:
+        """Return a timer part value, accepting old total-second timer state."""
+        if restored_value > self.entity_description.native_max_value:
+            total_seconds = clamp_duration_seconds(
+                restored_value,
+                minimum=TIMER_DURATION_MIN_SECONDS,
+                maximum=TIMER_DURATION_MAX_SECONDS,
+            )
+            if total_seconds is None:
+                return None
+            self._timer_duration_seconds = total_seconds
+            return self._timer_part_native_value(total_seconds)
+        return restored_value
+
+    def _timer_total_seconds_from_client(self, value: object) -> int | None:
+        """Return whole timer seconds from the client minute value."""
+        return clamp_duration_seconds(
+            minutes_to_seconds(value),
+            minimum=TIMER_DURATION_MIN_SECONDS,
+            maximum=TIMER_DURATION_MAX_SECONDS,
+        )
+
+    def _timer_total_seconds_for_write(self, value: object) -> int | None:
+        """Return the full timer duration after replacing one UI part."""
+        current_total_seconds = self._timer_duration_seconds
+        if current_total_seconds is None:
+            if self.entity_description.timer_duration_part == TIMER_DURATION_PART_MINUTES:
+                requested = coerce_float(value)
+                if requested is None:
+                    return None
+                current_total_seconds = int(round(requested)) * 60
+            else:
+                current_total_seconds = TIMER_DURATION_MIN_SECONDS
+
+        return replace_duration_part(
+            current_total_seconds,
+            self.entity_description.timer_duration_part or "",
+            value,
+            minimum=TIMER_DURATION_MIN_SECONDS,
+            maximum=TIMER_DURATION_MAX_SECONDS,
+        )
+
+    def _timer_part_native_value(self, total_seconds: int) -> float | None:
+        """Return the configured timer UI part from a total duration."""
+        if self.entity_description.timer_duration_part == TIMER_DURATION_PART_MINUTES:
+            return float(duration_minutes_part(total_seconds) or 0)
+        if self.entity_description.timer_duration_part == TIMER_DURATION_PART_SECONDS:
+            return float(duration_seconds_part(total_seconds) or 0)
+        return None
 
     def _update_extra_state_attributes(self) -> None:
         """Refresh static and display-only attributes."""
         attributes = dict(self._base_extra_state_attributes)
-        if self._is_timer_duration and self._attr_native_value is not None:
-            minutes_value = seconds_to_minutes(self._attr_native_value)
+        if self._is_timer_duration and self._timer_duration_seconds is not None:
+            minutes_value = seconds_to_minutes(self._timer_duration_seconds)
             display_value = format_minutes_duration(minutes_value)
             if display_value is not None:
                 attributes["duration"] = display_value
-                attributes["duration_seconds"] = int(round(self._attr_native_value))
+                attributes["duration_seconds"] = self._timer_duration_seconds
+                attributes["duration_minutes_part"] = duration_minutes_part(
+                    self._timer_duration_seconds
+                )
+                attributes["duration_seconds_part"] = duration_seconds_part(
+                    self._timer_duration_seconds
+                )
+                attributes["duration_part"] = self.entity_description.timer_duration_part
         self._attr_extra_state_attributes = attributes
 
     async def async_added_to_hass(self) -> None:

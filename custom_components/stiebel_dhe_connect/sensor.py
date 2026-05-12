@@ -94,26 +94,9 @@ class StiebelDHEDiagnosticSensorEntityDescription(SensorEntityDescription):
     polls: bool = False
 
 
-DEFAULT_DISABLED_SENSOR_KEYS = {
-    "configured_power",
-    "water_consumption_week",
-    "water_consumption_year",
+DEFAULT_ENABLED_SENSOR_KEYS = {
     "water_consumption_years",
-    "energy_consumption_week",
-    "energy_consumption_year",
     "energy_consumption_years",
-    "saving_monitor_water",
-    "saving_monitor_energy",
-    "saving_monitor_co2",
-    "saving_monitor_activation_rate",
-    "saving_monitor_possible_water",
-    "saving_monitor_possible_energy",
-    "saving_monitor_possible_co2",
-    "saving_monitor_possible_value",
-    "saving_monitor_real_water",
-    "saving_monitor_real_energy",
-    "saving_monitor_real_co2",
-    "saving_monitor_real_value",
 }
 
 CONNECTION_STATE_OPTIONS = (
@@ -140,7 +123,6 @@ DIAGNOSTIC_SENSOR_DESCRIPTIONS: tuple[StiebelDHEDiagnosticSensorEntityDescriptio
         translation_key="last_reconnect_reason",
         icon="mdi:alert-circle-outline",
         diagnostic_key="last_reconnect_reason",
-        entity_registry_enabled_default=False,
     ),
 )
 
@@ -280,6 +262,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         icon="mdi:timer-outline",
         odb_id=ID_LAST_USAGE_TIME,
         source_command="set:ste.app.consumption:lastUsage",
+        entity_registry_enabled_default=False,
     ),
     StiebelDHESensorEntityDescription(
         key="last_usage_cost",
@@ -543,7 +526,7 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
             name=name,
             client=client,
         )
-        if description.key in DEFAULT_DISABLED_SENSOR_KEYS:
+        if description.key not in DEFAULT_ENABLED_SENSOR_KEYS:
             self._attr_entity_registry_enabled_default = False
         if description.timer_path:
             self._base_extra_state_attributes = {
@@ -626,7 +609,6 @@ class StiebelDHEReconnectCountSensor(StiebelDHEEntityMixin, SensorEntity):
     """DHE reconnect count diagnostic sensor."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_entity_registry_enabled_default = False
     _attr_has_entity_name = True
     _attr_icon = "mdi:restart"
     _attr_should_poll = False
@@ -790,6 +772,9 @@ class StiebelDHEDiagnosticSensor(StiebelDHEEntityMixin, SensorEntity):
             key=description.key,
             name=name,
             client=client,
+        )
+        self._attr_entity_registry_enabled_default = (
+            description.entity_registry_enabled_default
         )
         self._attr_should_poll = description.polls
         self._attr_available = False

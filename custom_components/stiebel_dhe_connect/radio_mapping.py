@@ -57,6 +57,29 @@ def source_option_map(stations_value: list[dict[str, Any]]) -> dict[str, dict[st
     return options
 
 
+def source_option_map_for_state(
+    state: dict[str, Any],
+    current_sources: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Build source options while keeping startup radio states usable."""
+    if "favorites" in state:
+        favorites = stations(state.get("favorites"))
+        if favorites:
+            return source_option_map(favorites)
+        station = state.get("station")
+        if isinstance(station, dict):
+            return source_option_map([station])
+        return {}
+
+    if current_sources:
+        return {option: dict(station) for option, station in current_sources.items()}
+
+    station = state.get("station")
+    if isinstance(station, dict):
+        return source_option_map([station])
+    return {}
+
+
 def source_for_station(
     station: Any,
     sources_by_option: dict[str, dict[str, Any]],
@@ -70,6 +93,20 @@ def source_for_station(
         if station_id(source_station) == current_station_id:
             return option
     return station_name(station)
+
+
+def source_for_state(
+    station: Any,
+    sources_by_option: dict[str, dict[str, Any]],
+    current_source: str | None = None,
+) -> str | None:
+    """Return the active source, falling back to a stable navigation anchor."""
+    source = source_for_station(station, sources_by_option)
+    if source is not None:
+        return source
+    if current_source in sources_by_option:
+        return current_source
+    return next(iter(sources_by_option), None)
 
 
 def source_label(station: dict[str, Any]) -> str:

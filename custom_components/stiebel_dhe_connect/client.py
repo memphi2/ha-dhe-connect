@@ -2596,17 +2596,12 @@ class DHEClient:
                 callback(self._copy_radio_state())
 
     def _copy_radio_state(self) -> dict[str, Any]:
-        state: dict[str, Any] = {}
-        for key, value in self._last_radio_state.items():
-            if isinstance(value, dict):
-                state[key] = dict(value)
-            elif isinstance(value, list):
-                state[key] = [
-                    dict(item) if isinstance(item, dict) else item
-                    for item in value
-                ]
-            else:
-                state[key] = value
+        state = {
+            key: _copy_json_like_value(value)
+            for key, value in self._last_radio_state.items()
+        }
+        if self._radio_favorites_generation > 0 and "favorites" not in state:
+            state["favorites"] = self._radio_favorites()
         return state
 
     def _radio_favorites(self) -> list[dict[str, Any]]:
