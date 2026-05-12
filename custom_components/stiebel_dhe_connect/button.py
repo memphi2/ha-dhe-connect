@@ -49,6 +49,7 @@ STATIC_BUTTON_DESCRIPTIONS: tuple[StiebelDHEButtonEntityDescription, ...] = (
         availability_measurement_id=ID_BRUSH_TIMER_ACTIVATION,
         timer_path=BRUSH_TIMER_PATH,
         timer_property="reset",
+        entity_registry_enabled_default=False,
     ),
     StiebelDHEButtonEntityDescription(
         key="reset_shower_timer",
@@ -58,6 +59,7 @@ STATIC_BUTTON_DESCRIPTIONS: tuple[StiebelDHEButtonEntityDescription, ...] = (
         availability_measurement_id=ID_SHOWER_TIMER_ACTIVATION,
         timer_path=SHOWER_TIMER_PATH,
         timer_property="reset",
+        entity_registry_enabled_default=False,
     ),
     StiebelDHEButtonEntityDescription(
         key="repair_pairing",

@@ -32,6 +32,7 @@ from .client import (
     ID_BRUSH_TIMER_REMAINING,
     ID_CONFIGURED_POWER,
     ID_DEVICE_INFO,
+    ID_DEVICE_STATUS,
     ID_ENERGY_CONSUMPTION_WEEK,
     ID_ENERGY_CONSUMPTION_YEAR,
     ID_ENERGY_CONSUMPTION_YEARS,
@@ -54,6 +55,7 @@ from .client import (
     ID_SAVING_MONITOR_REAL_VALUE,
     ID_SAVING_MONITOR_REAL_WATER,
     ID_SAVING_MONITOR_WATER,
+    ID_SCALD_PROTECTION_TEMPERATURE_LIMIT,
     ID_SHOWER_TIMER_REMAINING,
     ID_WATER_CONSUMPTION_WEEK,
     ID_WATER_CONSUMPTION_YEAR,
@@ -62,6 +64,7 @@ from .client import (
     MeasurementValue,
     SHOWER_TIMER_PATH,
 )
+from .client_mapping import DEVICE_STATUS_OPTIONS, DEVICE_STATUS_SERVICE_REQUIRED
 from .entity_helpers import StiebelDHEEntityMixin
 from .entity_state_helpers import (
     coerce_float,
@@ -94,26 +97,9 @@ class StiebelDHEDiagnosticSensorEntityDescription(SensorEntityDescription):
     polls: bool = False
 
 
-DEFAULT_DISABLED_SENSOR_KEYS = {
-    "configured_power",
-    "water_consumption_week",
-    "water_consumption_year",
+DEFAULT_ENABLED_SENSOR_KEYS = {
     "water_consumption_years",
-    "energy_consumption_week",
-    "energy_consumption_year",
     "energy_consumption_years",
-    "saving_monitor_water",
-    "saving_monitor_energy",
-    "saving_monitor_co2",
-    "saving_monitor_activation_rate",
-    "saving_monitor_possible_water",
-    "saving_monitor_possible_energy",
-    "saving_monitor_possible_co2",
-    "saving_monitor_possible_value",
-    "saving_monitor_real_water",
-    "saving_monitor_real_energy",
-    "saving_monitor_real_co2",
-    "saving_monitor_real_value",
 }
 
 CONNECTION_STATE_OPTIONS = (
@@ -140,7 +126,6 @@ DIAGNOSTIC_SENSOR_DESCRIPTIONS: tuple[StiebelDHEDiagnosticSensorEntityDescriptio
         translation_key="last_reconnect_reason",
         icon="mdi:alert-circle-outline",
         diagnostic_key="last_reconnect_reason",
-        entity_registry_enabled_default=False,
     ),
 )
 
@@ -190,6 +175,26 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         odb_id=ID_INTERNAL_TEMPERATURE_2,
+    ),
+    StiebelDHESensorEntityDescription(
+        key="scald_protection_temperature_limit",
+        translation_key="scald_protection_temperature_limit",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        icon="mdi:shield-thermometer",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        odb_id=ID_SCALD_PROTECTION_TEMPERATURE_LIMIT,
+    ),
+    StiebelDHESensorEntityDescription(
+        key="device_status",
+        translation_key="device_status",
+        icon="mdi:wrench",
+        device_class=SensorDeviceClass.ENUM,
+        options=DEVICE_STATUS_OPTIONS,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        odb_id=ID_DEVICE_STATUS,
     ),
     StiebelDHESensorEntityDescription(
         key="water_consumption_week",
@@ -280,6 +285,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         icon="mdi:timer-outline",
         odb_id=ID_LAST_USAGE_TIME,
         source_command="set:ste.app.consumption:lastUsage",
+        entity_registry_enabled_default=False,
     ),
     StiebelDHESensorEntityDescription(
         key="last_usage_cost",
@@ -543,7 +549,7 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
             name=name,
             client=client,
         )
-        if description.key in DEFAULT_DISABLED_SENSOR_KEYS:
+        if description.key not in DEFAULT_ENABLED_SENSOR_KEYS:
             self._attr_entity_registry_enabled_default = False
         if description.timer_path:
             self._base_extra_state_attributes = {
@@ -626,7 +632,6 @@ class StiebelDHEReconnectCountSensor(StiebelDHEEntityMixin, SensorEntity):
     """DHE reconnect count diagnostic sensor."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_entity_registry_enabled_default = False
     _attr_has_entity_name = True
     _attr_icon = "mdi:restart"
     _attr_should_poll = False
@@ -677,6 +682,7 @@ class StiebelDHEErrorStatusSensor(StiebelDHEEntityMixin, SensorEntity):
         )
         self._setpoint: float | None = None
         self._inlet_temperature: float | None = None
+        self._device_status: str | None = None
         self._attr_available = False
         self._attr_native_value: str | None = None
         self._update_status()
@@ -696,6 +702,8 @@ class StiebelDHEErrorStatusSensor(StiebelDHEEntityMixin, SensorEntity):
         self._inlet_temperature = self._coerce_temperature(
             self._client.last_measurements.get(ID_INTERNAL_TEMPERATURE_1)
         )
+        device_status = self._client.last_measurements.get(ID_DEVICE_STATUS)
+        self._device_status = str(device_status) if isinstance(device_status, str) else None
         self._update_status()
         self.async_write_ha_state()
 
@@ -707,9 +715,12 @@ class StiebelDHEErrorStatusSensor(StiebelDHEEntityMixin, SensorEntity):
 
     @callback
     def _handle_measurement_update(self, odb_id: int, value: MeasurementValue) -> None:
-        if odb_id != ID_INTERNAL_TEMPERATURE_1:
+        if odb_id == ID_INTERNAL_TEMPERATURE_1:
+            self._inlet_temperature = self._coerce_temperature(value)
+        elif odb_id == ID_DEVICE_STATUS:
+            self._device_status = str(value) if isinstance(value, str) else None
+        else:
             return
-        self._inlet_temperature = self._coerce_temperature(value)
         self._update_status()
         self.async_write_ha_state()
 
@@ -719,6 +730,7 @@ class StiebelDHEErrorStatusSensor(StiebelDHEEntityMixin, SensorEntity):
             available,
             self._setpoint,
             self._inlet_temperature,
+            self._device_status,
         )
         self._update_status()
         self.async_write_ha_state()
@@ -729,10 +741,18 @@ class StiebelDHEErrorStatusSensor(StiebelDHEEntityMixin, SensorEntity):
             and self._inlet_temperature is not None
             and self._setpoint < self._inlet_temperature
         )
+        service_required = self._device_status == DEVICE_STATUS_SERVICE_REQUIRED
         language = str(getattr(self.hass.config, "language", "") or "").lower() if self.hass else ""
         if not self._client.online:
             self._attr_native_value = "Nicht verbunden" if language.startswith("de") else "Disconnected"
             active_error = "disconnected"
+        elif service_required:
+            self._attr_native_value = (
+                "Service nötig"
+                if language.startswith("de")
+                else "Service required"
+            )
+            active_error = "service_required"
         elif below_inlet:
             self._attr_native_value = (
                 "Solltemperatur unter Zulauftemperatur"
@@ -748,6 +768,7 @@ class StiebelDHEErrorStatusSensor(StiebelDHEEntityMixin, SensorEntity):
             self._client.available,
             self._setpoint,
             self._inlet_temperature,
+            self._device_status,
         )
         self._attr_extra_state_attributes = {
             "online": self._client.online,
@@ -756,6 +777,8 @@ class StiebelDHEErrorStatusSensor(StiebelDHEEntityMixin, SensorEntity):
             "setpoint_temperature": self._setpoint,
             "inlet_temperature": self._inlet_temperature,
             "setpoint_below_inlet": below_inlet,
+            "device_status": self._device_status,
+            "device_service_required": service_required,
         }
         if below_inlet and self._setpoint is not None and self._inlet_temperature is not None:
             self._attr_extra_state_attributes["inlet_minus_setpoint"] = round(
@@ -790,6 +813,9 @@ class StiebelDHEDiagnosticSensor(StiebelDHEEntityMixin, SensorEntity):
             key=description.key,
             name=name,
             client=client,
+        )
+        self._attr_entity_registry_enabled_default = (
+            description.entity_registry_enabled_default
         )
         self._attr_should_poll = description.polls
         self._attr_available = False

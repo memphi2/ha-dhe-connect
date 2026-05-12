@@ -24,14 +24,13 @@ Development and protocol mapping for this release were assisted by OpenAI Codex.
 - Automatic reconnect and diagnostic reconnect counter.
 - Target temperature control through the DHE ODB command interface.
 - Temperature memory controls for all 12 supported slots; slots 3 to 12 are disabled by default.
-- Water and energy consumption sensors, with long-term values disabled by default to keep the device card tidy.
-- Last usage, saving monitor, brush timer, shower timer and device diagnostic sensors.
+- Total water and energy consumption sensors are enabled by default; detailed live, last usage, timer and saving-monitor sensors start disabled to keep the device card tidy.
 - Eco mode, Eco flow limit, bath fill, maximum temperature and wellness controls; currency, cost and CO2 settings live in the integration options.
 - Compact radio media player for station metadata, playback, volume and favorites.
 - Options-flow radio search by full text, DHE genre catalog, country catalog or city catalog.
 - Weather entity for the DHE forecast payload.
 - Brush timer and shower timer controls.
-- General diagnostic status, reconnect count, connection details and device information.
+- General diagnostic status, reconnect count, connection details, scald-protection diagnostics, device alarm and device information.
 
 ## Installation
 
@@ -135,13 +134,16 @@ The climate entity keeps the last valid target temperature during short reconnec
 
 ### Binary sensors
 
-No dedicated binary sensors are created by default in the current entity model.
+| Entity | Class / category | Source / behavior |
+|---|---|---|
+| Scald protection active | diagnostic, disabled by default | ODB ID `22`, true when the DHE reports the anti-scald protection as active |
+| Device alarm | `problem`, diagnostic, disabled by default | Derived from ODB ID `34`; turns on for status code `3`, matching the browser UI wrench indicator |
 
 ### Media player
 
 | Entity | Features | Source / command | Behavior |
 |---|---|---|---|
-| Radio | play/pause, volume, source selection, previous/next favorite | `get:ste.app.radio:station`, `volume`, `play`, `paired`, `title`, `favorites`; `assign:ste.app.radio:play`, `volume`, `station` | Shows the current radio station/title, controls playback/volume and switches between radio favorites |
+| Radio | play/pause, volume, source selection, previous/next favorite | `get:ste.app.radio:station`, `volume`, `play`, `paired`, `title`, `favorites`; `assign:ste.app.radio:play`, `volume`, `station` | Shows the current radio title, station short description or station name, controls playback/volume and switches between radio favorites |
 
 The radio entity intentionally does not request the full station catalog during startup. It does read the small favorites list so Home Assistant can expose radio favorites as media-player sources and use previous/next to cycle through them. The options flow can search stations by full text, DHE genre catalog, or by DHE country/city catalog plus a search term, then add the selected station as a DHE radio favorite and activate it. Genre searches send the selected genre directly; full-text search sends `{attribute: "text", value: "<query>"}`; country and city searches send the selected catalog value and include the entered search term as additional text. Existing radio favorites can also be removed from the options flow. Catalog, favorites and search payloads are treated as known protocol messages so they do not pollute debug logs.
 
@@ -153,7 +155,7 @@ The radio entity intentionally does not request the full station catalog during 
 
 The weather entity exposes the DHE forecast location, including `city`, `country` and a combined `location` attribute in `place, country` format, daily temperatures, precipitation probabilities and original `icon_id_*` values. The observed DHE weather icons are mapped to Home Assistant weather conditions where verified from device traffic: `1`/`2` = sunny, `3`/`4`/`6` = partly cloudy, `5` = cloudy and `7`/`8` = rainy. Unknown icon IDs remain visible as attributes and fall back to precipitation-based conditions. Weather favorites, forecast search results and the selected country are treated as known protocol messages; the full country catalog is recognized but not requested during startup because it is very large.
 
-Weather location search uses the same split city/country workflow as the DHE UI. The integration options can add and remove weather favorites. The disabled-by-default `Weather location` select can be enabled when you want to switch between existing favorites from Home Assistant. The service `stiebel_dhe_connect.search_weather_location` sends `get:ste.app.weather:forecast` with `name` and `country_id`; the returned results are exposed as `forecast_results` attributes. The service `stiebel_dhe_connect.toggle_weather_favorite` can toggle an existing result by `result_number` or run a fresh search first when `name` and `country_id` are provided. The DHE uses the same `assign:ste.app.weather:favorite` command to add and remove favorites.
+Weather location search uses the same split city/country workflow as the DHE UI. The integration options can add and remove weather favorites. The `Weather location` select is enabled by default and switches between existing favorites from Home Assistant. The service `stiebel_dhe_connect.search_weather_location` sends `get:ste.app.weather:forecast` with `name` and `country_id`; the returned results are exposed as `forecast_results` attributes. The service `stiebel_dhe_connect.toggle_weather_favorite` can toggle an existing result by `result_number` or run a fresh search first when `name` and `country_id` are provided. The DHE uses the same `assign:ste.app.weather:favorite` command to add and remove favorites.
 
 Selecting the active weather location is a separate step. The service `stiebel_dhe_connect.select_weather_location` sends `get:ste.app.weather:location` with the selected `LocationId`, matching the browser protocol used when switching to a favorite. It can select by exact `location_id`, by the current search `result_number`, or run a fresh name/country search first. When multiple DHE devices are configured, include `entry_id` in service data to target one integration entry. Example for toggling New York in the USA:
 
@@ -179,22 +181,24 @@ data:
 
 | Entity | Unit | Class / category | State class | Source / scaling |
 |---|---:|---|---|---|
-| Current water flow | `L/min` | `volume_flow_rate` | `measurement` | ODB ID `15 / 10` |
-| Current power consumption | `kW` | `power` | `measurement` | ODB ID `16 / 100 * configured_power_kw` |
+| Current water flow | `L/min` | `volume_flow_rate`, disabled by default | `measurement` | ODB ID `15 / 10` |
+| Current power consumption | `kW` | `power`, disabled by default | `measurement` | ODB ID `16 / 100 * configured_power_kw` |
 | Configured power | `kW` | `power`, disabled by default | none | ODB ID `20` |
-| Inlet temperature | `C` | `temperature`, diagnostic | `measurement` | ODB ID `13 / 10` |
-| Outlet temperature | `C` | `temperature`, diagnostic | `measurement` | ODB ID `14 / 10` |
+| Inlet temperature | `C` | `temperature`, diagnostic, disabled by default | `measurement` | ODB ID `13 / 10` |
+| Outlet temperature | `C` | `temperature`, diagnostic, disabled by default | `measurement` | ODB ID `14 / 10` |
+| Scald protection temperature limit | `C` | `temperature`, diagnostic, disabled by default | none | ODB ID `24 / 10` |
+| Device status | text | `enum`, diagnostic, disabled by default | none | ODB ID `34`; status code `3` also drives the device alarm binary sensor |
 | Water consumption week | `L` | `water`, disabled by default | `total_increasing` | `set:ste.app.consumption:waterWeek` |
 | Water consumption year | `m3` | `water`, disabled by default | `total_increasing` | `set:ste.app.consumption:waterYear` |
-| Water consumption years | `m3` | `water`, disabled by default | `total_increasing` | `set:ste.app.consumption:waterYears` |
+| Water consumption years | `m3` | `water` | `total_increasing` | `set:ste.app.consumption:waterYears` |
 | Energy consumption week | `kWh` | `energy`, disabled by default | `total` | `set:ste.app.consumption:energyWeek` |
 | Energy consumption year | `kWh` | `energy`, disabled by default | `total` | `set:ste.app.consumption:energyYear` |
-| Energy consumption years | `kWh` | `energy`, disabled by default | `total` | `set:ste.app.consumption:energyYears` |
-| Last usage water | `L` | none | `measurement` | `set:ste.app.consumption:lastUsage.water` |
-| Last usage energy | `kWh` | none | `measurement` | `set:ste.app.consumption:lastUsage.energy` |
-| Last usage duration | `M:SS` | none | none | `set:ste.app.consumption:lastUsage.time`, rendered like timer remaining values |
-| Last usage cost | `EUR` | `monetary` | none | `set:ste.app.consumption:lastUsage.costs` |
-| Bath fill remaining | `L` | none | `measurement` | Derived from target volume ODB ID `3` minus current bath fill ODB ID `31` |
+| Energy consumption years | `kWh` | `energy` | `total` | `set:ste.app.consumption:energyYears` |
+| Last usage water | `L` | disabled by default | `measurement` | `set:ste.app.consumption:lastUsage.water` |
+| Last usage energy | `kWh` | disabled by default | `measurement` | `set:ste.app.consumption:lastUsage.energy` |
+| Last usage duration | `M:SS` | disabled by default | none | `set:ste.app.consumption:lastUsage.time`, rendered like timer remaining values |
+| Last usage cost | `EUR` | `monetary`, disabled by default | none | `set:ste.app.consumption:lastUsage.costs` |
+| Bath fill remaining | `L` | disabled by default | `measurement` | Derived as whole liters from target volume ODB ID `3` minus current bath fill ODB ID `31` |
 | Saving monitor consumption water | `L` | disabled by default | `measurement` | `set:ste.app.savingMonitor:consumption.water_l`, rounded to 2 decimals |
 | Saving monitor consumption energy | `kWh` | disabled by default | `measurement` | `set:ste.app.savingMonitor:consumption.energy_Wh / 1000`, rounded to 2 decimals |
 | Saving monitor consumption CO2 | `kg` | disabled by default | `measurement` | `set:ste.app.savingMonitor:consumption.emission_Co2Kg`, rounded to 2 decimals |
@@ -207,12 +211,13 @@ data:
 | Saving monitor real energy saving | `kWh` | disabled by default | `measurement` | `set:ste.app.savingMonitor:real.energy_Wh / 1000`, rounded to 2 decimals |
 | Saving monitor real CO2 saving | `kg` | disabled by default | `measurement` | `set:ste.app.savingMonitor:real.emission_Co2Kg`, rounded to 2 decimals |
 | Saving monitor real cost saving | `EUR` | `monetary`, disabled by default | none | `set:ste.app.savingMonitor:real.value_E`, rounded to 2 decimals |
-| Brush timer remaining | `M:SS` | none | none | `set:ste.app.brushTimer:remainingMilliseconds` |
-| Shower timer remaining | `M:SS` | none | none | `set:ste.app.showerTimer:remainingMilliseconds` |
+| Brush timer remaining | `M:SS` | disabled by default | none | `set:ste.app.brushTimer:remainingMilliseconds` |
+| Shower timer remaining | `M:SS` | disabled by default | none | `set:ste.app.showerTimer:remainingMilliseconds` |
 | Reconnects | count | diagnostic | `total_increasing` | Successful reconnect count after the initial connection |
 | Connection state | text | diagnostic | none | Client session state such as `starting`, `connected`, `reconnecting` or `stopped` |
 | Last reconnect reason | text | diagnostic | none | Last recorded session failure or forced reconnect reason |
-| Device info | text | diagnostic | none | DHE version and device information commands |
+| Temperature error status | text | diagnostic | none | General error status, including target temperature below inlet temperature and DHE status code `34` service-required state |
+| Device info | text | diagnostic, disabled by default | none | DHE version and device information commands |
 | Product ID | text | diagnostic, disabled by default | none | `set:ste.common.version:gadgetData.id` |
 | WLAN MAC | text | diagnostic, disabled by default | none | `set:ste.common.version:gadgetData.wlan` |
 | Bluetooth MAC | text | diagnostic, disabled by default | none | `set:ste.common.version:gadgetData.bluetooth` |
@@ -223,11 +228,11 @@ Consumption sensors expose the DHE chart array as a `chart` attribute and the re
 
 | Entity | Unit | Range | Mode | Source / command |
 |---|---:|---:|---|---|
-| Bath fill target volume | `L` | `1` to `300` | slider | ODB ID `3` |
+| Bath fill target volume | `L` | `1` to `300`, step `1` | slider | ODB ID `3`, shown as whole liters |
 | Maximum temperature | `C` | `20` to `50` | slider | ODB ID `5`, accepts raw tenths or degrees |
 | Eco flow limit | `L/min` | `6` to `8` | slider | ODB ID `7`, sent as raw tenths |
-| Brush timer duration | `s` | `60` to `1200`, step `1` | box | `assign:ste.app.brushTimer:durationMilliseconds`; exposes `duration` as `M:SS` |
-| Shower timer duration | `s` | `60` to `1200`, step `1` | box | `assign:ste.app.showerTimer:durationMilliseconds`; exposes `duration` as `M:SS` |
+| Brush timer duration | `s` | `60` to `1200`, step `1` | box | `assign:ste.app.brushTimer:durationMilliseconds`; shown in Home Assistant as seconds |
+| Shower timer duration | `s` | `60` to `1200`, step `1` | box | `assign:ste.app.showerTimer:durationMilliseconds`; shown in Home Assistant as seconds |
 | Temperature memory 1-12 temperature | `C` | `20` to `60` | box | `assign:ste.common.temperature:memory`, memory ID `0` to `11`; slots 3 to 12 disabled by default |
 
 Temperature memory writes keep the existing memory name and send `operation: add_change`. Slots 1 and 2 are enabled by default. Slots 3 to 12 are created in the entity registry but disabled by default, so they can be enabled explicitly without cluttering the device configuration card.
@@ -238,7 +243,7 @@ Currency, electricity price, water price and CO2 emission are configured from th
 
 | Entity | Options | Source / command | Behavior |
 |---|---|---|---|
-| Weather location | weather favorites, disabled by default | `get:ste.app.weather:location` with a `LocationId` value | Selects the active DHE weather favorite |
+| Weather location | weather favorites | `get:ste.app.weather:location` with a `LocationId` value | Selects the active DHE weather favorite |
 
 ### Texts
 
@@ -268,8 +273,8 @@ Wellness programs are triggered by writing the program ID and then sending the D
 
 | Entity | Command | Behavior |
 |---|---|---|
-| Reset brush timer | `assign:ste.app.brushTimer:reset` | Resets brush timer remaining time and activation state |
-| Reset shower timer | `assign:ste.app.showerTimer:reset` | Resets shower timer remaining time and activation state |
+| Reset brush timer | `assign:ste.app.brushTimer:reset` | Resets brush timer remaining time and activation state; disabled by default |
+| Reset shower timer | `assign:ste.app.showerTimer:reset` | Resets shower timer remaining time and activation state; disabled by default |
 | Repair pairing | local token reset and reconnect | Deletes the stored DHE token, starts a fresh pairing attempt and asks the user to confirm pairing on the DHE; disabled by default |
 | Disconnect radio pairing | `assign:ste.app.radio:paired` with `false` | Sends the observed DHE radio pairing disconnect action |
 | Temperature memory 1-12 | ODB ID `66` command | Sends the temperature stored in the matching memory slot; slots 3 to 12 disabled by default |
@@ -412,11 +417,11 @@ Required startup reads seed the interactive entities:
 | `15` | Water flow |
 | `16` | Current power fraction |
 | `20` | Configured power |
-| `22` | Known noisy diagnostic value, not exposed as an entity |
-| `24` | Known noisy temperature value, not exposed as an entity |
+| `22` | Scald protection active |
+| `24` | Scald protection temperature limit |
 | `31` | Current bath fill volume |
 | `33` | Water heating enabled state, used by the climate entity |
-| `34` | Known noisy diagnostic value, not exposed as an entity |
+| `34` | Device status; status code `3` is exposed as the device alarm |
 | `61` | Electricity price euros |
 | `62` | Water price euros |
 | `69` | CO2 emission |

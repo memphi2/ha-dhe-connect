@@ -195,6 +195,23 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
         if state:
             self._have_radio_state = True
 
+        self._apply_playback_state(state)
+        self._apply_volume_state(state)
+
+        station = state.get("station")
+        if isinstance(station, dict):
+            self._apply_station_media(state, station)
+
+        self._apply_source_state(state, station)
+
+        self._attr_extra_state_attributes = radio.radio_attributes(state)
+        self._attr_available = connected_and_ready(
+            self._client.available,
+            self._have_radio_state,
+        )
+
+    def _apply_playback_state(self, state: dict[str, Any]) -> None:
+        """Apply HA playback state from the DHE radio state."""
         play = state.get("play")
         if play is True:
             self._attr_state = STATE_PLAYING
@@ -203,28 +220,40 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
         elif state:
             self._attr_state = STATE_IDLE
 
+    def _apply_volume_state(self, state: dict[str, Any]) -> None:
+        """Apply HA volume level from the DHE radio state."""
         volume = state.get("volume")
         if isinstance(volume, (int, float)):
             self._attr_volume_level = max(0.0, min(float(volume) / 100.0, 1.0))
 
-        station = state.get("station")
-        if isinstance(station, dict):
-            current_station_id = radio.station_id(station)
-            self._attr_media_content_id = (
-                str(current_station_id) if current_station_id is not None else None
-            )
-            self._attr_media_content_type = "music"
-            self._attr_media_image_url = radio.station_logo_url(station)
-            self._attr_media_title = radio.media_title(state, station)
-            self._attr_media_artist = radio.station_name(station)
-
-        favorites = radio.stations(state.get("favorites"))
-        self._sources_by_option = radio.source_option_map(favorites)
-        self._attr_source_list = list(self._sources_by_option)
-        self._attr_source = radio.source_for_station(station, self._sources_by_option)
-
-        self._attr_extra_state_attributes = radio.radio_attributes(state)
-        self._attr_available = connected_and_ready(
-            self._client.available,
-            self._have_radio_state,
+    def _apply_source_state(
+        self,
+        state: dict[str, Any],
+        station: Any,
+    ) -> None:
+        """Apply source list and active source from the DHE radio state."""
+        self._sources_by_option = radio.source_option_map_for_state(
+            state,
+            self._sources_by_option,
         )
+        self._attr_source_list = list(self._sources_by_option)
+        self._attr_source = radio.source_for_state(
+            station,
+            self._sources_by_option,
+            self._attr_source,
+        )
+
+    def _apply_station_media(
+        self,
+        state: dict[str, Any],
+        station: dict[str, Any],
+    ) -> None:
+        """Apply station media fields used by the HA media-player controls."""
+        current_station_id = radio.station_id(station)
+        self._attr_media_content_id = (
+            str(current_station_id) if current_station_id is not None else None
+        )
+        self._attr_media_content_type = "music"
+        self._attr_media_image_url = radio.station_logo_url(station)
+        self._attr_media_title = radio.media_title(state, station)
+        self._attr_media_artist = radio.station_name(station)

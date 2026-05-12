@@ -42,6 +42,19 @@ def seconds_to_minutes(value: Any) -> float | None:
     return seconds_value / 60.0
 
 
+def clamp_duration_seconds(
+    value: Any,
+    *,
+    minimum: int,
+    maximum: int,
+) -> int | None:
+    """Return a whole-second duration clamped to the supported range."""
+    seconds_value = coerce_float(value)
+    if seconds_value is None:
+        return None
+    return max(minimum, min(int(round(seconds_value)), maximum))
+
+
 def value_available(connected: bool, value: Any) -> bool:
     """Return whether an entity is connected and has a known value."""
     return bool(connected) and value is not None

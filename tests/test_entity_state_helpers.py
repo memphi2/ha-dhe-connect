@@ -79,7 +79,6 @@ class TestValueConversionHelpers(unittest.TestCase):
         self.assertIsNone(self.helpers.minutes_to_seconds("abc"))
         self.assertIsNone(self.helpers.seconds_to_minutes(None))
 
-
 class TestAvailabilityHelpers(unittest.TestCase):
     """Validate shared availability decisions."""
 

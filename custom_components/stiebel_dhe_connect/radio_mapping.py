@@ -57,6 +57,52 @@ def source_option_map(stations_value: list[dict[str, Any]]) -> dict[str, dict[st
     return options
 
 
+def source_option_map_for_state(
+    state: dict[str, Any],
+    current_sources: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Build source options while keeping startup radio states usable."""
+    station = state.get("station")
+    if "favorites" in state:
+        favorites = stations(state.get("favorites"))
+        if favorites:
+            return source_option_map(favorites)
+        if isinstance(station, dict):
+            return source_option_map([station])
+        return {}
+
+    if isinstance(station, dict):
+        if current_sources:
+            return source_option_map(_merge_current_station(current_sources, station))
+        return source_option_map([station])
+
+    if current_sources:
+        return {option: dict(station) for option, station in current_sources.items()}
+
+    return {}
+
+
+def _merge_current_station(
+    current_sources: dict[str, dict[str, Any]],
+    station: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Return current sources with the latest station payload upserted."""
+    current_station_id = station_id(station)
+    current_station_name = station_name(station)
+    merged: list[dict[str, Any]] = []
+
+    for source_station in current_sources.values():
+        if current_station_id is not None:
+            if station_id(source_station) == current_station_id:
+                continue
+        elif station_name(source_station) == current_station_name:
+            continue
+        merged.append(dict(source_station))
+
+    merged.append(dict(station))
+    return merged
+
+
 def source_for_station(
     station: Any,
     sources_by_option: dict[str, dict[str, Any]],
@@ -72,6 +118,20 @@ def source_for_station(
     return station_name(station)
 
 
+def source_for_state(
+    station: Any,
+    sources_by_option: dict[str, dict[str, Any]],
+    current_source: str | None = None,
+) -> str | None:
+    """Return the active source, falling back to a stable navigation anchor."""
+    source = source_for_station(station, sources_by_option)
+    if source is not None:
+        return source
+    if current_source in sources_by_option:
+        return current_source
+    return next(iter(sources_by_option), None)
+
+
 def source_label(station: dict[str, Any]) -> str:
     """Return a source label for one station."""
     return station_name(station) or "Unknown station"
@@ -85,10 +145,13 @@ def stations(value: Any) -> list[dict[str, Any]]:
 
 
 def media_title(state: dict[str, Any], station: dict[str, Any]) -> str | None:
-    """Return current media title, falling back to the station name."""
+    """Return current media title, falling back to station description/name."""
     title = state.get("title")
     if isinstance(title, str) and title.strip():
         return title.strip()
+    short_description = station_text(station, "ShortDescription")
+    if short_description:
+        return short_description
     return station_name(station)
 
 

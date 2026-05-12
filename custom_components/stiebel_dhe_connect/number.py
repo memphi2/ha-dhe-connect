@@ -32,6 +32,7 @@ from .client import (
 )
 from .entity_helpers import StiebelDHEEntityMixin
 from .entity_state_helpers import (
+    clamp_duration_seconds,
     coerce_float,
     format_minutes_duration,
     minutes_to_seconds,
@@ -41,6 +42,9 @@ from .entity_state_helpers import (
 from .runtime_helpers import get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
+
+TIMER_DURATION_MIN_SECONDS = 60
+TIMER_DURATION_MAX_SECONDS = 1200
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -60,9 +64,9 @@ STATIC_NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfVolume.LITERS,
         device_class=NumberDeviceClass.VOLUME,
         icon="mdi:bathtub",
-        native_min_value=1.0,
-        native_max_value=300.0,
-        native_step=1.0,
+        native_min_value=1,
+        native_max_value=300,
+        native_step=1,
         odb_id=ID_BATH_FILL_TARGET_VOLUME,
     ),
     StiebelDHENumberEntityDescription(
@@ -92,9 +96,9 @@ STATIC_NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         translation_key="brush_timer_duration",
         native_unit_of_measurement=UnitOfTime.SECONDS,
         icon="mdi:toothbrush",
-        native_min_value=60.0,
-        native_max_value=1200.0,
-        native_step=1.0,
+        native_min_value=TIMER_DURATION_MIN_SECONDS,
+        native_max_value=TIMER_DURATION_MAX_SECONDS,
+        native_step=1,
         mode=NumberMode.BOX,
         odb_id=ID_BRUSH_TIMER_DURATION,
         timer_path=BRUSH_TIMER_PATH,
@@ -105,9 +109,9 @@ STATIC_NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         translation_key="shower_timer_duration",
         native_unit_of_measurement=UnitOfTime.SECONDS,
         icon="mdi:timer-edit",
-        native_min_value=60.0,
-        native_max_value=1200.0,
-        native_step=1.0,
+        native_min_value=TIMER_DURATION_MIN_SECONDS,
+        native_max_value=TIMER_DURATION_MAX_SECONDS,
+        native_step=1,
         mode=NumberMode.BOX,
         odb_id=ID_SHOWER_TIMER_DURATION,
         timer_path=SHOWER_TIMER_PATH,
@@ -222,6 +226,7 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
         self._attr_extra_state_attributes = dict(base_attributes)
         self._attr_available = False
         self._attr_native_value: float | None = None
+        self._timer_duration_seconds: int | None = None
 
     @property
     def _is_timer_duration(self) -> bool:
@@ -231,13 +236,24 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
     def _client_value_to_native(self, value: object) -> float | None:
         """Convert the client measurement value to the HA number value."""
         if self._is_timer_duration:
-            return minutes_to_seconds(value)
+            total_seconds = self._timer_total_seconds_from_client(value)
+            if total_seconds is None:
+                self._timer_duration_seconds = None
+                return None
+            self._timer_duration_seconds = total_seconds
+            return total_seconds
+        if self.entity_description.odb_id == ID_BATH_FILL_TARGET_VOLUME:
+            volume = coerce_float(value)
+            return int(round(volume)) if volume is not None else None
         return coerce_float(value)
 
     def _native_value_to_client(self, value: object) -> float | None:
         """Convert the HA number value to the client write value."""
         if self._is_timer_duration:
-            return seconds_to_minutes(value)
+            total_seconds = self._timer_total_seconds_for_write(value)
+            if total_seconds is None:
+                return None
+            return seconds_to_minutes(total_seconds)
         return coerce_float(value)
 
     def _restore_native_value(self, value: object) -> float | None:
@@ -245,22 +261,56 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
         restored_value = coerce_float(value)
         if restored_value is None:
             return None
-        if (
-            self._is_timer_duration
-            and restored_value < self.entity_description.native_min_value
-        ):
-            return minutes_to_seconds(restored_value)
+        if self._is_timer_duration:
+            return self._restore_timer_native_value(restored_value)
         return restored_value
+
+    def _restore_timer_native_value(self, restored_value: float) -> float | None:
+        """Return seconds, accepting old minute-based timer state."""
+        candidate = (
+            minutes_to_seconds(restored_value)
+            if 0 < restored_value < TIMER_DURATION_MIN_SECONDS
+            else restored_value
+        )
+        total_seconds = clamp_duration_seconds(
+            candidate,
+            minimum=TIMER_DURATION_MIN_SECONDS,
+            maximum=TIMER_DURATION_MAX_SECONDS,
+        )
+        if total_seconds is None:
+            return None
+        self._timer_duration_seconds = total_seconds
+        return total_seconds
+
+    def _timer_total_seconds_from_client(self, value: object) -> int | None:
+        """Return whole timer seconds from the client minute value."""
+        return clamp_duration_seconds(
+            minutes_to_seconds(value),
+            minimum=TIMER_DURATION_MIN_SECONDS,
+            maximum=TIMER_DURATION_MAX_SECONDS,
+        )
+
+    def _timer_total_seconds_for_write(self, value: object) -> int | None:
+        """Return the requested whole-second timer duration."""
+        return clamp_duration_seconds(
+            value,
+            minimum=TIMER_DURATION_MIN_SECONDS,
+            maximum=TIMER_DURATION_MAX_SECONDS,
+        )
 
     def _update_extra_state_attributes(self) -> None:
         """Refresh static and display-only attributes."""
         attributes = dict(self._base_extra_state_attributes)
-        if self._is_timer_duration and self._attr_native_value is not None:
-            minutes_value = seconds_to_minutes(self._attr_native_value)
+        if (
+            self._is_timer_duration
+            and self._attr_native_value is not None
+            and self._timer_duration_seconds is not None
+        ):
+            minutes_value = seconds_to_minutes(self._timer_duration_seconds)
             display_value = format_minutes_duration(minutes_value)
             if display_value is not None:
                 attributes["duration"] = display_value
-                attributes["duration_seconds"] = int(round(self._attr_native_value))
+                attributes["duration_seconds"] = self._timer_duration_seconds
         self._attr_extra_state_attributes = attributes
 
     async def async_added_to_hass(self) -> None:

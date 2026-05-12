@@ -22,6 +22,8 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .client_mapping import (
     copy_json_like_value as _copy_json_like_value,
+    device_status_key as _device_status_key,
+    device_status_problem as _device_status_problem,
     normalize_radio_stations_value as _normalize_radio_stations_value,
     normalize_radio_string_catalog as _normalize_radio_string_catalog,
     normalize_weather_favorites_value as _normalize_weather_favorites_value,
@@ -68,11 +70,11 @@ ID_INTERNAL_TEMPERATURE_2 = 14
 ID_WATER_FLOW = 15
 ID_POWER = 16
 ID_CONFIGURED_POWER = 20
-ID_UNKNOWN_ODB_22 = 22
-ID_UNKNOWN_TEMPERATURE_24 = 24
+ID_SCALD_PROTECTION_ACTIVE = 22
+ID_SCALD_PROTECTION_TEMPERATURE_LIMIT = 24
 ID_BATH_FILL_CURRENT_VOLUME = 31
 ID_WATER_HEATING_ENABLED = 33
-ID_UNKNOWN_ODB_34 = 34
+ID_DEVICE_STATUS = 34
 ID_ELECTRICITY_PRICE_EUROS = 61
 ID_WATER_PRICE_EUROS = 62
 ID_SET_REQ = 66
@@ -202,11 +204,11 @@ INITIAL_VALUE_IDS = (
     ID_WATER_FLOW,
     ID_POWER,
     ID_CONFIGURED_POWER,
-    ID_UNKNOWN_ODB_22,
-    ID_UNKNOWN_TEMPERATURE_24,
+    ID_SCALD_PROTECTION_ACTIVE,
+    ID_SCALD_PROTECTION_TEMPERATURE_LIMIT,
     ID_BATH_FILL_CURRENT_VOLUME,
     ID_WATER_HEATING_ENABLED,
-    ID_UNKNOWN_ODB_34,
+    ID_DEVICE_STATUS,
     ID_ELECTRICITY_PRICE_EUROS,
     ID_ELECTRICITY_PRICE_CENTS,
     ID_WATER_PRICE_EUROS,
@@ -2596,17 +2598,12 @@ class DHEClient:
                 callback(self._copy_radio_state())
 
     def _copy_radio_state(self) -> dict[str, Any]:
-        state: dict[str, Any] = {}
-        for key, value in self._last_radio_state.items():
-            if isinstance(value, dict):
-                state[key] = dict(value)
-            elif isinstance(value, list):
-                state[key] = [
-                    dict(item) if isinstance(item, dict) else item
-                    for item in value
-                ]
-            else:
-                state[key] = value
+        state = {
+            key: _copy_json_like_value(value)
+            for key, value in self._last_radio_state.items()
+        }
+        if self._radio_favorites_generation > 0 and "favorites" not in state:
+            state["favorites"] = self._radio_favorites()
         return state
 
     def _radio_favorites(self) -> list[dict[str, Any]]:
@@ -3203,15 +3200,14 @@ class DHEClient:
                 ID_INTERNAL_TEMPERATURE_2,
             }:
                 self._handle_measurement(odb_id, _raw_tenths_to_c(_raw_to_float(raw_value)))
-            elif odb_id == ID_UNKNOWN_TEMPERATURE_24:
+            elif odb_id == ID_SCALD_PROTECTION_TEMPERATURE_LIMIT:
                 self._handle_measurement(odb_id, _raw_tenths_to_c(_raw_to_float(raw_value)))
             elif odb_id == ID_WATER_HEATING_ENABLED:
                 self._handle_measurement(odb_id, _raw_to_water_heating_enabled(raw_value))
-            elif odb_id in {
-                ID_UNKNOWN_ODB_22,
-                ID_UNKNOWN_ODB_34,
-            }:
-                self._handle_measurement(odb_id, _raw_to_float(raw_value))
+            elif odb_id == ID_SCALD_PROTECTION_ACTIVE:
+                self._handle_measurement(odb_id, _raw_to_bool(raw_value))
+            elif odb_id == ID_DEVICE_STATUS:
+                self._handle_device_status(raw_value)
             elif odb_id in PRICE_COMPONENT_IDS:
                 self._handle_price_component(odb_id, raw_value)
             elif odb_id == ID_CO2_EMISSION_RAW:
@@ -3260,7 +3256,7 @@ class DHEClient:
         self._last_measurement_attributes[ID_BATH_FILL_REMAINING_VOLUME] = attributes
         self._handle_measurement(
             ID_BATH_FILL_REMAINING_VOLUME,
-            max(target_l - current_l, 0.0),
+            int(round(max(target_l - current_l, 0.0))),
             force_update=previous_attributes != attributes,
         )
 
@@ -3307,6 +3303,22 @@ class DHEClient:
         self._handle_measurement(
             ID_CO2_EMISSION,
             value,
+            force_update=previous_attributes != attributes,
+        )
+
+    def _handle_device_status(self, raw_value: Any) -> None:
+        raw = int(_raw_to_float(raw_value))
+        status = _device_status_key(raw)
+        attributes = {
+            "raw_value": raw,
+            "status": status,
+            "service_required": _device_status_problem(raw),
+        }
+        previous_attributes = self._last_measurement_attributes.get(ID_DEVICE_STATUS)
+        self._last_measurement_attributes[ID_DEVICE_STATUS] = attributes
+        self._handle_measurement(
+            ID_DEVICE_STATUS,
+            status,
             force_update=previous_attributes != attributes,
         )
 

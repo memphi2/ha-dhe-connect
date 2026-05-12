@@ -103,5 +103,27 @@ class TestRadioMapping(unittest.TestCase):
         self.assertFalse(self.mapping.radio_station_in_list(4, [{"Id": 1}]))
 
 
+class TestDeviceStatusMapping(unittest.TestCase):
+    """Validate device status code mapping."""
+
+    def setUp(self) -> None:
+        self.mapping = _load_client_mapping()
+
+    def test_device_status_key_maps_known_codes(self) -> None:
+        self.assertEqual(self.mapping.device_status_key(1), "normal")
+        self.assertEqual(self.mapping.device_status_key("3"), "service_required")
+        self.assertEqual(self.mapping.device_status_key(8), "status_8")
+
+    def test_device_status_key_rejects_invalid_values(self) -> None:
+        self.assertEqual(self.mapping.device_status_key(None), "unknown")
+        self.assertEqual(self.mapping.device_status_key(True), "unknown")
+        self.assertEqual(self.mapping.device_status_key("bad"), "unknown")
+
+    def test_device_status_problem_matches_wrench_code(self) -> None:
+        self.assertTrue(self.mapping.device_status_problem(3))
+        self.assertFalse(self.mapping.device_status_problem(1))
+        self.assertFalse(self.mapping.device_status_problem(4))
+
+
 if __name__ == "__main__":
     unittest.main()
