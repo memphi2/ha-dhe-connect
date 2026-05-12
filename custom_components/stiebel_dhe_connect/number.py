@@ -102,9 +102,9 @@ STATIC_NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         translation_key="brush_timer_duration_minutes",
         native_unit_of_measurement=UnitOfTime.MINUTES,
         icon="mdi:toothbrush",
-        native_min_value=1.0,
-        native_max_value=20.0,
-        native_step=1.0,
+        native_min_value=1,
+        native_max_value=20,
+        native_step=1,
         mode=NumberMode.BOX,
         odb_id=ID_BRUSH_TIMER_DURATION,
         timer_path=BRUSH_TIMER_PATH,
@@ -116,9 +116,9 @@ STATIC_NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         translation_key="brush_timer_duration_seconds",
         native_unit_of_measurement=UnitOfTime.SECONDS,
         icon="mdi:toothbrush",
-        native_min_value=0.0,
-        native_max_value=59.0,
-        native_step=1.0,
+        native_min_value=0,
+        native_max_value=59,
+        native_step=1,
         mode=NumberMode.BOX,
         odb_id=ID_BRUSH_TIMER_DURATION,
         timer_path=BRUSH_TIMER_PATH,
@@ -130,9 +130,9 @@ STATIC_NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         translation_key="shower_timer_duration_minutes",
         native_unit_of_measurement=UnitOfTime.MINUTES,
         icon="mdi:timer-edit",
-        native_min_value=1.0,
-        native_max_value=20.0,
-        native_step=1.0,
+        native_min_value=1,
+        native_max_value=20,
+        native_step=1,
         mode=NumberMode.BOX,
         odb_id=ID_SHOWER_TIMER_DURATION,
         timer_path=SHOWER_TIMER_PATH,
@@ -144,9 +144,9 @@ STATIC_NUMBER_DESCRIPTIONS: tuple[StiebelDHENumberEntityDescription, ...] = (
         translation_key="shower_timer_duration_seconds",
         native_unit_of_measurement=UnitOfTime.SECONDS,
         icon="mdi:timer-edit",
-        native_min_value=0.0,
-        native_max_value=59.0,
-        native_step=1.0,
+        native_min_value=0,
+        native_max_value=59,
+        native_step=1,
         mode=NumberMode.BOX,
         odb_id=ID_SHOWER_TIMER_DURATION,
         timer_path=SHOWER_TIMER_PATH,
@@ -309,7 +309,7 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
                 return None
             self._timer_duration_seconds = total_seconds
             return self._timer_part_native_value(total_seconds)
-        return restored_value
+        return int(round(restored_value))
 
     def _timer_total_seconds_from_client(self, value: object) -> int | None:
         """Return whole timer seconds from the client minute value."""
@@ -339,12 +339,12 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
             maximum=TIMER_DURATION_MAX_SECONDS,
         )
 
-    def _timer_part_native_value(self, total_seconds: int) -> float | None:
+    def _timer_part_native_value(self, total_seconds: int) -> int | None:
         """Return the configured timer UI part from a total duration."""
         if self.entity_description.timer_duration_part == TIMER_DURATION_PART_MINUTES:
-            return float(duration_minutes_part(total_seconds) or 0)
+            return duration_minutes_part(total_seconds) or 0
         if self.entity_description.timer_duration_part == TIMER_DURATION_PART_SECONDS:
-            return float(duration_seconds_part(total_seconds) or 0)
+            return duration_seconds_part(total_seconds) or 0
         return None
 
     def _update_extra_state_attributes(self) -> None:
