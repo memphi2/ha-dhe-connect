@@ -387,6 +387,20 @@ class DHEClient:
         self._pending_write_id: int | None = None
         self._pending_write_expected: ODBValue | None = None
         self._socketio_message_id = random.randint(1, 99)
+        self._odb_value_handlers: dict[int, Callable[[Any], None]] = {
+            ID_SETPOINT: self._handle_odb_setpoint_value,
+            ID_WATER_FLOW: self._handle_odb_water_flow_value,
+            ID_POWER_PERCENT: self._handle_odb_power_percent_value,
+            ID_NOMINAL_POWER: self._handle_odb_nominal_power_value,
+            ID_BATH_FILL_TARGET_VOLUME: self._handle_odb_bath_fill_target_value,
+            ID_BATH_FILL_CURRENT_VOLUME: self._handle_odb_bath_fill_current_value,
+            ID_PROTOCOL_VERSION: self._handle_odb_protocol_version_value,
+            ID_WATER_HEATING_ENABLED: self._handle_odb_water_heating_enabled_value,
+            ID_SCALD_PROTECTION_ACTIVE: self._handle_odb_scald_protection_active_value,
+            ID_DEVICE_STATUS: self._handle_odb_device_status_value,
+            ID_CO2_EMISSION_RAW: self._handle_odb_co2_emission_value,
+            ID_CHILD_SAFETY_ACTIVE: self._handle_odb_child_safety_active_value,
+        }
 
     @property
     def last_setpoint(self) -> float | None:
@@ -2653,74 +2667,88 @@ class DHEClient:
             None,
         )
 
+    def _handle_odb_setpoint_value(self, raw_value: Any) -> None:
+        self._handle_setpoint(_raw_tenths_to_c(_raw_to_float(raw_value)))
+
+    def _handle_odb_water_flow_value(self, raw_value: Any) -> None:
+        self._handle_measurement(ID_WATER_FLOW, _raw_to_float(raw_value) / 10.0)
+
+    def _handle_odb_power_percent_value(self, raw_value: Any) -> None:
+        self._last_power_fraction = _raw_to_float(raw_value) / 100.0
+        self._handle_measurement(
+            ID_POWER_PERCENT,
+            self._last_power_fraction * self._nominal_power_kw,
+        )
+
+    def _handle_odb_nominal_power_value(self, raw_value: Any) -> None:
+        self._nominal_power_kw = self._raw_nominal_power_to_kw(_raw_to_float(raw_value))
+        self._handle_measurement(ID_NOMINAL_POWER, self._nominal_power_kw)
+        if self._last_power_fraction is not None:
+            self._handle_measurement(
+                ID_POWER_PERCENT,
+                self._last_power_fraction * self._nominal_power_kw,
+            )
+
+    def _handle_odb_bath_fill_target_value(self, raw_value: Any) -> None:
+        self._handle_measurement(
+            ID_BATH_FILL_TARGET_VOLUME,
+            self._convert_odb_value(ID_BATH_FILL_TARGET_VOLUME, raw_value),
+        )
+        self._refresh_bath_fill_remaining()
+
+    def _handle_odb_bath_fill_current_value(self, raw_value: Any) -> None:
+        self._handle_measurement(ID_BATH_FILL_CURRENT_VOLUME, max(0.0, _raw_to_float(raw_value)))
+        self._refresh_bath_fill_remaining()
+
+    def _handle_odb_protocol_version_value(self, raw_value: Any) -> None:
+        self._handle_measurement(
+            ID_PROTOCOL_VERSION,
+            int(round(max(0.0, _raw_to_float(raw_value)))),
+        )
+
+    def _handle_odb_water_heating_enabled_value(self, raw_value: Any) -> None:
+        self._handle_measurement(ID_WATER_HEATING_ENABLED, _raw_to_water_heating_enabled(raw_value))
+
+    def _handle_odb_scald_protection_active_value(self, raw_value: Any) -> None:
+        self._handle_measurement(ID_SCALD_PROTECTION_ACTIVE, _raw_to_bool(raw_value))
+
+    def _handle_odb_device_status_value(self, raw_value: Any) -> None:
+        self._handle_device_status(raw_value)
+
+    def _handle_odb_co2_emission_value(self, raw_value: Any) -> None:
+        self._handle_co2_emission(raw_value)
+
+    def _handle_odb_child_safety_active_value(self, raw_value: Any) -> None:
+        self._handle_measurement(ID_CHILD_SAFETY_ACTIVE, _raw_to_bool(raw_value))
+
     def _handle_odb_value(self, odb_id: int, raw_value: Any, *, is_valid: Any = None) -> None:
         if is_valid is False:
             if int(odb_id) not in KNOWN_ODB_VALUE_IDS:
                 self._log_unknown_odb_value(odb_id, raw_value, is_valid=False)
             return
         try:
-            if odb_id == ID_SETPOINT:
-                self._handle_setpoint(_raw_tenths_to_c(_raw_to_float(raw_value)))
-            elif odb_id == ID_WATER_FLOW:
-                self._handle_measurement(odb_id, _raw_to_float(raw_value) / 10.0)
-            elif odb_id == ID_POWER_PERCENT:
-                self._last_power_fraction = _raw_to_float(raw_value) / 100.0
-                self._handle_measurement(odb_id, self._last_power_fraction * self._nominal_power_kw)
-            elif odb_id == ID_OPERATING_DURATION:
-                self._handle_measurement(odb_id, max(0.0, _raw_to_float(raw_value)))
-            elif odb_id == ID_NOMINAL_POWER:
-                self._nominal_power_kw = self._raw_nominal_power_to_kw(_raw_to_float(raw_value))
-                self._handle_measurement(odb_id, self._nominal_power_kw)
-                if self._last_power_fraction is not None:
-                    self._handle_measurement(
-                        ID_POWER_PERCENT,
-                        self._last_power_fraction * self._nominal_power_kw,
-                    )
-            elif odb_id == ID_BATH_FILL_TARGET_VOLUME:
-                self._handle_measurement(odb_id, self._convert_odb_value(odb_id, raw_value))
-                self._refresh_bath_fill_remaining()
-            elif odb_id == ID_BATH_FILL_CURRENT_VOLUME:
-                self._handle_measurement(odb_id, max(0.0, _raw_to_float(raw_value)))
-                self._refresh_bath_fill_remaining()
-            elif odb_id == ID_WELLNESS_TIME_NORMALIZED:
-                self._handle_measurement(odb_id, max(0.0, _raw_to_float(raw_value)))
-            elif odb_id in {
-                ID_INLET_TEMPERATURE,
-                ID_OUTLET_TEMPERATURE,
-            }:
+            handler = self._odb_value_handlers.get(odb_id)
+            if handler is not None:
+                handler(raw_value)
+                return
+            if odb_id in ODB_TENTHS_TEMPERATURE_IDS:
                 self._handle_measurement(odb_id, _raw_tenths_to_c(_raw_to_float(raw_value)))
-            elif odb_id == ID_SCALD_PROTECTION_TEMPERATURE_LIMIT:
-                self._handle_measurement(odb_id, _raw_tenths_to_c(_raw_to_float(raw_value)))
-            elif odb_id == ID_HEATING_ENERGY_TOTAL:
+                return
+            if odb_id in ODB_NONNEGATIVE_VALUE_IDS:
                 self._handle_measurement(odb_id, max(0.0, _raw_to_float(raw_value)))
-            elif odb_id == ID_HOT_WATER_VOLUME_TOTAL:
+                return
+            if odb_id in ODB_DECILITER_VALUE_IDS:
                 self._handle_measurement(odb_id, max(0.0, _raw_to_float(raw_value)) / 10.0)
-            elif odb_id == ID_POSSIBLE_ENERGY_SAVING:
-                self._handle_measurement(odb_id, max(0.0, _raw_to_float(raw_value)))
-            elif odb_id == ID_POSSIBLE_WATER_SAVING:
-                self._handle_measurement(odb_id, max(0.0, _raw_to_float(raw_value)) / 10.0)
-            elif odb_id == ID_PROTOCOL_VERSION:
-                self._handle_measurement(odb_id, int(round(max(0.0, _raw_to_float(raw_value)))))
-            elif odb_id == ID_WATER_HEATING_ENABLED:
-                self._handle_measurement(odb_id, _raw_to_water_heating_enabled(raw_value))
-            elif odb_id == ID_SCALD_PROTECTION_ACTIVE:
-                self._handle_measurement(odb_id, _raw_to_bool(raw_value))
-            elif odb_id == ID_DEVICE_STATUS:
-                self._handle_device_status(raw_value)
-            elif odb_id in PRICE_COMPONENT_IDS:
+                return
+            if odb_id in PRICE_COMPONENT_IDS:
                 self._handle_price_component(odb_id, raw_value)
-            elif odb_id == ID_CO2_EMISSION_RAW:
-                self._handle_co2_emission(raw_value)
-            elif odb_id == ID_CHILD_SAFETY_ACTIVE:
-                self._handle_measurement(odb_id, _raw_to_bool(raw_value))
-            elif odb_id == ID_CURRENCY_MODE:
                 return
-            elif odb_id == ID_SETPOINT_REQUEST:
+            if odb_id in ODB_IGNORED_VALUE_IDS:
                 return
-            elif odb_id in WRITABLE_OPTION_IDS:
+            if odb_id in WRITABLE_OPTION_IDS:
                 self._handle_measurement(odb_id, self._convert_odb_value(odb_id, raw_value))
-            else:
-                self._log_unknown_odb_value(odb_id, raw_value, is_valid=is_valid)
+                return
+            self._log_unknown_odb_value(odb_id, raw_value, is_valid=is_valid)
         except (TypeError, ValueError):
             return
 
