@@ -116,9 +116,24 @@ def radio_station_in_list(
     return any(radio_station_id(candidate) == station_id for candidate in stations)
 
 
+def radio_station_input_id(value: dict[str, Any] | int | str) -> int | None:
+    """Return a normalized station id from user input."""
+    if isinstance(value, dict):
+        return radio_station_id(value)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def weather_location_id(location: dict[str, Any]) -> str:
     """Return the normalized DHE weather location id."""
     return str(location.get("LocationId", "")).strip()
+
+
+def weather_location_has_id(value: Any) -> bool:
+    """Return whether an input value is a weather location payload with LocationId."""
+    return isinstance(value, dict) and bool(weather_location_id(value))
 
 
 def weather_location_in_list(

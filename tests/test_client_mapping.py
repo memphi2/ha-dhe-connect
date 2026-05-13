@@ -102,6 +102,12 @@ class TestRadioMapping(unittest.TestCase):
         )
         self.assertFalse(self.mapping.radio_station_in_list(4, [{"Id": 1}]))
 
+    def test_radio_station_input_id_accepts_dict_int_and_str(self) -> None:
+        self.assertEqual(self.mapping.radio_station_input_id({"Id": "5"}), 5)
+        self.assertEqual(self.mapping.radio_station_input_id(7), 7)
+        self.assertEqual(self.mapping.radio_station_input_id("9"), 9)
+        self.assertIsNone(self.mapping.radio_station_input_id("bad"))
+
 
 class TestDeviceStatusMapping(unittest.TestCase):
     """Validate device status code mapping."""
@@ -123,6 +129,18 @@ class TestDeviceStatusMapping(unittest.TestCase):
         self.assertTrue(self.mapping.device_status_problem(3))
         self.assertFalse(self.mapping.device_status_problem(1))
         self.assertFalse(self.mapping.device_status_problem(4))
+
+
+class TestWeatherLocationHelpers(unittest.TestCase):
+    """Validate weather location input helpers."""
+
+    def setUp(self) -> None:
+        self.mapping = _load_client_mapping()
+
+    def test_weather_location_has_id(self) -> None:
+        self.assertTrue(self.mapping.weather_location_has_id({"LocationId": "ID=1"}))
+        self.assertFalse(self.mapping.weather_location_has_id({"LocationId": "  "}))
+        self.assertFalse(self.mapping.weather_location_has_id("ID=1"))
 
 
 if __name__ == "__main__":

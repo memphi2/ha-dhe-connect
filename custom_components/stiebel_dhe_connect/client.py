@@ -29,10 +29,16 @@ from .client_mapping import (
     normalize_weather_favorites_value as _normalize_weather_favorites_value,
     normalize_weather_locations_value as _normalize_weather_locations_value,
     normalize_weather_value as _normalize_weather_value,
+    radio_station_input_id as _radio_station_input_id,
     radio_station_id as _radio_station_id,
     radio_station_in_list as _radio_station_in_list,
+    weather_location_has_id as _weather_location_has_id,
     weather_location_id as _weather_location_id,
     weather_location_in_list as _weather_location_in_list,
+)
+from .flow_helpers import (
+    request_generation_and_wait as _request_generation_and_wait,
+    wait_for_or_refresh as _wait_for_or_refresh,
 )
 from .pairing_helpers import (
     pairing_notification_text,
@@ -869,13 +875,37 @@ class DHEClient:
     async def list_radio_favorites(self) -> list[dict[str, Any]]:
         """Return DHE radio favorites."""
         async def _operation(ctx: DHESession) -> list[dict[str, Any]]:
-            generation = self._radio_favorites_generation
-            await self._request_app_value(ctx, RADIO_FAVORITES_GET_COMMAND)
-            return await self._wait_for_radio_favorites(generation)
+            return await self._request_radio_favorites(ctx)
 
         return await self._run_command_with_reconnect_retry(
             "Could not read DHE radio favorites",
             _operation,
+        )
+
+    def _require_radio_station_id(self, station: dict[str, Any] | int | str) -> int:
+        station_id = _radio_station_input_id(station)
+        if station_id is None:
+            raise DHEError("Radio station must include Id")
+        return station_id
+
+    async def _request_radio_favorites(self, ctx: DHESession) -> list[dict[str, Any]]:
+        return await _request_generation_and_wait(
+            lambda: self._request_app_value(ctx, RADIO_FAVORITES_GET_COMMAND),
+            lambda: self._radio_favorites_generation,
+            self._wait_for_radio_favorites,
+        )
+
+    async def _assign_radio_favorite_and_wait(
+        self,
+        ctx: DHESession,
+        station_id: int,
+    ) -> list[dict[str, Any]]:
+        generation = self._radio_favorites_generation
+        await self._send_ste_command(ctx, RADIO_FAVORITE_ASSIGN_COMMAND, station_id)
+        return await _wait_for_or_refresh(
+            lambda: self._wait_for_radio_favorites(generation),
+            lambda: self._request_app_value(ctx, RADIO_FAVORITES_GET_COMMAND),
+            retry_exceptions=(DHEError,),
         )
 
     async def add_radio_favorite(
@@ -885,47 +915,27 @@ class DHEClient:
         select: bool = True,
     ) -> bool:
         """Add a radio station favorite and optionally select it."""
-        if isinstance(station, dict):
-            station_id = _radio_station_id(station)
-        else:
-            try:
-                station_id = int(station)
-            except (TypeError, ValueError) as err:
-                raise DHEError("Radio station must include Id") from err
-        if station_id is None:
-            raise DHEError("Radio station must include Id")
+        station_id = self._require_radio_station_id(station)
 
         async def _operation(ctx: DHESession) -> bool:
             favorites = self._radio_favorites()
             favorites_known = bool(favorites)
             try:
-                favorites_generation = self._radio_favorites_generation
-                await self._request_app_value(ctx, RADIO_FAVORITES_GET_COMMAND)
-                favorites = await self._wait_for_radio_favorites(
-                    favorites_generation
-                )
+                favorites = await self._request_radio_favorites(ctx)
                 favorites_known = True
             except DHEError:
                 if not favorites_known:
                     raise
 
             if not _radio_station_in_list(station_id, favorites):
-                favorites_generation = self._radio_favorites_generation
-                await self._post_packet(ctx, self._message_packet({
-                    "command": RADIO_FAVORITE_ASSIGN_COMMAND,
-                    "value": station_id,
-                }))
-                try:
-                    await self._wait_for_radio_favorites(favorites_generation)
-                except DHEError:
-                    await self._request_app_value(ctx, RADIO_FAVORITES_GET_COMMAND)
-                    await self._wait_for_radio_favorites(favorites_generation)
+                await self._assign_radio_favorite_and_wait(ctx, station_id)
 
             if select:
-                await self._post_packet(ctx, self._message_packet({
-                    "command": RADIO_STATION_ASSIGN_COMMAND,
-                    "value": station_id,
-                }))
+                await self._send_ste_command(
+                    ctx,
+                    RADIO_STATION_ASSIGN_COMMAND,
+                    station_id,
+                )
                 try:
                     await self._wait_for_radio_station(station_id)
                 except DHEError:
@@ -939,39 +949,14 @@ class DHEClient:
 
     async def remove_radio_favorite(self, station: dict[str, Any] | int | str) -> bool:
         """Remove a radio station favorite."""
-        if isinstance(station, dict):
-            station_id = _radio_station_id(station)
-        else:
-            try:
-                station_id = int(station)
-            except (TypeError, ValueError) as err:
-                raise DHEError("Radio station must include Id") from err
-        if station_id is None:
-            raise DHEError("Radio station must include Id")
+        station_id = self._require_radio_station_id(station)
 
         async def _operation(ctx: DHESession) -> bool:
-            favorites_generation = self._radio_favorites_generation
-            await self._request_app_value(ctx, RADIO_FAVORITES_GET_COMMAND)
-            favorites = await self._wait_for_radio_favorites(
-                favorites_generation
-            )
+            favorites = await self._request_radio_favorites(ctx)
             if not _radio_station_in_list(station_id, favorites):
                 return True
 
-            favorites_generation = self._radio_favorites_generation
-            await self._post_packet(ctx, self._message_packet({
-                "command": RADIO_FAVORITE_ASSIGN_COMMAND,
-                "value": station_id,
-            }))
-            try:
-                favorites = await self._wait_for_radio_favorites(
-                    favorites_generation
-                )
-            except DHEError:
-                await self._request_app_value(ctx, RADIO_FAVORITES_GET_COMMAND)
-                favorites = await self._wait_for_radio_favorites(
-                    favorites_generation
-                )
+            favorites = await self._assign_radio_favorite_and_wait(ctx, station_id)
             if _radio_station_in_list(station_id, favorites):
                 raise DHEError("DHE radio favorite did not change")
             return True
@@ -983,21 +968,10 @@ class DHEClient:
 
     async def select_radio_station(self, station: dict[str, Any] | int | str) -> bool:
         """Select/play a radio station by station payload or station ID."""
-        if isinstance(station, dict):
-            station_id = _radio_station_id(station)
-        else:
-            try:
-                station_id = int(station)
-            except (TypeError, ValueError) as err:
-                raise DHEError("Radio station must include Id") from err
-        if station_id is None:
-            raise DHEError("Radio station must include Id")
+        station_id = self._require_radio_station_id(station)
 
         async def _operation(ctx: DHESession) -> bool:
-            await self._post_packet(ctx, self._message_packet({
-                "command": RADIO_STATION_ASSIGN_COMMAND,
-                "value": station_id,
-            }))
+            await self._send_ste_command(ctx, RADIO_STATION_ASSIGN_COMMAND, station_id)
             try:
                 await self._wait_for_radio_station(station_id)
             except DHEError:
@@ -1048,16 +1022,12 @@ class DHEClient:
         )
 
     async def toggle_weather_favorite(self, location: dict[str, Any]) -> bool:
-        if not isinstance(location, dict) or not location.get("LocationId"):
+        if not _weather_location_has_id(location):
             raise DHEError("Weather favorite location must include LocationId")
 
         async def _operation(ctx: DHESession) -> bool:
             payload = _copy_json_like_value(location)
-            await self._post_packet(ctx, self._message_packet({
-                "command": WEATHER_FAVORITE_ASSIGN_COMMAND,
-                "value": payload,
-            }))
-            await self._request_app_value(ctx, WEATHER_FAVORITES_GET_COMMAND)
+            await self._assign_weather_favorite_and_wait(ctx, payload)
             return True
 
         return await self._run_command_with_reconnect_retry(
@@ -1068,9 +1038,7 @@ class DHEClient:
     async def list_weather_favorites(self) -> list[dict[str, Any]]:
         """Return the weather favorites from the DHE."""
         async def _operation(ctx: DHESession) -> list[dict[str, Any]]:
-            favorites_generation = self._weather_favorites_generation
-            await self._request_app_value(ctx, WEATHER_FAVORITES_GET_COMMAND)
-            return await self._wait_for_weather_favorites(favorites_generation)
+            return await self._request_weather_favorites(ctx)
 
         return await self._run_command_with_reconnect_retry(
             "Could not read DHE weather favorites",
@@ -1079,7 +1047,7 @@ class DHEClient:
 
     async def add_weather_favorite(self, location: dict[str, Any]) -> bool:
         """Add a weather favorite without toggling an existing favorite off."""
-        if not isinstance(location, dict) or not location.get("LocationId"):
+        if not _weather_location_has_id(location):
             raise DHEError("Weather favorite location must include LocationId")
 
         async def _operation(ctx: DHESession) -> bool:
@@ -1087,30 +1055,16 @@ class DHEClient:
 
             favorites = self._weather_favorites()
             try:
-                favorites_generation = self._weather_favorites_generation
-                await self._request_app_value(ctx, WEATHER_FAVORITES_GET_COMMAND)
-                favorites = await self._wait_for_weather_favorites(favorites_generation)
+                favorites = await self._request_weather_favorites(ctx)
             except DHEError:
                 pass
             if _weather_location_in_list(payload, favorites):
                 return True
 
             location_id = _weather_location_id(payload)
-            favorites_generation = self._weather_favorites_generation
-            await self._post_packet(ctx, self._message_packet({
-                "command": WEATHER_FAVORITE_ASSIGN_COMMAND,
-                "value": payload,
-            }))
-            await self._post_packet(ctx, self._message_packet({
-                "command": WEATHER_LOCATION_GET_COMMAND,
-                "value": location_id,
-            }))
+            await self._assign_weather_favorite_and_wait(ctx, payload)
+            await self._send_ste_command(ctx, WEATHER_LOCATION_GET_COMMAND, location_id)
             await self._wait_for_weather_location(location_id)
-            try:
-                await self._wait_for_weather_favorites(favorites_generation)
-            except DHEError:
-                await self._request_app_value(ctx, WEATHER_FAVORITES_GET_COMMAND)
-                await self._wait_for_weather_favorites(favorites_generation)
             return True
 
         return await self._run_command_with_reconnect_retry(
@@ -1128,10 +1082,11 @@ class DHEClient:
             raise DHEError("Weather location must include LocationId")
 
         async def _operation(ctx: DHESession) -> bool:
-            await self._post_packet(ctx, self._message_packet({
-                "command": WEATHER_LOCATION_GET_COMMAND,
-                "value": requested_location_id,
-            }))
+            await self._send_ste_command(
+                ctx,
+                WEATHER_LOCATION_GET_COMMAND,
+                requested_location_id,
+            )
             await self._wait_for_weather_location(requested_location_id)
             return True
 
@@ -1140,16 +1095,33 @@ class DHEClient:
             _operation,
         )
 
+    async def _request_weather_favorites(self, ctx: DHESession) -> list[dict[str, Any]]:
+        return await _request_generation_and_wait(
+            lambda: self._request_app_value(ctx, WEATHER_FAVORITES_GET_COMMAND),
+            lambda: self._weather_favorites_generation,
+            self._wait_for_weather_favorites,
+        )
+
+    async def _assign_weather_favorite_and_wait(
+        self,
+        ctx: DHESession,
+        payload: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        generation = self._weather_favorites_generation
+        await self._send_ste_command(ctx, WEATHER_FAVORITE_ASSIGN_COMMAND, payload)
+        return await _wait_for_or_refresh(
+            lambda: self._wait_for_weather_favorites(generation),
+            lambda: self._request_app_value(ctx, WEATHER_FAVORITES_GET_COMMAND),
+            retry_exceptions=(DHEError,),
+        )
+
     async def _assign_radio_value(self, field: str, value: Any) -> None:
         command = f"assign:{RADIO_PATH}:{field}"
         if command not in RADIO_ASSIGN_COMMANDS:
             raise DHEError(f"Unsupported DHE radio assignment: {field}")
 
         async def _operation(ctx: DHESession) -> None:
-            await self._post_packet(ctx, self._message_packet({
-                "command": command,
-                "value": value,
-            }))
+            await self._send_ste_command(ctx, command, value)
 
         await self._run_command_with_reconnect_retry(
             f"Could not write DHE radio {field}",
@@ -3150,13 +3122,20 @@ class DHEClient:
             await self._request_optional_app_value(ctx, command)
 
     async def _request_odb_value(self, ctx: DHESession, odb_id: int) -> None:
-        await self._post_packet(
+        await self._send_ste_command(
             ctx,
-            self._message_packet({"command": ODB_GET_COMMAND, "value": {"id": odb_id, "value": ""}}),
+            ODB_GET_COMMAND,
+            {"id": odb_id, "value": ""},
         )
 
     async def _request_app_value(self, ctx: DHESession, command: str) -> None:
-        await self._post_packet(ctx, self._message_packet({"command": command, "value": ""}))
+        await self._send_ste_command(ctx, command, "")
+
+    async def _send_ste_command(self, ctx: DHESession, command: str, value: Any) -> None:
+        await self._post_packet(
+            ctx,
+            self._message_packet({"command": command, "value": value}),
+        )
 
     async def _request_optional_odb_value(self, ctx: DHESession, odb_id: int) -> None:
         try:
