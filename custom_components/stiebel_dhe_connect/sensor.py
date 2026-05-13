@@ -119,6 +119,13 @@ CONNECTION_STATE_OPTIONS = (
     "stopped",
 )
 
+ERROR_STATUS_OPTIONS = (
+    "ok",
+    "disconnected",
+    "service_required",
+    "target_below_inlet",
+)
+
 
 DIAGNOSTIC_SENSOR_DESCRIPTIONS: tuple[StiebelDHEDiagnosticSensorEntityDescription, ...] = (
     StiebelDHEDiagnosticSensorEntityDescription(
@@ -752,6 +759,8 @@ class StiebelDHEErrorStatusSensor(StiebelDHEEntityMixin, SensorEntity):
     _attr_has_entity_name = True
     _attr_should_poll = False
     _attr_translation_key = "error_status"
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = ERROR_STATUS_OPTIONS
     _attr_icon = "mdi:alert-octagon-outline"
 
     def __init__(self, entry_id: str, name: str, client: DHEClient) -> None:
@@ -824,27 +833,16 @@ class StiebelDHEErrorStatusSensor(StiebelDHEEntityMixin, SensorEntity):
             and self._setpoint < self._inlet_temperature
         )
         service_required = self._device_status == DEVICE_STATUS_SERVICE_REQUIRED
-        language = str(getattr(self.hass.config, "language", "") or "").lower() if self.hass else ""
         if not self._client.online:
-            self._attr_native_value = "Nicht verbunden" if language.startswith("de") else "Disconnected"
-            active_error = "disconnected"
+            state = "disconnected"
         elif service_required:
-            self._attr_native_value = (
-                "Service nötig"
-                if language.startswith("de")
-                else "Service required"
-            )
-            active_error = "service_required"
+            state = "service_required"
         elif below_inlet:
-            self._attr_native_value = (
-                "Solltemperatur unter Zulauftemperatur"
-                if language.startswith("de")
-                else "Target temperature below inlet temperature"
-            )
-            active_error = "target_below_inlet"
+            state = "target_below_inlet"
         else:
-            self._attr_native_value = "OK"
-            active_error = None
+            state = "ok"
+        self._attr_native_value = state
+        active_error = None if state == "ok" else state
 
         self._attr_available = connected_or_known_available(
             self._client.available,

@@ -861,7 +861,7 @@ class DHEClient:
             try:
                 callback(self._last_setpoint)
             except Exception:  # noqa: BLE001
-                pass
+                self._log_callback_exception("setpoint")
         return remove
 
     def add_availability_callback(self, callback: AvailabilityCallback) -> CallbackRemover:
@@ -869,7 +869,7 @@ class DHEClient:
         try:
             callback(self._available)
         except Exception:  # noqa: BLE001
-            pass
+            self._log_callback_exception("availability")
         return remove
 
     def add_online_callback(self, callback: OnlineCallback) -> CallbackRemover:
@@ -877,7 +877,7 @@ class DHEClient:
         try:
             callback(self._online)
         except Exception:  # noqa: BLE001
-            pass
+            self._log_callback_exception("online")
         return remove
 
     def add_measurement_callback(self, callback: MeasurementCallback) -> CallbackRemover:
@@ -886,7 +886,7 @@ class DHEClient:
             try:
                 callback(odb_id, value)
             except Exception:  # noqa: BLE001
-                pass
+                self._log_callback_exception("measurement")
         if self._temperature_memory_full_list_seen:
             for measurement_id in TEMPERATURE_MEMORY_SLOT_MEASUREMENTS.values():
                 if measurement_id in self._last_measurements:
@@ -894,7 +894,7 @@ class DHEClient:
                 try:
                     callback(measurement_id, None)
                 except Exception:  # noqa: BLE001
-                    pass
+                    self._log_callback_exception("measurement")
         return remove
 
     def add_reconnect_callback(self, callback: ReconnectCallback) -> CallbackRemover:
@@ -902,7 +902,7 @@ class DHEClient:
         try:
             callback(self._reconnect_count)
         except Exception:  # noqa: BLE001
-            pass
+            self._log_callback_exception("reconnect")
         return remove
 
     def add_radio_callback(self, callback: RadioCallback) -> CallbackRemover:
@@ -910,7 +910,7 @@ class DHEClient:
         try:
             callback(self._copy_radio_state())
         except Exception:  # noqa: BLE001
-            pass
+            self._log_callback_exception("radio")
         return remove
 
     def add_weather_callback(self, callback: WeatherCallback) -> CallbackRemover:
@@ -918,7 +918,7 @@ class DHEClient:
         try:
             callback(self._copy_weather_state())
         except Exception:  # noqa: BLE001
-            pass
+            self._log_callback_exception("weather")
         return remove
 
     def add_diagnostic_callback(self, callback: DiagnosticCallback) -> CallbackRemover:
@@ -926,7 +926,7 @@ class DHEClient:
         try:
             callback(self._copy_diagnostic_state())
         except Exception:  # noqa: BLE001
-            pass
+            self._log_callback_exception("diagnostic")
         return remove
 
     @staticmethod
@@ -937,6 +937,10 @@ class DHEClient:
             callbacks.discard(callback)
 
         return _remove_callback
+
+    @staticmethod
+    def _log_callback_exception(callback_name: str) -> None:
+        _LOGGER.debug("DHE %s callback raised an exception", callback_name, exc_info=True)
 
     async def start(self) -> None:
         if self._runner and not self._runner.done():

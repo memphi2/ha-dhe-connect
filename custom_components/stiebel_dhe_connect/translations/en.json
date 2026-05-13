@@ -482,7 +482,13 @@
         "name": "Shower timer remaining"
       },
       "error_status": {
-        "name": "Error status"
+        "name": "Error status",
+        "state": {
+          "ok": "OK",
+          "disconnected": "Disconnected",
+          "service_required": "Service required",
+          "target_below_inlet": "Target temperature below inlet temperature"
+        }
       },
       "reconnect_count": {
         "name": "Reconnects"
