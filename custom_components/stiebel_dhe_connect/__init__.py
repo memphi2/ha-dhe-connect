@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import shutil
@@ -17,6 +18,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 
+from .async_helpers import cancel_task_if_pending
 from .client import DHEClient
 from .config_entry_helpers import merged_entry_data
 from .const import (
@@ -25,6 +27,7 @@ from .const import (
     DOMAIN,
     PLATFORMS,
 )
+from .service_helpers import WEATHER_RESULT_NUMBER_MAX
 from .token_file_helpers import (
     LEGACY_TOKEN_FILE,
     legacy_token_file_for_entry,
@@ -54,7 +57,7 @@ WEATHER_LOCATION_ACTION_SCHEMA = vol.Schema({
     vol.Optional(ATTR_ENTRY_ID): cv.string,
     vol.Optional(ATTR_RESULT_NUMBER, default=1): vol.All(
         vol.Coerce(int),
-        vol.Range(min=1, max=20),
+        vol.Range(min=1, max=WEATHER_RESULT_NUMBER_MAX),
     ),
 })
 WEATHER_TOGGLE_FAVORITE_SCHEMA = WEATHER_LOCATION_ACTION_SCHEMA
@@ -67,6 +70,7 @@ class DHEConnectRuntimeData:
 
     client: DHEClient
     name: str
+    start_task: asyncio.Task[Any] | None = None
 
 
 def _token_file_for_entry(entry: ConfigEntry) -> str:
@@ -86,16 +90,19 @@ async def _async_migrate_legacy_token_if_needed(
     """Move legacy single-entry token file when upgrading old installs."""
     target_path = token_file if os.path.isabs(token_file) else hass.config.path(token_file)
     legacy_path = hass.config.path(LEGACY_TOKEN_FILE)
-    if os.path.exists(target_path) or not os.path.exists(legacy_path):
-        return
     if len(hass.config_entries.async_entries(DOMAIN)) != 1:
         return
 
-    def _move() -> None:
+    def _move() -> bool:
+        if os.path.exists(target_path) or not os.path.exists(legacy_path):
+            return False
         os.makedirs(os.path.dirname(target_path), exist_ok=True)
         shutil.move(legacy_path, target_path)
+        return True
 
-    await hass.async_add_executor_job(_move)
+    migrated = await hass.async_add_executor_job(_move)
+    if not migrated:
+        return
     _LOGGER.debug(
         "Migrated legacy token file for entry_id=%s to %s (legacy file consumed)",
         entry.entry_id,
@@ -139,7 +146,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
         raise
     _async_register_services(hass)
-    _start_client_background(hass, client)
+    runtime = hass.data[DOMAIN][entry.entry_id]
+    runtime.start_task = _start_client_background(hass, client)
+    entry.async_on_unload(runtime.start_task.cancel)
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
@@ -171,6 +180,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     if unloaded:
         if runtime is not None:
+            if runtime.start_task is not None:
+                await cancel_task_if_pending(runtime.start_task)
             await runtime.client.stop()
         hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
         if not hass.data.get(DOMAIN):
@@ -184,13 +195,15 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
     await hass.config_entries.async_reload(entry.entry_id)
 
 
-def _start_client_background(hass: HomeAssistant, client: DHEClient) -> None:
+def _start_client_background(
+    hass: HomeAssistant,
+    client: DHEClient,
+) -> asyncio.Task[Any]:
     """Start the persistent DHE session without blocking entity setup."""
     create_background_task = getattr(hass, "async_create_background_task", None)
     if create_background_task is not None:
-        create_background_task(client.start(), "stiebel_dhe_connect_start")
-    else:
-        hass.async_create_task(client.start(), name="stiebel_dhe_connect_start")
+        return create_background_task(client.start(), "stiebel_dhe_connect_start")
+    return hass.async_create_task(client.start(), name="stiebel_dhe_connect_start")
 
 
 def _async_register_services(hass: HomeAssistant) -> None:

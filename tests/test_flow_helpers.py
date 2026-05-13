@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 from pathlib import Path
 import unittest
@@ -91,6 +92,72 @@ class TestFlowHelpers(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(trace, ["wait"])
+
+    async def test_wait_until_returns_true_when_predicate_becomes_true(self) -> None:
+        module = _load_flow_helpers()
+        state = {"done": False}
+
+        async def _flip() -> None:
+            await asyncio.sleep(0.01)
+            state["done"] = True
+
+        asyncio.create_task(_flip())
+        result = await module.wait_until(
+            lambda: state["done"],
+            timeout_seconds=0.2,
+            poll_interval_seconds=0.005,
+        )
+
+        self.assertTrue(result)
+
+    async def test_wait_until_returns_false_on_timeout(self) -> None:
+        module = _load_flow_helpers()
+        result = await module.wait_until(
+            lambda: False,
+            timeout_seconds=0.03,
+            poll_interval_seconds=0.005,
+        )
+        self.assertFalse(result)
+
+    async def test_wait_until_does_not_accept_late_success_after_timeout(self) -> None:
+        module = _load_flow_helpers()
+        start = asyncio.get_running_loop().time()
+
+        result = await module.wait_until(
+            lambda: (asyncio.get_running_loop().time() - start) >= 0.035,
+            timeout_seconds=0.02,
+            poll_interval_seconds=0.005,
+        )
+
+        self.assertFalse(result)
+
+    async def test_wait_for_generation_change_returns_true_after_update(self) -> None:
+        module = _load_flow_helpers()
+        generation = {"value": 5}
+
+        async def _bump() -> None:
+            await asyncio.sleep(0.01)
+            generation["value"] = 6
+
+        asyncio.create_task(_bump())
+        result = await module.wait_for_generation_change(
+            5,
+            lambda: generation["value"],
+            timeout_seconds=0.2,
+            poll_interval_seconds=0.005,
+        )
+
+        self.assertTrue(result)
+
+    async def test_wait_for_generation_change_returns_false_on_timeout(self) -> None:
+        module = _load_flow_helpers()
+        result = await module.wait_for_generation_change(
+            2,
+            lambda: 2,
+            timeout_seconds=0.03,
+            poll_interval_seconds=0.005,
+        )
+        self.assertFalse(result)
 
 
 if __name__ == "__main__":
