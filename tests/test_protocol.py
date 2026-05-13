@@ -35,6 +35,26 @@ class TestODBProtocolConstants(unittest.TestCase):
         self.assertIn(self.protocol.ID_CURRENCY_MODE, known_ids)
         self.assertIn(self.protocol.ID_SETPOINT_REQUEST, known_ids)
 
+    def test_odb_handler_groups_cover_expected_ids(self) -> None:
+        direct = set(self.protocol.ODB_DIRECT_HANDLER_IDS)
+        tenths_temperature = set(self.protocol.ODB_TENTHS_TEMPERATURE_IDS)
+        nonnegative = set(self.protocol.ODB_NONNEGATIVE_VALUE_IDS)
+        deciliters = set(self.protocol.ODB_DECILITER_VALUE_IDS)
+        ignored = set(self.protocol.ODB_IGNORED_VALUE_IDS)
+
+        self.assertIn(self.protocol.ID_SETPOINT, direct)
+        self.assertIn(self.protocol.ID_DEVICE_STATUS, direct)
+        self.assertIn(self.protocol.ID_SCALD_PROTECTION_TEMPERATURE_LIMIT, tenths_temperature)
+        self.assertIn(self.protocol.ID_WELLNESS_TIME_NORMALIZED, nonnegative)
+        self.assertIn(self.protocol.ID_HOT_WATER_VOLUME_TOTAL, deciliters)
+        self.assertEqual(
+            ignored,
+            {self.protocol.ID_CURRENCY_MODE, self.protocol.ID_SETPOINT_REQUEST},
+        )
+
+        combined = direct | tenths_temperature | nonnegative | deciliters | ignored
+        self.assertTrue(combined.issubset(set(self.protocol.KNOWN_ODB_VALUE_IDS)))
+
     def test_debug_names_cover_observed_raw_odb_ids(self) -> None:
         debug_names = self.protocol.ODB_DEBUG_NAMES
 
