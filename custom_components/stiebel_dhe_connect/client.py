@@ -2120,6 +2120,8 @@ class DHEClient:
         pairing_confirmed = not require_confirmation
         saw_pairing_request = False
         candidate_token: str | None = None
+        manual_auth_sent = False
+        manual_websocket_attempted = False
         try:
             _LOGGER.debug(
                 "DHE token request started (require_confirmation=%s).",
@@ -2191,19 +2193,43 @@ class DHEClient:
                             await self._save_token(candidate_token)
                             return candidate_token
                         if not saw_pairing_request:
-                            _LOGGER.info(
-                                "DHE returned a pairing token without an on-device "
-                                "pairing request; continuing without explicit "
-                                "device confirmation."
+                            if self._manual_pairing_requested:
+                                if not manual_auth_sent:
+                                    manual_auth_sent = True
+                                    _LOGGER.info(
+                                        "Manual pairing token received; authenticating "
+                                        "same session while waiting for explicit pairing_result."
+                                    )
+                                    await self._post_packet(
+                                        ctx,
+                                        self._event_packet(
+                                            "authenticate",
+                                            {"token": candidate_token},
+                                        ),
+                                    )
+                                if not manual_websocket_attempted:
+                                    manual_websocket_attempted = True
+                                    try:
+                                        await self._upgrade_to_websocket(ctx)
+                                        _LOGGER.debug(
+                                            "Manual pairing session upgraded to websocket "
+                                            "while waiting for pairing_result."
+                                        )
+                                    except Exception as err:  # noqa: BLE001
+                                        _LOGGER.debug(
+                                            "Manual pairing websocket upgrade unavailable; "
+                                            "continuing polling while waiting for pairing_result: %s",
+                                            _diagnostic_error(err),
+                                        )
+                                _LOGGER.debug(
+                                    "Token received without pairing_request during manual pairing; "
+                                    "waiting for explicit pairing_result from DHE."
+                                )
+                                continue
+                            _LOGGER.debug(
+                                "Token received without pairing_request; waiting for explicit pairing confirmation events."
                             )
-                            self._record_pairing_progress(
-                                "fallback_no_device_confirmation",
-                                "DHE returned a token without requesting on-device confirmation.",
-                                notify=True,
-                            )
-                            self._require_pairing_confirmation = False
-                            await self._save_token(candidate_token)
-                            return candidate_token
+                            continue
                         if not pairing_confirmed:
                             _LOGGER.debug(
                                 "Token received, waiting for DHE pairing confirmation."
