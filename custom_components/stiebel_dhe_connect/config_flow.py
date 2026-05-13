@@ -508,8 +508,6 @@ class StiebelDHEConnectConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             except ValueError as err:
                 _apply_validation_error(errors, err)
             else:
-                if _is_target_used_by_other_entry(self.hass, host, port):
-                    return self.async_abort(reason="already_configured")
                 name = str(user_input.get(CONF_NAME, DEFAULT_NAME)).strip() or DEFAULT_NAME
 
                 if not await _can_connect(self.hass, host, port):
