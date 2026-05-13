@@ -482,7 +482,13 @@
         "name": "Duschtimer Restzeit"
       },
       "error_status": {
-        "name": "Fehlerstatus"
+        "name": "Fehlerstatus",
+        "state": {
+          "ok": "OK",
+          "disconnected": "Nicht verbunden",
+          "service_required": "Service nötig",
+          "target_below_inlet": "Solltemperatur unter Zulauftemperatur"
+        }
       },
       "reconnect_count": {
         "name": "Reconnects"
