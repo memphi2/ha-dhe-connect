@@ -20,7 +20,7 @@ The integration stores the DHE token locally per configured DHE target at:
 /config/.storage/stiebel_dhe_connect_token_<host>_<port>.txt
 ```
 
-Older integration versions used `/config/.storage/stiebel_dhe_connect_token.txt` or entry-id based token filenames. Setup pairing removes stale legacy token files before requesting a fresh token.
+Older integration versions used `/config/.storage/stiebel_dhe_connect_token.txt` or entry-id based token filenames. Setup pairing removes stale legacy token files that are not owned by an existing config entry before requesting a fresh token.
 
 The file is written atomically and the integration attempts to set permissions to `0600`. Some Home Assistant filesystems may not enforce POSIX permissions; therefore Home Assistant backups and config access should be treated as sensitive.
 
