@@ -10,9 +10,9 @@ import random
 import re
 import stat
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeVar
 from urllib.parse import quote
 
 import aiohttp
@@ -40,6 +40,7 @@ from .pairing_helpers import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+_T = TypeVar("_T")
 
 NS = "1.0.0"
 ODB_GET_COMMAND = "get:ste.common.odb:value"
@@ -50,6 +51,8 @@ TEMP_MEMORY_SET_COMMAND = "set:ste.common.temperature:memory"
 TEMP_MEMORY_ASSIGN_COMMAND = "assign:ste.common.temperature:memory"
 CURRENCY_GET_COMMAND = "get:ste.common.currency:value"
 CURRENCY_SET_COMMAND = "set:ste.common.currency:value"
+COMMAND_RETRY_ATTEMPTS = 2
+COMMAND_RETRY_DELAY_SECONDS = 1.0
 
 ID_SETPOINT = 0
 ID_BATH_FILL_ACTIVE = 1
@@ -1024,6 +1027,32 @@ class DHEClient:
             await self.start()
         return True
 
+    async def _run_command_with_reconnect_retry(
+        self,
+        error_message: str,
+        operation: Callable[[DHESession], Awaitable[_T]],
+        *,
+        timeout: float = 45.0,
+        on_error: Callable[[], None] | None = None,
+    ) -> _T:
+        async with self._command_lock:
+            for attempt in range(COMMAND_RETRY_ATTEMPTS):
+                try:
+                    await self._ensure_ready(timeout=timeout)
+                    ctx = self._ctx
+                    if ctx is None:
+                        raise DHEError("DHE session is not connected")
+                    return await operation(ctx)
+                except Exception as err:  # noqa: BLE001
+                    if on_error is not None:
+                        on_error()
+                    if attempt == 0:
+                        await self._force_reconnect(reason=_diagnostic_error(err))
+                        await asyncio.sleep(COMMAND_RETRY_DELAY_SECONDS)
+                        continue
+                    raise DHEError(f"{error_message}: {err}") from err
+        raise DHEError(error_message)
+
     def _begin_manual_pairing(self, state: str, message: str, *, notify: bool) -> None:
         """Prepare a pairing attempt that must end with an explicit DHE result."""
         self._pairing_active = True
@@ -1042,32 +1071,25 @@ class DHEClient:
 
     async def set_temperature(self, temperature: float) -> float:
         requested = _round_to_half_c(_clamp(float(temperature), 20.0, 60.0))
-        async with self._command_lock:
-            for attempt in range(2):
-                try:
-                    await self._ensure_ready(timeout=45)
-                    ctx = self._ctx
-                    if ctx is None:
-                        raise DHEError("DHE session is not connected")
-                    addr = random.randint(1, 63)
-                    req_value = _build_req66(requested, addr)
-                    future = self._new_setpoint_future(requested)
-                    await self._post_packet(ctx, self._message_packet({
-                        "command": ODB_ASSIGN_COMMAND,
-                        "value": {"id": ID_SETPOINT_REQUEST, "value": req_value},
-                    }))
-                    readback = await self._wait_for_setpoint_confirmation(ctx, future)
-                    if abs(readback - requested) < 0.01:
-                        return readback
-                    raise DHEError(f"readback was {readback:.1f} C, expected {requested:.1f} C")
-                except Exception as err:  # noqa: BLE001
-                    self._clear_pending_future(None)
-                    if attempt == 0:
-                        await self._force_reconnect(reason=_diagnostic_error(err))
-                        await asyncio.sleep(1)
-                        continue
-                    raise DHEError(f"Could not set DHE setpoint: {err}") from err
-        raise DHEError("Could not set DHE setpoint")
+
+        async def _operation(ctx: DHESession) -> float:
+            addr = random.randint(1, 63)
+            req_value = _build_req66(requested, addr)
+            future = self._new_setpoint_future(requested)
+            await self._post_packet(ctx, self._message_packet({
+                "command": ODB_ASSIGN_COMMAND,
+                "value": {"id": ID_SETPOINT_REQUEST, "value": req_value},
+            }))
+            readback = await self._wait_for_setpoint_confirmation(ctx, future)
+            if abs(readback - requested) < 0.01:
+                return readback
+            raise DHEError(f"readback was {readback:.1f} C, expected {requested:.1f} C")
+
+        return await self._run_command_with_reconnect_retry(
+            "Could not set DHE setpoint",
+            _operation,
+            on_error=lambda: self._clear_pending_future(None),
+        )
 
     async def set_heating_off(self) -> None:
         """Backward-compatible wrapper for the known DHE sync request."""
@@ -1087,60 +1109,45 @@ class DHEClient:
 
     async def _send_set_req_sync(self) -> None:
         """Send the observed ID 66 sync request used by the native app."""
-        async with self._command_lock:
-            for attempt in range(2):
-                try:
-                    await self._ensure_ready(timeout=45)
-                    ctx = self._ctx
-                    if ctx is None:
-                        raise DHEError("DHE session is not connected")
-                    await self._post_packet(
-                        ctx,
-                        self._message_packet(
-                            {
-                                "command": ODB_ASSIGN_COMMAND,
-                                "value": {
-                                    "id": ID_SETPOINT_REQUEST,
-                                    "value": SET_REQ_OFF_VALUE,
-                                },
-                            }
-                        ),
-                    )
-                    return
-                except Exception as err:  # noqa: BLE001
-                    if attempt == 0:
-                        await self._force_reconnect(reason=_diagnostic_error(err))
-                        await asyncio.sleep(1)
-                        continue
-                    raise DHEError(f"Could not send DHE set-req sync: {err}") from err
-        raise DHEError("Could not send DHE set-req sync")
+
+        async def _operation(ctx: DHESession) -> None:
+            await self._post_packet(
+                ctx,
+                self._message_packet(
+                    {
+                        "command": ODB_ASSIGN_COMMAND,
+                        "value": {
+                            "id": ID_SETPOINT_REQUEST,
+                            "value": SET_REQ_OFF_VALUE,
+                        },
+                    }
+                ),
+            )
+
+        await self._run_command_with_reconnect_retry(
+            "Could not send DHE set-req sync",
+            _operation,
+        )
 
     async def write_odb_value(self, odb_id: int, value: Any) -> ODBValue:
         expected = self._convert_odb_value(odb_id, value)
-        async with self._command_lock:
-            for attempt in range(2):
-                try:
-                    await self._ensure_ready(timeout=45)
-                    ctx = self._ctx
-                    if ctx is None:
-                        raise DHEError("DHE session is not connected")
-                    future = self._new_write_future(odb_id, expected)
-                    await self._post_packet(ctx, self._message_packet({
-                        "command": ODB_ASSIGN_COMMAND,
-                        "value": {"id": int(odb_id), "value": value},
-                    }))
-                    confirmed = await self._wait_for_write_confirmation(ctx, future, odb_id)
-                    if _values_equal(confirmed, expected):
-                        return confirmed
-                    raise DHEError(f"write confirmation was {confirmed!r}, expected {expected!r}")
-                except Exception as err:  # noqa: BLE001
-                    self._clear_pending_write_future(None)
-                    if attempt == 0:
-                        await self._force_reconnect(reason=_diagnostic_error(err))
-                        await asyncio.sleep(1)
-                        continue
-                    raise DHEError(f"Could not write DHE ODB id {odb_id}: {err}") from err
-        raise DHEError(f"Could not write DHE ODB id {odb_id}")
+
+        async def _operation(ctx: DHESession) -> ODBValue:
+            future = self._new_write_future(odb_id, expected)
+            await self._post_packet(ctx, self._message_packet({
+                "command": ODB_ASSIGN_COMMAND,
+                "value": {"id": int(odb_id), "value": value},
+            }))
+            confirmed = await self._wait_for_write_confirmation(ctx, future, odb_id)
+            if _values_equal(confirmed, expected):
+                return confirmed
+            raise DHEError(f"write confirmation was {confirmed!r}, expected {expected!r}")
+
+        return await self._run_command_with_reconnect_retry(
+            f"Could not write DHE ODB id {odb_id}",
+            _operation,
+            on_error=lambda: self._clear_pending_write_future(None),
+        )
 
     async def start_bath_fill(self) -> bool:
         return bool(await self.write_odb_value(ID_BATH_FILL_ACTIVE, True))
@@ -1199,26 +1206,18 @@ class DHEClient:
         if not requested:
             raise DHEError("Currency must not be empty")
 
-        async with self._command_lock:
-            for attempt in range(2):
-                try:
-                    await self._ensure_ready(timeout=45)
-                    ctx = self._ctx
-                    if ctx is None:
-                        raise DHEError("DHE session is not connected")
-                    await self._post_packet(ctx, self._message_packet({
-                        "command": CURRENCY_GET_COMMAND,
-                        "value": requested,
-                    }))
-                    self._handle_currency_value(requested, source_command=CURRENCY_GET_COMMAND)
-                    return requested.upper()
-                except Exception as err:  # noqa: BLE001
-                    if attempt == 0:
-                        await self._force_reconnect(reason=_diagnostic_error(err))
-                        await asyncio.sleep(1)
-                        continue
-                    raise DHEError(f"Could not set DHE currency: {err}") from err
-        raise DHEError("Could not set DHE currency")
+        async def _operation(ctx: DHESession) -> str:
+            await self._post_packet(ctx, self._message_packet({
+                "command": CURRENCY_GET_COMMAND,
+                "value": requested,
+            }))
+            self._handle_currency_value(requested, source_command=CURRENCY_GET_COMMAND)
+            return requested.upper()
+
+        return await self._run_command_with_reconnect_retry(
+            "Could not set DHE currency",
+            _operation,
+        )
 
     async def set_radio_play(self, play: bool) -> bool:
         requested = bool(play)
@@ -1249,28 +1248,18 @@ class DHEClient:
         if command is None:
             raise DHEError(f"Unsupported DHE radio catalog: {attribute}")
 
-        async with self._command_lock:
-            for attempt in range(2):
-                try:
-                    await self._ensure_ready(timeout=45)
-                    ctx = self._ctx
-                    if ctx is None:
-                        raise DHEError("DHE session is not connected")
-                    generation = self._radio_catalog_generations[requested_attribute]
-                    await self._request_app_value(ctx, command)
-                    return await self._wait_for_radio_catalog(
-                        requested_attribute,
-                        generation,
-                    )
-                except Exception as err:  # noqa: BLE001
-                    if attempt == 0:
-                        await self._force_reconnect(reason=_diagnostic_error(err))
-                        await asyncio.sleep(1)
-                        continue
-                    raise DHEError(
-                        f"Could not read DHE radio {requested_attribute} catalog: {err}"
-                    ) from err
-        raise DHEError(f"Could not read DHE radio {requested_attribute} catalog")
+        async def _operation(ctx: DHESession) -> list[str]:
+            generation = self._radio_catalog_generations[requested_attribute]
+            await self._request_app_value(ctx, command)
+            return await self._wait_for_radio_catalog(
+                requested_attribute,
+                generation,
+            )
+
+        return await self._run_command_with_reconnect_retry(
+            f"Could not read DHE radio {requested_attribute} catalog",
+            _operation,
+        )
 
     async def search_radio_stations_by_genre(self, genre: str) -> list[dict[str, Any]]:
         """Search radio stations by DHE radio genre path."""
@@ -1301,46 +1290,30 @@ class DHEClient:
         if requested_search_text:
             search_payload["text"] = requested_search_text
 
-        async with self._command_lock:
-            for attempt in range(2):
-                try:
-                    await self._ensure_ready(timeout=45)
-                    ctx = self._ctx
-                    if ctx is None:
-                        raise DHEError("DHE session is not connected")
-                    generation = self._radio_stations_generation
-                    await self._post_packet(ctx, self._message_packet({
-                        "command": RADIO_STATIONS_GET_COMMAND,
-                        "value": search_payload,
-                    }))
-                    return await self._wait_for_radio_stations(generation)
-                except Exception as err:  # noqa: BLE001
-                    if attempt == 0:
-                        await self._force_reconnect(reason=_diagnostic_error(err))
-                        await asyncio.sleep(1)
-                        continue
-                    raise DHEError(f"Could not search DHE radio stations: {err}") from err
-        raise DHEError("Could not search DHE radio stations")
+        async def _operation(ctx: DHESession) -> list[dict[str, Any]]:
+            generation = self._radio_stations_generation
+            await self._post_packet(ctx, self._message_packet({
+                "command": RADIO_STATIONS_GET_COMMAND,
+                "value": search_payload,
+            }))
+            return await self._wait_for_radio_stations(generation)
+
+        return await self._run_command_with_reconnect_retry(
+            "Could not search DHE radio stations",
+            _operation,
+        )
 
     async def list_radio_favorites(self) -> list[dict[str, Any]]:
         """Return DHE radio favorites."""
-        async with self._command_lock:
-            for attempt in range(2):
-                try:
-                    await self._ensure_ready(timeout=45)
-                    ctx = self._ctx
-                    if ctx is None:
-                        raise DHEError("DHE session is not connected")
-                    generation = self._radio_favorites_generation
-                    await self._request_app_value(ctx, RADIO_FAVORITES_GET_COMMAND)
-                    return await self._wait_for_radio_favorites(generation)
-                except Exception as err:  # noqa: BLE001
-                    if attempt == 0:
-                        await self._force_reconnect(reason=_diagnostic_error(err))
-                        await asyncio.sleep(1)
-                        continue
-                    raise DHEError(f"Could not read DHE radio favorites: {err}") from err
-        raise DHEError("Could not read DHE radio favorites")
+        async def _operation(ctx: DHESession) -> list[dict[str, Any]]:
+            generation = self._radio_favorites_generation
+            await self._request_app_value(ctx, RADIO_FAVORITES_GET_COMMAND)
+            return await self._wait_for_radio_favorites(generation)
+
+        return await self._run_command_with_reconnect_retry(
+            "Could not read DHE radio favorites",
+            _operation,
+        )
 
     async def add_radio_favorite(
         self,
@@ -1359,56 +1332,47 @@ class DHEClient:
         if station_id is None:
             raise DHEError("Radio station must include Id")
 
-        async with self._command_lock:
-            for attempt in range(2):
+        async def _operation(ctx: DHESession) -> bool:
+            favorites = self._radio_favorites()
+            favorites_known = bool(favorites)
+            try:
+                favorites_generation = self._radio_favorites_generation
+                await self._request_app_value(ctx, RADIO_FAVORITES_GET_COMMAND)
+                favorites = await self._wait_for_radio_favorites(
+                    favorites_generation
+                )
+                favorites_known = True
+            except DHEError:
+                if not favorites_known:
+                    raise
+
+            if not _radio_station_in_list(station_id, favorites):
+                favorites_generation = self._radio_favorites_generation
+                await self._post_packet(ctx, self._message_packet({
+                    "command": RADIO_FAVORITE_ASSIGN_COMMAND,
+                    "value": station_id,
+                }))
                 try:
-                    await self._ensure_ready(timeout=45)
-                    ctx = self._ctx
-                    if ctx is None:
-                        raise DHEError("DHE session is not connected")
+                    await self._wait_for_radio_favorites(favorites_generation)
+                except DHEError:
+                    await self._request_app_value(ctx, RADIO_FAVORITES_GET_COMMAND)
+                    await self._wait_for_radio_favorites(favorites_generation)
 
-                    favorites = self._radio_favorites()
-                    favorites_known = bool(favorites)
-                    try:
-                        favorites_generation = self._radio_favorites_generation
-                        await self._request_app_value(ctx, RADIO_FAVORITES_GET_COMMAND)
-                        favorites = await self._wait_for_radio_favorites(
-                            favorites_generation
-                        )
-                        favorites_known = True
-                    except DHEError:
-                        if not favorites_known:
-                            raise
+            if select:
+                await self._post_packet(ctx, self._message_packet({
+                    "command": RADIO_STATION_ASSIGN_COMMAND,
+                    "value": station_id,
+                }))
+                try:
+                    await self._wait_for_radio_station(station_id)
+                except DHEError:
+                    pass
+            return True
 
-                    if not _radio_station_in_list(station_id, favorites):
-                        favorites_generation = self._radio_favorites_generation
-                        await self._post_packet(ctx, self._message_packet({
-                            "command": RADIO_FAVORITE_ASSIGN_COMMAND,
-                            "value": station_id,
-                        }))
-                        try:
-                            await self._wait_for_radio_favorites(favorites_generation)
-                        except DHEError:
-                            await self._request_app_value(ctx, RADIO_FAVORITES_GET_COMMAND)
-                            await self._wait_for_radio_favorites(favorites_generation)
-
-                    if select:
-                        await self._post_packet(ctx, self._message_packet({
-                            "command": RADIO_STATION_ASSIGN_COMMAND,
-                            "value": station_id,
-                        }))
-                        try:
-                            await self._wait_for_radio_station(station_id)
-                        except DHEError:
-                            pass
-                    return True
-                except Exception as err:  # noqa: BLE001
-                    if attempt == 0:
-                        await self._force_reconnect(reason=_diagnostic_error(err))
-                        await asyncio.sleep(1)
-                        continue
-                    raise DHEError(f"Could not add DHE radio favorite: {err}") from err
-        raise DHEError("Could not add DHE radio favorite")
+        return await self._run_command_with_reconnect_retry(
+            "Could not add DHE radio favorite",
+            _operation,
+        )
 
     async def remove_radio_favorite(self, station: dict[str, Any] | int | str) -> bool:
         """Remove a radio station favorite."""
@@ -1422,48 +1386,37 @@ class DHEClient:
         if station_id is None:
             raise DHEError("Radio station must include Id")
 
-        async with self._command_lock:
-            for attempt in range(2):
-                try:
-                    await self._ensure_ready(timeout=45)
-                    ctx = self._ctx
-                    if ctx is None:
-                        raise DHEError("DHE session is not connected")
+        async def _operation(ctx: DHESession) -> bool:
+            favorites_generation = self._radio_favorites_generation
+            await self._request_app_value(ctx, RADIO_FAVORITES_GET_COMMAND)
+            favorites = await self._wait_for_radio_favorites(
+                favorites_generation
+            )
+            if not _radio_station_in_list(station_id, favorites):
+                return True
 
-                    favorites_generation = self._radio_favorites_generation
-                    await self._request_app_value(ctx, RADIO_FAVORITES_GET_COMMAND)
-                    favorites = await self._wait_for_radio_favorites(
-                        favorites_generation
-                    )
-                    if not _radio_station_in_list(station_id, favorites):
-                        return True
+            favorites_generation = self._radio_favorites_generation
+            await self._post_packet(ctx, self._message_packet({
+                "command": RADIO_FAVORITE_ASSIGN_COMMAND,
+                "value": station_id,
+            }))
+            try:
+                favorites = await self._wait_for_radio_favorites(
+                    favorites_generation
+                )
+            except DHEError:
+                await self._request_app_value(ctx, RADIO_FAVORITES_GET_COMMAND)
+                favorites = await self._wait_for_radio_favorites(
+                    favorites_generation
+                )
+            if _radio_station_in_list(station_id, favorites):
+                raise DHEError("DHE radio favorite did not change")
+            return True
 
-                    favorites_generation = self._radio_favorites_generation
-                    await self._post_packet(ctx, self._message_packet({
-                        "command": RADIO_FAVORITE_ASSIGN_COMMAND,
-                        "value": station_id,
-                    }))
-                    try:
-                        favorites = await self._wait_for_radio_favorites(
-                            favorites_generation
-                        )
-                    except DHEError:
-                        await self._request_app_value(ctx, RADIO_FAVORITES_GET_COMMAND)
-                        favorites = await self._wait_for_radio_favorites(
-                            favorites_generation
-                        )
-                    if _radio_station_in_list(station_id, favorites):
-                        raise DHEError("DHE radio favorite did not change")
-                    return True
-                except Exception as err:  # noqa: BLE001
-                    if attempt == 0:
-                        await self._force_reconnect(reason=_diagnostic_error(err))
-                        await asyncio.sleep(1)
-                        continue
-                    raise DHEError(
-                        f"Could not remove DHE radio favorite: {err}"
-                    ) from err
-        raise DHEError("Could not remove DHE radio favorite")
+        return await self._run_command_with_reconnect_retry(
+            "Could not remove DHE radio favorite",
+            _operation,
+        )
 
     async def select_radio_station(self, station: dict[str, Any] | int | str) -> bool:
         """Select/play a radio station by station payload or station ID."""
@@ -1477,29 +1430,21 @@ class DHEClient:
         if station_id is None:
             raise DHEError("Radio station must include Id")
 
-        async with self._command_lock:
-            for attempt in range(2):
-                try:
-                    await self._ensure_ready(timeout=45)
-                    ctx = self._ctx
-                    if ctx is None:
-                        raise DHEError("DHE session is not connected")
-                    await self._post_packet(ctx, self._message_packet({
-                        "command": RADIO_STATION_ASSIGN_COMMAND,
-                        "value": station_id,
-                    }))
-                    try:
-                        await self._wait_for_radio_station(station_id)
-                    except DHEError:
-                        pass
-                    return True
-                except Exception as err:  # noqa: BLE001
-                    if attempt == 0:
-                        await self._force_reconnect(reason=_diagnostic_error(err))
-                        await asyncio.sleep(1)
-                        continue
-                    raise DHEError(f"Could not select DHE radio station: {err}") from err
-        raise DHEError("Could not select DHE radio station")
+        async def _operation(ctx: DHESession) -> bool:
+            await self._post_packet(ctx, self._message_packet({
+                "command": RADIO_STATION_ASSIGN_COMMAND,
+                "value": station_id,
+            }))
+            try:
+                await self._wait_for_radio_station(station_id)
+            except DHEError:
+                pass
+            return True
+
+        return await self._run_command_with_reconnect_retry(
+            "Could not select DHE radio station",
+            _operation,
+        )
 
     async def search_weather_locations(
         self,
@@ -1511,144 +1456,104 @@ class DHEClient:
             raise DHEError("Weather location search name must not be empty")
         requested_country_id = int(_raw_to_float(country_id))
 
-        async with self._command_lock:
-            for attempt in range(2):
-                try:
-                    await self._ensure_ready(timeout=45)
-                    ctx = self._ctx
-                    if ctx is None:
-                        raise DHEError("DHE session is not connected")
-                    generation = self._weather_search_generation
-                    await self._post_packet(ctx, self._message_packet({
-                        "command": WEATHER_FORECAST_GET_COMMAND,
-                        "value": {
-                            "name": requested_name,
-                            "countryId": requested_country_id,
-                        },
-                    }))
-                    return await self._wait_for_weather_search_results(generation)
-                except Exception as err:  # noqa: BLE001
-                    if attempt == 0:
-                        await self._force_reconnect(reason=_diagnostic_error(err))
-                        await asyncio.sleep(1)
-                        continue
-                    raise DHEError(f"Could not search DHE weather locations: {err}") from err
-        raise DHEError("Could not search DHE weather locations")
+        async def _operation(ctx: DHESession) -> list[dict[str, Any]]:
+            generation = self._weather_search_generation
+            await self._post_packet(ctx, self._message_packet({
+                "command": WEATHER_FORECAST_GET_COMMAND,
+                "value": {
+                    "name": requested_name,
+                    "countryId": requested_country_id,
+                },
+            }))
+            return await self._wait_for_weather_search_results(generation)
+
+        return await self._run_command_with_reconnect_retry(
+            "Could not search DHE weather locations",
+            _operation,
+        )
 
     async def list_weather_countries(self) -> list[dict[str, Any]]:
         """Return the weather country catalog from the DHE."""
-        async with self._command_lock:
-            for attempt in range(2):
-                try:
-                    await self._ensure_ready(timeout=45)
-                    ctx = self._ctx
-                    if ctx is None:
-                        raise DHEError("DHE session is not connected")
-                    generation = self._weather_countries_generation
-                    await self._request_app_value(ctx, WEATHER_COUNTRIES_GET_COMMAND)
-                    return await self._wait_for_weather_countries(generation)
-                except Exception as err:  # noqa: BLE001
-                    if attempt == 0:
-                        await self._force_reconnect(reason=_diagnostic_error(err))
-                        await asyncio.sleep(1)
-                        continue
-                    raise DHEError(f"Could not read DHE weather countries: {err}") from err
-        raise DHEError("Could not read DHE weather countries")
+        async def _operation(ctx: DHESession) -> list[dict[str, Any]]:
+            generation = self._weather_countries_generation
+            await self._request_app_value(ctx, WEATHER_COUNTRIES_GET_COMMAND)
+            return await self._wait_for_weather_countries(generation)
+
+        return await self._run_command_with_reconnect_retry(
+            "Could not read DHE weather countries",
+            _operation,
+        )
 
     async def toggle_weather_favorite(self, location: dict[str, Any]) -> bool:
         if not isinstance(location, dict) or not location.get("LocationId"):
             raise DHEError("Weather favorite location must include LocationId")
 
-        async with self._command_lock:
-            for attempt in range(2):
-                try:
-                    await self._ensure_ready(timeout=45)
-                    ctx = self._ctx
-                    if ctx is None:
-                        raise DHEError("DHE session is not connected")
-                    payload = _copy_json_like_value(location)
-                    await self._post_packet(ctx, self._message_packet({
-                        "command": WEATHER_FAVORITE_ASSIGN_COMMAND,
-                        "value": payload,
-                    }))
-                    await self._request_app_value(ctx, WEATHER_FAVORITES_GET_COMMAND)
-                    return True
-                except Exception as err:  # noqa: BLE001
-                    if attempt == 0:
-                        await self._force_reconnect(reason=_diagnostic_error(err))
-                        await asyncio.sleep(1)
-                        continue
-                    raise DHEError(f"Could not toggle DHE weather favorite: {err}") from err
-        raise DHEError("Could not toggle DHE weather favorite")
+        async def _operation(ctx: DHESession) -> bool:
+            payload = _copy_json_like_value(location)
+            await self._post_packet(ctx, self._message_packet({
+                "command": WEATHER_FAVORITE_ASSIGN_COMMAND,
+                "value": payload,
+            }))
+            await self._request_app_value(ctx, WEATHER_FAVORITES_GET_COMMAND)
+            return True
+
+        return await self._run_command_with_reconnect_retry(
+            "Could not toggle DHE weather favorite",
+            _operation,
+        )
 
     async def list_weather_favorites(self) -> list[dict[str, Any]]:
         """Return the weather favorites from the DHE."""
-        async with self._command_lock:
-            for attempt in range(2):
-                try:
-                    await self._ensure_ready(timeout=45)
-                    ctx = self._ctx
-                    if ctx is None:
-                        raise DHEError("DHE session is not connected")
-                    favorites_generation = self._weather_favorites_generation
-                    await self._request_app_value(ctx, WEATHER_FAVORITES_GET_COMMAND)
-                    return await self._wait_for_weather_favorites(favorites_generation)
-                except Exception as err:  # noqa: BLE001
-                    if attempt == 0:
-                        await self._force_reconnect(reason=_diagnostic_error(err))
-                        await asyncio.sleep(1)
-                        continue
-                    raise DHEError(f"Could not read DHE weather favorites: {err}") from err
-        raise DHEError("Could not read DHE weather favorites")
+        async def _operation(ctx: DHESession) -> list[dict[str, Any]]:
+            favorites_generation = self._weather_favorites_generation
+            await self._request_app_value(ctx, WEATHER_FAVORITES_GET_COMMAND)
+            return await self._wait_for_weather_favorites(favorites_generation)
+
+        return await self._run_command_with_reconnect_retry(
+            "Could not read DHE weather favorites",
+            _operation,
+        )
 
     async def add_weather_favorite(self, location: dict[str, Any]) -> bool:
         """Add a weather favorite without toggling an existing favorite off."""
         if not isinstance(location, dict) or not location.get("LocationId"):
             raise DHEError("Weather favorite location must include LocationId")
 
-        async with self._command_lock:
-            for attempt in range(2):
-                try:
-                    await self._ensure_ready(timeout=45)
-                    ctx = self._ctx
-                    if ctx is None:
-                        raise DHEError("DHE session is not connected")
-                    payload = _copy_json_like_value(location)
+        async def _operation(ctx: DHESession) -> bool:
+            payload = _copy_json_like_value(location)
 
-                    favorites = self._weather_favorites()
-                    try:
-                        favorites_generation = self._weather_favorites_generation
-                        await self._request_app_value(ctx, WEATHER_FAVORITES_GET_COMMAND)
-                        favorites = await self._wait_for_weather_favorites(favorites_generation)
-                    except DHEError:
-                        pass
-                    if _weather_location_in_list(payload, favorites):
-                        return True
+            favorites = self._weather_favorites()
+            try:
+                favorites_generation = self._weather_favorites_generation
+                await self._request_app_value(ctx, WEATHER_FAVORITES_GET_COMMAND)
+                favorites = await self._wait_for_weather_favorites(favorites_generation)
+            except DHEError:
+                pass
+            if _weather_location_in_list(payload, favorites):
+                return True
 
-                    location_id = _weather_location_id(payload)
-                    favorites_generation = self._weather_favorites_generation
-                    await self._post_packet(ctx, self._message_packet({
-                        "command": WEATHER_FAVORITE_ASSIGN_COMMAND,
-                        "value": payload,
-                    }))
-                    await self._post_packet(ctx, self._message_packet({
-                        "command": WEATHER_LOCATION_GET_COMMAND,
-                        "value": location_id,
-                    }))
-                    await self._wait_for_weather_location(location_id)
-                    try:
-                        await self._wait_for_weather_favorites(favorites_generation)
-                    except DHEError:
-                        await self._request_app_value(ctx, WEATHER_FAVORITES_GET_COMMAND)
-                        await self._wait_for_weather_favorites(favorites_generation)
-                    return True
-                except Exception as err:  # noqa: BLE001
-                    if attempt == 0:
-                        await self._force_reconnect(reason=_diagnostic_error(err))
-                        await asyncio.sleep(1)
-                        continue
-                    raise DHEError(f"Could not add DHE weather favorite: {err}") from err
-        raise DHEError("Could not add DHE weather favorite")
+            location_id = _weather_location_id(payload)
+            favorites_generation = self._weather_favorites_generation
+            await self._post_packet(ctx, self._message_packet({
+                "command": WEATHER_FAVORITE_ASSIGN_COMMAND,
+                "value": payload,
+            }))
+            await self._post_packet(ctx, self._message_packet({
+                "command": WEATHER_LOCATION_GET_COMMAND,
+                "value": location_id,
+            }))
+            await self._wait_for_weather_location(location_id)
+            try:
+                await self._wait_for_weather_favorites(favorites_generation)
+            except DHEError:
+                await self._request_app_value(ctx, WEATHER_FAVORITES_GET_COMMAND)
+                await self._wait_for_weather_favorites(favorites_generation)
+            return True
+
+        return await self._run_command_with_reconnect_retry(
+            "Could not add DHE weather favorite",
+            _operation,
+        )
 
     async def select_weather_location(self, location: dict[str, Any] | str) -> bool:
         if isinstance(location, dict):
@@ -1659,51 +1564,34 @@ class DHEClient:
         if not requested_location_id:
             raise DHEError("Weather location must include LocationId")
 
-        async with self._command_lock:
-            for attempt in range(2):
-                try:
-                    await self._ensure_ready(timeout=45)
-                    ctx = self._ctx
-                    if ctx is None:
-                        raise DHEError("DHE session is not connected")
-                    await self._post_packet(ctx, self._message_packet({
-                        "command": WEATHER_LOCATION_GET_COMMAND,
-                        "value": requested_location_id,
-                    }))
-                    await self._wait_for_weather_location(requested_location_id)
-                    return True
-                except Exception as err:  # noqa: BLE001
-                    if attempt == 0:
-                        await self._force_reconnect(reason=_diagnostic_error(err))
-                        await asyncio.sleep(1)
-                        continue
-                    raise DHEError(f"Could not select DHE weather location: {err}") from err
-        raise DHEError("Could not select DHE weather location")
+        async def _operation(ctx: DHESession) -> bool:
+            await self._post_packet(ctx, self._message_packet({
+                "command": WEATHER_LOCATION_GET_COMMAND,
+                "value": requested_location_id,
+            }))
+            await self._wait_for_weather_location(requested_location_id)
+            return True
+
+        return await self._run_command_with_reconnect_retry(
+            "Could not select DHE weather location",
+            _operation,
+        )
 
     async def _assign_radio_value(self, field: str, value: Any) -> None:
         command = f"assign:{RADIO_PATH}:{field}"
         if command not in RADIO_ASSIGN_COMMANDS:
             raise DHEError(f"Unsupported DHE radio assignment: {field}")
 
-        async with self._command_lock:
-            for attempt in range(2):
-                try:
-                    await self._ensure_ready(timeout=45)
-                    ctx = self._ctx
-                    if ctx is None:
-                        raise DHEError("DHE session is not connected")
-                    await self._post_packet(ctx, self._message_packet({
-                        "command": command,
-                        "value": value,
-                    }))
-                    return
-                except Exception as err:  # noqa: BLE001
-                    if attempt == 0:
-                        await self._force_reconnect(reason=_diagnostic_error(err))
-                        await asyncio.sleep(1)
-                        continue
-                    raise DHEError(f"Could not write DHE radio {field}: {err}") from err
-        raise DHEError(f"Could not write DHE radio {field}")
+        async def _operation(ctx: DHESession) -> None:
+            await self._post_packet(ctx, self._message_packet({
+                "command": command,
+                "value": value,
+            }))
+
+        await self._run_command_with_reconnect_retry(
+            f"Could not write DHE radio {field}",
+            _operation,
+        )
 
     async def _set_price(
         self,
@@ -1726,35 +1614,27 @@ class DHEClient:
         except KeyError as err:
             raise DHEError(f"Unsupported temperature memory slot: {memory_slot}") from err
 
-        async with self._command_lock:
-            for attempt in range(2):
-                try:
-                    await self._ensure_ready(timeout=45)
-                    ctx = self._ctx
-                    if ctx is None:
-                        raise DHEError("DHE session is not connected")
-                    temperature = await self._get_temperature_memory_temperature(
-                        ctx,
-                        memory_slot,
-                        measurement_id,
-                    )
-                    request_value = _build_temperature_memory_button_value(temperature)
-                    await self._post_packet(ctx, self._message_packet({
-                        "command": ODB_ASSIGN_COMMAND,
-                        "value": {"id": ID_SETPOINT_REQUEST, "value": request_value},
-                    }))
-                    try:
-                        await self._request_setpoint(ctx)
-                    except Exception:  # noqa: BLE001
-                        pass
-                    return True
-                except Exception as err:  # noqa: BLE001
-                    if attempt == 0:
-                        await self._force_reconnect(reason=_diagnostic_error(err))
-                        await asyncio.sleep(1)
-                        continue
-                    raise DHEError(f"Could not press DHE temperature memory {memory_slot}: {err}") from err
-        raise DHEError(f"Could not press DHE temperature memory {memory_slot}")
+        async def _operation(ctx: DHESession) -> bool:
+            temperature = await self._get_temperature_memory_temperature(
+                ctx,
+                memory_slot,
+                measurement_id,
+            )
+            request_value = _build_temperature_memory_button_value(temperature)
+            await self._post_packet(ctx, self._message_packet({
+                "command": ODB_ASSIGN_COMMAND,
+                "value": {"id": ID_SETPOINT_REQUEST, "value": request_value},
+            }))
+            try:
+                await self._request_setpoint(ctx)
+            except Exception:  # noqa: BLE001
+                pass
+            return True
+
+        return await self._run_command_with_reconnect_retry(
+            f"Could not press DHE temperature memory {memory_slot}",
+            _operation,
+        )
 
     async def _get_temperature_memory_temperature(
         self,
@@ -1834,37 +1714,29 @@ class DHEClient:
 
         requested = _round_to_half_c(_clamp(float(temperature), 20.0, 60.0))
 
-        async with self._command_lock:
-            for attempt in range(2):
-                try:
-                    await self._ensure_ready(timeout=45)
-                    ctx = self._ctx
-                    if ctx is None:
-                        raise DHEError("DHE session is not connected")
-                    await self._refresh_temperature_memories(ctx)
-                    attributes = self._last_measurement_attributes.get(measurement_id, {})
-                    name = str(attributes.get("name", DEFAULT_TEMPERATURE_MEMORY_NAMES[memory_id]))
-                    payload = self._temperature_memory_payload(
-                        memory_id,
-                        measurement_id,
-                        name,
-                        requested,
-                    )
-                    await self._post_packet(ctx, self._message_packet({
-                        "command": TEMP_MEMORY_ASSIGN_COMMAND,
-                        "value": payload,
-                    }))
-                    if "id" in payload:
-                        self._handle_temperature_memory_item(payload, source_command=TEMP_MEMORY_ASSIGN_COMMAND)
-                    await self._refresh_temperature_memories(ctx)
-                    return self._cached_temperature_memory_temperature(measurement_id) or requested
-                except Exception as err:  # noqa: BLE001
-                    if attempt == 0:
-                        await self._force_reconnect(reason=_diagnostic_error(err))
-                        await asyncio.sleep(1)
-                        continue
-                    raise DHEError(f"Could not set DHE temperature memory {memory_slot}: {err}") from err
-        raise DHEError(f"Could not set DHE temperature memory {memory_slot}")
+        async def _operation(ctx: DHESession) -> float:
+            await self._refresh_temperature_memories(ctx)
+            attributes = self._last_measurement_attributes.get(measurement_id, {})
+            name = str(attributes.get("name", DEFAULT_TEMPERATURE_MEMORY_NAMES[memory_id]))
+            payload = self._temperature_memory_payload(
+                memory_id,
+                measurement_id,
+                name,
+                requested,
+            )
+            await self._post_packet(ctx, self._message_packet({
+                "command": TEMP_MEMORY_ASSIGN_COMMAND,
+                "value": payload,
+            }))
+            if "id" in payload:
+                self._handle_temperature_memory_item(payload, source_command=TEMP_MEMORY_ASSIGN_COMMAND)
+            await self._refresh_temperature_memories(ctx)
+            return self._cached_temperature_memory_temperature(measurement_id) or requested
+
+        return await self._run_command_with_reconnect_retry(
+            f"Could not set DHE temperature memory {memory_slot}",
+            _operation,
+        )
 
     async def set_temperature_memory_name(self, memory_slot: int, name: str) -> str:
         memory_id, measurement_id = self._temperature_memory_ids(memory_slot)
@@ -1873,72 +1745,56 @@ class DHEClient:
         if not requested_name:
             raise DHEError(f"DHE temperature memory {memory_slot} name must not be empty")
 
-        async with self._command_lock:
-            for attempt in range(2):
-                try:
-                    await self._ensure_ready(timeout=45)
-                    ctx = self._ctx
-                    if ctx is None:
-                        raise DHEError("DHE session is not connected")
-                    await self._refresh_temperature_memories(ctx)
-                    temperature = (
-                        self._cached_temperature_memory_temperature(measurement_id)
-                        or DEFAULT_NEW_TEMPERATURE_MEMORY_C
-                    )
-                    payload = self._temperature_memory_payload(
-                        memory_id,
-                        measurement_id,
-                        requested_name,
-                        temperature,
-                    )
-                    await self._post_packet(ctx, self._message_packet({
-                        "command": TEMP_MEMORY_ASSIGN_COMMAND,
-                        "value": payload,
-                    }))
-                    if "id" in payload:
-                        self._handle_temperature_memory_item(payload, source_command=TEMP_MEMORY_ASSIGN_COMMAND)
-                    await self._refresh_temperature_memories(ctx)
-                    attributes = self._last_measurement_attributes.get(measurement_id, {})
-                    return str(attributes.get("name", requested_name))
-                except Exception as err:  # noqa: BLE001
-                    if attempt == 0:
-                        await self._force_reconnect(reason=_diagnostic_error(err))
-                        await asyncio.sleep(1)
-                        continue
-                    raise DHEError(f"Could not set DHE temperature memory {memory_slot} name: {err}") from err
-        raise DHEError(f"Could not set DHE temperature memory {memory_slot} name")
+        async def _operation(ctx: DHESession) -> str:
+            await self._refresh_temperature_memories(ctx)
+            temperature = (
+                self._cached_temperature_memory_temperature(measurement_id)
+                or DEFAULT_NEW_TEMPERATURE_MEMORY_C
+            )
+            payload = self._temperature_memory_payload(
+                memory_id,
+                measurement_id,
+                requested_name,
+                temperature,
+            )
+            await self._post_packet(ctx, self._message_packet({
+                "command": TEMP_MEMORY_ASSIGN_COMMAND,
+                "value": payload,
+            }))
+            if "id" in payload:
+                self._handle_temperature_memory_item(payload, source_command=TEMP_MEMORY_ASSIGN_COMMAND)
+            await self._refresh_temperature_memories(ctx)
+            attributes = self._last_measurement_attributes.get(measurement_id, {})
+            return str(attributes.get("name", requested_name))
+
+        return await self._run_command_with_reconnect_retry(
+            f"Could not set DHE temperature memory {memory_slot} name",
+            _operation,
+        )
 
     async def delete_temperature_memory(self, memory_slot: int) -> bool:
         memory_id, measurement_id = self._temperature_memory_ids(memory_slot)
 
-        async with self._command_lock:
-            for attempt in range(2):
-                try:
-                    await self._ensure_ready(timeout=45)
-                    ctx = self._ctx
-                    if ctx is None:
-                        raise DHEError("DHE session is not connected")
-                    await self._refresh_temperature_memories(ctx)
-                    if not self._temperature_memory_exists(memory_id, measurement_id):
-                        raise DHEError(f"DHE temperature memory {memory_slot} is not available")
-                    await self._post_packet(ctx, self._message_packet({
-                        "command": TEMP_MEMORY_ASSIGN_COMMAND,
-                        "value": {
-                            "id": memory_id,
-                            "operation": "delete",
-                        },
-                    }))
-                    await self._refresh_temperature_memories(ctx)
-                    if self._temperature_memory_exists(memory_id, measurement_id):
-                        raise DHEError(f"DHE temperature memory {memory_slot} was not deleted")
-                    return True
-                except Exception as err:  # noqa: BLE001
-                    if attempt == 0:
-                        await self._force_reconnect(reason=_diagnostic_error(err))
-                        await asyncio.sleep(1)
-                        continue
-                    raise DHEError(f"Could not delete DHE temperature memory {memory_slot}: {err}") from err
-        raise DHEError(f"Could not delete DHE temperature memory {memory_slot}")
+        async def _operation(ctx: DHESession) -> bool:
+            await self._refresh_temperature_memories(ctx)
+            if not self._temperature_memory_exists(memory_id, measurement_id):
+                raise DHEError(f"DHE temperature memory {memory_slot} is not available")
+            await self._post_packet(ctx, self._message_packet({
+                "command": TEMP_MEMORY_ASSIGN_COMMAND,
+                "value": {
+                    "id": memory_id,
+                    "operation": "delete",
+                },
+            }))
+            await self._refresh_temperature_memories(ctx)
+            if self._temperature_memory_exists(memory_id, measurement_id):
+                raise DHEError(f"DHE temperature memory {memory_slot} was not deleted")
+            return True
+
+        return await self._run_command_with_reconnect_retry(
+            f"Could not delete DHE temperature memory {memory_slot}",
+            _operation,
+        )
 
     async def set_wellness_cold_prevention(self, enabled: bool) -> bool:
         if enabled:
@@ -2062,31 +1918,23 @@ class DHEClient:
         return True
 
     async def _write_app_value(self, command: str, value: Any, measurement_id: int, expected: ODBValue) -> ODBValue:
-        async with self._command_lock:
-            for attempt in range(2):
-                try:
-                    await self._ensure_ready(timeout=45)
-                    ctx = self._ctx
-                    if ctx is None:
-                        raise DHEError("DHE session is not connected")
-                    future = self._new_write_future(measurement_id, expected)
-                    await self._post_packet(ctx, self._message_packet({"command": command, "value": value}))
-                    try:
-                        return await self._wait_for_app_write_confirmation(future)
-                    except TimeoutError as err:
-                        self._clear_pending_write_future(None)
-                        raise DHEError(
-                            f"No DHE app confirmation for {command} within "
-                            f"{APP_COMMAND_CONFIRMATION_TIMEOUT:.1f}s"
-                        ) from err
-                except Exception as err:  # noqa: BLE001
-                    self._clear_pending_write_future(None)
-                    if attempt == 0:
-                        await self._force_reconnect(reason=_diagnostic_error(err))
-                        await asyncio.sleep(1)
-                        continue
-                    raise DHEError(f"Could not write DHE app command {command}: {err}") from err
-        raise DHEError(f"Could not write DHE app command {command}")
+        async def _operation(ctx: DHESession) -> ODBValue:
+            future = self._new_write_future(measurement_id, expected)
+            await self._post_packet(ctx, self._message_packet({"command": command, "value": value}))
+            try:
+                return await self._wait_for_app_write_confirmation(future)
+            except TimeoutError as err:
+                self._clear_pending_write_future(None)
+                raise DHEError(
+                    f"No DHE app confirmation for {command} within "
+                    f"{APP_COMMAND_CONFIRMATION_TIMEOUT:.1f}s"
+                ) from err
+
+        return await self._run_command_with_reconnect_retry(
+            f"Could not write DHE app command {command}",
+            _operation,
+            on_error=lambda: self._clear_pending_write_future(None),
+        )
 
     async def _run_loop(self) -> None:
         while not self._stopped.is_set():
