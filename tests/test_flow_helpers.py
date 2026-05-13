@@ -119,6 +119,18 @@ class TestFlowHelpers(unittest.IsolatedAsyncioTestCase):
         )
         self.assertFalse(result)
 
+    async def test_wait_until_does_not_accept_late_success_after_timeout(self) -> None:
+        module = _load_flow_helpers()
+        start = asyncio.get_running_loop().time()
+
+        result = await module.wait_until(
+            lambda: (asyncio.get_running_loop().time() - start) >= 0.035,
+            timeout_seconds=0.02,
+            poll_interval_seconds=0.005,
+        )
+
+        self.assertFalse(result)
+
     async def test_wait_for_generation_change_returns_true_after_update(self) -> None:
         module = _load_flow_helpers()
         generation = {"value": 5}

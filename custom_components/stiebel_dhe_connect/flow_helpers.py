@@ -48,7 +48,7 @@ async def wait_until(
         if predicate():
             return True
         await asyncio.sleep(poll_interval_seconds)
-    return bool(predicate())
+    return False
 
 
 async def wait_for_generation_change(
