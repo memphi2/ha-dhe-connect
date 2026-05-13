@@ -21,6 +21,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .client_mapping import (
+    copy_dict_items as _copy_dict_items,
     copy_json_like_value as _copy_json_like_value,
     device_status_key as _device_status_key,
     device_status_problem as _device_status_problem,
@@ -2099,11 +2100,7 @@ class DHEClient:
         return state
 
     def _radio_favorites(self) -> list[dict[str, Any]]:
-        return [
-            _copy_json_like_value(favorite)
-            for favorite in self._last_radio_favorites
-            if isinstance(favorite, dict)
-        ]
+        return _copy_dict_items(self._last_radio_favorites)
 
     def _handle_weather_value(self, command: str, raw_value: Any) -> None:
         self._last_app_values[command] = _summarize_weather_value(raw_value)
@@ -2177,13 +2174,7 @@ class DHEClient:
 
     def _weather_favorites(self) -> list[dict[str, Any]]:
         favorites = self._last_weather_state.get("favorites")
-        if not isinstance(favorites, list):
-            return []
-        return [
-            _copy_json_like_value(favorite)
-            for favorite in favorites
-            if isinstance(favorite, dict)
-        ]
+        return _copy_dict_items(favorites)
 
     def _copy_diagnostic_state(self) -> dict[str, Any]:
         state = {
@@ -2985,11 +2976,7 @@ class DHEClient:
             lambda: self._radio_stations_generation,
             timeout_seconds=APP_COMMAND_CONFIRMATION_TIMEOUT,
         ):
-            return [
-                _copy_json_like_value(station)
-                for station in self._last_radio_stations
-                if isinstance(station, dict)
-            ]
+            return _copy_dict_items(self._last_radio_stations)
         raise DHEError("radio station search timed out")
 
     async def _wait_for_radio_favorites(
@@ -3045,13 +3032,7 @@ class DHEClient:
             timeout_seconds=APP_COMMAND_CONFIRMATION_TIMEOUT,
         ):
             results = self._last_weather_state.get("forecast_results")
-            if isinstance(results, list):
-                return [
-                    _copy_json_like_value(result)
-                    for result in results
-                    if isinstance(result, dict)
-                ]
-            return []
+            return _copy_dict_items(results)
         raise DHEError("weather location search timed out")
 
     async def _wait_for_weather_countries(
@@ -3063,17 +3044,9 @@ class DHEClient:
             lambda: self._weather_countries_generation,
             timeout_seconds=WEATHER_CATALOG_TIMEOUT,
         ):
-            return [
-                _copy_json_like_value(country)
-                for country in self._last_weather_countries
-                if isinstance(country, dict)
-            ]
+            return _copy_dict_items(self._last_weather_countries)
         if self._last_weather_countries:
-            return [
-                _copy_json_like_value(country)
-                for country in self._last_weather_countries
-                if isinstance(country, dict)
-            ]
+            return _copy_dict_items(self._last_weather_countries)
         raise DHEError("weather country catalog timed out")
 
     async def _wait_for_weather_favorites(
@@ -3085,14 +3058,7 @@ class DHEClient:
             lambda: self._weather_favorites_generation,
             timeout_seconds=APP_COMMAND_CONFIRMATION_TIMEOUT,
         ):
-            favorites = self._last_weather_state.get("favorites")
-            if isinstance(favorites, list):
-                return [
-                    _copy_json_like_value(favorite)
-                    for favorite in favorites
-                    if isinstance(favorite, dict)
-                ]
-            return []
+            return self._weather_favorites()
         raise DHEError("weather favorites timed out")
 
     async def _wait_for_weather_location(

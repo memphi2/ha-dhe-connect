@@ -42,6 +42,15 @@ class TestWeatherMapping(unittest.TestCase):
         self.assertEqual(state["complete_days"], [{"date": "2026-05-10"}])
         self.assertEqual(state["simple_days"], [{"date": "2026-05-11"}])
 
+    def test_copy_dict_items_copies_only_dict_entries(self) -> None:
+        raw = [{"Name": "Essen", "Nested": {"value": 1}}, "bad"]
+
+        copied = self.mapping.copy_dict_items(raw)
+        raw[0]["Nested"]["value"] = 2
+
+        self.assertEqual(copied, [{"Name": "Essen", "Nested": {"value": 1}}])
+        self.assertIsNot(copied[0], raw[0])
+
     def test_normalize_weather_locations_rejects_non_lists(self) -> None:
         self.assertIsNone(self.mapping.normalize_weather_locations_value({}))
 

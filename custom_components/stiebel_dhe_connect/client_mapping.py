@@ -33,6 +33,17 @@ def copy_json_like_value(value: Any) -> Any:
     return value
 
 
+def copy_dict_items(value: Any) -> list[dict[str, Any]]:
+    """Return copied dict entries from a list-like protocol value."""
+    if not isinstance(value, list):
+        return []
+    return [
+        copy_json_like_value(item)
+        for item in value
+        if isinstance(item, dict)
+    ]
+
+
 def normalize_weather_value(raw_value: dict[str, Any]) -> dict[str, Any]:
     """Normalize the DHE weather location payload into client state."""
     state: dict[str, Any] = {}
@@ -43,19 +54,11 @@ def normalize_weather_value(raw_value: dict[str, Any]) -> dict[str, Any]:
 
     complete_days = raw_value.get("CompleteDays")
     if isinstance(complete_days, list):
-        state["complete_days"] = [
-            copy_json_like_value(day)
-            for day in complete_days
-            if isinstance(day, dict)
-        ]
+        state["complete_days"] = copy_dict_items(complete_days)
 
     simple_days = raw_value.get("SimpleDays")
     if isinstance(simple_days, list):
-        state["simple_days"] = [
-            copy_json_like_value(day)
-            for day in simple_days
-            if isinstance(day, dict)
-        ]
+        state["simple_days"] = copy_dict_items(simple_days)
 
     return state
 
@@ -64,11 +67,7 @@ def normalize_weather_locations_value(raw_value: Any) -> list[dict[str, Any]] | 
     """Normalize a DHE weather location list."""
     if not isinstance(raw_value, list):
         return None
-    return [
-        copy_json_like_value(location)
-        for location in raw_value
-        if isinstance(location, dict)
-    ]
+    return copy_dict_items(raw_value)
 
 
 def normalize_weather_favorites_value(raw_value: Any) -> list[dict[str, Any]] | None:
@@ -80,11 +79,7 @@ def normalize_radio_stations_value(raw_value: Any) -> list[dict[str, Any]] | Non
     """Normalize a DHE radio station list."""
     if not isinstance(raw_value, list):
         return None
-    return [
-        copy_json_like_value(station)
-        for station in raw_value
-        if isinstance(station, dict)
-    ]
+    return copy_dict_items(raw_value)
 
 
 def normalize_radio_string_catalog(raw_value: Any) -> list[str] | None:
