@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
+import logging
+import os
 import re
 from typing import Any
 from urllib.parse import urlsplit
@@ -47,7 +49,12 @@ from .entity_state_helpers import (
     normalize_internal_scald_protection,
 )
 from .pairing_helpers import map_pairing_error
-from .token_file_helpers import token_file_for_target
+from .token_file_helpers import (
+    LEGACY_TOKEN_FILE,
+    legacy_token_file_for_entry,
+    legacy_token_files_for_target,
+    token_file_for_target,
+)
 
 ATTR_COUNTRY_ID = "country_id"
 ATTR_RADIO_SELECTION = "selection"
@@ -78,6 +85,8 @@ DEFAULT_RADIO_SEARCH_TEXTS = {
     "country": "*",
     "city": "*",
 }
+
+_LOGGER = logging.getLogger(__name__)
 
 _HOST_RE = re.compile(
     r"^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)*"
@@ -184,6 +193,89 @@ def _is_target_used_by_other_entry(
         if target == (host, port):
             return True
     return False
+
+
+def _abs_config_path(hass: HomeAssistant, path: str) -> str:
+    """Return a normalized absolute Home Assistant config path."""
+    return os.path.normcase(os.path.abspath(hass.config.path(path)))
+
+
+def _configured_token_paths(hass: HomeAssistant) -> set[str]:
+    """Return token paths that belong to currently configured DHE entries."""
+    paths: set[str] = set()
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        paths.add(_abs_config_path(hass, legacy_token_file_for_entry(entry.entry_id)))
+        target = _entry_target(entry)
+        if target is None:
+            continue
+        entry_host, entry_port = target
+        paths.add(_abs_config_path(hass, token_file_for_target(entry_host, entry_port)))
+        for legacy_path in legacy_token_files_for_target(entry_host, entry_port):
+            paths.add(_abs_config_path(hass, legacy_path))
+    return paths
+
+
+def _setup_token_cleanup_paths(
+    hass: HomeAssistant,
+    host: str,
+    port: int,
+    token_file: str,
+) -> set[str]:
+    """Return token files that should be removed before explicit setup pairing."""
+    paths = {
+        _abs_config_path(hass, token_file),
+        _abs_config_path(hass, LEGACY_TOKEN_FILE),
+    }
+    paths.update(
+        _abs_config_path(hass, legacy_path)
+        for legacy_path in legacy_token_files_for_target(host, port)
+    )
+
+    configured_paths = _configured_token_paths(hass)
+    storage_path = hass.config.path(".storage")
+    try:
+        token_file_names = os.listdir(storage_path)
+    except OSError:
+        token_file_names = []
+    for file_name in token_file_names:
+        if not (
+            file_name.startswith("stiebel_dhe_connect_token_")
+            and file_name.endswith(".txt")
+        ):
+            continue
+        path = os.path.normcase(os.path.abspath(os.path.join(storage_path, file_name)))
+        if path not in configured_paths:
+            paths.add(path)
+    return paths
+
+
+async def _async_clear_setup_token_files(
+    hass: HomeAssistant,
+    host: str,
+    port: int,
+    token_file: str,
+) -> None:
+    """Remove stale setup tokens before requesting a fresh DHE pairing token."""
+    paths = _setup_token_cleanup_paths(hass, host, port, token_file)
+
+    def _delete() -> list[str]:
+        removed: list[str] = []
+        for path in paths:
+            try:
+                os.remove(path)
+            except FileNotFoundError:
+                continue
+            except OSError:
+                continue
+            removed.append(path)
+        return removed
+
+    removed_paths = await hass.async_add_executor_job(_delete)
+    if removed_paths:
+        _LOGGER.debug(
+            "Removed stale DHE setup token files before pairing: %s",
+            ", ".join(sorted(removed_paths)),
+        )
 
 
 def _schema(
@@ -464,6 +556,7 @@ async def _validate_setup_pairing(
     token_file: str,
 ) -> str | None:
     """Run one-shot pairing/auth validation before creating the config entry."""
+    await _async_clear_setup_token_files(hass, host, port, token_file)
     probe_client = DHEClient(
         hass=hass,
         host=host,

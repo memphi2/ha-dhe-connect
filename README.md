@@ -584,7 +584,7 @@ It checks the manifest, HACS metadata, required repository files, translation ke
 | Integration cannot connect | Verify host, port and browser access to `http://<host>:<port>/` |
 | Device appears twice after update | Current releases keep legacy host identifiers during upgrade. If a stale duplicate already exists from older test builds, remove only the stale device entry once |
 | Service call hits the wrong DHE | In multi-device setups always include `entry_id` in service data |
-| Pairing repeats | Enable and use the disabled-by-default `Repair pairing` button first. If needed, delete the matching `/config/.storage/stiebel_dhe_connect_token_<host>_<port>.txt` file and pair again |
+| Pairing repeats | Enable and use the disabled-by-default `Repair pairing` button first. During setup, stale legacy token files are removed automatically; if needed, delete matching `/config/.storage/stiebel_dhe_connect_token*.txt` files and pair again |
 | Entities stay unavailable | Check the `Connection state` / `Error status` diagnostic sensors and Home Assistant logs for DHE session errors |
 | Reconnect counter increases often | Confirm the WebSocket connection is not blocked and no second client is fighting for the DHE session |
 | Radio entity has no station/title | Open or change the radio once on the DHE UI so the device publishes station metadata |

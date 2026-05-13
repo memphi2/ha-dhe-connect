@@ -25,7 +25,11 @@ from .const import (
     DOMAIN,
     PLATFORMS,
 )
-from .token_file_helpers import token_file_for_target
+from .token_file_helpers import (
+    LEGACY_TOKEN_FILE,
+    legacy_token_file_for_entry,
+    token_file_for_target,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,8 +42,6 @@ ATTR_ENTRY_ID = "entry_id"
 ATTR_LOCATION_ID = "location_id"
 ATTR_NAME = "name"
 ATTR_RESULT_NUMBER = "result_number"
-LEGACY_TOKEN_FILE = ".storage/stiebel_dhe_connect_token.txt"
-
 WEATHER_SEARCH_SCHEMA = vol.Schema({
     vol.Required(ATTR_NAME): cv.string,
     vol.Required(ATTR_COUNTRY_ID): vol.Coerce(int),
@@ -72,7 +74,7 @@ def _token_file_for_entry(entry: ConfigEntry) -> str:
     host = str(merged.get(CONF_HOST, "")).strip()
     port = int(merged.get(CONF_PORT, DEFAULT_PORT))
     if not host:
-        return f".storage/stiebel_dhe_connect_token_{entry.entry_id}.txt"
+        return legacy_token_file_for_entry(entry.entry_id)
     return token_file_for_target(host, port)
 
 
