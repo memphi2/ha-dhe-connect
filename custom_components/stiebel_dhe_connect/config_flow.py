@@ -155,11 +155,6 @@ def _apply_validation_error(errors: dict[str, str], err: ValueError) -> None:
         errors[CONF_HOST] = "invalid_host"
 
 
-def _target_unique_id(host: str, port: int) -> str:
-    """Return stable unique_id for one DHE target."""
-    return f"{DOMAIN}:{host}:{port}"
-
-
 def _entry_target(entry: config_entries.ConfigEntry) -> tuple[str, int] | None:
     """Return normalized host/port from an existing config entry."""
     merged = merged_entry_data(entry)
@@ -515,8 +510,6 @@ class StiebelDHEConnectConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             else:
                 if _is_target_used_by_other_entry(self.hass, host, port):
                     return self.async_abort(reason="already_configured")
-                await self.async_set_unique_id(_target_unique_id(host, port))
-                self._abort_if_unique_id_configured()
                 name = str(user_input.get(CONF_NAME, DEFAULT_NAME)).strip() or DEFAULT_NAME
 
                 if not await _can_connect(self.hass, host, port):
@@ -646,10 +639,6 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
                 elif not await _can_connect(self.hass, host, port):
                     errors["base"] = "cannot_connect"
                 else:
-                    self.hass.config_entries.async_update_entry(
-                        self.config_entry,
-                        unique_id=_target_unique_id(host, port),
-                    )
                     return self.async_create_entry(
                         title="",
                         data={
