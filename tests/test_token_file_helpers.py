@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 from pathlib import Path
 import unittest
 
@@ -61,6 +62,40 @@ class TestTokenFileHelpers(unittest.TestCase):
         self.assertEqual(
             self.helpers.legacy_token_files_for_target("192.0.2.10", 8443),
             (),
+        )
+
+    def test_stale_unconfigured_token_paths_filters_storage_token_files(self) -> None:
+        storage_path = str(ROOT / "config" / ".storage")
+        configured_path = os.path.normcase(
+            os.path.abspath(
+                os.path.join(
+                    storage_path,
+                    "stiebel_dhe_connect_token_existing_8443.txt",
+                )
+            )
+        )
+
+        self.assertEqual(
+            self.helpers.stale_unconfigured_token_paths(
+                storage_path,
+                [
+                    "stiebel_dhe_connect_token_existing_8443.txt",
+                    "stiebel_dhe_connect_token_stale_8443.txt",
+                    "stiebel_dhe_connect_token_stale.json",
+                    "unrelated.txt",
+                ],
+                {configured_path},
+            ),
+            {
+                os.path.normcase(
+                    os.path.abspath(
+                        os.path.join(
+                            storage_path,
+                            "stiebel_dhe_connect_token_stale_8443.txt",
+                        )
+                    )
+                )
+            },
         )
 
 

@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import re
+from collections.abc import Iterable
 
 TOKEN_FILE_HOST_COMPONENT_MAX = 120
 LEGACY_TOKEN_FILE = ".storage/stiebel_dhe_connect_token.txt"
+TOKEN_FILE_PREFIX = "stiebel_dhe_connect_token_"
+TOKEN_FILE_SUFFIX = ".txt"
 _TOKEN_FILE_COMPONENT_RE = re.compile(r"[^A-Za-z0-9_.-]")
 
 
@@ -45,4 +49,26 @@ def legacy_token_files_for_target(host: str, port: int) -> tuple[str, ...]:
     if legacy_path == current_path:
         return ()
     return (legacy_path,)
+
+
+def stale_unconfigured_token_paths(
+    storage_path: str,
+    file_names: Iterable[str],
+    configured_paths: Iterable[str],
+) -> set[str]:
+    """Return token files in storage_path that are not owned by a config entry."""
+    normalized_configured_paths = {
+        os.path.normcase(os.path.abspath(path)) for path in configured_paths
+    }
+    paths: set[str] = set()
+    for file_name in file_names:
+        if not (
+            file_name.startswith(TOKEN_FILE_PREFIX)
+            and file_name.endswith(TOKEN_FILE_SUFFIX)
+        ):
+            continue
+        path = os.path.normcase(os.path.abspath(os.path.join(storage_path, file_name)))
+        if path not in normalized_configured_paths:
+            paths.add(path)
+    return paths
 

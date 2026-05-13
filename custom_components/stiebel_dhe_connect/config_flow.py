@@ -49,10 +49,12 @@ from .entity_state_helpers import (
     normalize_internal_scald_protection,
 )
 from .pairing_helpers import map_pairing_error
+from .service_helpers import WEATHER_RESULT_NUMBER_MAX
 from .token_file_helpers import (
     LEGACY_TOKEN_FILE,
     legacy_token_file_for_entry,
     legacy_token_files_for_target,
+    stale_unconfigured_token_paths,
     token_file_for_target,
 )
 
@@ -71,7 +73,7 @@ DEFAULT_RADIO_GENRE = "Dekaden/Dekade 1980s"
 DEFAULT_WEATHER_COUNTRY_ID = 34
 SETUP_PAIRING_TIMEOUT_SECONDS = 180.0
 MAX_RADIO_RESULT_OPTIONS = 50
-MAX_WEATHER_RESULT_OPTIONS = 50
+MAX_WEATHER_RESULT_OPTIONS = WEATHER_RESULT_NUMBER_MAX
 RADIO_CATALOG_SEARCH_TYPES = ("genre", "country", "city")
 RADIO_FILTER_SEARCH_TYPES = ("country", "city")
 RADIO_SEARCH_TYPES = ("text", *RADIO_CATALOG_SEARCH_TYPES)
@@ -215,38 +217,25 @@ def _configured_token_paths(hass: HomeAssistant) -> set[str]:
     return paths
 
 
-def _setup_token_cleanup_paths(
+def _setup_token_cleanup_context(
     hass: HomeAssistant,
     host: str,
     port: int,
     token_file: str,
-) -> set[str]:
-    """Return token files that should be removed before explicit setup pairing."""
-    paths = {
+) -> tuple[set[str], str, set[str]]:
+    """Return token cleanup data without touching the filesystem."""
+    explicit_paths = {
         _abs_config_path(hass, token_file),
         _abs_config_path(hass, LEGACY_TOKEN_FILE),
     }
-    paths.update(
+    explicit_paths.update(
         _abs_config_path(hass, legacy_path)
         for legacy_path in legacy_token_files_for_target(host, port)
     )
 
     configured_paths = _configured_token_paths(hass)
     storage_path = hass.config.path(".storage")
-    try:
-        token_file_names = os.listdir(storage_path)
-    except OSError:
-        token_file_names = []
-    for file_name in token_file_names:
-        if not (
-            file_name.startswith("stiebel_dhe_connect_token_")
-            and file_name.endswith(".txt")
-        ):
-            continue
-        path = os.path.normcase(os.path.abspath(os.path.join(storage_path, file_name)))
-        if path not in configured_paths:
-            paths.add(path)
-    return paths
+    return explicit_paths, storage_path, configured_paths
 
 
 async def _async_clear_setup_token_files(
@@ -256,9 +245,26 @@ async def _async_clear_setup_token_files(
     token_file: str,
 ) -> None:
     """Remove stale setup tokens before requesting a fresh DHE pairing token."""
-    paths = _setup_token_cleanup_paths(hass, host, port, token_file)
+    explicit_paths, storage_path, configured_paths = _setup_token_cleanup_context(
+        hass,
+        host,
+        port,
+        token_file,
+    )
 
     def _delete() -> list[str]:
+        paths = set(explicit_paths)
+        try:
+            token_file_names = os.listdir(storage_path)
+        except OSError:
+            token_file_names = ()
+        paths.update(
+            stale_unconfigured_token_paths(
+                storage_path,
+                token_file_names,
+                configured_paths,
+            )
+        )
         removed: list[str] = []
         for path in paths:
             try:
