@@ -38,7 +38,9 @@ from .client_mapping import (
 )
 from .flow_helpers import (
     request_generation_and_wait as _request_generation_and_wait,
+    wait_for_generation_change as _wait_for_generation_change,
     wait_for_or_refresh as _wait_for_or_refresh,
+    wait_until as _wait_until,
 )
 from .pairing_helpers import (
     pairing_notification_text,
@@ -2978,26 +2980,28 @@ class DHEClient:
         self,
         previous_generation: int,
     ) -> list[dict[str, Any]]:
-        deadline = time.monotonic() + APP_COMMAND_CONFIRMATION_TIMEOUT
-        while time.monotonic() < deadline:
-            if self._radio_stations_generation != previous_generation:
-                return [
-                    _copy_json_like_value(station)
-                    for station in self._last_radio_stations
-                    if isinstance(station, dict)
-                ]
-            await asyncio.sleep(0.1)
+        if await _wait_for_generation_change(
+            previous_generation,
+            lambda: self._radio_stations_generation,
+            timeout_seconds=APP_COMMAND_CONFIRMATION_TIMEOUT,
+        ):
+            return [
+                _copy_json_like_value(station)
+                for station in self._last_radio_stations
+                if isinstance(station, dict)
+            ]
         raise DHEError("radio station search timed out")
 
     async def _wait_for_radio_favorites(
         self,
         previous_generation: int,
     ) -> list[dict[str, Any]]:
-        deadline = time.monotonic() + APP_COMMAND_CONFIRMATION_TIMEOUT
-        while time.monotonic() < deadline:
-            if self._radio_favorites_generation != previous_generation:
-                return self._radio_favorites()
-            await asyncio.sleep(0.1)
+        if await _wait_for_generation_change(
+            previous_generation,
+            lambda: self._radio_favorites_generation,
+            timeout_seconds=APP_COMMAND_CONFIRMATION_TIMEOUT,
+        ):
+            return self._radio_favorites()
         raise DHEError("radio favorites timed out")
 
     async def _wait_for_radio_catalog(
@@ -3006,14 +3010,12 @@ class DHEClient:
         previous_generation: int,
     ) -> list[str]:
         requested_attribute = str(attribute).strip().lower()
-        deadline = time.monotonic() + WEATHER_CATALOG_TIMEOUT
-        while time.monotonic() < deadline:
-            if (
-                self._radio_catalog_generations.get(requested_attribute, 0)
-                != previous_generation
-            ):
-                return list(self._last_radio_catalogs.get(requested_attribute, []))
-            await asyncio.sleep(0.1)
+        if await _wait_for_generation_change(
+            previous_generation,
+            lambda: self._radio_catalog_generations.get(requested_attribute, 0),
+            timeout_seconds=WEATHER_CATALOG_TIMEOUT,
+        ):
+            return list(self._last_radio_catalogs.get(requested_attribute, []))
         catalog = self._last_radio_catalogs.get(requested_attribute, [])
         if catalog:
             return list(catalog)
@@ -3023,45 +3025,49 @@ class DHEClient:
         return await self._wait_for_radio_catalog("genre", previous_generation)
 
     async def _wait_for_radio_station(self, station_id: int) -> None:
-        deadline = time.monotonic() + APP_COMMAND_CONFIRMATION_TIMEOUT
-        while time.monotonic() < deadline:
-            station = self._last_radio_state.get("station")
-            if isinstance(station, dict) and _radio_station_id(station) == station_id:
-                return
-            await asyncio.sleep(0.1)
+        if await _wait_until(
+            lambda: (
+                isinstance(self._last_radio_state.get("station"), dict)
+                and _radio_station_id(self._last_radio_state["station"]) == station_id
+            ),
+            timeout_seconds=APP_COMMAND_CONFIRMATION_TIMEOUT,
+        ):
+            return
         raise DHEError("radio station selection timed out")
 
     async def _wait_for_weather_search_results(
         self,
         previous_generation: int,
     ) -> list[dict[str, Any]]:
-        deadline = time.monotonic() + APP_COMMAND_CONFIRMATION_TIMEOUT
-        while time.monotonic() < deadline:
-            if self._weather_search_generation != previous_generation:
-                results = self._last_weather_state.get("forecast_results")
-                if isinstance(results, list):
-                    return [
-                        _copy_json_like_value(result)
-                        for result in results
-                        if isinstance(result, dict)
-                    ]
-                return []
-            await asyncio.sleep(0.1)
+        if await _wait_for_generation_change(
+            previous_generation,
+            lambda: self._weather_search_generation,
+            timeout_seconds=APP_COMMAND_CONFIRMATION_TIMEOUT,
+        ):
+            results = self._last_weather_state.get("forecast_results")
+            if isinstance(results, list):
+                return [
+                    _copy_json_like_value(result)
+                    for result in results
+                    if isinstance(result, dict)
+                ]
+            return []
         raise DHEError("weather location search timed out")
 
     async def _wait_for_weather_countries(
         self,
         previous_generation: int,
     ) -> list[dict[str, Any]]:
-        deadline = time.monotonic() + WEATHER_CATALOG_TIMEOUT
-        while time.monotonic() < deadline:
-            if self._weather_countries_generation != previous_generation:
-                return [
-                    _copy_json_like_value(country)
-                    for country in self._last_weather_countries
-                    if isinstance(country, dict)
-                ]
-            await asyncio.sleep(0.1)
+        if await _wait_for_generation_change(
+            previous_generation,
+            lambda: self._weather_countries_generation,
+            timeout_seconds=WEATHER_CATALOG_TIMEOUT,
+        ):
+            return [
+                _copy_json_like_value(country)
+                for country in self._last_weather_countries
+                if isinstance(country, dict)
+            ]
         if self._last_weather_countries:
             return [
                 _copy_json_like_value(country)
@@ -3074,33 +3080,33 @@ class DHEClient:
         self,
         previous_generation: int,
     ) -> list[dict[str, Any]]:
-        deadline = time.monotonic() + APP_COMMAND_CONFIRMATION_TIMEOUT
-        while time.monotonic() < deadline:
-            if self._weather_favorites_generation != previous_generation:
-                favorites = self._last_weather_state.get("favorites")
-                if isinstance(favorites, list):
-                    return [
-                        _copy_json_like_value(favorite)
-                        for favorite in favorites
-                        if isinstance(favorite, dict)
-                    ]
-                return []
-            await asyncio.sleep(0.1)
+        if await _wait_for_generation_change(
+            previous_generation,
+            lambda: self._weather_favorites_generation,
+            timeout_seconds=APP_COMMAND_CONFIRMATION_TIMEOUT,
+        ):
+            favorites = self._last_weather_state.get("favorites")
+            if isinstance(favorites, list):
+                return [
+                    _copy_json_like_value(favorite)
+                    for favorite in favorites
+                    if isinstance(favorite, dict)
+                ]
+            return []
         raise DHEError("weather favorites timed out")
 
     async def _wait_for_weather_location(
         self,
         location_id: str,
     ) -> None:
-        deadline = time.monotonic() + APP_COMMAND_CONFIRMATION_TIMEOUT
-        while time.monotonic() < deadline:
-            location = self._last_weather_state.get("location")
-            if (
-                isinstance(location, dict)
-                and str(location.get("LocationId", "")) == location_id
-            ):
-                return
-            await asyncio.sleep(0.1)
+        if await _wait_until(
+            lambda: (
+                isinstance(self._last_weather_state.get("location"), dict)
+                and str(self._last_weather_state["location"].get("LocationId", "")) == location_id
+            ),
+            timeout_seconds=APP_COMMAND_CONFIRMATION_TIMEOUT,
+        ):
+            return
         raise DHEError("weather location selection timed out")
 
     @staticmethod
