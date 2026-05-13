@@ -200,6 +200,55 @@ class TestAvailabilityHelpers(unittest.TestCase):
         self.assertFalse(self.helpers.value_available(True, None))
         self.assertFalse(self.helpers.value_available(False, 1))
 
+    def test_switch_state_from_value_accepts_known_false_values(self) -> None:
+        self.assertTrue(self.helpers.switch_state_from_value(1))
+        self.assertFalse(self.helpers.switch_state_from_value(0))
+        self.assertFalse(self.helpers.switch_state_from_value(False))
+        self.assertIsNone(self.helpers.switch_state_from_value(None))
+
+    def test_restored_switch_state_accepts_only_on_off(self) -> None:
+        self.assertTrue(self.helpers.restored_switch_state("on"))
+        self.assertFalse(self.helpers.restored_switch_state("off"))
+        self.assertIsNone(self.helpers.restored_switch_state("unknown"))
+        self.assertIsNone(self.helpers.restored_switch_state(None))
+
+    def test_wellness_program_switch_state_matches_active_program(self) -> None:
+        self.assertTrue(
+            self.helpers.wellness_program_switch_state(
+                program_value=2,
+                program_active=True,
+                program_id=2,
+            )
+        )
+        self.assertTrue(
+            self.helpers.wellness_program_switch_state(
+                program_value="2",
+                program_active=None,
+                program_id=2,
+            )
+        )
+        self.assertFalse(
+            self.helpers.wellness_program_switch_state(
+                program_value=2,
+                program_active=False,
+                program_id=2,
+            )
+        )
+        self.assertFalse(
+            self.helpers.wellness_program_switch_state(
+                program_value=3,
+                program_active=True,
+                program_id=2,
+            )
+        )
+        self.assertFalse(
+            self.helpers.wellness_program_switch_state(
+                program_value="bad",
+                program_active=True,
+                program_id=2,
+            )
+        )
+
     def test_connected_or_known_available_accepts_cached_values(self) -> None:
         self.assertTrue(self.helpers.connected_or_known_available(True, None))
         self.assertTrue(self.helpers.connected_or_known_available(False, 0))

@@ -7,7 +7,6 @@ from dataclasses import dataclass
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_OFF, STATE_ON
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -27,7 +26,12 @@ from .client import (
     SHOWER_TIMER_PATH,
 )
 from .entity_helpers import StiebelDHEEntityMixin
-from .entity_state_helpers import value_available
+from .entity_state_helpers import (
+    restored_switch_state,
+    switch_state_from_value,
+    value_available,
+    wellness_program_switch_state,
+)
 from .runtime_helpers import get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
@@ -178,21 +182,22 @@ async def async_setup_entry(
     ])
 
 
-class StiebelDHEODBSwitch(StiebelDHEEntityMixin, SwitchEntity, RestoreEntity):
-    """Generic boolean switch backed by one ODB measurement id."""
+class StiebelDHEBaseSwitch(StiebelDHEEntityMixin, SwitchEntity, RestoreEntity):
+    """Shared switch behavior for DHE-backed switches."""
 
-    entity_description: StiebelDHEODBSwitchDescription
+    entity_description: SwitchEntityDescription
     _attr_has_entity_name = True
     _attr_should_poll = False
 
-    def __init__(
+    def _init_switch_entity(
         self,
+        *,
         entry_id: str,
         name: str,
         client: DHEClient,
-        description: StiebelDHEODBSwitchDescription,
+        description: SwitchEntityDescription,
     ) -> None:
-        self.entity_description = description
+        """Initialize common switch identity and state."""
         self._attr_translation_key = description.translation_key
         self._attr_icon = description.icon
         self._attr_entity_category = description.entity_category
@@ -202,24 +207,77 @@ class StiebelDHEODBSwitch(StiebelDHEEntityMixin, SwitchEntity, RestoreEntity):
             name=name,
             client=client,
         )
-        self._attr_extra_state_attributes = {"odb_id": description.measurement_id}
         self._attr_available = False
         self._attr_is_on: bool | None = None
 
+    def _subscribe_to_switch_updates(self) -> None:
+        """Subscribe to common switch update callbacks."""
+        self.async_on_remove(
+            self._client.add_measurement_callback(self._handle_measurement_update)
+        )
+        self.async_on_remove(
+            self._client.add_availability_callback(self._handle_availability_update)
+        )
+
+    async def _restore_state_from_measurement(self, measurement_id: int) -> None:
+        """Restore switch state from the latest client value or HA state."""
+        last_value = self._client.last_measurements.get(measurement_id)
+        if last_value is not None:
+            self._set_switch_state_from_value(last_value)
+            return
+
+        await self._restore_last_switch_state()
+
+    async def _restore_last_switch_state(self) -> bool:
+        """Restore switch state from Home Assistant's last stored state."""
+        last_state = await self.async_get_last_state()
+        restored = restored_switch_state(last_state.state if last_state else None)
+        if restored is None:
+            return False
+
+        self._attr_is_on = restored
+        self._attr_available = True
+        return True
+
+    def _set_switch_state_from_value(self, value: ODBValue) -> None:
+        """Update switch state from one client measurement value."""
+        self._attr_is_on = switch_state_from_value(value)
+        self._attr_available = self._attr_is_on is not None
+
+    @callback
+    def _handle_availability_update(self, available: bool) -> None:
+        """Handle DHE connection availability updates."""
+        self._attr_available = value_available(available, self._attr_is_on)
+        self.async_write_ha_state()
+
+
+class StiebelDHEODBSwitch(StiebelDHEBaseSwitch):
+    """Generic boolean switch backed by one ODB measurement id."""
+
+    entity_description: StiebelDHEODBSwitchDescription
+
+    def __init__(
+        self,
+        entry_id: str,
+        name: str,
+        client: DHEClient,
+        description: StiebelDHEODBSwitchDescription,
+    ) -> None:
+        self.entity_description = description
+        self._init_switch_entity(
+            entry_id=entry_id,
+            name=name,
+            client=client,
+            description=description,
+        )
+        self._attr_extra_state_attributes = {"odb_id": description.measurement_id}
+
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE updates and restore last known state."""
-        self.async_on_remove(self._client.add_measurement_callback(self._handle_measurement_update))
-        self.async_on_remove(self._client.add_availability_callback(self._handle_availability_update))
-
-        last_value = self._client.last_measurements.get(self.entity_description.measurement_id)
-        if last_value is not None:
-            self._attr_is_on = bool(last_value)
-            self._attr_available = True
-        else:
-            last_state = await self.async_get_last_state()
-            if last_state and last_state.state in {STATE_ON, STATE_OFF}:
-                self._attr_is_on = last_state.state == STATE_ON
-                self._attr_available = True
+        self._subscribe_to_switch_updates()
+        await self._restore_state_from_measurement(
+            self.entity_description.measurement_id
+        )
 
     async def async_turn_on(self, **kwargs) -> None:  # noqa: ANN003
         await self._set_enabled(
@@ -262,23 +320,14 @@ class StiebelDHEODBSwitch(StiebelDHEEntityMixin, SwitchEntity, RestoreEntity):
         """Handle converted ODB value updates from the persistent client."""
         if odb_id != self.entity_description.measurement_id:
             return
-        self._attr_is_on = bool(value)
-        self._attr_available = True
-        self.async_write_ha_state()
-
-    @callback
-    def _handle_availability_update(self, available: bool) -> None:
-        """Handle DHE connection availability updates."""
-        self._attr_available = value_available(available, self._attr_is_on)
+        self._set_switch_state_from_value(value)
         self.async_write_ha_state()
 
 
-class StiebelDHEAppTimerSwitch(StiebelDHEEntityMixin, SwitchEntity, RestoreEntity):
+class StiebelDHEAppTimerSwitch(StiebelDHEBaseSwitch):
     """App timer activation switch."""
 
     entity_description: StiebelDHEAppTimerSwitchDescription
-    _attr_has_entity_name = True
-    _attr_should_poll = False
 
     def __init__(
         self,
@@ -288,33 +337,24 @@ class StiebelDHEAppTimerSwitch(StiebelDHEEntityMixin, SwitchEntity, RestoreEntit
         description: StiebelDHEAppTimerSwitchDescription,
     ) -> None:
         self.entity_description = description
-        self._attr_translation_key = description.translation_key
-        self._attr_icon = description.icon
-        self._init_dhe_entity(
+        self._init_switch_entity(
             entry_id=entry_id,
-            key=description.key,
             name=name,
             client=client,
+            description=description,
         )
         self._attr_extra_state_attributes = {
             "timer_path": description.timer_path,
             "timer_property": "activation",
         }
-        self._attr_available = False
-        self._attr_is_on: bool | None = None
 
     async def async_added_to_hass(self) -> None:
-        self.async_on_remove(self._client.add_measurement_callback(self._handle_measurement_update))
-        self.async_on_remove(self._client.add_availability_callback(self._handle_availability_update))
-        last_value = self._client.last_measurements.get(self.entity_description.measurement_id)
-        if last_value is not None:
-            self._attr_is_on = bool(last_value)
-            self._attr_available = True
-        else:
-            last_state = await self.async_get_last_state()
-            if last_state and last_state.state in {STATE_ON, STATE_OFF}:
-                self._attr_is_on = last_state.state == STATE_ON
-                self._attr_available = True
+        """Subscribe to DHE updates and restore last known state."""
+        self._subscribe_to_switch_updates()
+        await self._restore_state_from_measurement(
+            self.entity_description.measurement_id
+        )
+
     async def async_turn_on(self, **kwargs) -> None:  # noqa: ANN003
         await self._set_enabled(True)
 
@@ -328,7 +368,11 @@ class StiebelDHEAppTimerSwitch(StiebelDHEEntityMixin, SwitchEntity, RestoreEntit
         except DHEError as err:
             self._attr_available = self._attr_is_on is not None
             self.async_write_ha_state()
-            _LOGGER.error("Could not set DHE app timer %s: %s", self.entity_description.key, err)
+            _LOGGER.error(
+                "Could not set DHE app timer %s: %s",
+                self.entity_description.key,
+                err,
+            )
             raise
         self._attr_available = True
         self.async_write_ha_state()
@@ -337,26 +381,16 @@ class StiebelDHEAppTimerSwitch(StiebelDHEEntityMixin, SwitchEntity, RestoreEntit
     def _handle_measurement_update(self, odb_id: int, value: ODBValue) -> None:
         if odb_id != self.entity_description.measurement_id:
             return
-        self._attr_is_on = bool(value)
-        self._attr_available = True
-        self.async_write_ha_state()
-
-    @callback
-    def _handle_availability_update(self, available: bool) -> None:
-        self._attr_available = value_available(available, self._attr_is_on)
+        self._set_switch_state_from_value(value)
         self.async_write_ha_state()
 
 
 class StiebelDHEWellnessShowerProgramSwitch(
-    StiebelDHEEntityMixin,
-    SwitchEntity,
-    RestoreEntity,
+    StiebelDHEBaseSwitch,
 ):
     """Wellness program switch based on ODB id 2."""
 
     entity_description: StiebelDHEWellnessShowerProgramSwitchDescription
-    _attr_has_entity_name = True
-    _attr_should_poll = False
 
     def __init__(
         self,
@@ -366,45 +400,55 @@ class StiebelDHEWellnessShowerProgramSwitch(
         description: StiebelDHEWellnessShowerProgramSwitchDescription,
     ) -> None:
         self.entity_description = description
-        self._attr_translation_key = description.translation_key
-        self._attr_icon = description.icon
-        self._init_dhe_entity(
+        self._init_switch_entity(
             entry_id=entry_id,
-            key=description.key,
             name=name,
             client=client,
+            description=description,
         )
-        self._attr_extra_state_attributes = {"odb_id": ID_WELLNESS_SHOWER_PROGRAM, "program_value": description.program_id}
-        self._attr_available = False
-        self._attr_is_on: bool | None = None
-        self._last_program_value: float | None = None
+        self._attr_extra_state_attributes = {
+            "odb_id": ID_WELLNESS_SHOWER_PROGRAM,
+            "program_value": description.program_id,
+        }
+        self._last_program_value: ODBValue | None = None
         self._program_active: bool | None = None
 
     async def async_added_to_hass(self) -> None:
-        self.async_on_remove(self._client.add_measurement_callback(self._handle_measurement_update))
-        self.async_on_remove(self._client.add_availability_callback(self._handle_availability_update))
-        last_value = self._client.last_measurements.get(ID_WELLNESS_SHOWER_PROGRAM)
-        last_stop_value = self._client.last_measurements.get(ID_WELLNESS_ACTIVE)
-        if last_stop_value is not None:
-            self._program_active = bool(last_stop_value)
-        if last_value is not None:
-            self._last_program_value = float(last_value)
-            self._attr_is_on = self._program_active is not False and self._last_program_value == float(self.entity_description.program_id)
+        """Subscribe to DHE updates and restore last known wellness state."""
+        self._subscribe_to_switch_updates()
+
+        last_active_value = self._client.last_measurements.get(ID_WELLNESS_ACTIVE)
+        if last_active_value is not None:
+            self._program_active = switch_state_from_value(last_active_value)
+
+        last_program_value = self._client.last_measurements.get(
+            ID_WELLNESS_SHOWER_PROGRAM
+        )
+        if last_program_value is not None:
+            self._last_program_value = last_program_value
+            self._attr_is_on = wellness_program_switch_state(
+                self._last_program_value,
+                self._program_active,
+                self.entity_description.program_id,
+            )
             self._attr_available = True
         else:
-            last_state = await self.async_get_last_state()
-            if last_state and last_state.state in {STATE_ON, STATE_OFF}:
-                self._attr_is_on = last_state.state == STATE_ON
-                self._attr_available = True
+            await self._restore_last_switch_state()
 
     async def async_turn_on(self, **kwargs) -> None:  # noqa: ANN003
         try:
-            await self._client.set_wellness_shower_program(self.entity_description.program_id)
+            await self._client.set_wellness_shower_program(
+                self.entity_description.program_id
+            )
             self._attr_is_on = True
         except DHEError as err:
             self._attr_available = self._attr_is_on is not None
             self.async_write_ha_state()
-            _LOGGER.error("Could not start DHE wellness program %s: %s", self.entity_description.key, err)
+            _LOGGER.error(
+                "Could not start DHE wellness program %s: %s",
+                self.entity_description.key,
+                err,
+            )
             raise
         self._attr_available = True
         self.async_write_ha_state()
@@ -416,7 +460,11 @@ class StiebelDHEWellnessShowerProgramSwitch(
         except DHEError as err:
             self._attr_available = self._attr_is_on is not None
             self.async_write_ha_state()
-            _LOGGER.error("Could not stop DHE wellness program %s: %s", self.entity_description.key, err)
+            _LOGGER.error(
+                "Could not stop DHE wellness program %s: %s",
+                self.entity_description.key,
+                err,
+            )
             raise
         self._attr_available = True
         self.async_write_ha_state()
@@ -424,19 +472,15 @@ class StiebelDHEWellnessShowerProgramSwitch(
     @callback
     def _handle_measurement_update(self, odb_id: int, value: ODBValue) -> None:
         if odb_id == ID_WELLNESS_SHOWER_PROGRAM:
-            self._last_program_value = float(value)
+            self._last_program_value = value
         elif odb_id == ID_WELLNESS_ACTIVE:
-            self._program_active = bool(value)
+            self._program_active = switch_state_from_value(value)
         else:
             return
-        self._attr_is_on = (
-            self._program_active is not False
-            and self._last_program_value == float(self.entity_description.program_id)
+        self._attr_is_on = wellness_program_switch_state(
+            self._last_program_value,
+            self._program_active,
+            self.entity_description.program_id,
         )
         self._attr_available = True
-        self.async_write_ha_state()
-
-    @callback
-    def _handle_availability_update(self, available: bool) -> None:
-        self._attr_available = value_available(available, self._attr_is_on)
         self.async_write_ha_state()

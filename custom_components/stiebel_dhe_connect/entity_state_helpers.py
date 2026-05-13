@@ -149,6 +149,34 @@ def value_available(connected: bool, value: Any) -> bool:
     return bool(connected) and value is not None
 
 
+def switch_state_from_value(value: Any) -> bool | None:
+    """Return a switch state from a known client value."""
+    if value is None:
+        return None
+    return bool(value)
+
+
+def restored_switch_state(state: Any) -> bool | None:
+    """Return a switch state from a restored Home Assistant state string."""
+    if state == "on":
+        return True
+    if state == "off":
+        return False
+    return None
+
+
+def wellness_program_switch_state(
+    program_value: Any,
+    program_active: bool | None,
+    program_id: int,
+) -> bool:
+    """Return whether one wellness program switch should be on."""
+    current_program = coerce_float(program_value)
+    if current_program is None:
+        return False
+    return program_active is not False and current_program == float(program_id)
+
+
 def connected_or_known_available(connected: bool, *values: Any) -> bool:
     """Return whether an entity is connected or has any cached known value."""
     return bool(connected) or any(value is not None for value in values)
