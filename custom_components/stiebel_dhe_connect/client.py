@@ -861,75 +861,48 @@ class DHEClient:
     def add_setpoint_callback(self, callback: SetpointCallback) -> CallbackRemover:
         remove = self._add_callback(self._setpoint_callbacks, callback)
         if self._last_setpoint is not None:
-            try:
-                callback(self._last_setpoint)
-            except Exception:  # noqa: BLE001
-                self._log_callback_exception("setpoint")
+            self._call_callback("setpoint", callback, self._last_setpoint)
         return remove
 
     def add_availability_callback(self, callback: AvailabilityCallback) -> CallbackRemover:
         remove = self._add_callback(self._availability_callbacks, callback)
-        try:
-            callback(self._available)
-        except Exception:  # noqa: BLE001
-            self._log_callback_exception("availability")
+        self._call_callback("availability", callback, self._available)
         return remove
 
     def add_online_callback(self, callback: OnlineCallback) -> CallbackRemover:
         remove = self._add_callback(self._online_callbacks, callback)
-        try:
-            callback(self._online)
-        except Exception:  # noqa: BLE001
-            self._log_callback_exception("online")
+        self._call_callback("online", callback, self._online)
         return remove
 
     def add_measurement_callback(self, callback: MeasurementCallback) -> CallbackRemover:
         remove = self._add_callback(self._measurement_callbacks, callback)
         for odb_id, value in self._last_measurements.items():
-            try:
-                callback(odb_id, value)
-            except Exception:  # noqa: BLE001
-                self._log_callback_exception("measurement")
+            self._call_callback("measurement", callback, odb_id, value)
         if self._temperature_memory_full_list_seen:
             for measurement_id in TEMPERATURE_MEMORY_SLOT_MEASUREMENTS.values():
                 if measurement_id in self._last_measurements:
                     continue
-                try:
-                    callback(measurement_id, None)
-                except Exception:  # noqa: BLE001
-                    self._log_callback_exception("measurement")
+                self._call_callback("measurement", callback, measurement_id, None)
         return remove
 
     def add_reconnect_callback(self, callback: ReconnectCallback) -> CallbackRemover:
         remove = self._add_callback(self._reconnect_callbacks, callback)
-        try:
-            callback(self._reconnect_count)
-        except Exception:  # noqa: BLE001
-            self._log_callback_exception("reconnect")
+        self._call_callback("reconnect", callback, self._reconnect_count)
         return remove
 
     def add_radio_callback(self, callback: RadioCallback) -> CallbackRemover:
         remove = self._add_callback(self._radio_callbacks, callback)
-        try:
-            callback(self._copy_radio_state())
-        except Exception:  # noqa: BLE001
-            self._log_callback_exception("radio")
+        self._call_callback("radio", callback, self._copy_radio_state())
         return remove
 
     def add_weather_callback(self, callback: WeatherCallback) -> CallbackRemover:
         remove = self._add_callback(self._weather_callbacks, callback)
-        try:
-            callback(self._copy_weather_state())
-        except Exception:  # noqa: BLE001
-            self._log_callback_exception("weather")
+        self._call_callback("weather", callback, self._copy_weather_state())
         return remove
 
     def add_diagnostic_callback(self, callback: DiagnosticCallback) -> CallbackRemover:
         remove = self._add_callback(self._diagnostic_callbacks, callback)
-        try:
-            callback(self._copy_diagnostic_state())
-        except Exception:  # noqa: BLE001
-            self._log_callback_exception("diagnostic")
+        self._call_callback("diagnostic", callback, self._copy_diagnostic_state())
         return remove
 
     @staticmethod
@@ -940,6 +913,26 @@ class DHEClient:
             callbacks.discard(callback)
 
         return _remove_callback
+
+    def _notify_callbacks(
+        self,
+        callback_name: str,
+        callbacks: set[Callable[..., None]],
+        *args: Any,
+    ) -> None:
+        for callback in tuple(callbacks):
+            self._call_callback(callback_name, callback, *args)
+
+    @staticmethod
+    def _call_callback(
+        callback_name: str,
+        callback: Callable[..., None],
+        *args: Any,
+    ) -> None:
+        try:
+            callback(*args)
+        except Exception:  # noqa: BLE001
+            DHEClient._log_callback_exception(callback_name)
 
     @staticmethod
     def _log_callback_exception(callback_name: str) -> None:
@@ -2344,8 +2337,11 @@ class DHEClient:
             return
 
         self._reconnect_count += 1
-        for callback in tuple(self._reconnect_callbacks):
-            callback(self._reconnect_count)
+        self._notify_callbacks(
+            "reconnect",
+            self._reconnect_callbacks,
+            self._reconnect_count,
+        )
 
     async def _handle_runtime_event(self, event: DHEEvent) -> None:
         if event.name == "__closed":
@@ -2484,8 +2480,11 @@ class DHEClient:
         if self._last_radio_state.get(field) == value:
             return
         self._last_radio_state[field] = value
-        for callback in tuple(self._radio_callbacks):
-            callback(self._copy_radio_state())
+        self._notify_callbacks(
+            "radio",
+            self._radio_callbacks,
+            self._copy_radio_state(),
+        )
 
     def _handle_radio_catalog_value(self, command: str, raw_value: Any) -> None:
         self._last_app_values[command] = _summarize_radio_value(raw_value)
@@ -2526,8 +2525,11 @@ class DHEClient:
         state["favorites"] = favorites
         if state != self._last_radio_state:
             self._last_radio_state = state
-            for callback in tuple(self._radio_callbacks):
-                callback(self._copy_radio_state())
+            self._notify_callbacks(
+                "radio",
+                self._radio_callbacks,
+                self._copy_radio_state(),
+            )
 
     def _copy_radio_state(self) -> dict[str, Any]:
         state = {
@@ -2603,8 +2605,11 @@ class DHEClient:
         if self._last_weather_state == state:
             return
         self._last_weather_state = state
-        for callback in tuple(self._weather_callbacks):
-            callback(self._copy_weather_state())
+        self._notify_callbacks(
+            "weather",
+            self._weather_callbacks,
+            self._copy_weather_state(),
+        )
 
     def _copy_weather_state(self) -> dict[str, Any]:
         return {
@@ -2648,8 +2653,7 @@ class DHEClient:
         if not changed:
             return
         state = self._copy_diagnostic_state()
-        for callback in tuple(self._diagnostic_callbacks):
-            callback(state)
+        self._notify_callbacks("diagnostic", self._diagnostic_callbacks, state)
 
     def _record_pairing_progress(
         self,
@@ -3100,8 +3104,12 @@ class DHEClient:
             "source_command": source_command,
             "operation": "delete",
         }
-        for callback in tuple(self._measurement_callbacks):
-            callback(measurement_id, None)
+        self._notify_callbacks(
+            "measurement",
+            self._measurement_callbacks,
+            measurement_id,
+            None,
+        )
 
     def _handle_odb_value(self, odb_id: int, raw_value: Any, *, is_valid: Any = None) -> None:
         if is_valid is False:
@@ -3303,8 +3311,7 @@ class DHEClient:
         previous = self._last_setpoint
         self._last_setpoint = value
         if previous is None or abs(previous - value) >= 0.01:
-            for callback in tuple(self._setpoint_callbacks):
-                callback(value)
+            self._notify_callbacks("setpoint", self._setpoint_callbacks, value)
         future = self._pending_setpoint_future
         expected = self._pending_expected_setpoint
         if future is not None and not future.done() and (expected is None or abs(value - expected) < 0.01):
@@ -3323,8 +3330,12 @@ class DHEClient:
                     return
             elif _values_equal(previous, value):
                 return
-        for callback in tuple(self._measurement_callbacks):
-            callback(odb_id, value)
+        self._notify_callbacks(
+            "measurement",
+            self._measurement_callbacks,
+            odb_id,
+            value,
+        )
 
     def _maybe_complete_write_future(self, odb_id: int, value: ODBValue) -> None:
         future = self._pending_write_future
@@ -3647,15 +3658,17 @@ class DHEClient:
         if self._available == available:
             return
         self._available = available
-        for callback in tuple(self._availability_callbacks):
-            callback(available)
+        self._notify_callbacks(
+            "availability",
+            self._availability_callbacks,
+            available,
+        )
 
     def _set_online(self, online: bool) -> None:
         if self._online == online:
             return
         self._online = online
-        for callback in tuple(self._online_callbacks):
-            callback(online)
+        self._notify_callbacks("online", self._online_callbacks, online)
 
     def _cancel_delayed_unavailable(self) -> None:
         task = self._availability_drop_task
