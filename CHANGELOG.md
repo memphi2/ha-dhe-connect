@@ -2,11 +2,19 @@
 
 ## Unreleased
 
+## v1.1.0 - 2026-05-13 (compared to v1.0.8)
+
 ### Changed
 
 - Entity object IDs were normalized around stable internal keys. Existing installs should remove the DHE Connect device/integration entry and add it again after updating so Home Assistant creates the new entity registry entries cleanly.
 - Error status sensor now uses stable enum states (`ok`, `disconnected`, `service_required`, `target_below_inlet`) with translated labels.
 - Registration-time callback failures are now debug-logged instead of being silently swallowed.
+- Runtime callback dispatch and command retry handling were consolidated so reconnect and write paths share one implementation.
+
+### Fixed
+
+- Fresh setup now removes stale legacy and entry-id based token files before requesting a pairing token, while preserving token files that belong to configured DHE entries.
+- Setup duplicate detection now checks configured host/port targets directly, so stale Home Assistant unique IDs no longer block a valid re-add and the same DHE target still cannot be added twice.
 
 ## v1.0.8 - 2026-05-12 (compared to v1.0.6)
 

@@ -6,6 +6,7 @@ import hashlib
 import re
 
 TOKEN_FILE_HOST_COMPONENT_MAX = 120
+LEGACY_TOKEN_FILE = ".storage/stiebel_dhe_connect_token.txt"
 _TOKEN_FILE_COMPONENT_RE = re.compile(r"[^A-Za-z0-9_.-]")
 
 
@@ -29,4 +30,19 @@ def token_file_for_target(host: str, port: int) -> str:
     """Return per-target token path under Home Assistant .storage."""
     safe_host = _bounded_host_component(host)
     return f".storage/stiebel_dhe_connect_token_{safe_host}_{port}.txt"
+
+
+def legacy_token_file_for_entry(entry_id: str) -> str:
+    """Return the old entry-id based token path used by early multi-device builds."""
+    return f".storage/stiebel_dhe_connect_token_{entry_id}.txt"
+
+
+def legacy_token_files_for_target(host: str, port: int) -> tuple[str, ...]:
+    """Return older host-derived token paths for one DHE target."""
+    safe_host = _normalize_token_file_component(host)
+    legacy_path = f".storage/stiebel_dhe_connect_token_{safe_host}_{port}.txt"
+    current_path = token_file_for_target(host, port)
+    if legacy_path == current_path:
+        return ()
+    return (legacy_path,)
 

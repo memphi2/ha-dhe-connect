@@ -6,7 +6,7 @@ The integration talks directly to the DHE web interface on your local network. I
 
 ## Status
 
-- Current version: `1.0.8`
+- Current version: `1.1.0`
 - Home Assistant setup: UI config flow
 - HACS type: custom integration
 - IoT class: local push
@@ -57,6 +57,12 @@ Copy the integration directory to:
 
 After copying, restart Home Assistant and add `Stiebel DHE Connect` from the UI.
 
+### Upgrade to v1.1.0
+
+v1.1.0 normalizes internal entity object IDs around stable integration keys.
+If the integration was already installed before this release, remove the existing `Stiebel DHE Connect` integration entry/device once after updating and add it again so Home Assistant creates a clean entity registry.
+Fresh installs are unaffected.
+
 ## Configuration
 
 The config flow asks for:
@@ -103,6 +109,7 @@ After successful pairing the local token is stored per configured DHE target at:
 With multiple DHE devices, each host/port pair gets its own token file.
 On upgrade from older single-device versions, the legacy global token file is moved once to the new per-target file and then consumed.
 For very long hostnames, the token filename uses a bounded host component with a hash suffix to avoid filesystem filename-length errors.
+During explicit setup pairing, stale legacy or entry-id based token files that do not belong to an existing DHE config entry are removed before a fresh token is requested.
 
 Use the disabled-by-default `Repair pairing` button if you want to force a new pairing from Home Assistant.
 The button deletes the stored token, reconnects and shows a pairing notification while the DHE waits for confirmation.
@@ -582,9 +589,10 @@ It checks the manifest, HACS metadata, required repository files, translation ke
 | Symptom | Check |
 |---|---|
 | Integration cannot connect | Verify host, port and browser access to `http://<host>:<port>/` |
-| Device appears twice after update | Current releases keep legacy host identifiers during upgrade. If a stale duplicate already exists from older test builds, remove only the stale device entry once |
+| Device or entity registry looks stale after v1.1.0 | Remove the DHE Connect integration entry/device and add it again once so Home Assistant rebuilds the registry with normalized object IDs |
+| Add flow says already configured | Another DHE Connect config entry already uses the same host/port target. Stale token files alone should not cause this in v1.1.0 |
 | Service call hits the wrong DHE | In multi-device setups always include `entry_id` in service data |
-| Pairing repeats | Enable and use the disabled-by-default `Repair pairing` button first. If needed, delete the matching `/config/.storage/stiebel_dhe_connect_token_<host>_<port>.txt` file and pair again |
+| Pairing repeats | Enable and use the disabled-by-default `Repair pairing` button first. During setup, stale legacy token files are removed automatically; if needed, delete matching `/config/.storage/stiebel_dhe_connect_token*.txt` files and pair again |
 | Entities stay unavailable | Check the `Connection state` / `Error status` diagnostic sensors and Home Assistant logs for DHE session errors |
 | Reconnect counter increases often | Confirm the WebSocket connection is not blocked and no second client is fighting for the DHE session |
 | Radio entity has no station/title | Open or change the radio once on the DHE UI so the device publishes station metadata |
