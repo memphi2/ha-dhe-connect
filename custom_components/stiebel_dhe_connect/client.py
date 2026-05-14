@@ -1070,16 +1070,21 @@ class DHEClient:
         async def _operation(ctx: DHESession) -> bool:
             payload = _copy_json_like_value(location)
 
+            favorites_known = "favorites" in self._last_weather_state
             favorites = self._weather_favorites()
             try:
                 favorites = await self._request_weather_favorites(ctx)
+                favorites_known = True
             except DHEError:
-                pass
+                if not favorites_known:
+                    raise
             if _weather_location_in_list(payload, favorites):
                 return True
 
             location_id = _weather_location_id(payload)
-            await self._assign_weather_favorite_and_wait(ctx, payload)
+            favorites = await self._assign_weather_favorite_and_wait(ctx, payload)
+            if not _weather_location_in_list(payload, favorites):
+                raise DHEError("DHE weather favorite did not change")
             await self._send_ste_command(ctx, WEATHER_LOCATION_GET_COMMAND, location_id)
             await self._wait_for_weather_location(location_id)
             return True
