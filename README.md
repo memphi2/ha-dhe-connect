@@ -1,5 +1,9 @@
 # Stiebel DHE Connect for Home Assistant
 
+[![Validate](https://github.com/memphi2/ha-dhe-connect/actions/workflows/validate.yml/badge.svg)](https://github.com/memphi2/ha-dhe-connect/actions/workflows/validate.yml)
+[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://www.hacs.xyz/)
+[![License MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Local Home Assistant integration for STIEBEL ELTRON DHE Connect instantaneous water heaters.
 
 The integration talks directly to the DHE web interface on your local network. It uses the same Socket.IO / Engine.IO v3 protocol shape as the browser UI: polling for session setup and authentication, then a WebSocket upgrade for the persistent runtime connection. No cloud service is used.
