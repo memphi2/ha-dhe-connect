@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import ipaddress
 import json
 import logging
@@ -1158,10 +1159,19 @@ class DHEClient:
         *,
         max_value: float,
     ) -> float:
+        old_euros = self._last_measurements.get(euros_odb_id)
+        old_cents = self._last_measurements.get(cents_odb_id)
         total_cents = int(round(_clamp(float(value), 0.0, max_value) * 100))
         euros, cents = divmod(total_cents, 100)
-        await self.write_odb_value(euros_odb_id, euros)
-        await self.write_odb_value(cents_odb_id, cents)
+        try:
+            await self.write_odb_value(euros_odb_id, euros)
+            await self.write_odb_value(cents_odb_id, cents)
+        except Exception:
+            if old_euros is not None and old_cents is not None:
+                with contextlib.suppress(Exception):
+                    await self.write_odb_value(euros_odb_id, old_euros)
+                    await self.write_odb_value(cents_odb_id, old_cents)
+            raise
         return total_cents / 100.0
 
     async def press_temperature_memory(self, memory_slot: int) -> bool:

@@ -73,6 +73,48 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
             client_b._pairing_confirmation_notification_id,
         )
 
+    async def test_set_price_rolls_back_when_second_write_fails(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        DHEError = client_module.DHEError
+
+        client = DHEClient.__new__(DHEClient)
+        euros_id = 100
+        cents_id = 101
+        client._last_measurements = {
+            euros_id: 0.0,
+            cents_id: 29.0,
+        }
+
+        calls: list[tuple[int, float]] = []
+
+        async def _write_odb_value(odb_id: int, value):
+            calls.append((odb_id, float(value)))
+            if (odb_id, float(value)) == (cents_id, 5.0):
+                raise DHEError("write failed")
+            return float(value)
+
+        client.write_odb_value = AsyncMock(side_effect=_write_odb_value)
+
+        with self.assertRaises(DHEError):
+            await DHEClient._set_price(
+                client,
+                1.05,
+                euros_id,
+                cents_id,
+                max_value=9.99,
+            )
+
+        self.assertEqual(
+            calls,
+            [
+                (euros_id, 1.0),
+                (cents_id, 5.0),
+                (euros_id, 0.0),
+                (cents_id, 29.0),
+            ],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
