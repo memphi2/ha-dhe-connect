@@ -57,6 +57,16 @@ Copy the integration directory to:
 
 After copying, restart Home Assistant and add `Stiebel DHE Connect` from the UI.
 
+### Custom logo
+
+The integration icon is stored as:
+
+```text
+/config/custom_components/stiebel_dhe_connect/brand/icon.png
+```
+
+To use a different local logo, replace that file with another PNG using the same filename, then restart Home Assistant and refresh the browser cache if the old icon is still shown. HACS or manual updates can overwrite the file, so keep a copy of custom artwork and reapply it after updating if needed.
+
 ### Upgrade to v1.1.0
 
 v1.1.0 normalizes internal entity object IDs around stable integration keys.
