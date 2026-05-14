@@ -1,0 +1,553 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Stiebel DHE Connect einrichten",
+        "description": "Lokale Verbindung zum DHE Connect und physische Tmax-Jumperposition konfigurieren. Die Pairing-Anfrage wird im nächsten Schritt gestartet.",
+        "data": {
+          "host": "IP-Adresse oder Hostname",
+          "port": "Port",
+          "name": "Gerätename",
+          "internal_scald_protection": "Interner Verbrühschutz (Tmax-Jumper)"
+        }
+      },
+      "pairing_confirm": {
+        "title": "Pairing bestätigen",
+        "description": "Jetzt OK klicken. Danach erscheint die Pairing-Anfrage am DHE und die Bestätigung muss dort vollständig abgeschlossen werden. Die Integration wird erst nach erfolgreichem Pairing und Login angelegt."
+      }
+    },
+    "error": {
+      "pairing_timeout": "Pairing am DHE wurde nicht rechtzeitig bestätigt. Bitte erneut versuchen.",
+      "pairing_not_confirmed": "Pairing wurde am DHE nicht bestätigt. Bitte am Gerät bestätigen und erneut versuchen.",
+      "pairing_token_timeout": "Pairing wurde bestätigt, aber das Token konnte nicht rechtzeitig abgerufen werden.",
+      "pairing_confirm_after_auth_timeout": "Anmeldung erhalten, aber die Pairing-Bestätigung am DHE ist ausgeblieben.",
+      "pairing_rejected": "Pairing wurde am DHE abgelehnt. Bitte erneut bestätigen.",
+      "pairing_failed": "Pairing mit dem DHE ist fehlgeschlagen.",
+      "auth_failed": "Pairing war erfolgreich, aber die Anmeldung am DHE ist fehlgeschlagen.",
+      "auth_timeout": "Anmeldung am DHE hat zu lange gedauert. Bitte erneut versuchen.",
+      "cannot_connect": "Verbindung zum DHE nicht möglich. IP-Adresse und Port prüfen.",
+      "invalid_host": "Ungültiger Host. Bitte nur IP-Adresse oder Hostname ohne Pfad, Benutzername oder Port eingeben.",
+      "embedded_port_not_supported": "Bitte Port nicht im Hostfeld angeben (z. B. \"192.168.1.10\"). Den Port nur im Port-Feld eintragen.",
+      "invalid_port": "Ungültiger Port. Der Port muss zwischen 1 und 65535 liegen.",
+      "invalid_internal_scald_protection": "Ungültige Tmax-Jumperposition."
+    },
+    "abort": {
+      "already_configured": "Stiebel DHE Connect ist bereits konfiguriert."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Stiebel DHE Connect konfigurieren",
+        "description": "Verbindung, Gerät, Kosten, Wetter-Favoriten oder Radio-Sender verwalten.",
+        "menu_options": {
+          "connection": "Verbindung/Gerät",
+          "device_settings": "Kosten & Emissionen",
+          "weather_favorite": "Wetter-Favorit hinzufügen",
+          "remove_weather_favorite": "Wetter-Favorit entfernen",
+          "radio_favorite": "Radio-Sender hinzufügen",
+          "remove_radio_favorite": "Radio-Sender entfernen"
+        }
+      },
+      "connection": {
+        "title": "Verbindung/Gerät konfigurieren",
+        "description": "IP-Adresse, Port, Gerätename und physische Tmax-Jumperposition ändern.",
+        "data": {
+          "host": "IP-Adresse oder Hostname",
+          "port": "Port",
+          "name": "Gerätename",
+          "internal_scald_protection": "Interner Verbrühschutz (Tmax-Jumper)"
+        }
+      },
+      "device_settings": {
+        "title": "Kosten & Emissionen",
+        "description": "Währung, Strompreis, Wasserpreis und CO2-Emission am DHE setzen. Zahlenfelder sind mit aktuellen Gerätewerten vorbelegt, Währung standardmäßig auf EUR.",
+        "data": {
+          "currency": "Währung",
+          "electricity_price": "Strompreis (EUR/kWh)",
+          "water_price": "Wasserpreis (EUR/m³)",
+          "co2_emission": "CO2-Emission (kg/kWh)"
+        }
+      },
+      "weather_favorite": {
+        "title": "Wetter-Favorit suchen",
+        "description": "Land auswählen und Ort suchen.",
+        "data": {
+          "country_id": "Land",
+          "name": "Suchbegriff"
+        }
+      },
+      "weather_favorite_result": {
+        "title": "Wetter-Favorit auswählen",
+        "description": "Treffer auswählen und als Favorit speichern.",
+        "data": {
+          "result": "Treffer"
+        }
+      },
+      "remove_weather_favorite": {
+        "title": "Wetter-Favorit entfernen",
+        "description": "Vorhandenen Favorit auswählen und vom DHE entfernen.",
+        "data": {
+          "result": "Favorit"
+        }
+      },
+      "radio_favorite": {
+        "title": "Radio-Suche auswählen",
+        "description": "Nach Volltext, Musikrichtung, Land oder Stadt suchen. Musikrichtung wird aus dem DHE-Katalog gesucht; Land und Stadt nutzen Katalogauswahl plus Suchbegriff.",
+        "data": {
+          "search_type": "Suchart"
+        }
+      },
+      "radio_favorite_catalog": {
+        "title": "Radio-Suche eingeben",
+        "description": "Suchbegriff eingeben und bei Land, Stadt oder Musikrichtung den passenden Katalogeintrag auswählen.",
+        "data": {
+          "selection": "Auswahl (Land/Stadt/Musikrichtung)",
+          "filter_text": "Textfilter (z. B. *)"
+        }
+      },
+      "radio_favorite_result": {
+        "title": "Radio-Sender auswählen",
+        "description": "Treffer auswählen, als Favorit speichern und auf dem DHE aktivieren.",
+        "data": {
+          "result": "Sender"
+        }
+      },
+      "remove_radio_favorite": {
+        "title": "Radio-Sender entfernen",
+        "description": "Vorhandenen Radio-Favorit auswählen und vom DHE entfernen.",
+        "data": {
+          "result": "Sender"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbindung zum DHE nicht möglich. IP-Adresse und Port prüfen.",
+      "already_configured": "Stiebel DHE Connect ist bereits konfiguriert.",
+      "invalid_host": "Ungültiger Host. Bitte nur IP-Adresse oder Hostname ohne Pfad, Benutzername oder Port eingeben.",
+      "embedded_port_not_supported": "Bitte Port nicht im Hostfeld angeben (z. B. \"192.168.1.10\"). Den Port nur im Port-Feld eintragen.",
+      "pairing_not_confirmed": "Pairing wurde am DHE nicht bestätigt. Bitte am Gerät bestätigen und erneut versuchen.",
+      "pairing_token_timeout": "Pairing wurde bestätigt, aber das Token konnte nicht rechtzeitig abgerufen werden.",
+      "pairing_confirm_after_auth_timeout": "Anmeldung erhalten, aber die Pairing-Bestätigung am DHE ist ausgeblieben.",
+      "auth_timeout": "Anmeldung am DHE hat zu lange gedauert. Bitte erneut versuchen.",
+      "invalid_port": "Ungültiger Port. Der Port muss zwischen 1 und 65535 liegen.",
+      "not_loaded": "Die Integration ist noch nicht geladen.",
+      "no_countries": "Keine Wetter-Länder vom DHE erhalten.",
+      "no_results": "Keine Treffer gefunden.",
+      "no_favorites": "Keine Wetter-Favoriten vorhanden.",
+      "search_failed": "Wettersuche fehlgeschlagen.",
+      "favorite_failed": "Favorit konnte nicht gespeichert werden.",
+      "remove_favorite_failed": "Favorit konnte nicht entfernt werden.",
+      "invalid_device_setting": "Ungültige Kosten- oder Emissionsangabe.",
+      "device_settings_failed": "Kosten und Emissionen konnten nicht gespeichert werden.",
+      "invalid_internal_scald_protection": "Ungültige Tmax-Jumperposition.",
+      "no_radio_catalog": "Keinen Radio-Katalog vom DHE erhalten.",
+      "radio_catalog_failed": "Radio-Katalog konnte nicht gelesen werden.",
+      "radio_search_failed": "Radio-Suche fehlgeschlagen.",
+      "radio_favorite_failed": "Radio-Sender konnte nicht gespeichert werden.",
+      "no_radio_favorites": "Keine Radio-Favoriten vorhanden.",
+      "remove_radio_favorite_failed": "Radio-Sender konnte nicht entfernt werden.",
+      "required": "Dieses Feld ist erforderlich.",
+      "invalid_radio_search_type": "Ungültige Suchart.",
+      "invalid_radio_catalog_value": "Ungültige Auswahl.",
+      "invalid_country": "Ungültiges Land.",
+      "invalid_result": "Ungültiger Treffer."
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "scald_protection_active": {
+        "name": "Verbrühschutz aktiv"
+      }
+    },
+    "button": {
+      "reset_brush_timer": {
+        "name": "Zahnputz-Timer zurücksetzen"
+      },
+      "reset_shower_timer": {
+        "name": "Duschtimer zurücksetzen"
+      },
+      "repair_pairing": {
+        "name": "Pairing erneuern"
+      },
+      "disconnect_radio_pairing": {
+        "name": "Radio-Kopplung trennen"
+      },
+      "temperature_memory_1": {
+        "name": "Speicher 1"
+      },
+      "temperature_memory_2": {
+        "name": "Speicher 2"
+      },
+      "temperature_memory_3": {
+        "name": "Speicher 3"
+      },
+      "temperature_memory_4": {
+        "name": "Speicher 4"
+      },
+      "temperature_memory_5": {
+        "name": "Speicher 5"
+      },
+      "temperature_memory_6": {
+        "name": "Speicher 6"
+      },
+      "temperature_memory_7": {
+        "name": "Speicher 7"
+      },
+      "temperature_memory_8": {
+        "name": "Speicher 8"
+      },
+      "temperature_memory_9": {
+        "name": "Speicher 9"
+      },
+      "temperature_memory_10": {
+        "name": "Speicher 10"
+      },
+      "temperature_memory_11": {
+        "name": "Speicher 11"
+      },
+      "temperature_memory_12": {
+        "name": "Speicher 12"
+      },
+      "delete_temperature_memory_3": {
+        "name": "Speicher 3 löschen"
+      },
+      "delete_temperature_memory_4": {
+        "name": "Speicher 4 löschen"
+      },
+      "delete_temperature_memory_5": {
+        "name": "Speicher 5 löschen"
+      },
+      "delete_temperature_memory_6": {
+        "name": "Speicher 6 löschen"
+      },
+      "delete_temperature_memory_7": {
+        "name": "Speicher 7 löschen"
+      },
+      "delete_temperature_memory_8": {
+        "name": "Speicher 8 löschen"
+      },
+      "delete_temperature_memory_9": {
+        "name": "Speicher 9 löschen"
+      },
+      "delete_temperature_memory_10": {
+        "name": "Speicher 10 löschen"
+      },
+      "delete_temperature_memory_11": {
+        "name": "Speicher 11 löschen"
+      },
+      "delete_temperature_memory_12": {
+        "name": "Speicher 12 löschen"
+      }
+    },
+    "media_player": {
+      "radio": {
+        "name": "Radio"
+      }
+    },
+    "climate": {
+      "water_heating": {
+        "name": "Durchlauferhitzer"
+      }
+    },
+    "weather": {
+      "weather": {
+        "name": "Wetter"
+      }
+    },
+    "number": {
+      "bath_fill_target_volume": {
+        "name": "Wannenfüllmenge"
+      },
+      "child_safety_temperature_limit": {
+        "name": "Kindersicherung Temperaturgrenze"
+      },
+      "eco_flow_limit": {
+        "name": "Eco-Durchflussbegrenzung"
+      },
+      "brush_timer_duration": {
+        "name": "Zahnputz-Timer Sekunden"
+      },
+      "shower_timer_duration": {
+        "name": "Duschtimer Sekunden"
+      },
+      "temperature_memory_1_temperature": {
+        "name": "Speicher 1 Temperatur"
+      },
+      "temperature_memory_2_temperature": {
+        "name": "Speicher 2 Temperatur"
+      },
+      "temperature_memory_3_temperature": {
+        "name": "Speicher 3 Temperatur"
+      },
+      "temperature_memory_4_temperature": {
+        "name": "Speicher 4 Temperatur"
+      },
+      "temperature_memory_5_temperature": {
+        "name": "Speicher 5 Temperatur"
+      },
+      "temperature_memory_6_temperature": {
+        "name": "Speicher 6 Temperatur"
+      },
+      "temperature_memory_7_temperature": {
+        "name": "Speicher 7 Temperatur"
+      },
+      "temperature_memory_8_temperature": {
+        "name": "Speicher 8 Temperatur"
+      },
+      "temperature_memory_9_temperature": {
+        "name": "Speicher 9 Temperatur"
+      },
+      "temperature_memory_10_temperature": {
+        "name": "Speicher 10 Temperatur"
+      },
+      "temperature_memory_11_temperature": {
+        "name": "Speicher 11 Temperatur"
+      },
+      "temperature_memory_12_temperature": {
+        "name": "Speicher 12 Temperatur"
+      }
+    },
+    "select": {
+      "weather_location": {
+        "name": "Wetter-Standort"
+      }
+    },
+    "text": {
+      "temperature_memory_1_name": {
+        "name": "Speicher 1 Name"
+      },
+      "temperature_memory_2_name": {
+        "name": "Speicher 2 Name"
+      },
+      "temperature_memory_3_name": {
+        "name": "Speicher 3 Name"
+      },
+      "temperature_memory_4_name": {
+        "name": "Speicher 4 Name"
+      },
+      "temperature_memory_5_name": {
+        "name": "Speicher 5 Name"
+      },
+      "temperature_memory_6_name": {
+        "name": "Speicher 6 Name"
+      },
+      "temperature_memory_7_name": {
+        "name": "Speicher 7 Name"
+      },
+      "temperature_memory_8_name": {
+        "name": "Speicher 8 Name"
+      },
+      "temperature_memory_9_name": {
+        "name": "Speicher 9 Name"
+      },
+      "temperature_memory_10_name": {
+        "name": "Speicher 10 Name"
+      },
+      "temperature_memory_11_name": {
+        "name": "Speicher 11 Name"
+      },
+      "temperature_memory_12_name": {
+        "name": "Speicher 12 Name"
+      }
+    },
+    "sensor": {
+      "water_flow": {
+        "name": "Aktueller Wasserdurchfluss"
+      },
+      "power": {
+        "name": "Aktueller Stromverbrauch"
+      },
+      "nominal_power": {
+        "name": "Nennleistung"
+      },
+      "operating_duration": {
+        "name": "Betriebsdauer"
+      },
+      "inlet_temperature": {
+        "name": "Zulauftemperatur"
+      },
+      "outlet_temperature": {
+        "name": "Auslauftemperatur"
+      },
+      "scald_protection_temperature_limit": {
+        "name": "Verbrühschutz-Grenztemperatur"
+      },
+      "device_status": {
+        "name": "Gerätestatus",
+        "state": {
+          "status_0": "Status 0",
+          "normal": "Normal",
+          "status_2": "Status 2",
+          "service_required": "Service erforderlich",
+          "status_4": "Status 4",
+          "status_5": "Status 5",
+          "status_6": "Status 6",
+          "status_7": "Status 7",
+          "status_8": "Status 8",
+          "unknown": "Unbekannt"
+        }
+      },
+      "protocol_version": {
+        "name": "Protokollversion"
+      },
+      "water_consumption_week": {
+        "name": "Wasserverbrauch Woche"
+      },
+      "water_consumption_year": {
+        "name": "Wasserverbrauch Jahr"
+      },
+      "water_consumption_total": {
+        "name": "Gesamtwasserverbrauch"
+      },
+      "hot_water_volume_total": {
+        "name": "Warmwasservolumen gesamt"
+      },
+      "energy_consumption_week": {
+        "name": "Energieverbrauch Woche"
+      },
+      "heating_energy_total": {
+        "name": "Heizenergie gesamt"
+      },
+      "possible_energy_saving": {
+        "name": "Mögliche Energieeinsparung"
+      },
+      "possible_water_saving": {
+        "name": "Mögliche Wassereinsparung"
+      },
+      "energy_consumption_year": {
+        "name": "Energieverbrauch Jahr"
+      },
+      "energy_consumption_total": {
+        "name": "Gesamtenergieverbrauch"
+      },
+      "last_usage_water": {
+        "name": "Letzter Wasserverbrauch"
+      },
+      "last_usage_energy": {
+        "name": "Letzter Energieverbrauch"
+      },
+      "last_usage_time": {
+        "name": "Letzte Nutzungsdauer"
+      },
+      "last_usage_cost": {
+        "name": "Letzte Nutzungskosten"
+      },
+      "bath_fill_remaining_volume": {
+        "name": "Wannenfüllung verbleibend"
+      },
+      "bath_fill_current_volume": {
+        "name": "Wannenfüllmenge aktuell"
+      },
+      "saving_monitor_consumption_water": {
+        "name": "Sparmonitor Verbrauch Wasser"
+      },
+      "saving_monitor_consumption_energy": {
+        "name": "Sparmonitor Verbrauch Energie"
+      },
+      "saving_monitor_consumption_co2": {
+        "name": "Sparmonitor Verbrauch CO2"
+      },
+      "saving_monitor_activation_rate": {
+        "name": "Sparmonitor Aktivierungsrate"
+      },
+      "saving_monitor_possible_water": {
+        "name": "Sparmonitor mögliche Einsparung Wasser"
+      },
+      "saving_monitor_possible_energy": {
+        "name": "Sparmonitor mögliche Einsparung Energie"
+      },
+      "saving_monitor_possible_co2": {
+        "name": "Sparmonitor mögliche Einsparung CO2"
+      },
+      "saving_monitor_possible_cost": {
+        "name": "Sparmonitor mögliche Einsparung Kosten"
+      },
+      "saving_monitor_real_water": {
+        "name": "Sparmonitor reale Einsparung Wasser"
+      },
+      "saving_monitor_real_energy": {
+        "name": "Sparmonitor reale Einsparung Energie"
+      },
+      "saving_monitor_real_co2": {
+        "name": "Sparmonitor reale Einsparung CO2"
+      },
+      "saving_monitor_real_cost": {
+        "name": "Sparmonitor reale Einsparung Kosten"
+      },
+      "brush_timer_remaining": {
+        "name": "Zahnputz-Timer Restzeit"
+      },
+      "shower_timer_remaining": {
+        "name": "Duschtimer Restzeit"
+      },
+      "error_status": {
+        "name": "Fehlerstatus",
+        "state": {
+          "ok": "OK",
+          "disconnected": "Nicht verbunden",
+          "service_required": "Service nötig",
+          "target_below_inlet": "Solltemperatur unter Zulauftemperatur"
+        }
+      },
+      "reconnect_count": {
+        "name": "Reconnects"
+      },
+      "connection_state": {
+        "name": "Verbindungsstatus",
+        "state": {
+          "starting": "Startet",
+          "connected": "Verbunden",
+          "reconnecting": "Verbindet neu",
+          "pairing_failed_waiting_manual_retry": "Pairing fehlgeschlagen (manueller Neustart erforderlich)",
+          "stopping": "Beendet",
+          "stopped": "Beendet"
+        }
+      },
+      "last_reconnect_reason": {
+        "name": "Letzter Reconnect-Grund"
+      },
+      "device_info": {
+        "name": "Geräteinfo"
+      },
+      "product_id": {
+        "name": "Produkt-ID"
+      },
+      "wlan_mac": {
+        "name": "WLAN MAC"
+      },
+      "bluetooth_mac": {
+        "name": "Bluetooth MAC"
+      }
+    },
+    "switch": {
+      "eco_mode": {
+        "name": "Eco-Modus"
+      },
+      "bath_fill_active": {
+        "name": "Wannenfüllung"
+      },
+      "child_safety_active": {
+        "name": "Kindersicherung"
+      },
+      "brush_timer_active": {
+        "name": "Zahnputz-Timer"
+      },
+      "shower_timer_active": {
+        "name": "Duschtimer"
+      },
+      "wellness_cold_prevention": {
+        "name": "Erkältungsvorbeugung"
+      },
+      "wellness_winter_refresh": {
+        "name": "Wintererfrischung"
+      },
+      "wellness_summer_fitness": {
+        "name": "Sommerfitness"
+      },
+      "wellness_circulation_support": {
+        "name": "Durchblutungsförderung"
+      }
+    }
+  }
+}
