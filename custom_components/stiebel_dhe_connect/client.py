@@ -3590,7 +3590,12 @@ class DHEClient:
             token_dir = os.path.dirname(self.token_path)
             os.makedirs(token_dir, exist_ok=True)
             tmp_path = f"{self.token_path}.tmp"
-            with open(tmp_path, "w", encoding="utf-8") as file:
+            file_descriptor = os.open(
+                tmp_path,
+                os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+                stat.S_IRUSR | stat.S_IWUSR,
+            )
+            with os.fdopen(file_descriptor, "w", encoding="utf-8") as file:
                 file.write(token)
             try:
                 os.chmod(tmp_path, stat.S_IRUSR | stat.S_IWUSR)

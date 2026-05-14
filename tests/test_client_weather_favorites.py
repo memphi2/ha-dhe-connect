@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
+import stat
 import sys
+import tempfile
 import unittest
 from unittest.mock import AsyncMock
 
@@ -114,6 +117,29 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
                 (cents_id, 29.0),
             ],
         )
+
+    async def test_save_token_creates_restrictive_file(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+
+        class _FakeHass:
+            async def async_add_executor_job(self, func, *args):
+                return func(*args)
+
+        client = DHEClient.__new__(DHEClient)
+        client.hass = _FakeHass()
+        client._token = None
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            client.token_path = os.path.join(temp_dir, "token.txt")
+            await DHEClient._save_token(client, "super-secret-token")
+
+            with open(client.token_path, "r", encoding="utf-8") as file:
+                self.assertEqual(file.read(), "super-secret-token")
+
+            if os.name == "posix":
+                mode = stat.S_IMODE(os.stat(client.token_path).st_mode)
+                self.assertEqual(mode, stat.S_IRUSR | stat.S_IWUSR)
 
 
 if __name__ == "__main__":
