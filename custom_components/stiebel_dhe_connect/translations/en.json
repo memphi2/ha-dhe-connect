@@ -59,6 +59,10 @@
           "internal_scald_protection": "Internal scald protection (Tmax jumper)"
         }
       },
+      "connection_pairing_confirm": {
+        "title": "Confirm pairing",
+        "description": "Click OK now. Because the DHE host or port changed, the integration validates pairing and login for the new target before saving the options. Confirm the pairing request on the DHE device display."
+      },
       "device_settings": {
         "title": "Costs & emissions",
         "description": "Set currency, electricity price, water price and CO2 emission on the DHE. Number fields are prefilled with current device values, currency defaults to EUR.",
@@ -126,9 +130,13 @@
       "already_configured": "Stiebel DHE Connect is already configured.",
       "invalid_host": "Invalid host. Enter only an IP address or hostname, without path, username or port.",
       "embedded_port_not_supported": "Do not include the port in the host field (for example \"192.168.1.10\"). Enter the port only in the port field.",
+      "pairing_timeout": "Pairing was not confirmed on the DHE in time. Please try again.",
       "pairing_not_confirmed": "Pairing was not confirmed on the DHE. Confirm it on the device and try again.",
       "pairing_token_timeout": "Pairing was confirmed, but the token could not be retrieved in time.",
       "pairing_confirm_after_auth_timeout": "Authentication was received, but pairing confirmation on the DHE did not complete in time.",
+      "pairing_rejected": "Pairing was rejected on the DHE. Please confirm it again.",
+      "pairing_failed": "Pairing with the DHE failed.",
+      "auth_failed": "Pairing succeeded, but login on the DHE failed.",
       "auth_timeout": "Authentication on the DHE timed out. Please try again.",
       "invalid_port": "Invalid port. The port must be between 1 and 65535.",
       "not_loaded": "The integration is not loaded yet.",

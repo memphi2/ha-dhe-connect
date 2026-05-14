@@ -45,5 +45,8 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Run unit tests
+        run: python -m unittest discover tests
+
       - name: Run integration checks
         run: python scripts/check_integration.py

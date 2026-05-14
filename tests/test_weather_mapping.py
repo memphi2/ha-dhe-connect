@@ -71,6 +71,14 @@ class TestWeatherForecastMapping(unittest.TestCase):
             },
         )
 
+    def test_forecast_from_day_keeps_device_calendar_date_at_utc_midnight(self) -> None:
+        forecast = self.weather.forecast_from_day({"date": "2026-12-31"})
+
+        self.assertEqual(forecast, {"datetime": "2026-12-31T00:00:00+00:00"})
+
+    def test_forecast_from_day_requires_date(self) -> None:
+        self.assertIsNone(self.weather.forecast_from_day({"tmax": 19}))
+
     def test_current_weather_period_boundaries(self) -> None:
         self.assertEqual(
             self.weather.current_weather_period(datetime(2026, 5, 10, 11, 59)),

@@ -59,6 +59,10 @@
           "internal_scald_protection": "Interner Verbrühschutz (Tmax-Jumper)"
         }
       },
+      "connection_pairing_confirm": {
+        "title": "Pairing bestÃ¤tigen",
+        "description": "Jetzt OK klicken. Da DHE-Host oder Port geÃ¤ndert wurden, prÃ¼ft die Integration Pairing und Login fÃ¼r das neue Ziel vor dem Speichern. Die Pairing-Anfrage am DHE-Display bestÃ¤tigen."
+      },
       "device_settings": {
         "title": "Kosten & Emissionen",
         "description": "Währung, Strompreis, Wasserpreis und CO2-Emission am DHE setzen. Zahlenfelder sind mit aktuellen Gerätewerten vorbelegt, Währung standardmäßig auf EUR.",
@@ -126,9 +130,13 @@
       "already_configured": "Stiebel DHE Connect ist bereits konfiguriert.",
       "invalid_host": "Ungültiger Host. Bitte nur IP-Adresse oder Hostname ohne Pfad, Benutzername oder Port eingeben.",
       "embedded_port_not_supported": "Bitte Port nicht im Hostfeld angeben (z. B. \"192.168.1.10\"). Den Port nur im Port-Feld eintragen.",
+      "pairing_timeout": "Pairing am DHE wurde nicht rechtzeitig bestätigt. Bitte erneut versuchen.",
       "pairing_not_confirmed": "Pairing wurde am DHE nicht bestätigt. Bitte am Gerät bestätigen und erneut versuchen.",
       "pairing_token_timeout": "Pairing wurde bestätigt, aber das Token konnte nicht rechtzeitig abgerufen werden.",
       "pairing_confirm_after_auth_timeout": "Anmeldung erhalten, aber die Pairing-Bestätigung am DHE ist ausgeblieben.",
+      "pairing_rejected": "Pairing wurde am DHE abgelehnt. Bitte erneut bestätigen.",
+      "pairing_failed": "Pairing mit dem DHE ist fehlgeschlagen.",
+      "auth_failed": "Pairing war erfolgreich, aber die Anmeldung am DHE ist fehlgeschlagen.",
       "auth_timeout": "Anmeldung am DHE hat zu lange gedauert. Bitte erneut versuchen.",
       "invalid_port": "Ungültiger Port. Der Port muss zwischen 1 und 65535 liegen.",
       "not_loaded": "Die Integration ist noch nicht geladen.",
