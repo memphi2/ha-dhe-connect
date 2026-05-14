@@ -89,6 +89,8 @@ def normalize_radio_string_catalog(raw_value: Any) -> list[str] | None:
 
     values: list[str] = []
     for item in raw_value:
+        if item is None:
+            continue
         value = str(item).strip()
         if value:
             values.append(value)

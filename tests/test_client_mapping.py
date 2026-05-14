@@ -96,7 +96,9 @@ class TestRadioMapping(unittest.TestCase):
 
     def test_normalize_radio_string_catalog_trims_and_drops_empty_values(self) -> None:
         self.assertEqual(
-            self.mapping.normalize_radio_string_catalog(["  Rock ", "", " Pop ", 123]),
+            self.mapping.normalize_radio_string_catalog(
+                ["  Rock ", "", " Pop ", 123, None]
+            ),
             ["Rock", "Pop", "123"],
         )
 
