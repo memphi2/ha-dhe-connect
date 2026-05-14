@@ -1298,7 +1298,12 @@ class DHEClient:
             if "id" in payload:
                 self._handle_temperature_memory_item(payload, source_command=TEMP_MEMORY_ASSIGN_COMMAND)
             await self._refresh_temperature_memories(ctx)
-            return self._cached_temperature_memory_temperature(measurement_id) or requested
+            confirmed = self._cached_temperature_memory_temperature(measurement_id)
+            if confirmed is None:
+                raise DHEError(
+                    f"DHE temperature memory {memory_slot} was not confirmed"
+                )
+            return confirmed
 
         return await self._run_command_with_reconnect_retry(
             f"Could not set DHE temperature memory {memory_slot}",

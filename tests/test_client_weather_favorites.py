@@ -141,6 +141,32 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
                 mode = stat.S_IMODE(os.stat(client.token_path).st_mode)
                 self.assertEqual(mode, stat.S_IRUSR | stat.S_IWUSR)
 
+    async def test_set_temperature_memory_requires_confirmed_value(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        DHEError = client_module.DHEError
+
+        client = DHEClient.__new__(DHEClient)
+        client._last_measurement_attributes = {}
+        client._temperature_memory_ids = lambda _slot: (0, 700)
+        client._refresh_temperature_memories = AsyncMock()
+        client._temperature_memory_payload = lambda *_args, **_kwargs: {
+            "name": "Dusche",
+            "temperature": 38.0,
+            "operation": "add_change",
+        }
+        client._post_packet = AsyncMock()
+        client._message_packet = lambda payload: payload
+        client._cached_temperature_memory_temperature = lambda _measurement_id: None
+
+        async def _run_with_retry(_message, operation):
+            return await operation(object())
+
+        client._run_command_with_reconnect_retry = _run_with_retry
+
+        with self.assertRaisesRegex(DHEError, "was not confirmed"):
+            await DHEClient.set_temperature_memory(client, 0, 38.0)
+
 
 if __name__ == "__main__":
     unittest.main()
