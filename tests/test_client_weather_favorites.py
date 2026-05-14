@@ -52,6 +52,27 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         client._send_ste_command.assert_not_awaited()
         client._wait_for_weather_location.assert_not_awaited()
 
+    async def test_pairing_notification_ids_include_port(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+
+        client_a = DHEClient.__new__(DHEClient)
+        client_a.host = "dhe.local"
+        client_a.port = 8443
+
+        client_b = DHEClient.__new__(DHEClient)
+        client_b.host = "dhe.local"
+        client_b.port = 9443
+
+        self.assertNotEqual(
+            client_a._pairing_notification_id,
+            client_b._pairing_notification_id,
+        )
+        self.assertNotEqual(
+            client_a._pairing_confirmation_notification_id,
+            client_b._pairing_confirmation_notification_id,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

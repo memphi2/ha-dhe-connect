@@ -2324,12 +2324,12 @@ class DHEClient:
     @property
     def _pairing_notification_id(self) -> str:
         safe_host = re.sub(r"[^A-Za-z0-9_-]+", "_", self.host)
-        return f"{PAIRING_NOTIFICATION_ID_PREFIX}_{safe_host}"
+        return f"{PAIRING_NOTIFICATION_ID_PREFIX}_{safe_host}_{self.port}"
 
     @property
     def _pairing_confirmation_notification_id(self) -> str:
         safe_host = re.sub(r"[^A-Za-z0-9_-]+", "_", self.host)
-        return f"{PAIRING_CONFIRM_HINT_NOTIFICATION_ID_PREFIX}_{safe_host}"
+        return f"{PAIRING_CONFIRM_HINT_NOTIFICATION_ID_PREFIX}_{safe_host}_{self.port}"
 
     def _pairing_notification_text(self, state: str) -> tuple[str, str]:
         language = str(getattr(self.hass.config, "language", "") or "").lower()
