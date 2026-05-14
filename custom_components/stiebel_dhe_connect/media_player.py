@@ -12,6 +12,14 @@ try:
 except ImportError:  # pragma: no cover - compatibility with older HA versions
     from homeassistant.components.media_player.const import MediaPlayerEntityFeature
 
+try:
+    from homeassistant.components.media_player import MediaPlayerState
+except ImportError:  # pragma: no cover - compatibility with older HA versions
+    try:
+        from homeassistant.components.media_player.const import MediaPlayerState
+    except ImportError:  # pragma: no cover - compatibility with much older HA versions
+        MediaPlayerState = None
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -24,9 +32,9 @@ from .runtime_helpers import get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
 
-STATE_IDLE = "idle"
-STATE_PAUSED = "paused"
-STATE_PLAYING = "playing"
+STATE_IDLE = MediaPlayerState.IDLE if MediaPlayerState is not None else "idle"
+STATE_PAUSED = MediaPlayerState.PAUSED if MediaPlayerState is not None else "paused"
+STATE_PLAYING = MediaPlayerState.PLAYING if MediaPlayerState is not None else "playing"
 
 
 async def async_setup_entry(
@@ -201,6 +209,8 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
         station = state.get("station")
         if isinstance(station, dict):
             self._apply_station_media(state, station)
+        else:
+            self._clear_station_media()
 
         self._apply_source_state(state, station)
 
@@ -257,3 +267,11 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
         self._attr_media_image_url = radio.station_logo_url(station)
         self._attr_media_title = radio.media_title(state, station)
         self._attr_media_artist = radio.station_name(station)
+
+    def _clear_station_media(self) -> None:
+        """Clear station metadata when the DHE does not publish a station."""
+        self._attr_media_content_id = None
+        self._attr_media_content_type = None
+        self._attr_media_image_url = None
+        self._attr_media_title = None
+        self._attr_media_artist = None

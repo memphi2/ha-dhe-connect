@@ -15,7 +15,20 @@ TRANSLATIONS = INTEGRATION / "translations"
 
 def _load_json(path: Path) -> dict:
     with path.open("r", encoding="utf-8") as file:
-        return json.load(file)
+        return json.load(file, object_pairs_hook=_reject_duplicate_json_keys(path))
+
+
+def _reject_duplicate_json_keys(path: Path):
+    """Return an object hook that rejects duplicate keys in JSON objects."""
+    def _object_pairs_hook(pairs):
+        data = {}
+        for key, value in pairs:
+            if key in data:
+                _fail(f"duplicate JSON key {key!r} in {path.relative_to(ROOT)}")
+            data[key] = value
+        return data
+
+    return _object_pairs_hook
 
 
 def _fail(message: str) -> None:

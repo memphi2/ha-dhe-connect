@@ -3,12 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-import ipaddress
 import logging
 import os
-import re
 from typing import Any
-from urllib.parse import urlsplit
 
 import voluptuous as vol
 
@@ -37,6 +34,12 @@ from .config_flow_mapping import (
     weather_result_options as _weather_result_options,
 )
 from .config_entry_helpers import merged_entry_data
+from .connection_helpers import (
+    host_for_url,
+    normalize_host,
+    target_changed,
+    validate_port,
+)
 from .const import (
     DEFAULT_NAME,
     DEFAULT_PORT,
@@ -90,69 +93,6 @@ DEFAULT_RADIO_SEARCH_TEXTS = {
 
 _LOGGER = logging.getLogger(__name__)
 
-_HOST_RE = re.compile(
-    r"^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)*"
-    r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$"
-)
-
-
-def _normalize_host(host: str) -> str:
-    """Normalize and validate the host value from UI input."""
-    value = host.strip()
-    if not value:
-        raise ValueError("empty_host")
-
-    if "://" in value:
-        parsed = urlsplit(value)
-        if parsed.scheme not in {"http", "https"}:
-            raise ValueError("invalid_scheme")
-        if parsed.username or parsed.password or parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
-            raise ValueError("invalid_host")
-        value = parsed.hostname or ""
-
-    value = value.strip()
-    if value.startswith("[") and value.endswith("]"):
-        value = value[1:-1].strip()
-    value = value.rstrip(".")
-
-    if not value or any(char in value for char in "/?#@\\"):
-        raise ValueError("invalid_host")
-
-    try:
-        return str(ipaddress.ip_address(value))
-    except ValueError:
-        pass
-
-    # The port has a dedicated config field. Reject host:port to keep URL
-    # construction deterministic and avoid ambiguity.
-    if ":" in value:
-        raise ValueError("embedded_port_not_supported")
-
-    if not _HOST_RE.fullmatch(value):
-        raise ValueError("invalid_host")
-
-    return value.lower()
-
-
-def _host_for_url(host: str) -> str:
-    """Return host part suitable for URL construction (wrap IPv6 in brackets)."""
-    try:
-        ip = ipaddress.ip_address(host)
-    except ValueError:
-        return host
-    if ip.version == 6:
-        return f"[{host}]"
-    return host
-
-
-def _validate_port(port: int) -> int:
-    """Validate TCP port from UI input."""
-    port = int(port)
-    if port < 1 or port > 65535:
-        raise ValueError("invalid_port")
-    return port
-
-
 def _apply_validation_error(errors: dict[str, str], err: ValueError) -> None:
     """Map validation exceptions to form fields."""
     code = str(err) or "invalid_host"
@@ -173,8 +113,8 @@ def _entry_target(entry: config_entries.ConfigEntry) -> tuple[str, int] | None:
     if host_value is None:
         return None
     try:
-        host = _normalize_host(str(host_value))
-        port = _validate_port(int(merged.get(CONF_PORT, DEFAULT_PORT)))
+        host = normalize_host(str(host_value))
+        port = validate_port(int(merged.get(CONF_PORT, DEFAULT_PORT)))
     except (TypeError, ValueError):
         return None
     return host, port
@@ -545,7 +485,7 @@ def _radio_catalog_schema(
 async def _can_connect(hass: HomeAssistant, host: str, port: int) -> bool:
     """Check if the DHE web endpoint is reachable before creating the config entry."""
     session = async_get_clientsession(hass)
-    url = f"http://{_host_for_url(host)}:{port}/"
+    url = f"http://{host_for_url(host)}:{port}/"
 
     try:
         async with session.get(url, timeout=8) as resp:
@@ -597,8 +537,8 @@ class StiebelDHEConnectConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             try:
-                host = _normalize_host(user_input[CONF_HOST])
-                port = _validate_port(user_input.get(CONF_PORT, DEFAULT_PORT))
+                host = normalize_host(user_input[CONF_HOST])
+                port = validate_port(user_input.get(CONF_PORT, DEFAULT_PORT))
                 internal_scald_protection = str(
                     user_input.get(CONF_INTERNAL_SCALD_PROTECTION) or ""
                 ).strip()
@@ -679,6 +619,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
         self._weather_countries: list[dict[str, Any]] = []
         self._weather_favorites: list[dict[str, Any]] = []
         self._weather_results: list[dict[str, Any]] = []
+        self._pending_connection_data: dict[str, Any] | None = None
         self._menu_options = [
             "connection",
             "device_settings",
@@ -716,8 +657,8 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
 
         if user_input is not None:
             try:
-                host = _normalize_host(user_input[CONF_HOST])
-                port = _validate_port(user_input.get(CONF_PORT, DEFAULT_PORT))
+                host = normalize_host(user_input[CONF_HOST])
+                port = validate_port(user_input.get(CONF_PORT, DEFAULT_PORT))
                 internal_scald_protection = str(
                     user_input.get(CONF_INTERNAL_SCALD_PROTECTION) or ""
                 ).strip()
@@ -738,19 +679,56 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
                 elif not await _can_connect(self.hass, host, port):
                     errors["base"] = "cannot_connect"
                 else:
+                    data = {
+                        CONF_HOST: host,
+                        CONF_PORT: port,
+                        CONF_NAME: name,
+                        CONF_INTERNAL_SCALD_PROTECTION: internal_scald_protection,
+                    }
+                    if target_changed(
+                        current,
+                        host,
+                        port,
+                        default_port=DEFAULT_PORT,
+                    ):
+                        self._pending_connection_data = data
+                        return await self.async_step_connection_pairing_confirm()
                     return self.async_create_entry(
                         title="",
-                        data={
-                            CONF_HOST: host,
-                            CONF_PORT: port,
-                            CONF_NAME: name,
-                            CONF_INTERNAL_SCALD_PROTECTION: internal_scald_protection,
-                        },
+                        data=data,
                     )
 
         return self.async_show_form(
             step_id="connection",
             data_schema=_schema(self.hass, current),
+            errors=errors,
+        )
+
+    async def async_step_connection_pairing_confirm(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ):
+        """Confirm pairing/authentication after changing host or port."""
+        if self._pending_connection_data is None:
+            return await self.async_step_connection()
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            data = dict(self._pending_connection_data)
+            error_key = await _validate_setup_pairing(
+                self.hass,
+                data[CONF_HOST],
+                data[CONF_PORT],
+                token_file_for_target(data[CONF_HOST], data[CONF_PORT]),
+            )
+            if error_key is None:
+                self._pending_connection_data = None
+                return self.async_create_entry(title="", data=data)
+            errors["base"] = error_key
+
+        return self.async_show_form(
+            step_id="connection_pairing_confirm",
+            data_schema=vol.Schema({}),
             errors=errors,
         )
 

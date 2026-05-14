@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from typing import Any
 
 from homeassistant.components.weather import WeatherEntity
@@ -106,10 +107,11 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
         if update_listeners is None:
             return
         try:
-            task = update_listeners(("daily",))
+            result = update_listeners(("daily",))
         except TypeError:  # pragma: no cover - older HA compatibility
-            task = update_listeners()
-        self.hass.async_create_task(task)
+            result = update_listeners()
+        if inspect.iscoroutine(result):
+            self.hass.async_create_task(result)
 
     def _apply_weather_state(self, state: dict[str, Any]) -> None:
         if not state:

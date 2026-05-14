@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.2.1 - 2026-05-14
+
+### Changed
+
+- Reject embedded ports in URL-style host input and require the dedicated port field.
+- Require a fresh pairing/auth validation when options change the DHE host or port.
+- Clear radio station metadata when the DHE publishes no active station, while keeping known favorites.
+- Use Home Assistant media-player state enums when available.
+- Schedule weather forecast listener updates only when Home Assistant returns a coroutine.
+- Run unit tests explicitly in CI before the repository integration checks.
+
+### Tests
+
+- Added host normalization coverage for URL, raw host:port and IPv6 port inputs.
+- Added target-change coverage for options-flow connection changes.
+- Added explicit weather forecast date semantics coverage.
+
 ## v1.2.0 - 2026-05-14
 
 ### Added
