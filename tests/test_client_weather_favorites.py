@@ -569,6 +569,64 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         client._assign_radio_favorite_and_wait.assert_not_awaited()
         client._send_ste_command.assert_not_awaited()
 
+    async def test_remove_weather_favorite_existing_and_refresh_timeout_no_toggle(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        DHEError = client_module.DHEError
+        client = DHEClient.__new__(DHEClient)
+        location = {"LocationId": "ID=1", "Name": "Essen"}
+
+        client._last_weather_state = {
+            "favorites": [location],
+        }
+        client._weather_favorites = lambda: [location]
+        client._request_weather_favorites = AsyncMock(side_effect=DHEError("timeout"))
+        client._assign_weather_favorite_and_wait = AsyncMock(
+            side_effect=AssertionError("must not toggle existing favorite")
+        )
+
+        async def _run_with_retry(_message, operation):
+            return await operation(object())
+
+        client._run_command_with_reconnect_retry = _run_with_retry
+
+        result = await DHEClient.remove_weather_favorite(client, location)
+
+        self.assertTrue(result)
+        client._request_weather_favorites.assert_awaited_once()
+        client._assign_weather_favorite_and_wait.assert_not_awaited()
+
+    async def test_remove_weather_favorite_missing_in_stale_cache_fails_safely(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        DHEError = client_module.DHEError
+        client = DHEClient.__new__(DHEClient)
+        location = {"LocationId": "ID=2", "Name": "Stuttgart"}
+        cached_location = {"LocationId": "ID=1", "Name": "Essen"}
+
+        client._last_weather_state = {
+            "favorites": [cached_location],
+        }
+        client._weather_favorites = lambda: [cached_location]
+        client._request_weather_favorites = AsyncMock(side_effect=DHEError("timeout"))
+        client._assign_weather_favorite_and_wait = AsyncMock(
+            side_effect=AssertionError("must not toggle unknown location")
+        )
+
+        async def _run_with_retry(_message, operation):
+            return await operation(object())
+
+        client._run_command_with_reconnect_retry = _run_with_retry
+
+        with self.assertRaisesRegex(
+            DHEError,
+            "Cannot safely remove DHE weather favorite without a fresh favorite list",
+        ):
+            await DHEClient.remove_weather_favorite(client, location)
+
+        client._request_weather_favorites.assert_awaited_once()
+        client._assign_weather_favorite_and_wait.assert_not_awaited()
+
     async def test_pairing_notification_ids_include_port(self) -> None:
         client_module = _load_client()
         DHEClient = client_module.DHEClient

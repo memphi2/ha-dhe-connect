@@ -37,7 +37,9 @@ from .token_file_helpers import (
 _LOGGER = logging.getLogger(__name__)
 
 SERVICE_SEARCH_WEATHER_LOCATION = "search_weather_location"
+SERVICE_ADD_WEATHER_FAVORITE = "add_weather_favorite"
 SERVICE_TOGGLE_WEATHER_FAVORITE = "toggle_weather_favorite"
+SERVICE_REMOVE_WEATHER_FAVORITE = "remove_weather_favorite"
 SERVICE_SELECT_WEATHER_LOCATION = "select_weather_location"
 
 ATTR_COUNTRY_ID = "country_id"
@@ -62,6 +64,8 @@ WEATHER_LOCATION_ACTION_SCHEMA = vol.Schema({
 })
 WEATHER_TOGGLE_FAVORITE_SCHEMA = WEATHER_LOCATION_ACTION_SCHEMA
 WEATHER_SELECT_LOCATION_SCHEMA = WEATHER_LOCATION_ACTION_SCHEMA
+WEATHER_ADD_FAVORITE_SCHEMA = WEATHER_LOCATION_ACTION_SCHEMA
+WEATHER_REMOVE_FAVORITE_SCHEMA = WEATHER_LOCATION_ACTION_SCHEMA
 
 
 @dataclass
@@ -235,6 +239,46 @@ def _async_register_services(hass: HomeAssistant) -> None:
         )
         await client.toggle_weather_favorite(location)
 
+    async def async_add_weather_favorite(call: ServiceCall) -> None:
+        runtime = _resolve_runtime(hass, call.data.get(ATTR_ENTRY_ID))
+        client = runtime.client
+        data = call.data
+        results = await _weather_results_from_service_input(
+            client,
+            data,
+            missing_country_error=(
+                "country_id is required when adding a weather favorite by name"
+            ),
+        )
+
+        location = _select_weather_location(
+            client.last_weather_state,
+            results,
+            data.get(ATTR_LOCATION_ID),
+            data[ATTR_RESULT_NUMBER],
+        )
+        await client.add_weather_favorite(location)
+
+    async def async_remove_weather_favorite(call: ServiceCall) -> None:
+        runtime = _resolve_runtime(hass, call.data.get(ATTR_ENTRY_ID))
+        client = runtime.client
+        data = call.data
+        results = await _weather_results_from_service_input(
+            client,
+            data,
+            missing_country_error=(
+                "country_id is required when removing a weather favorite by name"
+            ),
+        )
+
+        location = _select_weather_location(
+            client.last_weather_state,
+            results,
+            data.get(ATTR_LOCATION_ID),
+            data[ATTR_RESULT_NUMBER],
+        )
+        await client.remove_weather_favorite(location)
+
     async def async_select_weather_location(call: ServiceCall) -> None:
         runtime = _resolve_runtime(hass, call.data.get(ATTR_ENTRY_ID))
         client = runtime.client
@@ -263,9 +307,19 @@ def _async_register_services(hass: HomeAssistant) -> None:
             WEATHER_SEARCH_SCHEMA,
         ),
         (
+            SERVICE_ADD_WEATHER_FAVORITE,
+            async_add_weather_favorite,
+            WEATHER_ADD_FAVORITE_SCHEMA,
+        ),
+        (
             SERVICE_TOGGLE_WEATHER_FAVORITE,
             async_toggle_weather_favorite,
             WEATHER_TOGGLE_FAVORITE_SCHEMA,
+        ),
+        (
+            SERVICE_REMOVE_WEATHER_FAVORITE,
+            async_remove_weather_favorite,
+            WEATHER_REMOVE_FAVORITE_SCHEMA,
         ),
         (
             SERVICE_SELECT_WEATHER_LOCATION,
@@ -288,7 +342,9 @@ def _async_unregister_services(hass: HomeAssistant) -> None:
     """Remove integration services when the last entry unloads."""
     for service in (
         SERVICE_SEARCH_WEATHER_LOCATION,
+        SERVICE_ADD_WEATHER_FAVORITE,
         SERVICE_TOGGLE_WEATHER_FAVORITE,
+        SERVICE_REMOVE_WEATHER_FAVORITE,
         SERVICE_SELECT_WEATHER_LOCATION,
     ):
         if hass.services.has_service(DOMAIN, service):

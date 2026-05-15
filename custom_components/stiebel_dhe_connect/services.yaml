@@ -24,6 +24,48 @@ search_weather_location:
           max: 9999
           mode: box
 
+add_weather_favorite:
+  name: Add weather favorite
+  description: Add a DHE weather favorite from a search result, location ID or a fresh name/country search. Existing favorites are kept and not toggled off.
+  fields:
+    entry_id:
+      required: false
+      name: Config entry ID
+      description: Optional. Required when multiple Stiebel DHE Connect devices are configured.
+      selector:
+        text:
+    name:
+      required: false
+      name: Name
+      description: Optional city or location name. When set, the integration searches first and adds the selected result.
+      selector:
+        text:
+    country_id:
+      required: false
+      name: Country ID
+      description: Required when name is used. For example 143 for USA or 34 for Germany.
+      selector:
+        number:
+          min: 1
+          max: 9999
+          mode: box
+    result_number:
+      required: false
+      name: Result number
+      description: One-based search result number to add. Defaults to 1.
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 50
+          mode: box
+    location_id:
+      required: false
+      name: Location ID
+      description: Optional exact DHE LocationId from the weather attributes. When set, it is preferred over result number.
+      selector:
+        text:
+
 toggle_weather_favorite:
   name: Toggle weather favorite
   description: Toggle a DHE weather favorite from a search result, location ID or a fresh name/country search. The DHE uses the same command to add and remove favorites.
@@ -53,6 +95,48 @@ toggle_weather_favorite:
       required: false
       name: Result number
       description: One-based search result number to toggle. Defaults to 1.
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 50
+          mode: box
+    location_id:
+      required: false
+      name: Location ID
+      description: Optional exact DHE LocationId from the weather attributes. When set, it is preferred over result number.
+      selector:
+        text:
+
+remove_weather_favorite:
+  name: Remove weather favorite
+  description: Remove a DHE weather favorite from a search result, location ID or a fresh name/country search. If already missing, no change is made.
+  fields:
+    entry_id:
+      required: false
+      name: Config entry ID
+      description: Optional. Required when multiple Stiebel DHE Connect devices are configured.
+      selector:
+        text:
+    name:
+      required: false
+      name: Name
+      description: Optional city or location name. When set, the integration searches first and removes the selected result.
+      selector:
+        text:
+    country_id:
+      required: false
+      name: Country ID
+      description: Required when name is used. For example 143 for USA or 34 for Germany.
+      selector:
+        number:
+          min: 1
+          max: 9999
+          mode: box
+    result_number:
+      required: false
+      name: Result number
+      description: One-based search result number to remove. Defaults to 1.
       default: 1
       selector:
         number:

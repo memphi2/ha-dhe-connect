@@ -1099,6 +1099,37 @@ class DHEClient:
             _operation,
         )
 
+    async def remove_weather_favorite(self, location: dict[str, Any]) -> bool:
+        """Remove a weather favorite without toggling a missing favorite on."""
+        if not _weather_location_has_id(location):
+            raise DHEError("Weather favorite location must include LocationId")
+
+        async def _operation(ctx: DHESession) -> bool:
+            payload = _copy_json_like_value(location)
+            favorites = self._weather_favorites()
+            try:
+                favorites = await self._request_weather_favorites(ctx)
+            except DHEError:
+                if not _weather_location_in_list(payload, favorites):
+                    raise DHEError(
+                        "Cannot safely remove DHE weather favorite without a fresh "
+                        "favorite list"
+                    )
+                return True
+
+            if not _weather_location_in_list(payload, favorites):
+                return True
+
+            favorites = await self._assign_weather_favorite_and_wait(ctx, payload)
+            if _weather_location_in_list(payload, favorites):
+                raise DHEError("DHE weather favorite did not change")
+            return True
+
+        return await self._run_command_with_reconnect_retry(
+            "Could not remove DHE weather favorite",
+            _operation,
+        )
+
     async def select_weather_location(self, location: dict[str, Any] | str) -> bool:
         if isinstance(location, dict):
             location_id = location.get("LocationId")

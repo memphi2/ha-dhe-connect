@@ -904,7 +904,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
             try:
                 selected = int(user_input[ATTR_RESULT])
                 location = self._weather_favorites[selected]
-                await client.toggle_weather_favorite(location)
+                await client.remove_weather_favorite(location)
             except (IndexError, TypeError, ValueError):
                 errors[ATTR_RESULT] = "invalid_result"
             except DHEError:
