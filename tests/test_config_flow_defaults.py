@@ -56,6 +56,42 @@ def _install_fake_homeassistant() -> None:
     sys.modules["homeassistant.helpers.aiohttp_client"] = fake_aiohttp_client
 
 
+def _install_fake_voluptuous() -> None:
+    """Install a tiny voluptuous substitute for tests without dependency."""
+
+    if "voluptuous" in sys.modules:
+        return
+
+    voluptuous = types.ModuleType("voluptuous")
+
+    class _Marker:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            self.key = args[0] if args else None
+            self.default = kwargs.get("default")
+
+    def Required(*args: object, **kwargs: object) -> _Marker:
+        return _Marker(*args, **kwargs)
+
+    def Optional(*args: object, **kwargs: object) -> _Marker:
+        return _Marker(*args, **kwargs)
+
+    def In(_values: object) -> _Marker:
+        return _Marker(_values)
+
+    class Schema:
+        def __init__(self, schema: object, *args: object, **kwargs: object) -> None:
+            self.schema = schema
+
+        def __call__(self, value: object) -> object:
+            return value
+
+    voluptuous.Required = Required
+    voluptuous.Optional = Optional
+    voluptuous.In = In
+    voluptuous.Schema = Schema
+    sys.modules["voluptuous"] = voluptuous
+
+
 def _install_fake_integration_modules() -> None:
     package_module = types.ModuleType("custom_components")
     package_module.__path__ = [str(PACKAGE_ROOT)]  # type: ignore[attr-defined]
@@ -171,6 +207,7 @@ def _install_fake_integration_modules() -> None:
 
 
 def _load_config_flow():
+    _install_fake_voluptuous()
     _install_fake_homeassistant()
     _install_fake_integration_modules()
 
