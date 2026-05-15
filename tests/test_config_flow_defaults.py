@@ -7,6 +7,7 @@ import sys
 import types
 from pathlib import Path
 import unittest
+from unittest.mock import AsyncMock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -269,3 +270,52 @@ class TestDeviceSettingsDefaults(unittest.TestCase):
             defaults[self.config_flow.ATTR_CURRENCY],
             self.config_flow.CURRENCY_UNCHANGED,
         )
+
+
+class TestDeviceSettingsOptionsFlow(unittest.IsolatedAsyncioTestCase):
+    """Validate device settings options flow does not write unchanged currency."""
+
+    def setUp(self) -> None:
+        self.config_flow = _load_config_flow()
+        self.flow = self.config_flow.StiebelDHEConnectOptionsFlow()
+        self.entry_id = "entry-device-settings"
+        self.client = types.SimpleNamespace(
+            set_currency=AsyncMock(),
+            set_electricity_price=AsyncMock(),
+            set_water_price=AsyncMock(),
+            set_co2_emission=AsyncMock(),
+        )
+        self.config_entry = types.SimpleNamespace(
+            entry_id=self.entry_id,
+            options={},
+        )
+        self.flow.config_entry = self.config_entry
+        self.flow.hass = types.SimpleNamespace(
+            data={
+                self.config_flow.DOMAIN: {
+                    self.entry_id: types.SimpleNamespace(client=self.client),
+                }
+            },
+            config=types.SimpleNamespace(language="en"),
+        )
+        self.flow.async_create_entry = types.MethodType(
+            lambda _self, **kwargs: {
+                "type": "create_entry",
+                "title": kwargs.get("title"),
+                "data": kwargs.get("data", {}),
+            },
+            self.flow,
+        )
+
+    async def test_device_settings_does_not_write_currency_without_explicit_change(
+        self,
+    ) -> None:
+        user_input = {self.config_flow.ATTR_ELECTRICITY_PRICE: "0.21"}
+
+        result = await self.flow.async_step_device_settings(user_input=user_input)
+
+        self.assertEqual(result["data"], {})
+        self.client.set_currency.assert_not_awaited()
+        self.client.set_electricity_price.assert_awaited_once_with(0.21)
+        self.client.set_water_price.assert_not_awaited()
+        self.client.set_co2_emission.assert_not_awaited()
