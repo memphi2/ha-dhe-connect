@@ -9,7 +9,6 @@ import sys
 import unittest
 from typing import Any, Callable
 
-
 ROOT = Path(__file__).resolve().parents[1]
 COMPONENT_DIR = ROOT / "custom_components" / "stiebel_dhe_connect"
 PACKAGE_NAME = "custom_components.stiebel_dhe_connect"
@@ -385,6 +384,9 @@ def _ensure_aiohttp_stub() -> None:
 
 def _load_component_module(module_name: str):
     _ensure_aiohttp_stub()
+    from test_ha_stubs import ensure_homeassistant_stubs
+
+    ensure_homeassistant_stubs()
     root_module_name = "custom_components"
     if root_module_name not in sys.modules:
         root_module = types.ModuleType(root_module_name)

@@ -20,7 +20,6 @@ PACKAGE_NAME = "custom_components.stiebel_dhe_connect"
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-
 def _ensure_aiohttp_stub() -> None:
     if "aiohttp" in sys.modules:
         return
@@ -399,6 +398,9 @@ def _ensure_aiohttp_stub() -> None:
 
 def _load_component_module(module_name: str):
     _ensure_aiohttp_stub()
+    from test_ha_stubs import ensure_homeassistant_stubs
+
+    ensure_homeassistant_stubs()
     root_module_name = "custom_components"
     if root_module_name not in sys.modules:
         root_module = types.ModuleType(root_module_name)
