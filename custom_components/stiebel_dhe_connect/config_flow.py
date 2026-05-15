@@ -38,7 +38,6 @@ from .config_entry_helpers import merged_entry_data
 from .connection_helpers import (
     host_for_url,
     normalize_host,
-    should_check_connectivity,
     target_changed,
     validate_port,
 )
@@ -694,7 +693,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
                         port,
                         default_port=DEFAULT_PORT,
                     )
-                    if should_check_connectivity(target_changed=changed) and not await _can_connect(self.hass, host, port):
+                    if changed and not await _can_connect(self.hass, host, port):
                         errors["base"] = "cannot_connect"
                         return self.async_show_form(
                             step_id="connection",

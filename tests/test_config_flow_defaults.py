@@ -145,7 +145,6 @@ def _install_fake_integration_modules() -> None:
     )
     fake_connection.host_for_url = lambda host: str(host)
     fake_connection.normalize_host = lambda host: str(host)
-    fake_connection.should_check_connectivity = lambda *_args, **_kwargs: False
     fake_connection.target_changed = lambda current, host, port, default_port: (
         current.get("host") != host or current.get("port", default_port) != port
     )
@@ -319,3 +318,117 @@ class TestDeviceSettingsOptionsFlow(unittest.IsolatedAsyncioTestCase):
         self.client.set_electricity_price.assert_awaited_once_with(0.21)
         self.client.set_water_price.assert_not_awaited()
         self.client.set_co2_emission.assert_not_awaited()
+
+
+class TestConnectionOptionsConnectivity(unittest.IsolatedAsyncioTestCase):
+    """Check options flow connection step connectivity policy."""
+
+    def setUp(self) -> None:
+        self.config_flow = _load_config_flow()
+        self.flow = self.config_flow.StiebelDHEConnectOptionsFlow()
+        self.entry_id = "entry-connection-options"
+        self.config_entry = types.SimpleNamespace(
+            entry_id=self.entry_id,
+            data={
+                "host": "dhe.local",
+                "port": 80,
+                "name": "DHE",
+                self.config_flow.CONF_INTERNAL_SCALD_PROTECTION: "50",
+            },
+            options={},
+        )
+
+        class _ConfigEntries:
+            def __init__(self, entries: list[types.SimpleNamespace]) -> None:
+                self._entries = entries
+
+            def async_entries(self, _domain: str):  # noqa: ANN001
+                return self._entries
+
+        self.flow.config_entry = self.config_entry
+        self.flow.hass = types.SimpleNamespace(
+            config=types.SimpleNamespace(language="en"),
+            config_entries=_ConfigEntries([]),
+            data={},
+        )
+        self.flow.async_show_form = types.MethodType(
+            lambda _self, **kwargs: {
+                "type": "form",
+                "step_id": kwargs.get("step_id"),
+                "errors": kwargs.get("errors", {}),
+            },
+            self.flow,
+        )
+        self.flow.async_create_entry = types.MethodType(
+            lambda _self, **kwargs: {
+                "type": "create_entry",
+                "title": kwargs.get("title"),
+                "data": kwargs.get("data", {}),
+            },
+            self.flow,
+        )
+
+    async def test_connection_step_skips_connectivity_when_target_unchanged(
+        self,
+    ) -> None:
+        self.config_flow._can_connect = AsyncMock(return_value=False)
+
+        result = await self.flow.async_step_connection(
+            {
+                self.config_flow.CONF_HOST: "dhe.local",
+                self.config_flow.CONF_PORT: 80,
+                self.config_flow.CONF_NAME: "DHE 2",
+                self.config_flow.CONF_INTERNAL_SCALD_PROTECTION: "55",
+            },
+        )
+
+        self.config_flow._can_connect.assert_not_awaited()
+        self.assertEqual(result["type"], "create_entry")
+        self.assertEqual(result["data"][self.config_flow.CONF_HOST], "dhe.local")
+        self.assertEqual(result["data"][self.config_flow.CONF_NAME], "DHE 2")
+        self.assertEqual(
+            result["data"][self.config_flow.CONF_INTERNAL_SCALD_PROTECTION], "55"
+        )
+
+    async def test_connection_step_checks_connectivity_when_target_changed(self) -> None:
+        self.config_flow._can_connect = AsyncMock(return_value=False)
+
+        result = await self.flow.async_step_connection(
+            {
+                self.config_flow.CONF_HOST: "other.local",
+                self.config_flow.CONF_PORT: 80,
+                self.config_flow.CONF_NAME: "DHE 2",
+                self.config_flow.CONF_INTERNAL_SCALD_PROTECTION: "50",
+            },
+        )
+
+        self.config_flow._can_connect.assert_awaited_once_with(
+            self.flow.hass,
+            "other.local",
+            80,
+        )
+        self.assertEqual(result["type"], "form")
+        self.assertEqual(result["step_id"], "connection")
+        self.assertEqual(result["errors"]["base"], "cannot_connect")
+
+    async def test_connection_step_enters_pairing_when_target_changed_and_connects(
+        self,
+    ) -> None:
+        self.config_flow._can_connect = AsyncMock(return_value=True)
+
+        result = await self.flow.async_step_connection(
+            {
+                self.config_flow.CONF_HOST: "other.local",
+                self.config_flow.CONF_PORT: 80,
+                self.config_flow.CONF_NAME: "DHE 2",
+                self.config_flow.CONF_INTERNAL_SCALD_PROTECTION: "50",
+            },
+        )
+
+        self.config_flow._can_connect.assert_awaited_once_with(
+            self.flow.hass,
+            "other.local",
+            80,
+        )
+        self.assertEqual(result["type"], "form")
+        self.assertEqual(result["step_id"], "connection_pairing_confirm")

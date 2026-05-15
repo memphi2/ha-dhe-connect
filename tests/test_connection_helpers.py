@@ -83,14 +83,5 @@ class TestConnectionHelpers(unittest.TestCase):
             )
         )
 
-    def test_should_check_connectivity_only_when_target_changed(self) -> None:
-        self.assertFalse(
-            self.helpers.should_check_connectivity(target_changed=False)
-        )
-        self.assertTrue(
-            self.helpers.should_check_connectivity(target_changed=True)
-        )
-
-
 if __name__ == "__main__":
     unittest.main()
