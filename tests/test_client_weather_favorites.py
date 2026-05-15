@@ -6,7 +6,7 @@ import stat
 import sys
 import tempfile
 import unittest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 import importlib.util
 import os
 from pathlib import Path
@@ -279,6 +279,55 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         self.assertNotEqual(
             client_a._pairing_confirmation_notification_id,
             client_b._pairing_confirmation_notification_id,
+        )
+
+    async def test_notify_pairing_progress_cleans_up_legacy_pairing_notifications(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+
+        class _FakeHass:
+            pass
+
+        client = DHEClient.__new__(DHEClient)
+        client.hass = _FakeHass()
+        client.host = "dhe.local"
+        client.port = 9443
+
+        client._pairing_notification_text = lambda _state: (
+            "DHE Pairing",
+            "waiting",
+        )
+
+        async_create = Mock()
+        async_dismiss = Mock()
+
+        client_module.persistent_notification.async_create = async_create
+        client_module.persistent_notification.async_dismiss = async_dismiss
+
+        client._notify_pairing_progress("connecting")
+
+        self.assertEqual(
+            async_dismiss.call_count,
+            3,
+            "Expected legacy and scoped pairing confirmation notifications to be dismissed",
+        )
+        async_dismiss.assert_any_call(
+            client.hass,
+            client._legacy_pairing_confirmation_notification_id,
+        )
+        async_dismiss.assert_any_call(
+            client.hass,
+            client._legacy_pairing_notification_id,
+        )
+        async_dismiss.assert_any_call(
+            client.hass,
+            client._pairing_confirmation_notification_id,
+        )
+        async_create.assert_called_once_with(
+            client.hass,
+            "waiting",
+            title="DHE Pairing",
+            notification_id=client._pairing_notification_id,
         )
 
     async def test_set_price_rolls_back_when_second_write_fails(self) -> None:

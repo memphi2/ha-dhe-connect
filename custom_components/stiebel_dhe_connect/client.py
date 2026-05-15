@@ -2368,8 +2368,16 @@ class DHEClient:
         self._pairing_active = False
 
     def _notify_pairing_progress(self, state: str) -> None:
-        # Legacy cleanup: remove old standalone hint notification if present.
+        # Cleanup legacy pairing notifications without a port suffix.
         try:
+            persistent_notification.async_dismiss(
+                self.hass,
+                self._legacy_pairing_confirmation_notification_id,
+            )
+            persistent_notification.async_dismiss(
+                self.hass,
+                self._legacy_pairing_notification_id,
+            )
             persistent_notification.async_dismiss(
                 self.hass,
                 self._pairing_confirmation_notification_id,
@@ -2390,9 +2398,19 @@ class DHEClient:
         return f"{PAIRING_NOTIFICATION_ID_PREFIX}_{safe_host}_{self.port}"
 
     @property
+    def _legacy_pairing_notification_id(self) -> str:
+        safe_host = re.sub(r"[^A-Za-z0-9_-]+", "_", self.host)
+        return f"{PAIRING_NOTIFICATION_ID_PREFIX}_{safe_host}"
+
+    @property
     def _pairing_confirmation_notification_id(self) -> str:
         safe_host = re.sub(r"[^A-Za-z0-9_-]+", "_", self.host)
         return f"{PAIRING_CONFIRM_HINT_NOTIFICATION_ID_PREFIX}_{safe_host}_{self.port}"
+
+    @property
+    def _legacy_pairing_confirmation_notification_id(self) -> str:
+        safe_host = re.sub(r"[^A-Za-z0-9_-]+", "_", self.host)
+        return f"{PAIRING_CONFIRM_HINT_NOTIFICATION_ID_PREFIX}_{safe_host}"
 
     def _pairing_notification_text(self, state: str) -> tuple[str, str]:
         language = str(getattr(self.hass.config, "language", "") or "").lower()
