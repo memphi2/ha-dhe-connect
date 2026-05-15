@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Stiebel DHE Connect einrichten",
-        "description": "Lokale Verbindung zum DHE Connect und physische Tmax-Jumperposition konfigurieren. Die Pairing-Anfrage wird im n?chsten Schritt gestartet.",
+        "description": "Lokale Verbindung zum DHE Connect und physische Tmax-Jumperposition konfigurieren. Die Pairing-Anfrage wird im nächsten Schritt gestartet.",
         "data": {
           "host": "IP-Adresse oder Hostname",
           "port": "Port",
@@ -45,13 +45,13 @@
           "device_settings": "Kosten & Emissionen",
           "weather_favorite": "Wetter-Favorit hinzufügen",
           "remove_weather_favorite": "Wetter-Favorit entfernen",
-          "radio_favorite": "Radio-Sender hinzuf?gen",
+          "radio_favorite": "Radio-Sender hinzufügen",
           "remove_radio_favorite": "Radio-Sender entfernen"
         }
       },
       "connection": {
         "title": "Verbindung/Gerät konfigurieren",
-        "description": "IP-Adresse, Port, Gerätename und physische Tmax-Jumperposition ?ndern.",
+        "description": "IP-Adresse, Port, Gerätename und physische Tmax-Jumperposition ändern.",
         "data": {
           "host": "IP-Adresse oder Hostname",
           "port": "Port",
@@ -61,7 +61,7 @@
       },
       "connection_pairing_confirm": {
         "title": "Pairing bestätigen",
-        "description": "Jetzt OK klicken. Da DHE-Host oder Port ge?ndert wurden, prüft die Integration Pairing und Login f?r das neue Ziel vor dem Speichern. Die Pairing-Anfrage am DHE-Display bestätigen."
+        "description": "Jetzt OK klicken. Da DHE-Host oder Port geändert wurden, prüft die Integration Pairing und Login für das neue Ziel vor dem Speichern. Die Pairing-Anfrage am DHE-Display bestätigen."
       },
       "device_settings": {
         "title": "Kosten & Emissionen",
@@ -69,34 +69,34 @@
         "data": {
           "currency": "Währung",
           "electricity_price": "Strompreis (EUR/kWh)",
-          "water_price": "Wasserpreis (EUR/m?)",
+          "water_price": "Wasserpreis (EUR/m³)",
           "co2_emission": "CO2-Emission (kg/kWh)"
         }
       },
       "weather_favorite": {
         "title": "Wetter-Favorit suchen",
-        "description": "Land ausw?hlen und Ort suchen.",
+        "description": "Land auswählen und Ort suchen.",
         "data": {
           "country_id": "Land",
           "name": "Suchbegriff"
         }
       },
       "weather_favorite_result": {
-        "title": "Wetter-Favorit ausw?hlen",
-        "description": "Treffer ausw?hlen und als Favorit speichern.",
+        "title": "Wetter-Favorit auswählen",
+        "description": "Treffer auswählen und als Favorit speichern.",
         "data": {
           "result": "Treffer"
         }
       },
       "remove_weather_favorite": {
         "title": "Wetter-Favorit entfernen",
-        "description": "Vorhandenen Favorit ausw?hlen und vom DHE entfernen.",
+        "description": "Vorhandenen Favorit auswählen und vom DHE entfernen.",
         "data": {
           "result": "Favorit"
         }
       },
       "radio_favorite": {
-        "title": "Radio-Suche ausw?hlen",
+        "title": "Radio-Suche auswählen",
         "description": "Nach Volltext, Musikrichtung, Land oder Stadt suchen. Musikrichtung wird aus dem DHE-Katalog gesucht; Land und Stadt nutzen Katalogauswahl plus Suchbegriff.",
         "data": {
           "search_type": "Suchart"
@@ -104,22 +104,22 @@
       },
       "radio_favorite_catalog": {
         "title": "Radio-Suche eingeben",
-        "description": "Suchbegriff eingeben und bei Land, Stadt oder Musikrichtung den passenden Katalogeintrag ausw?hlen.",
+        "description": "Suchbegriff eingeben und bei Land, Stadt oder Musikrichtung den passenden Katalogeintrag auswählen.",
         "data": {
           "selection": "Auswahl (Land/Stadt/Musikrichtung)",
           "filter_text": "Textfilter (z. B. *)"
         }
       },
       "radio_favorite_result": {
-        "title": "Radio-Sender ausw?hlen",
-        "description": "Treffer ausw?hlen, als Favorit speichern und auf dem DHE aktivieren.",
+        "title": "Radio-Sender auswählen",
+        "description": "Treffer auswählen, als Favorit speichern und auf dem DHE aktivieren.",
         "data": {
           "result": "Sender"
         }
       },
       "remove_radio_favorite": {
         "title": "Radio-Sender entfernen",
-        "description": "Vorhandenen Radio-Favorit ausw?hlen und vom DHE entfernen.",
+        "description": "Vorhandenen Radio-Favorit auswählen und vom DHE entfernen.",
         "data": {
           "result": "Sender"
         }
@@ -140,7 +140,7 @@
       "auth_timeout": "Anmeldung am DHE hat zu lange gedauert. Bitte erneut versuchen.",
       "invalid_port": "Ungültiger Port. Der Port muss zwischen 1 und 65535 liegen.",
       "not_loaded": "Die Integration ist noch nicht geladen.",
-      "no_countries": "Keine Wetter-L?nder vom DHE erhalten.",
+      "no_countries": "Keine Wetter-Länder vom DHE erhalten.",
       "no_results": "Keine Treffer gefunden.",
       "no_favorites": "Keine Wetter-Favoriten vorhanden.",
       "search_failed": "Wettersuche fehlgeschlagen.",
@@ -170,10 +170,10 @@
     },
     "button": {
       "reset_brush_timer": {
-        "name": "Zahnputz-Timer zur?cksetzen"
+        "name": "Zahnputz-Timer zurücksetzen"
       },
       "reset_shower_timer": {
-        "name": "Duschtimer zur?cksetzen"
+        "name": "Duschtimer zurücksetzen"
       },
       "repair_pairing": {
         "name": "Pairing erneuern"
@@ -218,34 +218,34 @@
         "name": "Speicher 12"
       },
       "delete_temperature_memory_3": {
-        "name": "Speicher 3 l?schen"
+        "name": "Speicher 3 löschen"
       },
       "delete_temperature_memory_4": {
-        "name": "Speicher 4 l?schen"
+        "name": "Speicher 4 löschen"
       },
       "delete_temperature_memory_5": {
-        "name": "Speicher 5 l?schen"
+        "name": "Speicher 5 löschen"
       },
       "delete_temperature_memory_6": {
-        "name": "Speicher 6 l?schen"
+        "name": "Speicher 6 löschen"
       },
       "delete_temperature_memory_7": {
-        "name": "Speicher 7 l?schen"
+        "name": "Speicher 7 löschen"
       },
       "delete_temperature_memory_8": {
-        "name": "Speicher 8 l?schen"
+        "name": "Speicher 8 löschen"
       },
       "delete_temperature_memory_9": {
-        "name": "Speicher 9 l?schen"
+        "name": "Speicher 9 löschen"
       },
       "delete_temperature_memory_10": {
-        "name": "Speicher 10 l?schen"
+        "name": "Speicher 10 löschen"
       },
       "delete_temperature_memory_11": {
-        "name": "Speicher 11 l?schen"
+        "name": "Speicher 11 löschen"
       },
       "delete_temperature_memory_12": {
-        "name": "Speicher 12 l?schen"
+        "name": "Speicher 12 löschen"
       }
     },
     "media_player": {
