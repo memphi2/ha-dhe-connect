@@ -101,3 +101,8 @@ def target_changed(
     except (TypeError, ValueError):
         return True
     return (current_host, current_port) != (host, port)
+
+
+def should_check_connectivity(*, target_changed: bool) -> bool:
+    """Return whether options-flow connectivity checks should run."""
+    return target_changed

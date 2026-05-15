@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import ipaddress
 import json
 import logging
@@ -1070,16 +1071,21 @@ class DHEClient:
         async def _operation(ctx: DHESession) -> bool:
             payload = _copy_json_like_value(location)
 
+            favorites_known = "favorites" in self._last_weather_state
             favorites = self._weather_favorites()
             try:
                 favorites = await self._request_weather_favorites(ctx)
+                favorites_known = True
             except DHEError:
-                pass
+                if not favorites_known:
+                    raise
             if _weather_location_in_list(payload, favorites):
                 return True
 
             location_id = _weather_location_id(payload)
-            await self._assign_weather_favorite_and_wait(ctx, payload)
+            favorites = await self._assign_weather_favorite_and_wait(ctx, payload)
+            if not _weather_location_in_list(payload, favorites):
+                raise DHEError("DHE weather favorite did not change")
             await self._send_ste_command(ctx, WEATHER_LOCATION_GET_COMMAND, location_id)
             await self._wait_for_weather_location(location_id)
             return True
@@ -1153,10 +1159,19 @@ class DHEClient:
         *,
         max_value: float,
     ) -> float:
+        old_euros = self._last_measurements.get(euros_odb_id)
+        old_cents = self._last_measurements.get(cents_odb_id)
         total_cents = int(round(_clamp(float(value), 0.0, max_value) * 100))
         euros, cents = divmod(total_cents, 100)
-        await self.write_odb_value(euros_odb_id, euros)
-        await self.write_odb_value(cents_odb_id, cents)
+        try:
+            await self.write_odb_value(euros_odb_id, euros)
+            await self.write_odb_value(cents_odb_id, cents)
+        except Exception:
+            if old_euros is not None and old_cents is not None:
+                with contextlib.suppress(Exception):
+                    await self.write_odb_value(euros_odb_id, old_euros)
+                    await self.write_odb_value(cents_odb_id, old_cents)
+            raise
         return total_cents / 100.0
 
     async def press_temperature_memory(self, memory_slot: int) -> bool:
@@ -1283,7 +1298,12 @@ class DHEClient:
             if "id" in payload:
                 self._handle_temperature_memory_item(payload, source_command=TEMP_MEMORY_ASSIGN_COMMAND)
             await self._refresh_temperature_memories(ctx)
-            return self._cached_temperature_memory_temperature(measurement_id) or requested
+            confirmed = self._cached_temperature_memory_temperature(measurement_id)
+            if confirmed is None:
+                raise DHEError(
+                    f"DHE temperature memory {memory_slot} was not confirmed"
+                )
+            return confirmed
 
         return await self._run_command_with_reconnect_retry(
             f"Could not set DHE temperature memory {memory_slot}",
@@ -2319,12 +2339,12 @@ class DHEClient:
     @property
     def _pairing_notification_id(self) -> str:
         safe_host = re.sub(r"[^A-Za-z0-9_-]+", "_", self.host)
-        return f"{PAIRING_NOTIFICATION_ID_PREFIX}_{safe_host}"
+        return f"{PAIRING_NOTIFICATION_ID_PREFIX}_{safe_host}_{self.port}"
 
     @property
     def _pairing_confirmation_notification_id(self) -> str:
         safe_host = re.sub(r"[^A-Za-z0-9_-]+", "_", self.host)
-        return f"{PAIRING_CONFIRM_HINT_NOTIFICATION_ID_PREFIX}_{safe_host}"
+        return f"{PAIRING_CONFIRM_HINT_NOTIFICATION_ID_PREFIX}_{safe_host}_{self.port}"
 
     def _pairing_notification_text(self, state: str) -> tuple[str, str]:
         language = str(getattr(self.hass.config, "language", "") or "").lower()
@@ -3575,7 +3595,12 @@ class DHEClient:
             token_dir = os.path.dirname(self.token_path)
             os.makedirs(token_dir, exist_ok=True)
             tmp_path = f"{self.token_path}.tmp"
-            with open(tmp_path, "w", encoding="utf-8") as file:
+            file_descriptor = os.open(
+                tmp_path,
+                os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+                stat.S_IRUSR | stat.S_IWUSR,
+            )
+            with os.fdopen(file_descriptor, "w", encoding="utf-8") as file:
                 file.write(token)
             try:
                 os.chmod(tmp_path, stat.S_IRUSR | stat.S_IWUSR)

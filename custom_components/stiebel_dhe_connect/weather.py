@@ -110,7 +110,7 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
             result = update_listeners(("daily",))
         except TypeError:  # pragma: no cover - older HA compatibility
             result = update_listeners()
-        if inspect.iscoroutine(result):
+        if inspect.isawaitable(result):
             self.hass.async_create_task(result)
 
     def _apply_weather_state(self, state: dict[str, Any]) -> None:

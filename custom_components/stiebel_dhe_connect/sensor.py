@@ -621,6 +621,13 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
     entity_description: StiebelDHESensorEntityDescription
     _attr_has_entity_name = True
     _attr_should_poll = False
+    _unrecorded_attributes = frozenset({
+        "chart",
+        "activation_rate",
+        "possible",
+        "real",
+        "consumption",
+    })
 
     def __init__(
         self,
