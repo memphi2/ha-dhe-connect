@@ -1110,12 +1110,10 @@ class DHEClient:
             try:
                 favorites = await self._request_weather_favorites(ctx)
             except DHEError:
-                if not _weather_location_in_list(payload, favorites):
-                    raise DHEError(
-                        "Cannot safely remove DHE weather favorite without a fresh "
-                        "favorite list"
-                    )
-                return True
+                raise DHEError(
+                    "Cannot safely remove DHE weather favorite without a fresh "
+                    "favorite list"
+                )
 
             if not _weather_location_in_list(payload, favorites):
                 return True

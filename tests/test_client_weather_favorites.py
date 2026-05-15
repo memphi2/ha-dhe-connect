@@ -223,9 +223,12 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
 
         client._run_command_with_reconnect_retry = _run_with_retry
 
-        result = await DHEClient.remove_weather_favorite(client, location)
+        with self.assertRaisesRegex(
+            DHEError,
+            "Cannot safely remove DHE weather favorite without a fresh favorite list",
+        ):
+            await DHEClient.remove_weather_favorite(client, location)
 
-        self.assertTrue(result)
         client._request_weather_favorites.assert_awaited_once()
         client._assign_weather_favorite_and_wait.assert_not_awaited()
 
