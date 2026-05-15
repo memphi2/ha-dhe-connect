@@ -71,7 +71,6 @@ def _ensure_aiohttp_stub() -> None:
         "ServerTimeoutError",
         "InvalidURL",
         "ClientConnectionResetError",
-        "ClientPayloadError",
         "WSServerHandshakeError",
     ]:
         setattr(aiohttp_module, name, type(name, (Exception,), {}))
@@ -250,7 +249,7 @@ def _ensure_aiohttp_stub() -> None:
             self.args = args
             self.kwargs = kwargs
 
-    def __repr__(self) -> str:
+        def __repr__(self) -> str:
             return "AppRunner()"
 
     web_module.AppRunner = _AppRunner

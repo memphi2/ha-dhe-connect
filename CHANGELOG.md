@@ -1,5 +1,32 @@
 # Changelog
 
+## v1.2.2b1 - 2026-05-15
+
+### Added
+
+- Expanded regression coverage for weather favorite toggling and recorder-safe sensor attributes.
+- Added shared lightweight Home Assistant/aiohttp stub coverage for dependency-free unit tests.
+
+### Changed
+
+- Run options-flow connectivity checks only when host or port changed.
+- Mark high-volume dynamic sensor attributes (`chart`, `possible`, `real`, `consumption`, `activation_rate`) as unrecorded for recorder protection.
+- Include host and port in pairing notification IDs to avoid collisions across multiple configured DHE targets.
+- Create pairing token temporary files with restrictive `0600` permissions from the first write.
+
+### Fixed
+
+- Restored German translations with proper umlauts and special characters.
+- Accept awaitable weather listener update hooks across Home Assistant versions.
+- Ignore `null` entries in radio string catalog normalization.
+- Harden weather favorite handling when favorite-list refresh times out or the DHE does not apply favorite changes.
+- Roll back split price writes when the second ODB write fails.
+- Require confirmed readback after setting a temperature-memory slot.
+
+### Beta notes
+
+- This is a beta release intended for validation before the next stable patch.
+
 ## v1.2.1 - 2026-05-14
 
 ### Changed
