@@ -176,12 +176,40 @@ The radio entity intentionally does not request the full station catalog during 
 
 The weather entity exposes the DHE forecast location, including `city`, `country` and a combined `location` attribute in `place, country` format, daily temperatures, precipitation probabilities and original `icon_id_*` values. The observed DHE weather icons are mapped to Home Assistant weather conditions where verified from device traffic: `1`/`2` = sunny, `3`/`4`/`6` = partly cloudy, `5` = cloudy and `7`/`8` = rainy. Unknown icon IDs remain visible as attributes and fall back to precipitation-based conditions. Weather favorites, forecast search results and the selected country are treated as known protocol messages; the full country catalog is recognized but not requested during startup because it is very large.
 
-Weather location search uses the same split city/country workflow as the DHE UI. The integration options can add and remove weather favorites. The `Weather location` select is enabled by default and switches between existing favorites from Home Assistant. The service `stiebel_dhe_connect.search_weather_location` sends `get:ste.app.weather:forecast` with `name` and `country_id`; the returned results are exposed as `forecast_results` attributes. The service `stiebel_dhe_connect.toggle_weather_favorite` can toggle an existing result by `result_number` or run a fresh search first when `name` and `country_id` are provided. The DHE uses the same `assign:ste.app.weather:favorite` command to add and remove favorites.
+Weather location search uses the same split city/country workflow as the DHE UI. The integration options can add and remove weather favorites. The `Weather location` select is enabled by default and switches between existing favorites from Home Assistant. `search_weather_location` returns forecast results in `forecast_results` attributes.
+
+Weather favorite service actions:
+
+- `add_weather_favorite`: safe add behavior (no toggle off if already present, requires a fresh favorite list on confirmation)
+- `remove_weather_favorite`: safe remove behavior (no toggle on if already missing, requires a fresh favorite list on removal)
+- `toggle_weather_favorite`: low-level toggle (protocol-native), can add or remove depending on current state
+
+All services share the same selection input model as before (`entry_id`, `result_number`, `location_id`, `name`, `country_id`) and are backed by `assign:ste.app.weather:favorite`.
 
 Selecting the active weather location is a separate step. The service `stiebel_dhe_connect.select_weather_location` sends `get:ste.app.weather:location` with the selected `LocationId`, matching the browser protocol used when switching to a favorite. It can select by exact `location_id`, by the current search `result_number`, or run a fresh name/country search first. When multiple DHE devices are configured, include `entry_id` in service data to target one integration entry. Example for toggling New York in the USA:
 
 ```yaml
 service: stiebel_dhe_connect.toggle_weather_favorite
+data:
+  entry_id: 01HXXXXXXXXXXXXXXX
+  name: New York
+  country_id: 143
+  result_number: 1
+```
+
+Example for explicitly adding or removing the same location:
+
+```yaml
+service: stiebel_dhe_connect.add_weather_favorite
+data:
+  entry_id: 01HXXXXXXXXXXXXXXX
+  name: New York
+  country_id: 143
+  result_number: 1
+```
+
+```yaml
+service: stiebel_dhe_connect.remove_weather_favorite
 data:
   entry_id: 01HXXXXXXXXXXXXXXX
   name: New York

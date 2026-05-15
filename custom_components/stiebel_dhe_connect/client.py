@@ -937,16 +937,18 @@ class DHEClient:
 
         async def _operation(ctx: DHESession) -> bool:
             favorites = self._radio_favorites()
-            favorites_known = bool(favorites)
             try:
                 favorites = await self._request_radio_favorites(ctx)
-                favorites_known = True
             except DHEError:
-                if not favorites_known:
-                    raise
+                if not _radio_station_in_list(station_id, favorites):
+                    raise DHEError(
+                        "Cannot safely add DHE radio favorite without a fresh favorite list"
+                    )
 
             if not _radio_station_in_list(station_id, favorites):
-                await self._assign_radio_favorite_and_wait(ctx, station_id)
+                favorites = await self._assign_radio_favorite_and_wait(ctx, station_id)
+                if not _radio_station_in_list(station_id, favorites):
+                    raise DHEError(f"DHE radio favorite {station_id} did not change")
 
             if select:
                 await self._send_ste_command(
@@ -1071,14 +1073,16 @@ class DHEClient:
         async def _operation(ctx: DHESession) -> bool:
             payload = _copy_json_like_value(location)
 
-            favorites_known = "favorites" in self._last_weather_state
             favorites = self._weather_favorites()
             try:
                 favorites = await self._request_weather_favorites(ctx)
-                favorites_known = True
             except DHEError:
-                if not favorites_known:
-                    raise
+                if _weather_location_in_list(payload, favorites):
+                    return True
+
+                raise DHEError(
+                    "Cannot safely add DHE weather favorite without a fresh favorite list"
+                )
             if _weather_location_in_list(payload, favorites):
                 return True
 
@@ -1092,6 +1096,35 @@ class DHEClient:
 
         return await self._run_command_with_reconnect_retry(
             "Could not add DHE weather favorite",
+            _operation,
+        )
+
+    async def remove_weather_favorite(self, location: dict[str, Any]) -> bool:
+        """Remove a weather favorite without toggling a missing favorite on."""
+        if not _weather_location_has_id(location):
+            raise DHEError("Weather favorite location must include LocationId")
+
+        async def _operation(ctx: DHESession) -> bool:
+            payload = _copy_json_like_value(location)
+            favorites = self._weather_favorites()
+            try:
+                favorites = await self._request_weather_favorites(ctx)
+            except DHEError:
+                raise DHEError(
+                    "Cannot safely remove DHE weather favorite without a fresh "
+                    "favorite list"
+                )
+
+            if not _weather_location_in_list(payload, favorites):
+                return True
+
+            favorites = await self._assign_weather_favorite_and_wait(ctx, payload)
+            if _weather_location_in_list(payload, favorites):
+                raise DHEError("DHE weather favorite did not change")
+            return True
+
+        return await self._run_command_with_reconnect_retry(
+            "Could not remove DHE weather favorite",
             _operation,
         )
 
@@ -1282,6 +1315,7 @@ class DHEClient:
         requested = _round_to_half_c(_clamp(float(temperature), 20.0, 60.0))
 
         async def _operation(ctx: DHESession) -> float:
+            before_generation = self._temperature_memory_generation
             await self._refresh_temperature_memories(ctx)
             attributes = self._last_measurement_attributes.get(measurement_id, {})
             name = str(attributes.get("name", DEFAULT_TEMPERATURE_MEMORY_NAMES[memory_id]))
@@ -1295,13 +1329,16 @@ class DHEClient:
                 "command": TEMP_MEMORY_ASSIGN_COMMAND,
                 "value": payload,
             }))
-            if "id" in payload:
-                self._handle_temperature_memory_item(payload, source_command=TEMP_MEMORY_ASSIGN_COMMAND)
             await self._refresh_temperature_memories(ctx)
-            confirmed = self._cached_temperature_memory_temperature(measurement_id)
-            if confirmed is None:
+            if self._temperature_memory_generation == before_generation:
                 raise DHEError(
                     f"DHE temperature memory {memory_slot} was not confirmed"
+                )
+            confirmed = self._cached_temperature_memory_temperature(measurement_id)
+            if confirmed is None or abs(confirmed - requested) >= 0.01:
+                raise DHEError(
+                    f"DHE temperature memory {memory_slot} readback was {confirmed!r}, "
+                    f"expected {requested!r}"
                 )
             return confirmed
 
@@ -1318,6 +1355,7 @@ class DHEClient:
             raise DHEError(f"DHE temperature memory {memory_slot} name must not be empty")
 
         async def _operation(ctx: DHESession) -> str:
+            before_generation = self._temperature_memory_generation
             await self._refresh_temperature_memories(ctx)
             temperature = (
                 self._cached_temperature_memory_temperature(measurement_id)
@@ -1333,11 +1371,19 @@ class DHEClient:
                 "command": TEMP_MEMORY_ASSIGN_COMMAND,
                 "value": payload,
             }))
-            if "id" in payload:
-                self._handle_temperature_memory_item(payload, source_command=TEMP_MEMORY_ASSIGN_COMMAND)
             await self._refresh_temperature_memories(ctx)
+            if self._temperature_memory_generation == before_generation:
+                raise DHEError(
+                    f"DHE temperature memory {memory_slot} name was not confirmed"
+                )
             attributes = self._last_measurement_attributes.get(measurement_id, {})
-            return str(attributes.get("name", requested_name))
+            confirmed_name = str(attributes.get("name", "")).strip()
+            if confirmed_name != requested_name:
+                raise DHEError(
+                    f"DHE temperature memory {memory_slot} name readback was "
+                    f"{confirmed_name!r}, expected {requested_name!r}"
+                )
+            return confirmed_name
 
         return await self._run_command_with_reconnect_retry(
             f"Could not set DHE temperature memory {memory_slot} name",
@@ -2320,8 +2366,16 @@ class DHEClient:
         self._pairing_active = False
 
     def _notify_pairing_progress(self, state: str) -> None:
-        # Legacy cleanup: remove old standalone hint notification if present.
+        # Cleanup legacy pairing notifications without a port suffix.
         try:
+            persistent_notification.async_dismiss(
+                self.hass,
+                self._legacy_pairing_confirmation_notification_id,
+            )
+            persistent_notification.async_dismiss(
+                self.hass,
+                self._legacy_pairing_notification_id,
+            )
             persistent_notification.async_dismiss(
                 self.hass,
                 self._pairing_confirmation_notification_id,
@@ -2342,9 +2396,19 @@ class DHEClient:
         return f"{PAIRING_NOTIFICATION_ID_PREFIX}_{safe_host}_{self.port}"
 
     @property
+    def _legacy_pairing_notification_id(self) -> str:
+        safe_host = re.sub(r"[^A-Za-z0-9_-]+", "_", self.host)
+        return f"{PAIRING_NOTIFICATION_ID_PREFIX}_{safe_host}"
+
+    @property
     def _pairing_confirmation_notification_id(self) -> str:
         safe_host = re.sub(r"[^A-Za-z0-9_-]+", "_", self.host)
         return f"{PAIRING_CONFIRM_HINT_NOTIFICATION_ID_PREFIX}_{safe_host}_{self.port}"
+
+    @property
+    def _legacy_pairing_confirmation_notification_id(self) -> str:
+        safe_host = re.sub(r"[^A-Za-z0-9_-]+", "_", self.host)
+        return f"{PAIRING_CONFIRM_HINT_NOTIFICATION_ID_PREFIX}_{safe_host}"
 
     def _pairing_notification_text(self, state: str) -> tuple[str, str]:
         language = str(getattr(self.hass.config, "language", "") or "").lower()

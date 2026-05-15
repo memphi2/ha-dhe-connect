@@ -60,6 +60,8 @@ class TestServiceHelpers(unittest.TestCase):
             [
                 self.helpers.WEATHER_RESULT_NUMBER_MAX,
                 self.helpers.WEATHER_RESULT_NUMBER_MAX,
+                self.helpers.WEATHER_RESULT_NUMBER_MAX,
+                self.helpers.WEATHER_RESULT_NUMBER_MAX,
             ],
         )
 

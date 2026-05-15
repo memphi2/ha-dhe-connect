@@ -65,7 +65,7 @@
       },
       "device_settings": {
         "title": "Costs & emissions",
-        "description": "Set currency, electricity price, water price and CO2 emission on the DHE. Number fields are prefilled with current device values, currency defaults to EUR.",
+        "description": "Set currency, electricity price, water price and CO2 emission on the DHE. Number fields are prefilled with current device values; if available, currency is prefilled from the current device, otherwise it defaults to 'Do not change'.",
         "data": {
           "currency": "Currency",
           "electricity_price": "Electricity price (EUR/kWh)",

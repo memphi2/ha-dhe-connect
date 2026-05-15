@@ -1,31 +1,35 @@
-# Changelog
+﻿# Changelog
 
-## v1.2.2b1 - 2026-05-15
+## v1.2.2b1 - 2026-05-16
 
 ### Added
 
-- Expanded regression coverage for weather favorite toggling and recorder-safe sensor attributes.
-- Added shared lightweight Home Assistant/aiohttp stub coverage for dependency-free unit tests.
+- Added dedicated weather favorite services for add/remove flows, plus safer validation paths in regression tests.
+- Added shared Home Assistant/aiohttp stubs used by multiple test suites.
+- Added tests for options flow currency no-op behavior and stricter temperature-memory confirmation checks.
 
 ### Changed
 
-- Run options-flow connectivity checks only when host or port changed.
-- Mark high-volume dynamic sensor attributes (`chart`, `possible`, `real`, `consumption`, `activation_rate`) as unrecorded for recorder protection.
-- Include host and port in pairing notification IDs to avoid collisions across multiple configured DHE targets.
-- Create pairing token temporary files with restrictive `0600` permissions from the first write.
+- Options-flow now only performs connectivity/pairing checks when host or port actually changed.
+- Pairing notifications are now scoped by host+port; legacy pairing notification IDs are cleaned up to avoid stale alerts.
+- Pairing token writes now use `0600` permissions from creation.
+- Host/port input handling was tightened so embedded ports are rejected at config entry time.
 
 ### Fixed
 
-- Restored German translations with proper umlauts and special characters.
-- Accept awaitable weather listener update hooks across Home Assistant versions.
-- Ignore `null` entries in radio string catalog normalization.
-- Harden weather favorite handling when favorite-list refresh times out or the DHE does not apply favorite changes.
-- Roll back split price writes when the second ODB write fails.
-- Require confirmed readback after setting a temperature-memory slot.
+- Restored proper UTF-8 German text in pairing confirmation UI.
+- Made weather and radio favorite operations safer against stale cache and failed refresh scenarios.
+- Improved awaitable handling for weather forecast update hooks.
+- Made price writes atomic (euros/cents) with rollback on partial write failure.
+- Enforced readback confirmation for temperature-memory value and name writes.
+- Improved radio catalog normalization by ignoring `null` entries.
 
-### Beta notes
+### Tests
 
-- This is a beta release intended for validation before the next stable patch.
+- Added/extended tests for URL/host:port/IPv6 host parsing.
+- Added coverage for options-flow target-change behavior.
+- Added explicit weather forecast date-semantics and stale favorite-list edge-case coverage.
+- Added regression coverage for currency, price, and temperature-memory write confirmations.
 
 ## v1.2.1 - 2026-05-14
 

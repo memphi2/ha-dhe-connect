@@ -19,6 +19,7 @@ from .client import (
     DHEClient,
     DHEError,
     ELECTRICITY_PRICE_MAX,
+    ID_APP_CURRENCY,
     ID_CO2_EMISSION,
     ID_ELECTRICITY_PRICE,
     ID_WATER_PRICE,
@@ -37,7 +38,6 @@ from .config_entry_helpers import merged_entry_data
 from .connection_helpers import (
     host_for_url,
     normalize_host,
-    should_check_connectivity,
     target_changed,
     validate_port,
 )
@@ -316,9 +316,18 @@ def _internal_scald_protection_options(hass: HomeAssistant) -> dict[str, str]:
 
 def _device_settings_defaults(client: Any) -> dict[str, Any]:
     measurements = getattr(client, "last_measurements", {})
+    raw_currency = measurements.get(ID_APP_CURRENCY)
+    currency = CURRENCY_UNCHANGED
+    if raw_currency not in (None, ""):
+        normalized_currency = str(raw_currency).strip().upper()
+        if (
+            normalized_currency
+            and normalized_currency != "UNSET"
+            and normalized_currency in CURRENCY_OPTIONS
+        ):
+            currency = normalized_currency
     return {
-        # Requested UX: keep currency default at EUR.
-        ATTR_CURRENCY: "EUR",
+        ATTR_CURRENCY: currency,
         ATTR_ELECTRICITY_PRICE: _format_number_default(
             measurements.get(ID_ELECTRICITY_PRICE)
         ),
@@ -684,7 +693,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
                         port,
                         default_port=DEFAULT_PORT,
                     )
-                    if should_check_connectivity(target_changed=changed) and not await _can_connect(self.hass, host, port):
+                    if changed and not await _can_connect(self.hass, host, port):
                         errors["base"] = "cannot_connect"
                         return self.async_show_form(
                             step_id="connection",
@@ -894,7 +903,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
             try:
                 selected = int(user_input[ATTR_RESULT])
                 location = self._weather_favorites[selected]
-                await client.toggle_weather_favorite(location)
+                await client.remove_weather_favorite(location)
             except (IndexError, TypeError, ValueError):
                 errors[ATTR_RESULT] = "invalid_result"
             except DHEError:
