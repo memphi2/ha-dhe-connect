@@ -67,7 +67,6 @@ def _ensure_aiohttp_stub() -> None:
         "ServerTimeoutError",
         "InvalidURL",
         "ClientConnectionResetError",
-        "ClientPayloadError",
         "WSServerHandshakeError",
     ]:
         setattr(aiohttp_module, name, type(name, (Exception,), {}))
