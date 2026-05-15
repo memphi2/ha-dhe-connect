@@ -65,7 +65,7 @@
       },
       "device_settings": {
         "title": "Kosten & Emissionen",
-        "description": "Währung, Strompreis, Wasserpreis und CO2-Emission am DHE setzen. Zahlenfelder sind mit aktuellen Gerätewerten vorbelegt, Währung standardmäßig auf EUR.",
+        "description": "Währung, Strompreis, Wasserpreis und CO2-Emission am DHE setzen. Zahlenfelder sind mit aktuellen Gerätewerten vorbelegt; wenn vorhanden wird die aktuelle Gerätwährung verwendet, sonst bleibt die Währung unverändert.",
         "data": {
           "currency": "Währung",
           "electricity_price": "Strompreis (EUR/kWh)",

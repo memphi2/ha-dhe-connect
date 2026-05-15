@@ -560,6 +560,7 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         DHEError = client_module.DHEError
 
         client = DHEClient.__new__(DHEClient)
+        client._temperature_memory_generation = 1
         client._last_measurement_attributes = {}
         client._temperature_memory_ids = lambda _slot: (0, 700)
         client._refresh_temperature_memories = AsyncMock()
@@ -579,6 +580,42 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
 
         with self.assertRaisesRegex(DHEError, "was not confirmed"):
             await DHEClient.set_temperature_memory(client, 0, 38.0)
+
+    async def test_set_temperature_memory_existing_slot_without_confirmation_is_rejected(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        DHEError = client_module.DHEError
+
+        client = DHEClient.__new__(DHEClient)
+        client._temperature_memory_generation = 2
+        client._last_measurement_attributes = {}
+        client._temperature_memory_ids = lambda _slot: (0, 700)
+        client._refresh_temperature_memories = AsyncMock()
+        client._temperature_memory_payload = lambda *_args, **_kwargs: {
+            "name": "Dusche",
+            "temperature": 38.0,
+            "id": 0,
+            "operation": "add_change",
+        }
+        client._post_packet = AsyncMock()
+        client._message_packet = lambda payload: payload
+        client._cached_temperature_memory_temperature = lambda _measurement_id: 38.0
+        client._handle_temperature_memory_item = unittest.mock.MagicMock()
+
+        async def _run_with_retry(_message, operation):
+            return await operation(object())
+
+        client._run_command_with_reconnect_retry = _run_with_retry
+
+        with self.assertRaisesRegex(
+            DHEError,
+            "was not confirmed",
+        ):
+            await DHEClient.set_temperature_memory(client, 0, 38.0)
+
+        self.assertEqual(client._temperature_memory_generation, 2)
+        self.assertEqual(client._refresh_temperature_memories.await_count, 2)
+        client._handle_temperature_memory_item.assert_not_called()
 
 
 if __name__ == "__main__":

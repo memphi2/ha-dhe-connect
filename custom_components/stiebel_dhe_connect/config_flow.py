@@ -19,6 +19,7 @@ from .client import (
     DHEClient,
     DHEError,
     ELECTRICITY_PRICE_MAX,
+    ID_APP_CURRENCY,
     ID_CO2_EMISSION,
     ID_ELECTRICITY_PRICE,
     ID_WATER_PRICE,
@@ -316,9 +317,18 @@ def _internal_scald_protection_options(hass: HomeAssistant) -> dict[str, str]:
 
 def _device_settings_defaults(client: Any) -> dict[str, Any]:
     measurements = getattr(client, "last_measurements", {})
+    raw_currency = measurements.get(ID_APP_CURRENCY)
+    currency = CURRENCY_UNCHANGED
+    if raw_currency not in (None, ""):
+        normalized_currency = str(raw_currency).strip().upper()
+        if (
+            normalized_currency
+            and normalized_currency != "UNSET"
+            and normalized_currency in CURRENCY_OPTIONS
+        ):
+            currency = normalized_currency
     return {
-        # Requested UX: keep currency default at EUR.
-        ATTR_CURRENCY: "EUR",
+        ATTR_CURRENCY: currency,
         ATTR_ELECTRICITY_PRICE: _format_number_default(
             measurements.get(ID_ELECTRICITY_PRICE)
         ),

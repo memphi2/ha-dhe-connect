@@ -1282,6 +1282,7 @@ class DHEClient:
         requested = _round_to_half_c(_clamp(float(temperature), 20.0, 60.0))
 
         async def _operation(ctx: DHESession) -> float:
+            before_generation = self._temperature_memory_generation
             await self._refresh_temperature_memories(ctx)
             attributes = self._last_measurement_attributes.get(measurement_id, {})
             name = str(attributes.get("name", DEFAULT_TEMPERATURE_MEMORY_NAMES[memory_id]))
@@ -1295,13 +1296,16 @@ class DHEClient:
                 "command": TEMP_MEMORY_ASSIGN_COMMAND,
                 "value": payload,
             }))
-            if "id" in payload:
-                self._handle_temperature_memory_item(payload, source_command=TEMP_MEMORY_ASSIGN_COMMAND)
             await self._refresh_temperature_memories(ctx)
-            confirmed = self._cached_temperature_memory_temperature(measurement_id)
-            if confirmed is None:
+            if self._temperature_memory_generation == before_generation:
                 raise DHEError(
                     f"DHE temperature memory {memory_slot} was not confirmed"
+                )
+            confirmed = self._cached_temperature_memory_temperature(measurement_id)
+            if confirmed is None or abs(confirmed - requested) >= 0.01:
+                raise DHEError(
+                    f"DHE temperature memory {memory_slot} readback was {confirmed!r}, "
+                    f"expected {requested!r}"
                 )
             return confirmed
 
