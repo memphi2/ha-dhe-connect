@@ -937,16 +937,18 @@ class DHEClient:
 
         async def _operation(ctx: DHESession) -> bool:
             favorites = self._radio_favorites()
-            favorites_known = bool(favorites)
             try:
                 favorites = await self._request_radio_favorites(ctx)
-                favorites_known = True
             except DHEError:
-                if not favorites_known:
-                    raise
+                if not _radio_station_in_list(station_id, favorites):
+                    raise DHEError(
+                        "Cannot safely add DHE radio favorite without a fresh favorite list"
+                    )
 
             if not _radio_station_in_list(station_id, favorites):
-                await self._assign_radio_favorite_and_wait(ctx, station_id)
+                favorites = await self._assign_radio_favorite_and_wait(ctx, station_id)
+                if not _radio_station_in_list(station_id, favorites):
+                    raise DHEError(f"DHE radio favorite {station_id} did not change")
 
             if select:
                 await self._send_ste_command(
@@ -1071,14 +1073,16 @@ class DHEClient:
         async def _operation(ctx: DHESession) -> bool:
             payload = _copy_json_like_value(location)
 
-            favorites_known = "favorites" in self._last_weather_state
             favorites = self._weather_favorites()
             try:
                 favorites = await self._request_weather_favorites(ctx)
-                favorites_known = True
             except DHEError:
-                if not favorites_known:
-                    raise
+                if _weather_location_in_list(payload, favorites):
+                    return True
+
+                raise DHEError(
+                    "Cannot safely add DHE weather favorite without a fresh favorite list"
+                )
             if _weather_location_in_list(payload, favorites):
                 return True
 
@@ -1322,6 +1326,7 @@ class DHEClient:
             raise DHEError(f"DHE temperature memory {memory_slot} name must not be empty")
 
         async def _operation(ctx: DHESession) -> str:
+            before_generation = self._temperature_memory_generation
             await self._refresh_temperature_memories(ctx)
             temperature = (
                 self._cached_temperature_memory_temperature(measurement_id)
@@ -1337,11 +1342,19 @@ class DHEClient:
                 "command": TEMP_MEMORY_ASSIGN_COMMAND,
                 "value": payload,
             }))
-            if "id" in payload:
-                self._handle_temperature_memory_item(payload, source_command=TEMP_MEMORY_ASSIGN_COMMAND)
             await self._refresh_temperature_memories(ctx)
+            if self._temperature_memory_generation == before_generation:
+                raise DHEError(
+                    f"DHE temperature memory {memory_slot} name was not confirmed"
+                )
             attributes = self._last_measurement_attributes.get(measurement_id, {})
-            return str(attributes.get("name", requested_name))
+            confirmed_name = str(attributes.get("name", "")).strip()
+            if confirmed_name != requested_name:
+                raise DHEError(
+                    f"DHE temperature memory {memory_slot} name readback was "
+                    f"{confirmed_name!r}, expected {requested_name!r}"
+                )
+            return confirmed_name
 
         return await self._run_command_with_reconnect_retry(
             f"Could not set DHE temperature memory {memory_slot} name",

@@ -13,15 +13,104 @@ def ensure_homeassistant_stubs() -> None:
     These stubs are intentionally minimal and only provide objects needed for
     module import and lightweight behavior assertions in this test suite.
     """
-    if "homeassistant" in sys.modules:
-        return
-
     def _module(*parts: str) -> types.ModuleType:
         name = ".".join(parts)
         module = types.ModuleType(name)
         sys.modules[name] = module
         return module
 
+    class _Units(str):
+        def __new__(cls, value: str) -> "_Units":
+            return str.__new__(cls, value)
+
+    def _ensure_constant(module: types.ModuleType, name: str, value: Any) -> None:
+        if not hasattr(module, name):
+            setattr(module, name, value)
+
+    def _ensure_units(module: types.ModuleType, name: str, attrs: dict[str, Any]) -> None:
+        existing = getattr(module, name, None)
+        if existing is None:
+            existing = type(name, (_Units,), {})
+            setattr(module, name, existing)
+        for attr_name, attr_value in attrs.items():
+            if not hasattr(existing, attr_name):
+                setattr(existing, attr_name, attr_value)
+
+    if "homeassistant" in sys.modules:
+        homeassistant = sys.modules["homeassistant"]
+
+        const = sys.modules.get("homeassistant.const")
+        if const is None:
+            const = _module("homeassistant.const")
+            homeassistant.const = const
+        homeassistant.const = const
+
+        _ensure_constant(const, "PERCENTAGE", "%")
+        _ensure_constant(const, "CONF_HOST", "host")
+        _ensure_constant(const, "CONF_NAME", "name")
+        _ensure_constant(const, "CONF_PORT", "port")
+        _ensure_constant(const, "ATTR_TEMPERATURE", "temperature")
+        _ensure_units(const, "UnitOfEnergy", {"KILO_WATT_HOUR": "kWh"})
+        _ensure_units(const, "UnitOfMass", {"KILOGRAMS": "kg"})
+        _ensure_units(const, "UnitOfPower", {"KILO_WATT": "kW"})
+        _ensure_units(const, "UnitOfTemperature", {"CELSIUS": "°C", "C": "°C"})
+        _ensure_units(const, "UnitOfTime", {"HOURS": "h", "SECONDS": "s"})
+        _ensure_units(const, "UnitOfVolume", {"LITERS": "l", "CUBIC_METERS": "m3"})
+        _ensure_units(
+            const,
+            "UnitOfVolumeFlowRate",
+            {"LITERS_PER_MINUTE": "L/min", "CUBIC_METERS_PER_HOUR": "m3/h"},
+        )
+
+        if not hasattr(const, "Platform"):
+
+            class Platform(str):
+                BINARY_SENSOR = "binary_sensor"
+                CLIMATE = "climate"
+                MEDIA_PLAYER = "media_player"
+                WEATHER = "weather"
+                SENSOR = "sensor"
+                SELECT = "select"
+                TEXT = "text"
+                NUMBER = "number"
+                SWITCH = "switch"
+                BUTTON = "button"
+
+            const.Platform = Platform
+
+        components = sys.modules.get("homeassistant.components")
+        if components is None:
+            components = _module("homeassistant.components")
+        homeassistant.components = components
+
+        helpers = sys.modules.get("homeassistant.helpers")
+        if helpers is None:
+            helpers = _module("homeassistant.helpers")
+        homeassistant.helpers = helpers
+
+        if not hasattr(homeassistant, "config_entries"):
+            config_entries = _module("homeassistant.config_entries")
+
+            class ConfigEntry:
+                pass
+
+            config_entries.ConfigEntry = ConfigEntry
+            homeassistant.config_entries = config_entries
+
+        if not hasattr(homeassistant, "core"):
+            core = _module("homeassistant.core")
+
+            class HomeAssistant:
+                """Marker type used for annotations."""
+
+            def callback(func: Callable[..., Any]) -> Callable[..., Any]:
+                return func
+
+            core.HomeAssistant = HomeAssistant
+            core.callback = callback
+            homeassistant.core = core
+
+        return
     homeassistant = types.ModuleType("homeassistant")
     components = _module("homeassistant.components")
     helpers = _module("homeassistant.helpers")
@@ -111,10 +200,6 @@ def ensure_homeassistant_stubs() -> None:
     # constants
     const = _module("homeassistant.const")
 
-    class _Units(str):
-        def __new__(cls, value: str) -> "_Units":
-            return str.__new__(cls, value)
-
     class _Energy(_Units):
         KILO_WATT_HOUR = "kWh"
 
@@ -129,6 +214,7 @@ def ensure_homeassistant_stubs() -> None:
 
     class _Time(_Units):
         HOURS = "h"
+        SECONDS = "s"
 
     class _Volume(_Units):
         LITERS = "l"
@@ -136,8 +222,13 @@ def ensure_homeassistant_stubs() -> None:
 
     class _VolumeFlowRate(_Units):
         LITERS_PER_MINUTE = "L/min"
+        CUBIC_METERS_PER_HOUR = "m3/h"
 
     const.PERCENTAGE = "%"
+    const.CONF_HOST = "host"
+    const.CONF_NAME = "name"
+    const.CONF_PORT = "port"
+    const.ATTR_TEMPERATURE = "temperature"
     const.UnitOfEnergy = _Energy
     const.UnitOfMass = _Mass
     const.UnitOfPower = _Power

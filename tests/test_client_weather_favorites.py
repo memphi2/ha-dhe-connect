@@ -468,6 +468,107 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         client._send_ste_command.assert_not_awaited()
         client._wait_for_weather_location.assert_not_awaited()
 
+    async def test_add_weather_favorite_missing_in_stale_cache_fails_safely(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        DHEError = client_module.DHEError
+        client = DHEClient.__new__(DHEClient)
+        location = {"LocationId": "ID=2", "Name": "Stuttgart"}
+        cached_location = {"LocationId": "ID=1", "Name": "Essen"}
+
+        client._last_weather_state = {
+            "favorites": [cached_location],
+        }
+        client._weather_favorites = lambda: [cached_location]
+        client._request_weather_favorites = AsyncMock(side_effect=DHEError("timeout"))
+        client._assign_weather_favorite_and_wait = AsyncMock(
+            side_effect=AssertionError("must not toggle when cache is stale")
+        )
+        client._send_ste_command = AsyncMock()
+        client._wait_for_weather_location = AsyncMock()
+
+        async def _run_with_retry(_message, operation):
+            return await operation(object())
+
+        client._run_command_with_reconnect_retry = _run_with_retry
+
+        with self.assertRaisesRegex(
+            DHEError,
+            "Cannot safely add DHE weather favorite without a fresh favorite list",
+        ):
+            await DHEClient.add_weather_favorite(client, location)
+
+        client._request_weather_favorites.assert_awaited_once()
+        client._assign_weather_favorite_and_wait.assert_not_awaited()
+        client._send_ste_command.assert_not_awaited()
+        client._wait_for_weather_location.assert_not_awaited()
+
+    async def test_add_radio_favorite_existing_and_refresh_timeout_no_toggle(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        DHEError = client_module.DHEError
+        client = DHEClient.__new__(DHEClient)
+
+        station = {"Id": 42, "Name": "WDR 2"}
+        client._radio_favorites = lambda: [station]
+        client._request_radio_favorites = AsyncMock(side_effect=DHEError("timeout"))
+        client._assign_radio_favorite_and_wait = AsyncMock(
+            side_effect=AssertionError("must not toggle existing favorite")
+        )
+        client._send_ste_command = AsyncMock()
+        client._wait_for_radio_station = AsyncMock()
+
+        async def _run_with_retry(_message, operation):
+            return await operation(object())
+
+        client._run_command_with_reconnect_retry = _run_with_retry
+
+        result = await DHEClient.add_radio_favorite(
+            client,
+            station,
+            select=False,
+        )
+
+        self.assertTrue(result)
+        client._request_radio_favorites.assert_awaited_once()
+        client._assign_radio_favorite_and_wait.assert_not_awaited()
+        client._send_ste_command.assert_not_awaited()
+
+    async def test_add_radio_favorite_missing_in_stale_cache_fails_safely(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        DHEError = client_module.DHEError
+        client = DHEClient.__new__(DHEClient)
+
+        station = {"Id": 42, "Name": "WDR 2"}
+        cached_station = {"Id": 7, "Name": "NDR"}
+        client._radio_favorites = lambda: [cached_station]
+        client._request_radio_favorites = AsyncMock(side_effect=DHEError("timeout"))
+        client._assign_radio_favorite_and_wait = AsyncMock(
+            side_effect=AssertionError("must not toggle unknown station")
+        )
+        client._send_ste_command = AsyncMock()
+        client._wait_for_radio_station = AsyncMock()
+
+        async def _run_with_retry(_message, operation):
+            return await operation(object())
+
+        client._run_command_with_reconnect_retry = _run_with_retry
+
+        with self.assertRaisesRegex(
+            DHEError,
+            "Cannot safely add DHE radio favorite without a fresh favorite list",
+        ):
+            await DHEClient.add_radio_favorite(
+                client,
+                station,
+                select=False,
+            )
+
+        client._request_radio_favorites.assert_awaited_once()
+        client._assign_radio_favorite_and_wait.assert_not_awaited()
+        client._send_ste_command.assert_not_awaited()
+
     async def test_pairing_notification_ids_include_port(self) -> None:
         client_module = _load_client()
         DHEClient = client_module.DHEClient
@@ -616,6 +717,84 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(client._temperature_memory_generation, 2)
         self.assertEqual(client._refresh_temperature_memories.await_count, 2)
         client._handle_temperature_memory_item.assert_not_called()
+
+    async def test_set_temperature_memory_name_without_confirmation_is_rejected(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        DHEError = client_module.DHEError
+
+        client = DHEClient.__new__(DHEClient)
+        client._temperature_memory_generation = 2
+        client._last_measurement_attributes = {}
+        client._temperature_memory_ids = lambda _slot: (0, 700)
+        client._refresh_temperature_memories = AsyncMock()
+        client._temperature_memory_payload = lambda *_args, **_kwargs: {
+            "name": "Family",
+            "temperature": 38.0,
+            "id": 0,
+            "operation": "add_change",
+        }
+        client._post_packet = AsyncMock()
+        client._message_packet = lambda payload: payload
+        client._cached_temperature_memory_temperature = lambda _measurement_id: 38.0
+
+        async def _run_with_retry(_message, operation):
+            return await operation(object())
+
+        client._run_command_with_reconnect_retry = _run_with_retry
+
+        with self.assertRaisesRegex(
+            DHEError,
+            "name was not confirmed",
+        ):
+            await DHEClient.set_temperature_memory_name(
+                client,
+                0,
+                "Family",
+            )
+
+        self.assertEqual(client._temperature_memory_generation, 2)
+        self.assertEqual(client._refresh_temperature_memories.await_count, 2)
+
+    async def test_set_temperature_memory_name_readback_mismatch_is_rejected(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        DHEError = client_module.DHEError
+
+        client = DHEClient.__new__(DHEClient)
+        client._temperature_memory_generation = 0
+        client._last_measurement_attributes = {}
+        client._temperature_memory_ids = lambda _slot: (0, 700)
+
+        async def _refresh_memory(_ctx: object | None = None) -> None:
+            client._temperature_memory_generation += 1
+            client._last_measurement_attributes[700] = {"name": "WrongName"}
+
+        client._refresh_temperature_memories = AsyncMock(side_effect=_refresh_memory)
+        client._temperature_memory_payload = lambda *_args, **_kwargs: {
+            "name": "Family",
+            "temperature": 38.0,
+            "id": 0,
+            "operation": "add_change",
+        }
+        client._post_packet = AsyncMock()
+        client._message_packet = lambda payload: payload
+        client._cached_temperature_memory_temperature = lambda _measurement_id: 38.0
+
+        async def _run_with_retry(_message, operation):
+            return await operation(object())
+
+        client._run_command_with_reconnect_retry = _run_with_retry
+
+        with self.assertRaisesRegex(
+            DHEError,
+            "name readback was 'WrongName', expected 'Family'",
+        ):
+            await DHEClient.set_temperature_memory_name(
+                client,
+                0,
+                "Family",
+            )
 
 
 if __name__ == "__main__":

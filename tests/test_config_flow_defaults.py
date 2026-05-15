@@ -144,6 +144,10 @@ def _install_fake_integration_modules() -> None:
 
     fake_pairing = types.ModuleType("custom_components.stiebel_dhe_connect.pairing_helpers")
     fake_pairing.map_pairing_error = lambda error: str(error)
+    fake_pairing.pairing_notification_text = lambda *_args: ("DHE Pairing", "pairing")
+    fake_pairing.pairing_result_success = (
+        lambda result: True if str(result).strip().lower() in {"true", "1"} else None
+    )
     sys.modules["custom_components.stiebel_dhe_connect.pairing_helpers"] = fake_pairing
 
     fake_service = types.ModuleType("custom_components.stiebel_dhe_connect.service_helpers")
