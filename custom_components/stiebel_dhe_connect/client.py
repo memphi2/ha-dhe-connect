@@ -38,6 +38,12 @@ from .client_mapping import (
     weather_location_id as _weather_location_id,
     weather_location_in_list as _weather_location_in_list,
 )
+from .engineio_helpers import (
+    balanced_json_array as _balanced_json_array,
+    decode_engineio_payload as _decode_engineio_payload,
+    engineio_ping_interval as _engineio_ping_interval,
+    parse_engineio_open_payload as _parse_engineio_open_payload,
+)
 from .flow_helpers import (
     request_generation_and_wait as _request_generation_and_wait,
     wait_for_generation_change as _wait_for_generation_change,
@@ -1908,7 +1914,10 @@ class DHEClient:
 
     async def _open_session(self, token_for_url: str) -> DHESession:
         open_payload = await self._get_text(self._poll_url(token_for_url, None, None))
-        open_data = self._parse_engineio_open_payload(open_payload)
+        try:
+            open_data = _parse_engineio_open_payload(open_payload)
+        except ValueError as err:
+            raise DHEError(str(err)) from err
         sid = str(open_data.get("sid", "")).strip()
         if not sid:
             raise DHEError(f"Could not extract sid from open payload: {open_payload!r}")
@@ -1918,7 +1927,10 @@ class DHEClient:
             sid=sid,
             url_token=token_for_url,
             websocket_sid=websocket_sid or None,
-            ping_interval=self._engineio_ping_interval(open_data),
+            ping_interval=_engineio_ping_interval(
+                open_data,
+                default_interval=DEFAULT_ENGINEIO_PING_INTERVAL_SECONDS,
+            ),
         )
         await self._post_packet(ctx, f"40/{NS}")
         return ctx
@@ -3423,7 +3435,7 @@ class DHEClient:
             return []
         if re.search(r"(^|[\ufffd\x1e])41(?:/1\.0\.0)?", raw):
             return [DHEEvent("__closed", None)]
-        packets = self._decode_engineio_payload(raw)
+        packets = _decode_engineio_payload(raw)
         app_packets: list[str] = []
         for packet in packets:
             stripped = packet.strip("\x00\x1e\ufffd")
@@ -3453,7 +3465,7 @@ class DHEClient:
         if not raw:
             return []
 
-        packets = self._decode_engineio_payload(raw)
+        packets = _decode_engineio_payload(raw)
         app_packets: list[str] = []
         for packet in packets:
             stripped = packet.strip("\x00\x1e\ufffd")
@@ -3500,36 +3512,6 @@ class DHEClient:
             "Origin": self.base_url,
             "Pragma": "no-cache",
         }
-
-    @classmethod
-    def _parse_engineio_open_payload(cls, open_payload: str) -> dict[str, Any]:
-        for packet in cls._decode_engineio_payload(open_payload):
-            stripped = packet.strip("\x00\x1e\ufffd")
-            if not stripped:
-                continue
-            if stripped.startswith("0"):
-                stripped = stripped[1:].strip()
-            if not stripped.startswith("{"):
-                continue
-            try:
-                parsed = json.loads(stripped)
-            except json.JSONDecodeError as err:
-                raise DHEError(
-                    f"Could not parse DHE open payload: {open_payload!r}"
-                ) from err
-            if isinstance(parsed, dict):
-                return parsed
-        raise DHEError(f"Could not parse DHE open payload: {open_payload!r}")
-
-    @staticmethod
-    def _engineio_ping_interval(open_payload: dict[str, Any]) -> float:
-        raw_interval = open_payload.get("pingInterval")
-        if raw_interval is None:
-            return DEFAULT_ENGINEIO_PING_INTERVAL_SECONDS
-        try:
-            return max(1.0, float(raw_interval) / 1000.0)
-        except (TypeError, ValueError):
-            return DEFAULT_ENGINEIO_PING_INTERVAL_SECONDS
 
     async def _get_text(self, url: str, *, timeout: float = 70.0) -> str:
         client_timeout = aiohttp.ClientTimeout(total=timeout)
@@ -3586,66 +3568,6 @@ class DHEClient:
         self._socketio_message_id = 1 if message_id >= 999 else message_id + 1
         return message_id
 
-    @staticmethod
-    def _decode_engineio_payload(text: str) -> list[str]:
-        if "\x1e" in text:
-            return [part for part in text.split("\x1e") if part.strip()]
-        if "\ufffd" in text:
-            return [part for part in text.split("\ufffd") if part.strip()]
-        packets: list[str] = []
-        i = 0
-        try:
-            while i < len(text):
-                if not text[i].isdigit():
-                    if packets:
-                        i += 1
-                        continue
-                    return [text]
-                j = i
-                while j < len(text) and text[j].isdigit():
-                    j += 1
-                if j >= len(text) or text[j] != ":":
-                    return [text]
-                length = int(text[i:j])
-                start = j + 1
-                end = start + length
-                if end > len(text):
-                    return [text]
-                packets.append(text[start:end])
-                i = end
-            return packets or [text]
-        except Exception:  # noqa: BLE001
-            return [text]
-
-    @staticmethod
-    def _balanced_json_array(text: str, start_index: int) -> tuple[str | None, int]:
-        start = text.find("[", start_index)
-        if start < 0:
-            return None, -1
-        depth = 0
-        in_string = False
-        escape = False
-        for idx in range(start, len(text)):
-            ch = text[idx]
-            if in_string:
-                if escape:
-                    escape = False
-                elif ch == "\\":
-                    escape = True
-                elif ch == '"':
-                    in_string = False
-                continue
-            if ch == '"':
-                in_string = True
-                continue
-            if ch == "[":
-                depth += 1
-            elif ch == "]":
-                depth -= 1
-                if depth == 0:
-                    return text[start : idx + 1], idx + 1
-        return None, -1
-
     def _parse_socketio_events(self, packets: list[str]) -> list[DHEEvent]:
         out: list[DHEEvent] = []
         for raw_packet in packets:
@@ -3658,7 +3580,7 @@ class DHEClient:
                 if not match:
                     break
                 frame_start = pos + match.start()
-                json_text, next_pos = self._balanced_json_array(packet, frame_start)
+                json_text, next_pos = _balanced_json_array(packet, frame_start)
                 if not json_text:
                     break
                 try:

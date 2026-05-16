@@ -62,6 +62,7 @@ def _load_component_module(module_name: str):
 
 def _load_client():
     _load_component_module("client_mapping")
+    _load_component_module("engineio_helpers")
     _load_component_module("flow_helpers")
     _load_component_module("pairing_helpers")
     _load_component_module("protocol")
@@ -809,39 +810,6 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(client._notify_callbacks.call_count, 2)
 
-    def test_engineio_open_payload_parser_accepts_raw_open_packet(self) -> None:
-        client_module = _load_client()
-        DHEClient = client_module.DHEClient
-
-        payload = (
-            '0{"sid":"polling sid","websocketSid":"websocket sid",'
-            '"pingInterval":25000}'
-        )
-
-        parsed = DHEClient._parse_engineio_open_payload(payload)
-
-        self.assertEqual(parsed["sid"], "polling sid")
-        self.assertEqual(parsed["websocketSid"], "websocket sid")
-        self.assertEqual(DHEClient._engineio_ping_interval(parsed), 25.0)
-
-    def test_engineio_open_payload_parser_accepts_length_prefixed_packet(self) -> None:
-        client_module = _load_client()
-        DHEClient = client_module.DHEClient
-
-        packet = '0{"sid":"sid-1","pingInterval":"30000"}'
-        parsed = DHEClient._parse_engineio_open_payload(f"{len(packet)}:{packet}")
-
-        self.assertEqual(parsed["sid"], "sid-1")
-        self.assertEqual(DHEClient._engineio_ping_interval(parsed), 30.0)
-
-    def test_engineio_open_payload_parser_rejects_malformed_json(self) -> None:
-        client_module = _load_client()
-        DHEClient = client_module.DHEClient
-        DHEError = client_module.DHEError
-
-        with self.assertRaisesRegex(DHEError, "Could not parse DHE open payload"):
-            DHEClient._parse_engineio_open_payload('0{"sid":')
-
     async def test_open_session_uses_structured_open_payload(self) -> None:
         client_module = _load_client()
         DHEClient = client_module.DHEClient
@@ -863,6 +831,23 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ctx.url_token, "token value")
         self.assertEqual(ctx.ping_interval, 15.0)
         client._post_packet.assert_awaited_once_with(ctx, f"40/{client_module.NS}")
+
+    def test_parse_socketio_events_continues_after_malformed_frame(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        client = DHEClient.__new__(DHEClient)
+
+        events = DHEClient._parse_socketio_events(
+            client,
+            [
+                '42/1.0.0,["message",{"text":"bad",}]'
+                '42/1.0.0,["message",{"command":"ok","value":1}]',
+            ],
+        )
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].name, "message")
+        self.assertEqual(events[0].data, {"command": "ok", "value": 1})
 
     async def test_websocket_upgrade_leaves_control_ping_handling_enabled(self) -> None:
         client_module = _load_client()
