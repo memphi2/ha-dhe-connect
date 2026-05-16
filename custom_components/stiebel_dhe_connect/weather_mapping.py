@@ -411,7 +411,7 @@ def precipitation_probability(
     values = [value for value in values if value is not None]
     if not values:
         return None
-    return int(round(max(values)))
+    return round(max(values))
 
 
 def ordered_period_keys(

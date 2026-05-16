@@ -71,7 +71,7 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
         | _CLIMATE_FEATURE_TURN_ON
         | _CLIMATE_FEATURE_TURN_OFF
     )
-    _attr_hvac_modes = [HVACMode.HEAT, HVACMode.OFF]
+    _attr_hvac_modes = (HVACMode.HEAT, HVACMode.OFF)
     _attr_hvac_mode = HVACMode.HEAT
     _attr_min_temp = 20.0
     _attr_max_temp = 60.0

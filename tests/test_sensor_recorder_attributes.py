@@ -64,6 +64,18 @@ def _load_sensor_module():
     return _load_component_module("sensor")
 
 
+def _fake_error_status_client():
+    return types.SimpleNamespace(
+        host="127.0.0.1",
+        port=8443,
+        legacy_device_identifier=None,
+        online=True,
+        available=True,
+        last_setpoint=38.0,
+        last_measurements={},
+    )
+
+
 class TestSensorRecorderAttributes(unittest.TestCase):
     """Validate unrecorded dynamic attributes for recorder safety."""
 
@@ -329,19 +341,10 @@ class TestSensorRecorderAttributes(unittest.TestCase):
     def test_error_status_sensor_does_not_write_for_inlet_jitter(self) -> None:
         sensor_module = _load_sensor_module()
 
-        class _FakeClient:
-            host = "127.0.0.1"
-            port = 8443
-            legacy_device_identifier = None
-            online = True
-            available = True
-            last_setpoint = 38.0
-            last_measurements = {}
-
         sensor = sensor_module.StiebelDHEErrorStatusSensor(
             entry_id="test-entry",
             name="Test DHE",
-            client=_FakeClient(),
+            client=_fake_error_status_client(),
         )
         writes: list[str | None] = []
         sensor.async_write_ha_state = lambda: writes.append(sensor._attr_native_value)
@@ -368,19 +371,10 @@ class TestSensorRecorderAttributes(unittest.TestCase):
     def test_error_status_sensor_refreshes_inlet_attributes_after_interval(self) -> None:
         sensor_module = _load_sensor_module()
 
-        class _FakeClient:
-            host = "127.0.0.1"
-            port = 8443
-            legacy_device_identifier = None
-            online = True
-            available = True
-            last_setpoint = 38.0
-            last_measurements = {}
-
         sensor = sensor_module.StiebelDHEErrorStatusSensor(
             entry_id="test-entry",
             name="Test DHE",
-            client=_FakeClient(),
+            client=_fake_error_status_client(),
         )
         writes: list[str | None] = []
         sensor.async_write_ha_state = lambda: writes.append(sensor._attr_native_value)
@@ -398,19 +392,10 @@ class TestSensorRecorderAttributes(unittest.TestCase):
     def test_error_status_sensor_writes_for_device_status_change(self) -> None:
         sensor_module = _load_sensor_module()
 
-        class _FakeClient:
-            host = "127.0.0.1"
-            port = 8443
-            legacy_device_identifier = None
-            online = True
-            available = True
-            last_setpoint = 38.0
-            last_measurements = {}
-
         sensor = sensor_module.StiebelDHEErrorStatusSensor(
             entry_id="test-entry",
             name="Test DHE",
-            client=_FakeClient(),
+            client=_fake_error_status_client(),
         )
         writes: list[str | None] = []
         sensor.async_write_ha_state = lambda: writes.append(sensor._attr_native_value)

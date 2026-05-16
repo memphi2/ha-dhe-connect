@@ -28,7 +28,11 @@ def ensure_homeassistant_stubs() -> None:
         if not hasattr(module, name):
             setattr(module, name, value)
 
-    def _ensure_units(module: types.ModuleType, name: str, attrs: dict[str, Any]) -> None:
+    def _ensure_units(
+        module: types.ModuleType,
+        name: str,
+        attrs: dict[str, Any],
+    ) -> None:
         existing = getattr(module, name, None)
         if existing is None:
             existing = type(name, (_Units,), {})
@@ -39,6 +43,8 @@ def ensure_homeassistant_stubs() -> None:
 
     if "homeassistant" in sys.modules:
         homeassistant = sys.modules["homeassistant"]
+        if not hasattr(homeassistant, "__path__"):
+            homeassistant.__path__ = []
 
         const = sys.modules.get("homeassistant.const")
         if const is None:
@@ -83,6 +89,69 @@ def ensure_homeassistant_stubs() -> None:
         if components is None:
             components = _module("homeassistant.components")
         homeassistant.components = components
+        if not hasattr(components, "__path__"):
+            components.__path__ = []
+        if not hasattr(components, "persistent_notification"):
+            persistent_notification = _module(
+                "homeassistant.components.persistent_notification"
+            )
+
+            async def async_create(*_args: Any, **_kwargs: Any) -> None:
+                return None
+
+            persistent_notification.async_create = async_create
+            components.persistent_notification = persistent_notification
+        if not hasattr(components, "sensor"):
+            from dataclasses import dataclass, field
+
+            sensor = _module("homeassistant.components.sensor")
+
+            class SensorDeviceClass:
+                ENUM = "enum"
+                WATER = "water"
+                DURATION = "duration"
+                TEMPERATURE = "temperature"
+                VOLUME_FLOW_RATE = "volume_flow_rate"
+                POWER = "power"
+                ENERGY = "energy"
+                MONETARY = "monetary"
+
+            class SensorStateClass:
+                MEASUREMENT = "measurement"
+                TOTAL = "total"
+                TOTAL_INCREASING = "total_increasing"
+
+            class SensorEntity:
+                pass
+
+            @dataclass(frozen=True, kw_only=True)
+            class SensorEntityDescription:
+                key: str | None = None
+                name: str | None = None
+                translation_key: str | None = None
+                icon: str | None = None
+                device_class: str | None = None
+                state_class: str | None = None
+                unit_of_measurement: str | None = None
+                native_unit_of_measurement: str | None = None
+                entity_registry_enabled_default: bool = True
+                entity_category: str | None = None
+                options: list[str] | tuple[str, ...] | None = None
+                suggested_display_precision: int | None = None
+                device_class_enum: str | None = None
+                class_: str | None = None
+                has_entity_name: bool | None = None
+                icon_disabled: str | None = None
+                entity_registry_disabled_default: bool = field(
+                    default=False,
+                    repr=False,
+                )
+
+            sensor.SensorDeviceClass = SensorDeviceClass
+            sensor.SensorStateClass = SensorStateClass
+            sensor.SensorEntity = SensorEntity
+            sensor.SensorEntityDescription = SensorEntityDescription
+            components.sensor = sensor
         if not hasattr(components, "climate"):
             climate = _module("homeassistant.components.climate")
             climate_const = _module("homeassistant.components.climate.const")
@@ -108,6 +177,33 @@ def ensure_homeassistant_stubs() -> None:
         if helpers is None:
             helpers = _module("homeassistant.helpers")
         homeassistant.helpers = helpers
+        if not hasattr(helpers, "__path__"):
+            helpers.__path__ = []
+
+        if "homeassistant.helpers.entity" not in sys.modules:
+            entity = _module("homeassistant.helpers.entity")
+
+            class EntityCategory:
+                CONFIG = "config"
+                DIAGNOSTIC = "diagnostic"
+
+            entity.EntityCategory = EntityCategory
+            helpers.entity = entity
+
+        if "homeassistant.helpers.entity_platform" not in sys.modules:
+            entity_platform = _module("homeassistant.helpers.entity_platform")
+            AddEntitiesCallback = Callable[[list[Any]], None]
+            entity_platform.AddEntitiesCallback = AddEntitiesCallback
+            helpers.entity_platform = entity_platform
+
+        if "homeassistant.helpers.aiohttp_client" not in sys.modules:
+            aiohttp_client = _module("homeassistant.helpers.aiohttp_client")
+
+            async def async_get_clientsession(*_args: Any, **_kwargs: Any) -> Any:
+                return object()
+
+            aiohttp_client.async_get_clientsession = async_get_clientsession
+            helpers.aiohttp_client = aiohttp_client
 
         if not hasattr(homeassistant, "config_entries"):
             config_entries = _module("homeassistant.config_entries")
@@ -172,7 +268,9 @@ def ensure_homeassistant_stubs() -> None:
     exceptions.HomeAssistantError = HomeAssistantError
 
     # components
-    persistent_notification = _module("homeassistant.components.persistent_notification")
+    persistent_notification = _module(
+        "homeassistant.components.persistent_notification"
+    )
 
     async def async_create(*_args: Any, **_kwargs: Any) -> None:
         return None

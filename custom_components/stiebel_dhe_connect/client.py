@@ -52,6 +52,7 @@ from .protocol import *  # noqa: F403,F401
 
 _LOGGER = logging.getLogger(__name__)
 _T = TypeVar("_T")
+_MISSING_MEASUREMENT = object()
 
 COMMAND_RETRY_ATTEMPTS = 2
 COMMAND_RETRY_DELAY_SECONDS = 1.0
@@ -121,7 +122,7 @@ def _clamp(value: float, lo: float, hi: float) -> float:
 
 
 def _c_to_raw_tenths(value: float) -> int:
-    return int(round(value * 10.0))
+    return round(value * 10.0)
 
 
 def _raw_tenths_to_c(value: int | float) -> float:
@@ -740,7 +741,7 @@ class DHEClient:
         return bool(await self.write_odb_value(ID_BATH_FILL_ACTIVE, False))
 
     async def set_bath_fill_target_volume(self, liters: float) -> float:
-        requested = int(round(_clamp(float(liters), 5.0, 200.0)))
+        requested = round(_clamp(float(liters), 5.0, 200.0))
         return float(await self.write_odb_value(ID_BATH_FILL_TARGET_VOLUME, requested))
 
     async def set_child_safety_temperature_limit(self, temperature: float) -> float:
@@ -760,7 +761,7 @@ class DHEClient:
 
     async def set_eco_flow_limit(self, liters_per_minute: float) -> float:
         requested_l_min = _round_to_half_c(_clamp(float(liters_per_minute), 4.0, 15.0))
-        raw_value = int(round(requested_l_min * 10.0))
+        raw_value = round(requested_l_min * 10.0)
         return float(await self.write_odb_value(ID_ECO_FLOW_LIMIT, raw_value))
 
     async def set_electricity_price(self, euros_per_kwh: float) -> float:
@@ -810,7 +811,7 @@ class DHEClient:
         return requested
 
     async def set_radio_volume(self, volume_level: float) -> float:
-        volume = int(round(_clamp(float(volume_level), 0.0, 1.0) * 100.0))
+        volume = round(_clamp(float(volume_level), 0.0, 1.0) * 100.0)
         await self._assign_radio_value("volume", volume)
         self._handle_radio_value(f"assign:{RADIO_PATH}:volume", volume)
         return volume / 100.0
@@ -1197,7 +1198,7 @@ class DHEClient:
     ) -> float:
         old_euros = self._last_measurements.get(euros_odb_id)
         old_cents = self._last_measurements.get(cents_odb_id)
-        total_cents = int(round(_clamp(float(value), 0.0, max_value) * 100))
+        total_cents = round(_clamp(float(value), 0.0, max_value) * 100)
         euros, cents = divmod(total_cents, 100)
         try:
             await self.write_odb_value(euros_odb_id, euros)
@@ -1507,7 +1508,7 @@ class DHEClient:
         minutes: float,
     ) -> float:
         requested_minutes = _clamp(float(minutes), 1.0, 20.0)
-        milliseconds = int(round(requested_minutes * 60000.0))
+        milliseconds = round(requested_minutes * 60000.0)
         confirmed = await self._write_app_value(
             f"assign:{path}:durationMilliseconds",
             milliseconds,
@@ -2245,7 +2246,7 @@ class DHEClient:
         if self._last_message_monotonic is not None:
             state["last_message_age_seconds"] = max(
                 0,
-                int(round(time.monotonic() - self._last_message_monotonic)),
+                round(time.monotonic() - self._last_message_monotonic),
             )
         return state
 
@@ -2782,7 +2783,7 @@ class DHEClient:
     def _handle_odb_protocol_version_value(self, raw_value: Any) -> None:
         self._handle_measurement(
             ID_PROTOCOL_VERSION,
-            int(round(max(0.0, _raw_to_float(raw_value)))),
+            round(max(0.0, _raw_to_float(raw_value))),
         )
 
     def _handle_odb_water_heating_enabled_value(self, raw_value: Any) -> None:
@@ -2864,12 +2865,12 @@ class DHEClient:
         self._last_measurement_attributes[ID_BATH_FILL_REMAINING_VOLUME] = attributes
         self._handle_measurement(
             ID_BATH_FILL_REMAINING_VOLUME,
-            int(round(max(target_l - current_l, 0.0))),
+            round(max(target_l - current_l, 0.0)),
             force_update=previous_attributes != attributes,
         )
 
     def _handle_price_component(self, odb_id: int, raw_value: Any) -> None:
-        value = int(round(_raw_to_float(raw_value)))
+        value = round(_raw_to_float(raw_value))
         measurement_id, euros_odb_id, cents_odb_id = PRICE_COMPONENT_IDS[odb_id]
         if odb_id == cents_odb_id:
             value = int(_clamp(value, 0, PRICE_CENTS_COMPONENT_MAX))
@@ -2933,7 +2934,7 @@ class DHEClient:
 
     @staticmethod
     def _co2_emission_to_raw(kg_per_kwh: float) -> int:
-        return int(round(float(kg_per_kwh) * 1000))
+        return round(float(kg_per_kwh) * 1000)
 
     @staticmethod
     def _raw_to_co2_emission(raw_value: float) -> float:
@@ -2969,11 +2970,11 @@ class DHEClient:
             self._pending_expected_setpoint = None
 
     def _handle_measurement(self, odb_id: int, value: MeasurementValue, *, force_update: bool = False) -> None:
-        previous = self._last_measurements.get(odb_id)
+        previous = self._last_measurements.get(odb_id, _MISSING_MEASUREMENT)
         self._last_measurements[odb_id] = value
         if value is not None and not isinstance(value, str):
             self._maybe_complete_write_future(odb_id, value)
-        if not force_update and previous is not None:
+        if not force_update and previous is not _MISSING_MEASUREMENT:
             if isinstance(previous, str) or isinstance(value, str):
                 if previous == value:
                     return

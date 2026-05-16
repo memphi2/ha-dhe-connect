@@ -32,7 +32,7 @@ def format_minutes_duration(value: Any) -> str | None:
     minutes_value = coerce_float(value)
     if minutes_value is None:
         return None
-    total_seconds = max(0, int(round(minutes_value * 60)))
+    total_seconds = max(0, round(minutes_value * 60))
     minutes, seconds = divmod(total_seconds, 60)
     return f"{minutes}:{seconds:02d}"
 
@@ -63,7 +63,7 @@ def clamp_duration_seconds(
     seconds_value = coerce_float(value)
     if seconds_value is None:
         return None
-    return max(minimum, min(int(round(seconds_value)), maximum))
+    return max(minimum, min(round(seconds_value), maximum))
 
 
 def normalize_internal_scald_protection(value: Any) -> str:
