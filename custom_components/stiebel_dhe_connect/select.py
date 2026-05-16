@@ -8,6 +8,7 @@ from typing import Any
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -74,7 +75,7 @@ class StiebelDHEWeatherLocationSelect(StiebelDHEEntityMixin, SelectEntity):
         """Select a DHE weather favorite."""
         location = self._locations_by_option.get(option)
         if location is None:
-            raise ValueError(f"Unknown weather location option: {option}")
+            raise HomeAssistantError(f"Unknown weather location option: {option}")
 
         try:
             await self._client.select_weather_location(location)

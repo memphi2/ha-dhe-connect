@@ -2,7 +2,7 @@
 
 ## Scope
 
-This integration is intended for local use inside a trusted Home Assistant network. It talks directly to the local DHE web interface via HTTP and Socket.IO/Engine.IO long-polling.
+This integration is intended for local use inside a trusted Home Assistant network. It talks directly to the local DHE web interface via HTTP and Socket.IO/Engine.IO transport (long-polling with WebSocket upgrade).
 
 ## Recommendations
 
