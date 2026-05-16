@@ -1,5 +1,33 @@
 ﻿# Changelog
 
+## v1.3.0 - 2026-05-16
+
+### Added
+
+- Added Home Assistant `climate.turn_on` / `climate.turn_off` support by mapping the DHE water-heating control to HVAC `heat` / `off`.
+- Added regression coverage for climate on/off, set-temperature auto-enable, WebSocket heartbeat/control pings, timer write paths, memory-slot recreation and recorder write filtering.
+
+### Changed
+
+- Reduced recorder churn further for diagnostic, climate, saving-monitor, consumption and error-status entities.
+- Refreshed nominal power on every session so derived power readings recover cleanly after reconnects.
+- Hardened weather and radio state handling, including local forecast dates, radio off state and favorite-list drift.
+- Simplified rounding and immutable class/test fixtures flagged by focused Ruff checks.
+- Improved shared Home Assistant test stubs so tests remain isolated regardless of execution order.
+
+### Fixed
+
+- Dedupe repeated unavailable (`None`) measurements in the client before notifying entity callbacks.
+- Guarded release-note source checks so legacy `info.md` release notes cannot be accidentally restored.
+- Fixed German currency label encoding coverage.
+
+### Validation
+
+- Local test suite: `192 passed`.
+- Integration repository check: `scripts/check_integration.py`.
+- GitHub Validate workflow: HACS, Hassfest and repository checks.
+- Live HA test: copied to the Home Assistant test instance, restarted HA, verified DHE entities, and exercised `climate.turn_off` / `climate.turn_on` from `heat -> off -> heat` without DHE error-log entries.
+
 ## v1.2.3 - 2026-05-16
 
 ### Changed
