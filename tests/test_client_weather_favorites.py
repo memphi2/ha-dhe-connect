@@ -811,6 +811,37 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         websocket.send_str.assert_any_await("2probe")
         websocket.send_str.assert_any_await("5")
 
+    async def test_websocket_heartbeat_failure_forces_reconnect(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        DHESession = client_module.DHESession
+
+        websocket = types.SimpleNamespace(closed=False)
+        client = DHEClient.__new__(DHEClient)
+        client._stopped = client_module.asyncio.Event()
+        client._send_websocket_packet = AsyncMock(
+            side_effect=RuntimeError("socket write failed")
+        )
+        client._force_reconnect = AsyncMock()
+        ctx = DHESession(
+            url_token="token",
+            sid="sid",
+            websocket=websocket,
+            ping_interval=0,
+        )
+
+        await DHEClient._websocket_ping_loop(client, ctx)
+
+        client._send_websocket_packet.assert_awaited_once_with(ctx, "2")
+        client._force_reconnect.assert_awaited_once()
+        args, kwargs = client._force_reconnect.await_args
+        self.assertEqual(args, (ctx,))
+        self.assertTrue(kwargs["immediate_availability"])
+        self.assertEqual(
+            kwargs["reason"],
+            "Heartbeat failed: RuntimeError: socket write failed",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
