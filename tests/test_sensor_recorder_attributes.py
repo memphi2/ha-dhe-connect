@@ -82,6 +82,14 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         self.assertEqual(sensor_module.SENSOR_WRITE_FILTERS["water_flow"], (1.0, 45.0))
         self.assertEqual(sensor_module.SENSOR_WRITE_FILTERS["power"], (1.5, 45.0))
         self.assertEqual(
+            sensor_module.SENSOR_WRITE_FILTERS["water_consumption_total"],
+            (0.001, 60.0),
+        )
+        self.assertEqual(
+            sensor_module.SENSOR_WRITE_FILTERS["energy_consumption_total"],
+            (0.05, 60.0),
+        )
+        self.assertEqual(
             sensor_module.SENSOR_WRITE_FILTERS["saving_monitor_consumption_water"],
             (0.25, 60.0),
         )
@@ -116,6 +124,35 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         sensor._last_written_native_value = 5.0
         sensor._last_written_monotonic = -1_000_000_000.0
         self.assertTrue(sensor._should_write_measurement_state(5.4))
+
+    def test_consumption_filter_blocks_small_jitter_but_allows_interval(self) -> None:
+        sensor_module = _load_sensor_module()
+        description = next(
+            item
+            for item in sensor_module.SENSOR_DESCRIPTIONS
+            if item.key == "energy_consumption_total"
+        )
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+
+        sensor = sensor_module.StiebelDHESensor(
+            entry_id="test-entry",
+            name="Test DHE",
+            client=_FakeClient(),
+            description=description,
+        )
+        sensor._last_written_native_value = 10.0
+        sensor._last_written_monotonic = time.monotonic()
+
+        self.assertFalse(sensor._should_write_measurement_state(10.01))
+        self.assertTrue(sensor._should_write_measurement_state(10.05))
+
+        sensor._last_written_native_value = 10.0
+        sensor._last_written_monotonic = -1_000_000_000.0
+        self.assertTrue(sensor._should_write_measurement_state(10.01))
 
 
 if __name__ == "__main__":
