@@ -1,5 +1,29 @@
 # Changelog
 
+## v1.3.1 - 2026-05-16
+
+### Changed
+
+- Reduced Home Assistant recorder churn after the `v1.3.0` stable tag by deduplicating repeated state writes for weather, radio, climate, text, number and sensor entities.
+- Added mounted Home Assistant smoke checks for entity health, DHE log errors, temporary localhost auth tokens and recorder write volume.
+- Made sensor state writes sensitive to recorder-visible attribute changes without re-enabling writes for high-churn chart and saving-monitor payload details.
+
+### Fixed
+
+- Preserved important attribute-only sensor updates that were previously hidden by the write filter.
+- Cleared the requested radio-off marker when selecting a new radio source, so a source change cannot leave Home Assistant stuck in an explicit off state.
+- Wrote climate state immediately when the inlet temperature crosses into or out of `target_below_inlet`, even while normal inlet telemetry is throttled.
+
+### Validation
+
+- Local test suite: `231 passed`.
+- Integration repository check: `scripts/check_integration.py`.
+- HA smoke after restart: `scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log`.
+- Idle HA recorder monitor: `recorder writes total=0 limit=10` over 90s.
+- Live water HA recorder monitor: `recorder writes total=0 limit=10` over 300s with water on/off.
+- Service interaction HA recorder monitor: `recorder writes total=0 limit=10` over 180s while exercising `climate.turn_off`, `climate.turn_on`, `media_player.turn_off` and `media_player.select_source`.
+- GitHub Validate workflow: HACS, Hassfest and repository checks.
+
 ## v1.3.0 - 2026-05-16
 
 ### Added
