@@ -16,8 +16,8 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .client import (
     DHEClient,
-    DHEError,
 )
+from .client_types import DHEError
 from .config_flow_mapping import (
     default_radio_catalog_value as _default_radio_catalog_value,
     default_weather_country_id as _default_weather_country_id,

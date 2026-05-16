@@ -11,7 +11,6 @@ import re
 import stat
 import time
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
 from typing import Any, TypeVar
 from urllib.parse import quote
 
@@ -38,6 +37,24 @@ from .client_mapping import (
     weather_location_in_list as _weather_location_in_list,
 )
 from .connection_helpers import host_for_url as _host_for_url
+from .client_types import (
+    AvailabilityCallback,
+    CallbackRemover,
+    DEFAULT_ENGINEIO_PING_INTERVAL_SECONDS,
+    DHEError,
+    DHEEvent,
+    DHESession,
+    DHESessionClosed,
+    DiagnosticCallback,
+    MeasurementCallback,
+    MeasurementValue,
+    ODBValue,
+    OnlineCallback,
+    RadioCallback,
+    ReconnectCallback,
+    SetpointCallback,
+    WeatherCallback,
+)
 from .engineio_helpers import (
     balanced_json_array as _balanced_json_array,
     decode_engineio_payload as _decode_engineio_payload,
@@ -191,52 +208,10 @@ AVAILABILITY_DROP_GRACE_SECONDS = 20.0
 WEBSOCKET_UPGRADE_TIMEOUT = 8.0
 AUTH_POLL_TIMEOUT_SECONDS = 10.0
 MAX_PAIRING_AUTO_RETRIES = 3
-DEFAULT_ENGINEIO_PING_INTERVAL_SECONDS = 25.0
 PAIRING_NOTIFICATION_ID_PREFIX = "stiebel_dhe_connect_pairing"
 PAIRING_CONFIRM_HINT_NOTIFICATION_ID_PREFIX = (
     "stiebel_dhe_connect_pairing_confirm"
 )
-
-
-ODBValue = bool | float
-MeasurementValue = bool | float | str | None
-SetpointCallback = Callable[[float], None]
-AvailabilityCallback = Callable[[bool], None]
-OnlineCallback = Callable[[bool], None]
-MeasurementCallback = Callable[[int, MeasurementValue], None]
-ReconnectCallback = Callable[[int], None]
-RadioCallback = Callable[[dict[str, Any]], None]
-WeatherCallback = Callable[[dict[str, Any]], None]
-DiagnosticCallback = Callable[[dict[str, Any]], None]
-CallbackRemover = Callable[[], None]
-
-
-class DHEError(Exception):
-    """Base DHE exception."""
-
-
-class DHESessionClosed(DHEError):
-    """DHE closed the Socket.IO namespace/session."""
-
-
-@dataclass
-class DHEEvent:
-    """Parsed Socket.IO event."""
-
-    name: str
-    data: Any
-
-
-@dataclass
-class DHESession:
-    """Open Engine.IO/Socket.IO session context."""
-
-    sid: str
-    url_token: str
-    websocket_sid: str | None = None
-    ping_interval: float = DEFAULT_ENGINEIO_PING_INTERVAL_SECONDS
-    websocket: Any | None = None
-    websocket_ping_task: asyncio.Task[None] | None = None
 
 
 def _round_to_half_c(value: float) -> float:

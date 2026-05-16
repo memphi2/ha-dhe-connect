@@ -11,11 +11,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .client import (
-    DHEClient,
-    DHEError,
-    MeasurementValue,
-)
+from .client import DHEClient
+from .client_types import DHEError, MeasurementValue
 from .entity_helpers import (
     StiebelDHEEntityMixin,
     temperature_memory_enabled_default,

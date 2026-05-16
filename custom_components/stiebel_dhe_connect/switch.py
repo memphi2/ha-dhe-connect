@@ -11,11 +11,8 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .client import (
-    DHEClient,
-    DHEError,
-    ODBValue,
-)
+from .client import DHEClient
+from .client_types import DHEError, ODBValue
 from .entity_helpers import StiebelDHEEntityMixin
 from .entity_state_helpers import (
     restored_switch_state,

@@ -13,10 +13,8 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .client import (
-    DHEClient,
-    MeasurementValue,
-)
+from .client import DHEClient
+from .client_types import MeasurementValue
 from .entity_helpers import StiebelDHEEntityMixin
 from .entity_state_helpers import coerce_float, merge_state_attributes, value_available
 from .protocol import ID_SCALD_PROTECTION_ACTIVE
