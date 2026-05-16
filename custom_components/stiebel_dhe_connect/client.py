@@ -3633,7 +3633,7 @@ class DHEClient:
         def _read() -> str:
             if not os.path.exists(self.token_path):
                 return ""
-            with open(self.token_path, "r", encoding="utf-8") as file:
+            with open(self.token_path, encoding="utf-8") as file:
                 return file.read().strip()
 
         token = await self.hass.async_add_executor_job(_read)

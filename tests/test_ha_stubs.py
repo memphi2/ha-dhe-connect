@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 import sys
 import types
 
@@ -20,7 +21,7 @@ def ensure_homeassistant_stubs() -> None:
         return module
 
     class _Units(str):
-        def __new__(cls, value: str) -> "_Units":
+        def __new__(cls, value: str) -> _Units:
             return str.__new__(cls, value)
 
     def _ensure_constant(module: types.ModuleType, name: str, value: Any) -> None:
@@ -288,5 +289,4 @@ def ensure_homeassistant_stubs() -> None:
     homeassistant.const = const
     homeassistant.core = core
     sys.modules["homeassistant"] = homeassistant
-
 
