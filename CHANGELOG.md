@@ -5,6 +5,7 @@
 ### Changed
 
 - Bumped the integration version to `1.3.3` for the next patch release cycle.
+- Extracted pure DHE client value conversion helpers out of `client.py` to keep the runtime client focused on connection and command behavior.
 
 ## v1.3.2 - 2026-05-16
 
