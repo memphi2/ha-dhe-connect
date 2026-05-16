@@ -132,7 +132,13 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
         self._forecast = [
             forecast
             for day in days
-            if (forecast := weather_model.forecast_from_day(day)) is not None
+            if (
+                forecast := weather_model.forecast_from_day(
+                    day,
+                    time_zone=now.tzinfo,
+                )
+            )
+            is not None
         ]
         self._attr_name = weather_model.weather_entity_name(state)
         self._attr_extra_state_attributes = weather_model.weather_attributes(
