@@ -194,6 +194,32 @@ class TestHATestApi(unittest.TestCase):
         self.assertTrue(result)
         self.assertEqual(urlopen.call_count, 4)
 
+    def test_wait_online_fails_restart_when_no_outage_is_observed(self) -> None:
+        api = ha_test_api.HomeAssistantApi("http://ha.test")
+
+        with (
+            patch.object(
+                ha_test_api.urllib.request,
+                "urlopen",
+                return_value=_FakeResponse(),
+            ) as urlopen,
+            patch.object(
+                ha_test_api.time,
+                "monotonic",
+                side_effect=[0.0, 1.0, 10.0, 21.0],
+            ),
+            patch.object(ha_test_api.time, "sleep"),
+        ):
+            result = api.wait_online(
+                timeout=20.0,
+                interval=0.0,
+                require_seen_down=True,
+                stable_online_seconds=5.0,
+            )
+
+        self.assertFalse(result)
+        self.assertEqual(urlopen.call_count, 2)
+
     def test_wait_api_ready_retries_until_stable(self) -> None:
         api = ha_test_api.HomeAssistantApi("http://ha.test")
 

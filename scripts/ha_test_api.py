@@ -112,7 +112,7 @@ class HomeAssistantApi:
         )
         return True
 
-    def restart(self, access_token: str) -> str:
+    def restart(self, access_token: str, *, timeout: float = 3.0) -> str:
         """Request a Home Assistant restart.
 
         HA often drops or times out the HTTP request while restarting. Treat
@@ -125,17 +125,17 @@ class HomeAssistantApi:
                 "homeassistant",
                 "restart",
                 {},
-                timeout=10,
-            )
+                timeout=timeout,
+        )
         except TimeoutError as err:
             return f"restart assumed after timeout: {err}"
-        except urllib.error.URLError as err:
-            return f"restart assumed after transport close: {err}"
         except urllib.error.HTTPError as err:
             detail = err.read().decode(errors="replace")[:120]
             if err.code in {500, 502, 503, 504}:
                 return f"restart assumed after HTTP {err.code}: {detail!r}"
             raise
+        except urllib.error.URLError as err:
+            return f"restart assumed after transport close: {err}"
         return "restart requested"
 
     def wait_online(
@@ -147,10 +147,11 @@ class HomeAssistantApi:
         settle_seconds: float = 0.0,
         stable_online_seconds: float = 20.0,
     ) -> bool:
-        """Wait until HA exposes auth providers again."""
+        """Wait until HA exposes auth providers after an optional outage."""
         if settle_seconds > 0:
             time.sleep(settle_seconds)
         deadline = time.monotonic() + timeout
+        seen_down = not require_seen_down
         stable_online_since: float | None = None
         while time.monotonic() < deadline:
             try:
@@ -161,11 +162,19 @@ class HomeAssistantApi:
                     if response.status == 200:
                         if not require_seen_down:
                             return True
+                        if not seen_down:
+                            stable_online_since = None
+                            time.sleep(interval)
+                            continue
                         now = time.monotonic()
                         stable_online_since = stable_online_since or now
                         if now - stable_online_since >= stable_online_seconds:
                             return True
+                    else:
+                        seen_down = True
+                        stable_online_since = None
             except (OSError, TimeoutError, urllib.error.URLError):
+                seen_down = True
                 stable_online_since = None
             time.sleep(interval)
         return False
@@ -450,6 +459,12 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--restart", action="store_true")
+    parser.add_argument(
+        "--restart-request-timeout",
+        type=float,
+        default=3.0,
+        help="Seconds to wait for the HA restart service call itself.",
+    )
     parser.add_argument("--wait-timeout", type=float, default=180.0)
     parser.add_argument(
         "--api-ready-timeout",
@@ -460,7 +475,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--restart-settle-seconds",
         type=float,
-        default=8.0,
+        default=0.0,
         help="Seconds to wait after restart request before polling HA online.",
     )
     parser.add_argument("--service-smoke", action="store_true")
@@ -492,7 +507,10 @@ def main() -> int:
         refresh_token = token.refresh_token
         print("PASS: HA auth login")
         if args.restart:
-            print(f"INFO: {api.restart(token.access_token)}")
+            print(
+                "INFO: "
+                f"{api.restart(token.access_token, timeout=args.restart_request_timeout)}"
+            )
             if not api.wait_online(
                 timeout=args.wait_timeout,
                 require_seen_down=True,
