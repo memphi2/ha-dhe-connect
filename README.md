@@ -10,7 +10,7 @@ The integration talks directly to the DHE web interface on your local network. I
 
 ## Status
 
-- Current version: `1.2.3`
+- Current version: `1.3.0`
 - Release channel: stable
 - Home Assistant setup: UI config flow
 - HACS type: custom integration
