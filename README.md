@@ -637,6 +637,21 @@ python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log
 
 The monitor fails when DHE entities write too many recorder rows during the selected interval. Use this after copying the integration to the HA test instance and restarting Home Assistant.
 
+For live Home Assistant API checks against a test instance, set the connection
+details through environment variables and run:
+
+```bash
+HA_TEST_URL=http://homeassistant.local:8123 \
+HA_TEST_USERNAME=your-ha-user \
+HA_TEST_PASSWORD=your-ha-password \
+python scripts/ha_test_api.py --config /mnt/ha-test-config --service-smoke --cleanup-localhost-tokens
+```
+
+The API helper can also request and wait for a Home Assistant restart with
+`--restart`. It revokes the temporary HA refresh token after the check and, when
+`--cleanup-localhost-tokens` is set, removes leftover localhost tokens from the
+mounted test configuration if the revoke endpoint is unavailable.
+
 ## Security notes
 
 - Use only on a trusted local network.
