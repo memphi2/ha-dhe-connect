@@ -16,7 +16,6 @@ from .client import (
     DHEClient,
     DHEError,
     MeasurementValue,
-    TEMPERATURE_MEMORY_SLOT_MEASUREMENTS,
 )
 from .entity_helpers import (
     StiebelDHEEntityMixin,
@@ -25,6 +24,7 @@ from .entity_helpers import (
     temperature_memory_measurement_slot_items,
 )
 from .entity_state_helpers import measurement_attribute_text, merge_state_attributes
+from .protocol import TEMPERATURE_MEMORY_SLOT_MEASUREMENTS
 from .runtime_helpers import get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)

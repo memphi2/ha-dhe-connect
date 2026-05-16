@@ -12,20 +12,22 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .client import (
-    BRUSH_TIMER_PATH,
     DHEClient,
     DHEError,
-    ID_BRUSH_TIMER_ACTIVATION,
-    ID_SHOWER_TIMER_ACTIVATION,
     MeasurementValue,
-    SHOWER_TIMER_PATH,
-    TEMPERATURE_MEMORY_SLOT_MEASUREMENTS,
 )
 from .entity_helpers import (
     StiebelDHEEntityMixin,
     temperature_memory_enabled_default,
     temperature_memory_icon,
     temperature_memory_measurement_slot_items,
+)
+from .protocol import (
+    BRUSH_TIMER_PATH,
+    ID_BRUSH_TIMER_ACTIVATION,
+    ID_SHOWER_TIMER_ACTIVATION,
+    SHOWER_TIMER_PATH,
+    TEMPERATURE_MEMORY_SLOT_MEASUREMENTS,
 )
 from .runtime_helpers import get_runtime_data
 

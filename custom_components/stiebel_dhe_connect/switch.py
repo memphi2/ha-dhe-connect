@@ -12,18 +12,9 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .client import (
-    BRUSH_TIMER_PATH,
     DHEClient,
     DHEError,
-    ID_BATH_FILL_ACTIVE,
-    ID_BRUSH_TIMER_ACTIVATION,
-    ID_CHILD_SAFETY_ACTIVE,
-    ID_ECO_MODE,
-    ID_WELLNESS_ACTIVE,
-    ID_WELLNESS_SHOWER_PROGRAM,
-    ID_SHOWER_TIMER_ACTIVATION,
     ODBValue,
-    SHOWER_TIMER_PATH,
 )
 from .entity_helpers import StiebelDHEEntityMixin
 from .entity_state_helpers import (
@@ -31,6 +22,17 @@ from .entity_state_helpers import (
     switch_state_from_value,
     value_available,
     wellness_program_switch_state,
+)
+from .protocol import (
+    BRUSH_TIMER_PATH,
+    ID_BATH_FILL_ACTIVE,
+    ID_BRUSH_TIMER_ACTIVATION,
+    ID_CHILD_SAFETY_ACTIVE,
+    ID_ECO_MODE,
+    ID_SHOWER_TIMER_ACTIVATION,
+    ID_WELLNESS_ACTIVE,
+    ID_WELLNESS_SHOWER_PROGRAM,
+    SHOWER_TIMER_PATH,
 )
 from .runtime_helpers import get_runtime_data
 

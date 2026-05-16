@@ -15,11 +15,11 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .client import (
     DHEClient,
-    ID_SCALD_PROTECTION_ACTIVE,
     MeasurementValue,
 )
 from .entity_helpers import StiebelDHEEntityMixin
 from .entity_state_helpers import coerce_float, merge_state_attributes, value_available
+from .protocol import ID_SCALD_PROTECTION_ACTIVE
 from .runtime_helpers import get_runtime_data
 
 

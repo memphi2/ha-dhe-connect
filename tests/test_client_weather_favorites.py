@@ -70,6 +70,10 @@ def _load_client():
     return _load_component_module("client")
 
 
+def _load_protocol():
+    return _load_component_module("protocol")
+
+
 class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
     """Validate weather-favorite toggle safeguards."""
 
@@ -428,14 +432,16 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
             },
         )
 
+        protocol_module = _load_protocol()
         expected_ids = set(
-            client_module.SAVING_MONITOR_SENSOR_FIELDS["consumption"].values()
+            protocol_module.SAVING_MONITOR_SENSOR_FIELDS["consumption"].values()
         )
         self.assertEqual({measurement_id for measurement_id, *_ in calls}, expected_ids)
         self.assertEqual({category for _, _, category, _ in calls}, {"consumption"})
 
     async def test_saving_monitor_attributes_do_not_include_other_categories(self) -> None:
         client_module = _load_client()
+        protocol_module = _load_protocol()
         DHEClient = client_module.DHEClient
         client = DHEClient.__new__(DHEClient)
         client._last_measurement_attributes = {}
@@ -460,14 +466,14 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
 
         DHEClient._update_saving_monitor_sensor(
             client,
-            client_module.ID_SAVING_MONITOR_POSSIBLE_WATER,
+            protocol_module.ID_SAVING_MONITOR_POSSIBLE_WATER,
             1.0,
             "possible",
             "water_l",
         )
 
         attributes = client._last_measurement_attributes[
-            client_module.ID_SAVING_MONITOR_POSSIBLE_WATER
+            protocol_module.ID_SAVING_MONITOR_POSSIBLE_WATER
         ]
         self.assertIn("possible", attributes)
         self.assertNotIn("real", attributes)
@@ -477,7 +483,7 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
             captured_calls,
             [
                 (
-                    client_module.ID_SAVING_MONITOR_POSSIBLE_WATER,
+                    protocol_module.ID_SAVING_MONITOR_POSSIBLE_WATER,
                     1.0,
                     True,
                 )
@@ -734,6 +740,7 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
 
     async def test_shower_timer_writes_use_shower_timer_path(self) -> None:
         client_module = _load_client()
+        protocol_module = _load_protocol()
         DHEClient = client_module.DHEClient
 
         client = DHEClient.__new__(DHEClient)
@@ -752,7 +759,7 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
             (
                 "assign:ste.app.showerTimer:durationMilliseconds",
                 300000,
-                client_module.ID_SHOWER_TIMER_DURATION,
+                protocol_module.ID_SHOWER_TIMER_DURATION,
                 5.0,
             ),
         )
@@ -761,7 +768,7 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
             (
                 "assign:ste.app.showerTimer:activation",
                 False,
-                client_module.ID_SHOWER_TIMER_ACTIVATION,
+                protocol_module.ID_SHOWER_TIMER_ACTIVATION,
                 False,
             ),
         )
@@ -770,13 +777,14 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
             (
                 "assign:ste.app.showerTimer:reset",
                 True,
-                client_module.ID_SHOWER_TIMER_REMAINING,
+                protocol_module.ID_SHOWER_TIMER_REMAINING,
                 0.0,
             ),
         )
 
     async def test_brush_timer_writes_keep_brush_timer_path(self) -> None:
         client_module = _load_client()
+        protocol_module = _load_protocol()
         DHEClient = client_module.DHEClient
 
         client = DHEClient.__new__(DHEClient)
@@ -795,7 +803,7 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
             (
                 "assign:ste.app.brushTimer:durationMilliseconds",
                 240000,
-                client_module.ID_BRUSH_TIMER_DURATION,
+                protocol_module.ID_BRUSH_TIMER_DURATION,
                 4.0,
             ),
         )
@@ -804,7 +812,7 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
             (
                 "assign:ste.app.brushTimer:activation",
                 True,
-                client_module.ID_BRUSH_TIMER_ACTIVATION,
+                protocol_module.ID_BRUSH_TIMER_ACTIVATION,
                 True,
             ),
         )
@@ -813,7 +821,7 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
             (
                 "assign:ste.app.brushTimer:reset",
                 True,
-                client_module.ID_BRUSH_TIMER_REMAINING,
+                protocol_module.ID_BRUSH_TIMER_REMAINING,
                 0.0,
             ),
         )
@@ -955,11 +963,12 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
 
     async def test_initial_values_reread_nominal_power_on_each_session(self) -> None:
         client_module = _load_client()
+        protocol_module = _load_protocol()
         DHEClient = client_module.DHEClient
         DHESession = client_module.DHESession
 
         client = DHEClient.__new__(DHEClient)
-        client._last_measurements = {client_module.ID_NOMINAL_POWER: 18.0}
+        client._last_measurements = {protocol_module.ID_NOMINAL_POWER: 18.0}
         client._request_odb_value = AsyncMock()
         client._request_app_value = AsyncMock()
         client._request_optional_odb_value = AsyncMock()
@@ -971,8 +980,8 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         requested_odb_ids = [
             call.args[1] for call in client._request_odb_value.await_args_list
         ]
-        self.assertEqual(requested_odb_ids, list(client_module.INITIAL_VALUE_IDS))
-        self.assertEqual(requested_odb_ids.count(client_module.ID_NOMINAL_POWER), 1)
+        self.assertEqual(requested_odb_ids, list(protocol_module.INITIAL_VALUE_IDS))
+        self.assertEqual(requested_odb_ids.count(protocol_module.ID_NOMINAL_POWER), 1)
 
 
 if __name__ == "__main__":
