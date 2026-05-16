@@ -1908,15 +1908,17 @@ class DHEClient:
 
     async def _open_session(self, token_for_url: str) -> DHESession:
         open_payload = await self._get_text(self._poll_url(token_for_url, None, None))
-        sid_match = re.search(r'"sid":"([^"]+)"', open_payload)
-        if not sid_match:
+        open_data = self._parse_engineio_open_payload(open_payload)
+        sid = str(open_data.get("sid", "")).strip()
+        if not sid:
             raise DHEError(f"Could not extract sid from open payload: {open_payload!r}")
-        websocket_sid_match = re.search(r'"websocketSid":"([^"]+)"', open_payload)
+        websocket_sid = open_data.get("websocketSid")
+        websocket_sid = str(websocket_sid).strip() if websocket_sid is not None else None
         ctx = DHESession(
-            sid=sid_match.group(1),
+            sid=sid,
             url_token=token_for_url,
-            websocket_sid=websocket_sid_match.group(1) if websocket_sid_match else None,
-            ping_interval=self._engineio_ping_interval(open_payload),
+            websocket_sid=websocket_sid or None,
+            ping_interval=self._engineio_ping_interval(open_data),
         )
         await self._post_packet(ctx, f"40/{NS}")
         return ctx
@@ -3499,12 +3501,35 @@ class DHEClient:
             "Pragma": "no-cache",
         }
 
+    @classmethod
+    def _parse_engineio_open_payload(cls, open_payload: str) -> dict[str, Any]:
+        for packet in cls._decode_engineio_payload(open_payload):
+            stripped = packet.strip("\x00\x1e\ufffd")
+            if not stripped:
+                continue
+            if stripped.startswith("0"):
+                stripped = stripped[1:].strip()
+            if not stripped.startswith("{"):
+                continue
+            try:
+                parsed = json.loads(stripped)
+            except json.JSONDecodeError as err:
+                raise DHEError(
+                    f"Could not parse DHE open payload: {open_payload!r}"
+                ) from err
+            if isinstance(parsed, dict):
+                return parsed
+        raise DHEError(f"Could not parse DHE open payload: {open_payload!r}")
+
     @staticmethod
-    def _engineio_ping_interval(open_payload: str) -> float:
-        match = re.search(r'"pingInterval"\s*:\s*(\d+(?:\.\d+)?)', open_payload)
-        if not match:
+    def _engineio_ping_interval(open_payload: dict[str, Any]) -> float:
+        raw_interval = open_payload.get("pingInterval")
+        if raw_interval is None:
             return DEFAULT_ENGINEIO_PING_INTERVAL_SECONDS
-        return max(1.0, float(match.group(1)) / 1000.0)
+        try:
+            return max(1.0, float(raw_interval) / 1000.0)
+        except (TypeError, ValueError):
+            return DEFAULT_ENGINEIO_PING_INTERVAL_SECONDS
 
     async def _get_text(self, url: str, *, timeout: float = 70.0) -> str:
         client_timeout = aiohttp.ClientTimeout(total=timeout)

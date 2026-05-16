@@ -809,6 +809,61 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(client._notify_callbacks.call_count, 2)
 
+    def test_engineio_open_payload_parser_accepts_raw_open_packet(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+
+        payload = (
+            '0{"sid":"polling sid","websocketSid":"websocket sid",'
+            '"pingInterval":25000}'
+        )
+
+        parsed = DHEClient._parse_engineio_open_payload(payload)
+
+        self.assertEqual(parsed["sid"], "polling sid")
+        self.assertEqual(parsed["websocketSid"], "websocket sid")
+        self.assertEqual(DHEClient._engineio_ping_interval(parsed), 25.0)
+
+    def test_engineio_open_payload_parser_accepts_length_prefixed_packet(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+
+        packet = '0{"sid":"sid-1","pingInterval":"30000"}'
+        parsed = DHEClient._parse_engineio_open_payload(f"{len(packet)}:{packet}")
+
+        self.assertEqual(parsed["sid"], "sid-1")
+        self.assertEqual(DHEClient._engineio_ping_interval(parsed), 30.0)
+
+    def test_engineio_open_payload_parser_rejects_malformed_json(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        DHEError = client_module.DHEError
+
+        with self.assertRaisesRegex(DHEError, "Could not parse DHE open payload"):
+            DHEClient._parse_engineio_open_payload('0{"sid":')
+
+    async def test_open_session_uses_structured_open_payload(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+
+        client = DHEClient.__new__(DHEClient)
+        client._get_text = AsyncMock(
+            return_value=(
+                '0{"sid":"polling sid","websocketSid":"websocket sid",'
+                '"pingInterval":15000}'
+            )
+        )
+        client._post_packet = AsyncMock(return_value="")
+        client._poll_url = Mock(return_value="http://example.invalid/socket.io")
+
+        ctx = await DHEClient._open_session(client, "token value")
+
+        self.assertEqual(ctx.sid, "polling sid")
+        self.assertEqual(ctx.websocket_sid, "websocket sid")
+        self.assertEqual(ctx.url_token, "token value")
+        self.assertEqual(ctx.ping_interval, 15.0)
+        client._post_packet.assert_awaited_once_with(ctx, f"40/{client_module.NS}")
+
     async def test_websocket_upgrade_leaves_control_ping_handling_enabled(self) -> None:
         client_module = _load_client()
         DHEClient = client_module.DHEClient
