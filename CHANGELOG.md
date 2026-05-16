@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.3.3 - Unreleased
+
+### Changed
+
+- Bumped the integration version to `1.3.3` for the next patch release cycle.
+
 ## v1.3.2 - 2026-05-16
 
 ### Added
