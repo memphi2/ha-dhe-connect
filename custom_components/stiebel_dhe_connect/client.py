@@ -2502,7 +2502,6 @@ class DHEClient:
                 "activation_rate",
                 "activation_rate",
             )
-            self._refresh_saving_monitor_sensors()
             return
 
         if not isinstance(raw_value, dict):
@@ -2518,11 +2517,20 @@ class DHEClient:
         except (KeyError, TypeError, ValueError):
             return
 
-        self._last_saving_monitor_values[key.lower()] = values
-        self._refresh_saving_monitor_sensors()
+        category = key.lower()
+        self._last_saving_monitor_values[category] = values
+        self._refresh_saving_monitor_sensors(category=category)
 
-    def _refresh_saving_monitor_sensors(self) -> None:
-        for category, field_ids in SAVING_MONITOR_SENSOR_FIELDS.items():
+    def _refresh_saving_monitor_sensors(self, *, category: str | None = None) -> None:
+        if category is None:
+            field_groups = SAVING_MONITOR_SENSOR_FIELDS.items()
+        else:
+            field_ids = SAVING_MONITOR_SENSOR_FIELDS.get(category)
+            if field_ids is None:
+                return
+            field_groups = ((category, field_ids),)
+
+        for category, field_ids in field_groups:
             values = self._last_saving_monitor_values.get(category)
             if not isinstance(values, dict):
                 continue
@@ -2547,10 +2555,9 @@ class DHEClient:
             "saving_monitor_category": category,
             "saving_monitor_field": field,
         }
-        for key in ("activation_rate", "possible", "real", "consumption"):
-            stored_value = self._last_saving_monitor_values.get(key)
-            if stored_value is not None:
-                attributes[key] = stored_value
+        stored_value = self._last_saving_monitor_values.get(category)
+        if stored_value is not None:
+            attributes[category] = stored_value
 
         previous_attributes = self._last_measurement_attributes.get(measurement_id)
         self._last_measurement_attributes[measurement_id] = attributes

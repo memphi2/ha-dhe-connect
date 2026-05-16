@@ -118,6 +118,18 @@ SENSOR_WRITE_FILTERS: dict[str, tuple[float, float]] = {
     "outlet_temperature": (0.5, 120.0),
     "water_flow": (1.0, 45.0),
     "power": (1.5, 45.0),
+    "saving_monitor_activation_rate": (1.0, 120.0),
+    "saving_monitor_consumption_water": (0.25, 60.0),
+    "saving_monitor_consumption_energy": (0.05, 60.0),
+    "saving_monitor_consumption_co2": (0.05, 60.0),
+    "saving_monitor_possible_water": (0.25, 60.0),
+    "saving_monitor_possible_energy": (0.05, 60.0),
+    "saving_monitor_possible_co2": (0.05, 60.0),
+    "saving_monitor_possible_cost": (0.05, 60.0),
+    "saving_monitor_real_water": (0.25, 60.0),
+    "saving_monitor_real_energy": (0.05, 60.0),
+    "saving_monitor_real_co2": (0.05, 60.0),
+    "saving_monitor_real_cost": (0.05, 60.0),
 }
 
 CONNECTION_STATE_OPTIONS = (

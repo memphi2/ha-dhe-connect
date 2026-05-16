@@ -83,6 +83,26 @@ def ensure_homeassistant_stubs() -> None:
         if components is None:
             components = _module("homeassistant.components")
         homeassistant.components = components
+        if not hasattr(components, "climate"):
+            climate = _module("homeassistant.components.climate")
+            climate_const = _module("homeassistant.components.climate.const")
+
+            class ClimateEntity:
+                pass
+
+            class ClimateEntityFeature:
+                TARGET_TEMPERATURE = 1
+                TURN_ON = 2
+                TURN_OFF = 4
+
+            class HVACMode:
+                HEAT = "heat"
+                OFF = "off"
+
+            climate.ClimateEntity = ClimateEntity
+            climate_const.ClimateEntityFeature = ClimateEntityFeature
+            climate_const.HVACMode = HVACMode
+            components.climate = climate
 
         helpers = sys.modules.get("homeassistant.helpers")
         if helpers is None:
@@ -111,6 +131,15 @@ def ensure_homeassistant_stubs() -> None:
             core.callback = callback
             homeassistant.core = core
 
+        if "homeassistant.exceptions" not in sys.modules:
+            exceptions = _module("homeassistant.exceptions")
+
+            class HomeAssistantError(Exception):
+                """Minimal HA exception stub."""
+
+            exceptions.HomeAssistantError = HomeAssistantError
+            homeassistant.exceptions = exceptions
+
         return
     homeassistant = types.ModuleType("homeassistant")
     components = _module("homeassistant.components")
@@ -133,6 +162,14 @@ def ensure_homeassistant_stubs() -> None:
 
     core.HomeAssistant = HomeAssistant
     core.callback = callback
+
+    # exceptions
+    exceptions = _module("homeassistant.exceptions")
+
+    class HomeAssistantError(Exception):
+        """Minimal HA exception stub."""
+
+    exceptions.HomeAssistantError = HomeAssistantError
 
     # components
     persistent_notification = _module("homeassistant.components.persistent_notification")
@@ -197,6 +234,26 @@ def ensure_homeassistant_stubs() -> None:
     sensor.SensorEntity = SensorEntity
     sensor.SensorEntityDescription = SensorEntityDescription
     components.sensor = sensor
+
+    climate = _module("homeassistant.components.climate")
+    climate_const = _module("homeassistant.components.climate.const")
+
+    class ClimateEntity:
+        pass
+
+    class ClimateEntityFeature:
+        TARGET_TEMPERATURE = 1
+        TURN_ON = 2
+        TURN_OFF = 4
+
+    class HVACMode:
+        HEAT = "heat"
+        OFF = "off"
+
+    climate.ClimateEntity = ClimateEntity
+    climate_const.ClimateEntityFeature = ClimateEntityFeature
+    climate_const.HVACMode = HVACMode
+    components.climate = climate
 
     # constants
     const = _module("homeassistant.const")
@@ -288,5 +345,5 @@ def ensure_homeassistant_stubs() -> None:
     homeassistant.config_entries = config_entries
     homeassistant.const = const
     homeassistant.core = core
+    homeassistant.exceptions = exceptions
     sys.modules["homeassistant"] = homeassistant
-
