@@ -137,6 +137,9 @@ SENSOR_WRITE_FILTERS: dict[str, tuple[float, float]] = {
     "saving_monitor_real_co2": (0.05, 60.0),
     "saving_monitor_real_cost": (0.05, 60.0),
 }
+SENSOR_ATTRIBUTE_REFRESH_KEYS = frozenset(
+    key for key in SENSOR_WRITE_FILTERS if key.startswith("saving_monitor_")
+)
 
 CONNECTION_STATE_OPTIONS = (
     "starting",
@@ -698,6 +701,9 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
             self._max_write_interval_seconds = None
         else:
             self._min_write_delta, self._max_write_interval_seconds = filter_values
+        self._write_on_attribute_change = (
+            description.key in SENSOR_ATTRIBUTE_REFRESH_KEYS
+        )
         self._last_written_native_value: MeasurementValue = None
         self._last_written_monotonic: float | None = None
 
@@ -751,10 +757,15 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
         if odb_id != self.entity_description.odb_id:
             return
 
+        previous_attributes = dict(self._attr_extra_state_attributes or {})
         self._update_extra_state_attributes()
+        attributes_changed = self._attr_extra_state_attributes != previous_attributes
         self._attr_native_value = self._convert_value(value)
         self._attr_available = self._attr_native_value is not None
-        if not self._should_write_measurement_state(self._attr_native_value):
+        if not self._should_write_measurement_state(
+            self._attr_native_value,
+            attributes_changed=attributes_changed,
+        ):
             return
         self._last_written_native_value = self._attr_native_value
         self._last_written_monotonic = time.monotonic()
@@ -766,8 +777,15 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
         self._attr_available = value_available(available, self._attr_native_value)
         self.async_write_ha_state()
 
-    def _should_write_measurement_state(self, new_value: MeasurementValue) -> bool:
+    def _should_write_measurement_state(
+        self,
+        new_value: MeasurementValue,
+        *,
+        attributes_changed: bool = False,
+    ) -> bool:
         """Return whether this measurement update should write a new HA state."""
+        if attributes_changed and self._write_on_attribute_change:
+            return True
         previous_value = self._last_written_native_value
         if previous_value is None or new_value is None:
             return previous_value != new_value
