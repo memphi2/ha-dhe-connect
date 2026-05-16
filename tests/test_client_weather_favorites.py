@@ -764,6 +764,24 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
             ),
         )
 
+    def test_repeated_none_measurements_are_deduped(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+
+        client = DHEClient.__new__(DHEClient)
+        client._last_measurements = {}
+        client._measurement_callbacks = set()
+        client._pending_write_future = None
+        client._pending_write_id = None
+        client._pending_write_expected = None
+        client._notify_callbacks = Mock()
+
+        DHEClient._handle_measurement(client, 123, None)
+        DHEClient._handle_measurement(client, 123, None)
+        DHEClient._handle_measurement(client, 123, None, force_update=True)
+
+        self.assertEqual(client._notify_callbacks.call_count, 2)
+
     async def test_websocket_upgrade_leaves_control_ping_handling_enabled(self) -> None:
         client_module = _load_client()
         DHEClient = client_module.DHEClient

@@ -230,18 +230,18 @@ class TestDeviceSettingsDefaults(unittest.TestCase):
         self.config_flow = _load_config_flow()
 
     def test_device_settings_defaults_uses_device_currency_when_available(self) -> None:
-        class Client:
-            last_measurements = {self.config_flow.ID_APP_CURRENCY: "gbp"}
+        client = types.SimpleNamespace(
+            last_measurements={self.config_flow.ID_APP_CURRENCY: "gbp"},
+        )
 
-        defaults = self.config_flow._device_settings_defaults(Client())
+        defaults = self.config_flow._device_settings_defaults(client)
 
         self.assertEqual(defaults[self.config_flow.ATTR_CURRENCY], "GBP")
 
     def test_device_settings_defaults_uses_unchanged_when_currency_missing(self) -> None:
-        class Client:
-            last_measurements = {}
+        client = types.SimpleNamespace(last_measurements={})
 
-        defaults = self.config_flow._device_settings_defaults(Client())
+        defaults = self.config_flow._device_settings_defaults(client)
 
         self.assertEqual(
             defaults[self.config_flow.ATTR_CURRENCY],
@@ -249,10 +249,11 @@ class TestDeviceSettingsDefaults(unittest.TestCase):
         )
 
     def test_device_settings_defaults_uses_unchanged_when_currency_is_unset(self) -> None:
-        class Client:
-            last_measurements = {self.config_flow.ID_APP_CURRENCY: "UNSET"}
+        client = types.SimpleNamespace(
+            last_measurements={self.config_flow.ID_APP_CURRENCY: "UNSET"},
+        )
 
-        defaults = self.config_flow._device_settings_defaults(Client())
+        defaults = self.config_flow._device_settings_defaults(client)
 
         self.assertEqual(
             defaults[self.config_flow.ATTR_CURRENCY],
@@ -260,10 +261,11 @@ class TestDeviceSettingsDefaults(unittest.TestCase):
         )
 
     def test_device_settings_defaults_uses_unchanged_when_currency_not_supported(self) -> None:
-        class Client:
-            last_measurements = {self.config_flow.ID_APP_CURRENCY: "JPY"}
+        client = types.SimpleNamespace(
+            last_measurements={self.config_flow.ID_APP_CURRENCY: "JPY"},
+        )
 
-        defaults = self.config_flow._device_settings_defaults(Client())
+        defaults = self.config_flow._device_settings_defaults(client)
 
         self.assertEqual(
             defaults[self.config_flow.ATTR_CURRENCY],

@@ -269,7 +269,7 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
             return total_seconds
         if self.entity_description.odb_id == ID_BATH_FILL_TARGET_VOLUME:
             volume = coerce_float(value)
-            return int(round(volume)) if volume is not None else None
+            return round(volume) if volume is not None else None
         if self._is_child_safety_temperature_limit:
             self._child_safety_temperature_limit_raw = coerce_float(value)
             return bounded_child_safety_temperature_limit(
