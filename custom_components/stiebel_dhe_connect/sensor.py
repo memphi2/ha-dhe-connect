@@ -783,7 +783,10 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
     @callback
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
-        self._attr_available = value_available(available, self._attr_native_value)
+        next_available = value_available(available, self._attr_native_value)
+        if self._attr_available == next_available:
+            return
+        self._attr_available = next_available
         self.async_write_ha_state()
 
     def _should_write_measurement_state(
