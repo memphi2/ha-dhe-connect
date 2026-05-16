@@ -128,6 +128,29 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
             location,
         )
 
+    async def test_command_retry_does_not_wrap_programming_errors(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        client = DHEClient.__new__(DHEClient)
+
+        client._command_lock = asyncio.Lock()
+        client._ctx = object()
+        client._ensure_ready = AsyncMock()
+        client._force_reconnect = AsyncMock()
+
+        async def _operation(_ctx):
+            raise RuntimeError("unexpected bug")
+
+        with self.assertRaisesRegex(RuntimeError, "unexpected bug"):
+            await DHEClient._run_command_with_reconnect_retry(
+                client,
+                "Could not run command",
+                _operation,
+            )
+
+        client._ensure_ready.assert_awaited_once()
+        client._force_reconnect.assert_not_awaited()
+
     async def test_add_weather_favorite_existing_and_refresh_timeout_no_toggle(self) -> None:
         client_module = _load_client()
         DHEClient = client_module.DHEClient

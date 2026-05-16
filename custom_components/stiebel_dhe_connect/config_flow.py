@@ -7,6 +7,7 @@ import logging
 import os
 from typing import Any
 
+import aiohttp
 import voluptuous as vol
 
 from homeassistant import config_entries
@@ -499,7 +500,7 @@ async def _can_connect(hass: HomeAssistant, host: str, port: int) -> bool:
         async with session.get(url, timeout=8) as resp:
             await resp.read()
             return 200 <= resp.status < 500
-    except Exception:  # noqa: BLE001
+    except (aiohttp.ClientError, TimeoutError, OSError):
         return False
 
 
@@ -524,7 +525,7 @@ async def _validate_setup_pairing(
         )
     except asyncio.CancelledError:
         raise
-    except Exception as err:  # noqa: BLE001
+    except (DHEError, TimeoutError, OSError, aiohttp.ClientError) as err:
         pairing_state = str(probe_client.diagnostic_state.get("pairing_state") or "")
         return map_pairing_error(err, pairing_state)
     return None

@@ -212,6 +212,14 @@ PAIRING_NOTIFICATION_ID_PREFIX = "stiebel_dhe_connect_pairing"
 PAIRING_CONFIRM_HINT_NOTIFICATION_ID_PREFIX = (
     "stiebel_dhe_connect_pairing_confirm"
 )
+_DHE_COMMAND_EXCEPTIONS = (
+    DHEError,
+    aiohttp.ClientError,
+    TimeoutError,
+    OSError,
+    ValueError,
+)
+_DHE_TRANSPORT_EXCEPTIONS = (*_DHE_COMMAND_EXCEPTIONS, RuntimeError)
 
 
 def _round_to_half_c(value: float) -> float:
@@ -676,7 +684,7 @@ class DHEClient:
             )
         finally:
             if ctx is not None:
-                with contextlib.suppress(Exception):  # noqa: BLE001
+                with contextlib.suppress(*_DHE_TRANSPORT_EXCEPTIONS):
                     await self._close_session(ctx)
             self._ctx = None
             self._ready.clear()
@@ -718,7 +726,7 @@ class DHEClient:
                     if ctx is None:
                         raise DHEError("DHE session is not connected")
                     return await operation(ctx)
-                except Exception as err:  # noqa: BLE001, PERF203
+                except _DHE_COMMAND_EXCEPTIONS as err:  # noqa: PERF203
                     if on_error is not None:
                         on_error()
                     if attempt == 0:
@@ -742,7 +750,7 @@ class DHEClient:
                 if ctx is None:
                     raise DHEError("DHE session is not connected")
                 return await operation(ctx)
-            except Exception as err:  # noqa: BLE001
+            except _DHE_COMMAND_EXCEPTIONS as err:
                 raise DHEError(f"{error_message}: {err}") from err
 
     def _begin_manual_pairing(self, state: str, message: str, *, notify: bool) -> None:
@@ -1310,9 +1318,9 @@ class DHEClient:
         try:
             await self.write_odb_value(euros_odb_id, euros)
             await self.write_odb_value(cents_odb_id, cents)
-        except Exception:
+        except DHEError:
             if old_euros is not None and old_cents is not None:
-                with contextlib.suppress(Exception):
+                with contextlib.suppress(DHEError):
                     await self.write_odb_value(euros_odb_id, old_euros)
                     await self.write_odb_value(cents_odb_id, old_cents)
             raise
@@ -1336,7 +1344,7 @@ class DHEClient:
                 "command": ODB_ASSIGN_COMMAND,
                 "value": {"id": ID_SETPOINT_REQUEST, "value": request_value},
             }))
-            with contextlib.suppress(Exception):  # noqa: BLE001
+            with contextlib.suppress(DHEError):
                 await self._request_setpoint(ctx)
             return True
 
@@ -1683,7 +1691,7 @@ class DHEClient:
                         await self._handle_runtime_event(event)
             except asyncio.CancelledError:  # noqa: PERF203
                 raise
-            except Exception as err:  # noqa: BLE001
+            except _DHE_TRANSPORT_EXCEPTIONS as err:
                 self._update_diagnostics(
                     connection_state="reconnecting",
                     last_reconnect_reason=_diagnostic_error(err),
@@ -1840,7 +1848,7 @@ class DHEClient:
         except asyncio.CancelledError:
             await self._close_session(ctx)
             raise
-        except Exception as err:
+        except _DHE_TRANSPORT_EXCEPTIONS as err:
             if self._pairing_active:
                 self._record_pairing_failed(err)
             await self._close_session(ctx)
@@ -1947,7 +1955,7 @@ class DHEClient:
                                             "Manual pairing session upgraded to websocket "
                                             "while waiting for pairing_result."
                                         )
-                                    except Exception as err:  # noqa: BLE001
+                                    except _DHE_TRANSPORT_EXCEPTIONS as err:
                                         _LOGGER.debug(
                                             "Manual pairing websocket upgrade unavailable; "
                                             "continuing polling while waiting for pairing_result: %s",
@@ -1990,7 +1998,7 @@ class DHEClient:
             if require_confirmation and candidate_token:
                 raise DHEError("Token received but DHE pairing confirmation did not complete in time")
             raise DHEError("Token request timeout")
-        except Exception as err:
+        except _DHE_TRANSPORT_EXCEPTIONS as err:
             self._record_pairing_failed(err)
             raise
         finally:
@@ -3339,11 +3347,11 @@ class DHEClient:
         )
 
     async def _request_optional_odb_value(self, ctx: DHESession, odb_id: int) -> None:
-        with contextlib.suppress(Exception):  # noqa: BLE001
+        with contextlib.suppress(DHEError):
             await self._request_odb_value(ctx, odb_id)
 
     async def _request_optional_app_value(self, ctx: DHESession, command: str) -> None:
-        with contextlib.suppress(Exception):  # noqa: BLE001
+        with contextlib.suppress(DHEError):
             await self._request_app_value(ctx, command)
 
     def _new_setpoint_future(self, expected: float | None = None) -> asyncio.Future[float]:
@@ -3475,12 +3483,12 @@ class DHEClient:
                             continue
                         _LOGGER.debug("Ignoring unexpected DHE websocket probe packet: %r", packet)
                     raise DHEError("probe timeout")
-                except Exception as err:  # noqa: BLE001
+                except _DHE_TRANSPORT_EXCEPTIONS as err:
                     errors.append(f"{label}: {type(err).__name__}")
                     if websocket is not None and not websocket.closed:
                         await websocket.close()
             raise DHEError("; ".join(errors) or "probe timeout")
-        except Exception as err:  # noqa: BLE001
+        except _DHE_TRANSPORT_EXCEPTIONS as err:
             if websocket is not None and not websocket.closed:
                 await websocket.close()
             raise DHEError(f"DHE websocket upgrade failed: {err}") from err
@@ -3494,7 +3502,7 @@ class DHEClient:
                 await self._send_websocket_packet(ctx, "2")
         except asyncio.CancelledError:
             return
-        except Exception as err:  # noqa: BLE001
+        except _DHE_TRANSPORT_EXCEPTIONS as err:
             if not self._stopped.is_set():
                 await self._force_reconnect(
                     ctx,
