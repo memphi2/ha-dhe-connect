@@ -1315,8 +1315,8 @@ class DHEClient:
         requested = _round_to_half_c(_clamp(float(temperature), 20.0, 60.0))
 
         async def _operation(ctx: DHESession) -> float:
-            before_generation = self._temperature_memory_generation
             await self._refresh_temperature_memories(ctx)
+            before_generation = self._temperature_memory_generation
             attributes = self._last_measurement_attributes.get(measurement_id, {})
             name = str(attributes.get("name", DEFAULT_TEMPERATURE_MEMORY_NAMES[memory_id]))
             payload = self._temperature_memory_payload(
@@ -1355,8 +1355,8 @@ class DHEClient:
             raise DHEError(f"DHE temperature memory {memory_slot} name must not be empty")
 
         async def _operation(ctx: DHESession) -> str:
-            before_generation = self._temperature_memory_generation
             await self._refresh_temperature_memories(ctx)
+            before_generation = self._temperature_memory_generation
             temperature = (
                 self._cached_temperature_memory_temperature(measurement_id)
                 or DEFAULT_NEW_TEMPERATURE_MEMORY_C

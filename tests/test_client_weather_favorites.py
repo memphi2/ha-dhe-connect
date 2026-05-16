@@ -461,6 +461,48 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(client._refresh_temperature_memories.await_count, 2)
         client._handle_temperature_memory_item.assert_not_called()
 
+    async def test_set_temperature_memory_requires_generation_change_after_write(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        DHEError = client_module.DHEError
+
+        client = DHEClient.__new__(DHEClient)
+        client._temperature_memory_generation = 0
+        client._last_measurement_attributes = {}
+        client._temperature_memory_ids = lambda _slot: (0, 700)
+
+        refresh_calls = 0
+
+        async def _refresh_memory(_ctx: object | None = None) -> None:
+            nonlocal refresh_calls
+            refresh_calls += 1
+            if refresh_calls == 1:
+                # Initial pre-write refresh changes generation and caches the slot.
+                client._temperature_memory_generation = 1
+                client._last_measurement_attributes[700] = {"name": "Dusche"}
+            # Second refresh simulates no post-write update from the DHE.
+
+        client._refresh_temperature_memories = AsyncMock(side_effect=_refresh_memory)
+        client._temperature_memory_payload = lambda *_args, **_kwargs: {
+            "name": "Dusche",
+            "temperature": 38.0,
+            "id": 0,
+            "operation": "add_change",
+        }
+        client._post_packet = AsyncMock()
+        client._message_packet = lambda payload: payload
+        client._cached_temperature_memory_temperature = lambda _measurement_id: 38.0
+
+        async def _run_with_retry(_message, operation):
+            return await operation(object())
+
+        client._run_command_with_reconnect_retry = _run_with_retry
+
+        with self.assertRaisesRegex(DHEError, "was not confirmed"):
+            await DHEClient.set_temperature_memory(client, 0, 38.0)
+
+        self.assertEqual(refresh_calls, 2)
+
     async def test_set_temperature_memory_name_without_confirmation_is_rejected(self) -> None:
         client_module = _load_client()
         DHEClient = client_module.DHEClient

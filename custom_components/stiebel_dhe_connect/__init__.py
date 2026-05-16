@@ -236,8 +236,9 @@ def _async_register_services(hass: HomeAssistant) -> None:
             results,
             data.get(ATTR_LOCATION_ID),
             data[ATTR_RESULT_NUMBER],
+            allow_raw_location_id=True,
         )
-        await client.toggle_weather_favorite(location)
+        await client.toggle_weather_favorite(_weather_location_payload(location))
 
     async def async_add_weather_favorite(call: ServiceCall) -> None:
         runtime = _resolve_runtime(hass, call.data.get(ATTR_ENTRY_ID))
@@ -256,8 +257,9 @@ def _async_register_services(hass: HomeAssistant) -> None:
             results,
             data.get(ATTR_LOCATION_ID),
             data[ATTR_RESULT_NUMBER],
+            allow_raw_location_id=True,
         )
-        await client.add_weather_favorite(location)
+        await client.add_weather_favorite(_weather_location_payload(location))
 
     async def async_remove_weather_favorite(call: ServiceCall) -> None:
         runtime = _resolve_runtime(hass, call.data.get(ATTR_ENTRY_ID))
@@ -276,8 +278,9 @@ def _async_register_services(hass: HomeAssistant) -> None:
             results,
             data.get(ATTR_LOCATION_ID),
             data[ATTR_RESULT_NUMBER],
+            allow_raw_location_id=True,
         )
-        await client.remove_weather_favorite(location)
+        await client.remove_weather_favorite(_weather_location_payload(location))
 
     async def async_select_weather_location(call: ServiceCall) -> None:
         runtime = _resolve_runtime(hass, call.data.get(ATTR_ENTRY_ID))
@@ -417,6 +420,16 @@ def _select_weather_location(
             f"Weather search result {result_number} is not available"
         )
     return results[result_number - 1]
+
+
+def _weather_location_payload(location: dict[str, Any] | str) -> dict[str, Any]:
+    """Return a weather location payload with LocationId for client actions."""
+    if isinstance(location, dict):
+        return location
+    location_id = str(location or "").strip()
+    if not location_id:
+        raise HomeAssistantError("Weather location_id must not be empty")
+    return {"LocationId": location_id}
 
 
 def _weather_locations(value: Any) -> list[dict[str, Any]]:

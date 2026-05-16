@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import time
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -108,6 +109,15 @@ class StiebelDHEDiagnosticSensorEntityDescription(SensorEntityDescription):
 DEFAULT_ENABLED_SENSOR_KEYS = {
     "water_consumption_total",
     "energy_consumption_total",
+}
+
+# Reduce write frequency for high-churn live telemetry values. The tuple is
+# (minimum absolute numeric delta, maximum seconds between writes).
+SENSOR_WRITE_FILTERS: dict[str, tuple[float, float]] = {
+    "inlet_temperature": (0.5, 120.0),
+    "outlet_temperature": (0.5, 120.0),
+    "water_flow": (1.0, 45.0),
+    "power": (1.5, 45.0),
 }
 
 CONNECTION_STATE_OPTIONS = (
@@ -663,6 +673,14 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
         self._attr_extra_state_attributes = dict(self._base_extra_state_attributes)
         self._attr_available = False
         self._attr_native_value: float | str | None = None
+        filter_values = SENSOR_WRITE_FILTERS.get(description.key)
+        if filter_values is None:
+            self._min_write_delta = None
+            self._max_write_interval_seconds = None
+        else:
+            self._min_write_delta, self._max_write_interval_seconds = filter_values
+        self._last_written_native_value: MeasurementValue = None
+        self._last_written_monotonic: float | None = None
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE measurements and start the persistent session."""
@@ -678,6 +696,8 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
             self._update_extra_state_attributes()
             self._attr_native_value = self._convert_value(last_value)
             self._attr_available = self._attr_native_value is not None
+            self._last_written_native_value = self._attr_native_value
+            self._last_written_monotonic = time.monotonic()
 
     def _convert_value(self, value: MeasurementValue) -> MeasurementValue:
         """Convert the raw client value for display."""
@@ -715,6 +735,10 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
         self._update_extra_state_attributes()
         self._attr_native_value = self._convert_value(value)
         self._attr_available = self._attr_native_value is not None
+        if not self._should_write_measurement_state(self._attr_native_value):
+            return
+        self._last_written_native_value = self._attr_native_value
+        self._last_written_monotonic = time.monotonic()
         self.async_write_ha_state()
 
     @callback
@@ -722,6 +746,30 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
         """Handle DHE connection availability updates."""
         self._attr_available = value_available(available, self._attr_native_value)
         self.async_write_ha_state()
+
+    def _should_write_measurement_state(self, new_value: MeasurementValue) -> bool:
+        """Return whether this measurement update should write a new HA state."""
+        previous_value = self._last_written_native_value
+        if previous_value is None or new_value is None:
+            return previous_value != new_value
+        if previous_value == new_value:
+            return False
+        min_write_delta = self._min_write_delta
+        max_write_interval_seconds = self._max_write_interval_seconds
+        if min_write_delta is None or max_write_interval_seconds is None:
+            return True
+
+        previous_number = coerce_float(previous_value)
+        new_number = coerce_float(new_value)
+        if previous_number is None or new_number is None:
+            return True
+        if abs(new_number - previous_number) >= min_write_delta:
+            return True
+
+        last_written = self._last_written_monotonic
+        if last_written is None:
+            return True
+        return (time.monotonic() - last_written) >= max_write_interval_seconds
 
 
 class StiebelDHEReconnectCountSensor(StiebelDHEEntityMixin, SensorEntity):

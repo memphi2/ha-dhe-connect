@@ -6,6 +6,7 @@ import importlib.util
 from pathlib import Path
 import types
 import sys
+import time
 import unittest
 
 try:
@@ -75,6 +76,38 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         self.assertIn("real", attributes)
         self.assertIn("consumption", attributes)
         self.assertIn("activation_rate", attributes)
+
+    def test_flow_and_power_write_filters_use_stricter_thresholds(self) -> None:
+        sensor_module = _load_sensor_module()
+        self.assertEqual(sensor_module.SENSOR_WRITE_FILTERS["water_flow"], (1.0, 45.0))
+        self.assertEqual(sensor_module.SENSOR_WRITE_FILTERS["power"], (1.5, 45.0))
+
+    def test_flow_filter_blocks_small_jitter_but_allows_large_delta_or_interval(self) -> None:
+        sensor_module = _load_sensor_module()
+        description = next(
+            item for item in sensor_module.SENSOR_DESCRIPTIONS if item.key == "water_flow"
+        )
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+
+        sensor = sensor_module.StiebelDHESensor(
+            entry_id="test-entry",
+            name="Test DHE",
+            client=_FakeClient(),
+            description=description,
+        )
+        sensor._last_written_native_value = 5.0
+        sensor._last_written_monotonic = time.monotonic()
+
+        self.assertFalse(sensor._should_write_measurement_state(5.4))
+        self.assertTrue(sensor._should_write_measurement_state(6.1))
+
+        sensor._last_written_native_value = 5.0
+        sensor._last_written_monotonic = -1_000_000_000.0
+        self.assertTrue(sensor._should_write_measurement_state(5.4))
 
 
 if __name__ == "__main__":
