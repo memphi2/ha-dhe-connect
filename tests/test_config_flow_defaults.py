@@ -270,6 +270,15 @@ class TestDeviceSettingsDefaults(unittest.TestCase):
             self.config_flow.CURRENCY_UNCHANGED,
         )
 
+    def test_currency_options_keep_german_unchanged_label_utf8(self) -> None:
+        hass = types.SimpleNamespace(config=types.SimpleNamespace(language="de"))
+
+        options = self.config_flow._currency_options(hass)
+
+        label = options[self.config_flow.CURRENCY_UNCHANGED]
+        self.assertEqual(label, "Nicht ändern")
+        self.assertNotIn("Ã", label)
+
 
 class TestDeviceSettingsOptionsFlow(unittest.IsolatedAsyncioTestCase):
     """Validate device settings options flow does not write unchanged currency."""
