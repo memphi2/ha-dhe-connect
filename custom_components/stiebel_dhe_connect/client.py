@@ -218,8 +218,9 @@ _DHE_COMMAND_EXCEPTIONS = (
     TimeoutError,
     OSError,
     ValueError,
+    RuntimeError,
 )
-_DHE_TRANSPORT_EXCEPTIONS = (*_DHE_COMMAND_EXCEPTIONS, RuntimeError)
+_DHE_TRANSPORT_EXCEPTIONS = _DHE_COMMAND_EXCEPTIONS
 
 
 def _round_to_half_c(value: float) -> float:
