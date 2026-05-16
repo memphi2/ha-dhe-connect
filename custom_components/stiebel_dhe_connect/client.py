@@ -3196,8 +3196,7 @@ class DHEClient:
 
     async def _request_initial_values(self, ctx: DHESession) -> None:
         for odb_id in INITIAL_VALUE_IDS:
-            if odb_id != ID_NOMINAL_POWER or odb_id not in self._last_measurements:
-                await self._request_odb_value(ctx, odb_id)
+            await self._request_odb_value(ctx, odb_id)
         for command in APP_TIMER_REQUEST_COMMANDS:
             await self._request_app_value(ctx, command)
         for command in CONSUMPTION_REQUEST_COMMANDS:

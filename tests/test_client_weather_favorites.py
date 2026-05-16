@@ -842,6 +842,27 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
             "Heartbeat failed: RuntimeError: socket write failed",
         )
 
+    async def test_initial_values_reread_nominal_power_on_each_session(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        DHESession = client_module.DHESession
+
+        client = DHEClient.__new__(DHEClient)
+        client._last_measurements = {client_module.ID_NOMINAL_POWER: 18.0}
+        client._request_odb_value = AsyncMock()
+        client._request_app_value = AsyncMock()
+        client._request_optional_odb_value = AsyncMock()
+        client._request_optional_app_value = AsyncMock()
+        ctx = DHESession(url_token="token", sid="sid")
+
+        await DHEClient._request_initial_values(client, ctx)
+
+        requested_odb_ids = [
+            call.args[1] for call in client._request_odb_value.await_args_list
+        ]
+        self.assertEqual(requested_odb_ids, list(client_module.INITIAL_VALUE_IDS))
+        self.assertEqual(requested_odb_ids.count(client_module.ID_NOMINAL_POWER), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
