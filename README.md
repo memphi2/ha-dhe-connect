@@ -620,6 +620,22 @@ python scripts/check_integration.py
 
 It checks the manifest, HACS metadata, required repository files, release-note source of truth, translation key parity and Python syntax without writing bytecode artifacts. The same check runs in the `Validate` GitHub Actions workflow.
 
+For a mounted Home Assistant test configuration, run the smoke check:
+
+```bash
+python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log
+```
+
+It reads Home Assistant's entity registry, recorder database, current log files and auth storage from the mounted config directory. It does not need Home Assistant credentials and does not print stored DHE tokens.
+The log scan fails if no Home Assistant log file is available; enable file logging or include the fault log when that is the only mounted log source.
+
+To also check recorder churn after a restart or live interaction, add a monitor window:
+
+```bash
+python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log --monitor-seconds 90
+```
+
+The monitor fails when DHE entities write too many recorder rows during the selected interval. Use this after copying the integration to the HA test instance and restarting Home Assistant.
 
 ## Security notes
 

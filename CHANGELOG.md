@@ -6,6 +6,7 @@
 
 - Added Home Assistant `climate.turn_on` / `climate.turn_off` support by mapping the DHE water-heating control to HVAC `heat` / `off`.
 - Added regression coverage for climate on/off, set-temperature auto-enable, WebSocket heartbeat/control pings, timer write paths, memory-slot recreation and recorder write filtering.
+- Added a reusable mounted-HA smoke check for entity health, recorder churn, DHE log errors and temporary localhost auth tokens.
 
 ### Changed
 
@@ -23,8 +24,9 @@
 
 ### Validation
 
-- Local test suite: `192 passed`.
+- Local test suite: `227 passed`.
 - Integration repository check: `scripts/check_integration.py`.
+- HA smoke check: `scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log --monitor-seconds 90`.
 - GitHub Validate workflow: HACS, Hassfest and repository checks.
 - Live HA test: copied to the Home Assistant test instance, restarted HA, verified DHE entities, and exercised `climate.turn_off` / `climate.turn_on` from `heat -> off -> heat` without DHE error-log entries.
 
