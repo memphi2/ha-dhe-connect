@@ -764,6 +764,53 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
             ),
         )
 
+    async def test_websocket_upgrade_leaves_control_ping_handling_enabled(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        DHESession = client_module.DHESession
+
+        message = types.SimpleNamespace(
+            type=client_module.aiohttp.WSMsgType.TEXT,
+            data="3probe",
+        )
+
+        class _FakeWebSocket:
+            closed = False
+
+            def __init__(self) -> None:
+                self.send_str = AsyncMock()
+                self.close = AsyncMock()
+                self.receive = AsyncMock(return_value=message)
+
+        websocket = _FakeWebSocket()
+        session = types.SimpleNamespace(ws_connect=AsyncMock(return_value=websocket))
+        client = DHEClient.__new__(DHEClient)
+        client._session = session
+        client._send_lock = client_module.asyncio.Lock()
+        client._websocket_url_candidates = Mock(
+            return_value=(("websocket-sid", "socket-sid", "ws://example.invalid/ws"),)
+        )
+        client._websocket_headers = Mock(return_value={"Origin": "http://example.invalid"})
+
+        def _capture_background_task(coro, _name):
+            coro.close()
+            return object()
+
+        client._create_background_task = Mock(side_effect=_capture_background_task)
+
+        ctx = DHESession(url_token="token", sid="sid")
+
+        await DHEClient._upgrade_to_websocket(client, ctx)
+
+        self.assertIs(ctx.websocket, websocket)
+        self.assertIsNotNone(ctx.websocket_ping_task)
+        session.ws_connect.assert_awaited_once()
+        kwargs = session.ws_connect.await_args.kwargs
+        self.assertTrue(kwargs["autoping"])
+        self.assertIsNone(kwargs["heartbeat"])
+        websocket.send_str.assert_any_await("2probe")
+        websocket.send_str.assert_any_await("5")
+
 
 if __name__ == "__main__":
     unittest.main()
