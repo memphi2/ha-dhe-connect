@@ -62,6 +62,7 @@ def _load_component_module(module_name: str):
 
 def _load_client():
     _load_component_module("client_mapping")
+    _load_component_module("connection_helpers")
     _load_component_module("engineio_helpers")
     _load_component_module("flow_helpers")
     _load_component_module("pairing_helpers")
@@ -71,6 +72,31 @@ def _load_client():
 
 class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
     """Validate weather-favorite toggle safeguards."""
+
+    async def test_client_init_normalizes_host_and_url(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        client_module.async_get_clientsession = Mock(return_value=object())
+
+        class _FakeConfig:
+            def path(self, value: str) -> str:
+                return f"/config/{value}"
+
+        class _FakeHass:
+            config = _FakeConfig()
+
+        client = DHEClient(
+            _FakeHass(),
+            " http://[2001:db8::1]/ ",
+            8443,
+            ".storage/token.txt",
+            "DHE",
+        )
+
+        self.assertEqual(client.host, "2001:db8::1")
+        self.assertEqual(client._url_host, "[2001:db8::1]")
+        self.assertEqual(client.base_url, "http://[2001:db8::1]:8443")
+        self.assertEqual(client.token_path, "/config/.storage/token.txt")
 
     async def test_toggle_weather_favorite_does_not_retry(self) -> None:
         client_module = _load_client()

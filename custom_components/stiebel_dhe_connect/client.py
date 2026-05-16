@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import ipaddress
 import json
 import logging
 import os
@@ -38,6 +37,7 @@ from .client_mapping import (
     weather_location_id as _weather_location_id,
     weather_location_in_list as _weather_location_in_list,
 )
+from .connection_helpers import host_for_url as _host_for_url
 from .engineio_helpers import (
     balanced_json_array as _balanced_json_array,
     decode_engineio_payload as _decode_engineio_payload,
@@ -303,17 +303,6 @@ def _summarize_diagnostic_value(value: Any, *, depth: int = 0) -> Any:
     if isinstance(value, str) and len(value) > 120:
         return f"{value[:117]}..."
     return value
-
-
-def _host_for_url(host: str) -> str:
-    """Return host part suitable for URL construction (wrap IPv6 in brackets)."""
-    try:
-        ip = ipaddress.ip_address(host)
-    except ValueError:
-        return host
-    if ip.version == 6:
-        return f"[{host}]"
-    return host
 
 
 class DHEClient:
