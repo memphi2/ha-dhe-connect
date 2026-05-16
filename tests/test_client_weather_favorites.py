@@ -131,31 +131,56 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
     async def test_command_retry_recovers_from_runtime_transport_errors(self) -> None:
         client_module = _load_client()
         DHEClient = client_module.DHEClient
+        for message in ("socket closing", "Session is closed"):
+            with self.subTest(message=message):
+                client = DHEClient.__new__(DHEClient)
+
+                client._command_lock = asyncio.Lock()
+                client._ctx = object()
+                client._ensure_ready = AsyncMock()
+                client._force_reconnect = AsyncMock()
+                attempts = 0
+
+                async def _operation(_ctx):
+                    nonlocal attempts
+                    attempts += 1
+                    if attempts == 1:
+                        raise RuntimeError(message)
+                    return "ok"
+
+                result = await DHEClient._run_command_with_reconnect_retry(
+                    client,
+                    "Could not run command",
+                    _operation,
+                )
+
+                self.assertEqual(result, "ok")
+                self.assertEqual(attempts, 2)
+                self.assertEqual(client._ensure_ready.await_count, 2)
+                client._force_reconnect.assert_awaited_once()
+
+    async def test_command_retry_does_not_retry_programming_runtime_errors(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
         client = DHEClient.__new__(DHEClient)
 
         client._command_lock = asyncio.Lock()
         client._ctx = object()
         client._ensure_ready = AsyncMock()
         client._force_reconnect = AsyncMock()
-        attempts = 0
 
         async def _operation(_ctx):
-            nonlocal attempts
-            attempts += 1
-            if attempts == 1:
-                raise RuntimeError("socket closing")
-            return "ok"
+            raise RuntimeError("unexpected invalid state")
 
-        result = await DHEClient._run_command_with_reconnect_retry(
-            client,
-            "Could not run command",
-            _operation,
-        )
+        with self.assertRaisesRegex(RuntimeError, "unexpected invalid state"):
+            await DHEClient._run_command_with_reconnect_retry(
+                client,
+                "Could not run command",
+                _operation,
+            )
 
-        self.assertEqual(result, "ok")
-        self.assertEqual(attempts, 2)
-        self.assertEqual(client._ensure_ready.await_count, 2)
-        client._force_reconnect.assert_awaited_once()
+        client._ensure_ready.assert_awaited_once()
+        client._force_reconnect.assert_not_awaited()
 
     async def test_add_weather_favorite_existing_and_refresh_timeout_no_toggle(self) -> None:
         client_module = _load_client()
@@ -556,10 +581,158 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
             [
                 (euros_id, 1.0),
                 (cents_id, 5.0),
-                (euros_id, 0.0),
                 (cents_id, 29.0),
+                (euros_id, 0.0),
             ],
         )
+
+    async def test_set_price_rolls_back_known_components_when_cache_is_partial(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        DHEError = client_module.DHEError
+
+        client = DHEClient.__new__(DHEClient)
+        euros_id = 100
+        cents_id = 101
+        client._last_measurements = {euros_id: 2.0}
+        calls: list[tuple[int, float]] = []
+
+        async def _write_odb_value(odb_id: int, value):
+            calls.append((odb_id, float(value)))
+            if (odb_id, float(value)) == (cents_id, 45.0):
+                raise DHEError("write failed")
+            return float(value)
+
+        client.write_odb_value = AsyncMock(side_effect=_write_odb_value)
+
+        with self.assertRaisesRegex(DHEError, "write failed"):
+            await DHEClient._set_price(
+                client,
+                3.45,
+                euros_id,
+                cents_id,
+                max_value=9.99,
+            )
+
+        self.assertEqual(
+            calls,
+            [
+                (euros_id, 3.0),
+                (cents_id, 45.0),
+                (euros_id, 2.0),
+            ],
+        )
+
+    async def test_set_price_rolls_back_when_runtime_error_fails_write(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+
+        client = DHEClient.__new__(DHEClient)
+        euros_id = 100
+        cents_id = 101
+        client._last_measurements = {
+            euros_id: 0.0,
+            cents_id: 29.0,
+        }
+        calls: list[tuple[int, float]] = []
+
+        async def _write_odb_value(odb_id: int, value):
+            calls.append((odb_id, float(value)))
+            if (odb_id, float(value)) == (cents_id, 5.0):
+                raise RuntimeError("unexpected invalid state")
+            return float(value)
+
+        client.write_odb_value = AsyncMock(side_effect=_write_odb_value)
+
+        with self.assertRaisesRegex(RuntimeError, "unexpected invalid state"):
+            await DHEClient._set_price(
+                client,
+                1.05,
+                euros_id,
+                cents_id,
+                max_value=9.99,
+            )
+
+        self.assertEqual(
+            calls,
+            [
+                (euros_id, 1.0),
+                (cents_id, 5.0),
+                (cents_id, 29.0),
+                (euros_id, 0.0),
+            ],
+        )
+
+    async def test_set_price_reports_rollback_failure(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        DHEError = client_module.DHEError
+
+        client = DHEClient.__new__(DHEClient)
+        euros_id = 100
+        cents_id = 101
+        client._last_measurements = {
+            euros_id: 0.0,
+            cents_id: 29.0,
+        }
+
+        async def _write_odb_value(odb_id: int, value):
+            if (odb_id, float(value)) == (cents_id, 5.0):
+                raise DHEError("write failed")
+            if (odb_id, float(value)) == (euros_id, 0.0):
+                raise DHEError("rollback failed")
+            return float(value)
+
+        client.write_odb_value = AsyncMock(side_effect=_write_odb_value)
+
+        with self.assertRaisesRegex(
+            DHEError,
+            "write failed; price rollback failed: ODB id 100: rollback failed",
+        ):
+            await DHEClient._set_price(
+                client,
+                1.05,
+                euros_id,
+                cents_id,
+                max_value=9.99,
+            )
+
+    async def test_set_price_reports_runtime_rollback_failure(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        DHEError = client_module.DHEError
+
+        client = DHEClient.__new__(DHEClient)
+        euros_id = 100
+        cents_id = 101
+        client._last_measurements = {
+            euros_id: 0.0,
+            cents_id: 29.0,
+        }
+
+        async def _write_odb_value(odb_id: int, value):
+            if (odb_id, float(value)) == (cents_id, 5.0):
+                raise RuntimeError("unexpected invalid state")
+            if (odb_id, float(value)) == (euros_id, 0.0):
+                raise RuntimeError("rollback invalid state")
+            return float(value)
+
+        client.write_odb_value = AsyncMock(side_effect=_write_odb_value)
+
+        with self.assertRaisesRegex(
+            DHEError,
+            (
+                "unexpected invalid state; price rollback failed: "
+                "ODB id 100: rollback invalid state"
+            ),
+        ):
+            await DHEClient._set_price(
+                client,
+                1.05,
+                euros_id,
+                cents_id,
+                max_value=9.99,
+            )
 
     async def test_save_token_creates_restrictive_file(self) -> None:
         client_module = _load_client()
