@@ -1,5 +1,39 @@
 # Changelog
 
+## v1.3.2 - 2026-05-16
+
+### Added
+
+- Added a reusable Home Assistant API test helper for authenticated restart checks, service smoke tests and localhost test-token cleanup.
+- Added focused regression coverage for closed-session RuntimeError retry behavior, setup-pairing RuntimeError mapping and price rollback failure diagnostics.
+- Moved the detailed Socket.IO / Engine.IO / ODB protocol reference out of the README into `docs/protocol.md`.
+
+### Changed
+
+- Bumped the integration version to `1.3.2`.
+- Reworked protocol imports to be explicit across platforms instead of relying on broad `client.py` re-exports.
+- Extracted shared DHE client exceptions, session/event models, callbacks and value aliases into `client_types.py` so `client.py` stays focused on runtime behavior.
+- Narrowed command and config-flow exception handling so programming errors are no longer retried or hidden as generic DHE failures.
+- Kept transport-like RuntimeError recovery for reconnect races, including closed aiohttp sessions.
+- Slimmed the README by keeping setup, entity and validation guidance there while moving protocol internals to dedicated documentation.
+
+### Fixed
+
+- Restored recoverable handling for DHE WebSocket/session RuntimeError transport races without broadly swallowing unrelated RuntimeError failures.
+- Mapped setup-pairing RuntimeError transport failures into the existing recoverable pairing path.
+- Made electricity and water price writes roll back only the components that were actually attempted, including partial-cache cases.
+- Preserved the original price write failure while reporting rollback failures, including RuntimeError rollback failures.
+
+### Validation
+
+- Local test suite: `247 passed`, `2 subtests passed`.
+- Integration repository check: `scripts/check_integration.py`.
+- Ruff: `ruff check custom_components/stiebel_dhe_connect tests scripts`.
+- HA-Test `172.16.1.147`: deployed the release-prep branch, restarted Home Assistant and verified DHE `172.16.2.124:8443` stayed connected.
+- HA-Test service smoke: `climate.turn_off`, `climate.turn_on`, `media_player.turn_off` and `media_player.select_source`.
+- HA-Test recorder monitor: `recorder writes total=0 limit=10` over 90s.
+- GitHub Validate workflow: HACS, Hassfest and repository checks.
+
 ## v1.3.1 - 2026-05-16
 
 ### Changed
