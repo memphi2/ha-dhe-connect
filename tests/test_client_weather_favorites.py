@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import stat
 import sys
 import tempfile
@@ -69,6 +70,32 @@ def _load_client():
 
 class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
     """Validate weather-favorite toggle safeguards."""
+
+    async def test_toggle_weather_favorite_does_not_retry(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        DHEError = client_module.DHEError
+        client = DHEClient.__new__(DHEClient)
+        location = {"LocationId": "ID=1", "Name": "Essen"}
+
+        client._command_lock = asyncio.Lock()
+        client._ctx = object()
+        client._ensure_ready = AsyncMock()
+        client._assign_weather_favorite_and_wait = AsyncMock(
+            side_effect=DHEError("confirmation timeout")
+        )
+
+        with self.assertRaisesRegex(
+            DHEError,
+            "Could not toggle DHE weather favorite: confirmation timeout",
+        ):
+            await DHEClient.toggle_weather_favorite(client, location)
+
+        client._ensure_ready.assert_awaited_once()
+        client._assign_weather_favorite_and_wait.assert_awaited_once_with(
+            client._ctx,
+            location,
+        )
 
     async def test_add_weather_favorite_existing_and_refresh_timeout_no_toggle(self) -> None:
         client_module = _load_client()

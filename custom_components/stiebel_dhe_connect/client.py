@@ -638,6 +638,23 @@ class DHEClient:
                     raise DHEError(f"{error_message}: {err}") from err
         raise DHEError(error_message)
 
+    async def _run_command_without_reconnect_retry(
+        self,
+        error_message: str,
+        operation: Callable[[DHESession], Awaitable[_T]],
+        *,
+        timeout: float = 45.0,
+    ) -> _T:
+        async with self._command_lock:
+            try:
+                await self._ensure_ready(timeout=timeout)
+                ctx = self._ctx
+                if ctx is None:
+                    raise DHEError("DHE session is not connected")
+                return await operation(ctx)
+            except Exception as err:  # noqa: BLE001
+                raise DHEError(f"{error_message}: {err}") from err
+
     def _begin_manual_pairing(self, state: str, message: str, *, notify: bool) -> None:
         """Prepare a pairing attempt that must end with an explicit DHE result."""
         self._pairing_active = True
@@ -1049,7 +1066,7 @@ class DHEClient:
             await self._assign_weather_favorite_and_wait(ctx, payload)
             return True
 
-        return await self._run_command_with_reconnect_retry(
+        return await self._run_command_without_reconnect_retry(
             "Could not toggle DHE weather favorite",
             _operation,
         )
