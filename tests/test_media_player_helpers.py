@@ -207,6 +207,34 @@ class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(player._attr_state, media_player.STATE_PLAYING)
         self.assertFalse(player._radio_off_requested)
 
+    def test_radio_update_skips_duplicate_state_writes(self) -> None:
+        media_player = _load_media_player_module()
+        station = {"Id": 1, "Name": "Radio Test", "Country": "Germany"}
+        state = {"play": False, "volume": 50, "station": station, "favorites": [station]}
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+            available = True
+            last_radio_state = state
+
+        player = media_player.StiebelDHERadioMediaPlayer(
+            entry_id="test-entry",
+            name="Test DHE",
+            client=_FakeClient(),
+        )
+        writes: list[str | None] = []
+        player.async_write_ha_state = lambda: writes.append(player._attr_state)
+
+        player._handle_radio_update(dict(state))
+        player._handle_radio_update(dict(state))
+        player._handle_availability_update(True)
+        player._handle_availability_update(False)
+
+        self.assertEqual(writes, [media_player.STATE_PAUSED, media_player.STATE_PAUSED])
+        self.assertFalse(player._attr_available)
+
 
 if __name__ == "__main__":
     unittest.main()

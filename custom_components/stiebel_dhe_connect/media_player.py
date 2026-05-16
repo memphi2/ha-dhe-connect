@@ -87,11 +87,19 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
         )
         self._attr_available = False
         self._attr_extra_state_attributes = {"radio_path": "ste.app.radio"}
+        self._attr_media_artist = None
+        self._attr_media_content_id = None
+        self._attr_media_content_type = None
+        self._attr_media_image_url = None
+        self._attr_media_title = None
+        self._attr_source = None
+        self._attr_source_list = []
         self._attr_state = None
         self._attr_volume_level = None
         self._have_radio_state = False
         self._radio_off_requested = False
         self._sources_by_option: dict[str, dict[str, Any]] = {}
+        self._last_written_radio_signature: tuple[Any, ...] | None = None
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE radio updates."""
@@ -125,7 +133,7 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
             _LOGGER.error("Could not set DHE radio volume: %s", err)
             raise
         self._attr_available = True
-        self.async_write_ha_state()
+        self._write_radio_state(force=True)
 
     async def async_select_source(self, source: str) -> None:
         """Select a DHE radio favorite."""
@@ -139,7 +147,7 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
             raise
         self._attr_source = source
         self._attr_available = True
-        self.async_write_ha_state()
+        self._write_radio_state(force=True)
 
     async def async_media_next_track(self) -> None:
         """Select the next DHE radio favorite."""
@@ -164,7 +172,7 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
         self._radio_off_requested = off_requested
         self._attr_state = state or (STATE_PLAYING if accepted_playing else STATE_PAUSED)
         self._attr_available = True
-        self.async_write_ha_state()
+        self._write_radio_state(force=True)
 
     async def _select_relative_source(self, offset: int) -> None:
         sources = list(self._sources_by_option)
@@ -201,13 +209,43 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
     def _handle_radio_update(self, state: dict[str, Any]) -> None:
         """Handle radio state updates from the persistent client."""
         self._apply_radio_state(state)
-        self.async_write_ha_state()
+        self._write_radio_state()
 
     @callback
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
         self._attr_available = connected_and_ready(available, self._have_radio_state)
+        self._write_radio_state()
+
+    def _write_radio_state(self, *, force: bool = False) -> bool:
+        """Write radio state only when recorder-visible state changed."""
+        signature = self._radio_write_signature()
+        if not force and signature == getattr(
+            self,
+            "_last_written_radio_signature",
+            None,
+        ):
+            return False
+        self._last_written_radio_signature = signature
         self.async_write_ha_state()
+        return True
+
+    def _radio_write_signature(self) -> tuple[Any, ...]:
+        """Return stable media-player fields that should trigger a state write."""
+        return (
+            getattr(self, "_attr_available", False),
+            getattr(self, "_attr_state", None),
+            getattr(self, "_attr_volume_level", None),
+            getattr(self, "_attr_source", None),
+            tuple(getattr(self, "_attr_source_list", []) or ()),
+            getattr(self, "_attr_media_content_id", None),
+            getattr(self, "_attr_media_content_type", None),
+            getattr(self, "_attr_media_image_url", None),
+            getattr(self, "_attr_media_title", None),
+            getattr(self, "_attr_media_artist", None),
+            getattr(self, "_radio_off_requested", False),
+            dict(getattr(self, "_attr_extra_state_attributes", None) or {}),
+        )
 
     def _apply_radio_state(self, state: dict[str, Any]) -> None:
         if state:
