@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 import types
 import unittest
+from unittest.mock import AsyncMock, Mock
 
 try:
     from tests.test_aiohttp_stubs import _ensure_aiohttp_stub
@@ -41,6 +42,7 @@ def _ensure_additional_ha_stubs() -> None:
 
         class MediaPlayerState:
             IDLE = "idle"
+            OFF = "off"
             PAUSED = "paused"
             PLAYING = "playing"
 
@@ -118,7 +120,7 @@ def _load_media_player_module():
     return _load_component_module("media_player")
 
 
-class TestMediaPlayerHelpers(unittest.TestCase):
+class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
     """Validate radio source helper behavior."""
 
     def test_current_source_index_matches_station_id(self) -> None:
@@ -152,6 +154,58 @@ class TestMediaPlayerHelpers(unittest.TestCase):
         index = player._current_source_index(list(player._sources_by_option))
 
         self.assertEqual(index, 1)
+
+    async def test_turn_off_sets_off_state(self) -> None:
+        media_player = _load_media_player_module()
+        player = media_player.StiebelDHERadioMediaPlayer.__new__(
+            media_player.StiebelDHERadioMediaPlayer
+        )
+        player._client = types.SimpleNamespace(set_radio_play=AsyncMock(return_value=False))
+        player.async_write_ha_state = Mock()
+
+        await player.async_turn_off()
+
+        player._client.set_radio_play.assert_awaited_once_with(False)
+        self.assertEqual(player._attr_state, media_player.STATE_OFF)
+        self.assertTrue(player._radio_off_requested)
+        player.async_write_ha_state.assert_called_once()
+
+    async def test_pause_keeps_paused_state(self) -> None:
+        media_player = _load_media_player_module()
+        player = media_player.StiebelDHERadioMediaPlayer.__new__(
+            media_player.StiebelDHERadioMediaPlayer
+        )
+        player._client = types.SimpleNamespace(set_radio_play=AsyncMock(return_value=False))
+        player.async_write_ha_state = Mock()
+
+        await player.async_media_pause()
+
+        player._client.set_radio_play.assert_awaited_once_with(False)
+        self.assertEqual(player._attr_state, media_player.STATE_PAUSED)
+        self.assertFalse(player._radio_off_requested)
+
+    def test_playback_update_preserves_requested_off_state(self) -> None:
+        media_player = _load_media_player_module()
+        player = media_player.StiebelDHERadioMediaPlayer.__new__(
+            media_player.StiebelDHERadioMediaPlayer
+        )
+        player._radio_off_requested = True
+
+        player._apply_playback_state({"play": False})
+
+        self.assertEqual(player._attr_state, media_player.STATE_OFF)
+
+    def test_playback_update_clears_requested_off_state_when_playing(self) -> None:
+        media_player = _load_media_player_module()
+        player = media_player.StiebelDHERadioMediaPlayer.__new__(
+            media_player.StiebelDHERadioMediaPlayer
+        )
+        player._radio_off_requested = True
+
+        player._apply_playback_state({"play": True})
+
+        self.assertEqual(player._attr_state, media_player.STATE_PLAYING)
+        self.assertFalse(player._radio_off_requested)
 
 
 if __name__ == "__main__":
