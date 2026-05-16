@@ -44,7 +44,8 @@ from .client_transport import DHEClientTransportMixin
 from .client_errors import (
     DHE_COMMAND_EXCEPTIONS as _DHE_COMMAND_EXCEPTIONS,
     DHE_TRANSPORT_EXCEPTIONS as _DHE_TRANSPORT_EXCEPTIONS,
-    is_runtime_transport_error as _is_runtime_transport_error,
+    runtime_transport_error_or_raise as _runtime_transport_error_or_raise,
+    suppress_transport_errors as _suppress_transport_errors,
 )
 from .client_value_helpers import (
     build_req66 as _build_req66,
@@ -498,7 +499,7 @@ class DHEClient(DHEClientTransportMixin):
             )
         finally:
             if ctx is not None:
-                with contextlib.suppress(*_DHE_TRANSPORT_EXCEPTIONS):
+                with _suppress_transport_errors():
                     await self._close_session(ctx)
             self._ctx = None
             self._ready.clear()
@@ -544,9 +545,7 @@ class DHEClient(DHEClientTransportMixin):
                 except _DHE_COMMAND_EXCEPTIONS as err:  # noqa: PERF203
                     command_error = err
                 except RuntimeError as err:
-                    if not _is_runtime_transport_error(err):
-                        raise
-                    command_error = err
+                    command_error = _runtime_transport_error_or_raise(err)
                 if on_error is not None:
                     on_error()
                 if attempt == 0:
@@ -573,9 +572,8 @@ class DHEClient(DHEClientTransportMixin):
             except _DHE_COMMAND_EXCEPTIONS as err:
                 raise DHEError(f"{error_message}: {err}") from err
             except RuntimeError as err:
-                if _is_runtime_transport_error(err):
-                    raise DHEError(f"{error_message}: {err}") from err
-                raise
+                err = _runtime_transport_error_or_raise(err)
+                raise DHEError(f"{error_message}: {err}") from err
 
     def _begin_manual_pairing(self, state: str, message: str, *, notify: bool) -> None:
         """Prepare a pairing attempt that must end with an explicit DHE result."""
@@ -1535,31 +1533,41 @@ class DHEClient(DHEClientTransportMixin):
             except asyncio.CancelledError:  # noqa: PERF203
                 raise
             except _DHE_TRANSPORT_EXCEPTIONS as err:
-                self._update_diagnostics(
-                    connection_state="reconnecting",
-                    last_reconnect_reason=_diagnostic_error(err),
-                )
-                self._clear_pending_future(err)
-                self._clear_pending_write_future(err)
-                self._ready.clear()
-                self._set_online(False)
-                self._set_available(False)
-                ctx = self._ctx
-                self._ctx = None
-                if ctx is not None:
-                    await self._close_session(ctx)
-                if self._pause_auto_reconnect_for_pairing:
-                    self._update_diagnostics(
-                        connection_state="pairing_failed_waiting_manual_retry",
-                        last_reconnect_reason=(
-                            "Pairing failed; waiting for manual retry via "
-                            "'Pairing erneuern'."
-                        ),
-                    )
-                    await self._stopped.wait()
+                if await self._handle_transport_reconnect(err):
                     return
-                with contextlib.suppress(TimeoutError):
-                    await asyncio.wait_for(self._stopped.wait(), timeout=10)
+            except RuntimeError as err:
+                err = _runtime_transport_error_or_raise(err)
+                if await self._handle_transport_reconnect(err):
+                    return
+
+    async def _handle_transport_reconnect(self, err: Exception) -> bool:
+        """Update state and pause before reconnecting after transport failures."""
+        self._update_diagnostics(
+            connection_state="reconnecting",
+            last_reconnect_reason=_diagnostic_error(err),
+        )
+        self._clear_pending_future(err)
+        self._clear_pending_write_future(err)
+        self._ready.clear()
+        self._set_online(False)
+        self._set_available(False)
+        ctx = self._ctx
+        self._ctx = None
+        if ctx is not None:
+            await self._close_session(ctx)
+        if self._pause_auto_reconnect_for_pairing:
+            self._update_diagnostics(
+                connection_state="pairing_failed_waiting_manual_retry",
+                last_reconnect_reason=(
+                    "Pairing failed; waiting for manual retry via "
+                    "'Pairing erneuern'."
+                ),
+            )
+            await self._stopped.wait()
+            return True
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(self._stopped.wait(), timeout=10)
+        return False
 
     async def _handle_runtime_event(self, event: DHEEvent) -> None:
         if event.name == "__closed":

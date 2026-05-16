@@ -19,7 +19,10 @@ from .client_diagnostics import (
     diagnostic_error as _diagnostic_error,
     summarize_diagnostic_value as _summarize_diagnostic_value,
 )
-from .client_errors import DHE_TRANSPORT_EXCEPTIONS as _DHE_TRANSPORT_EXCEPTIONS
+from .client_errors import (
+    DHE_TRANSPORT_EXCEPTIONS as _DHE_TRANSPORT_EXCEPTIONS,
+    runtime_transport_error_or_raise as _runtime_transport_error_or_raise,
+)
 from .client_types import (
     DEFAULT_ENGINEIO_PING_INTERVAL_SECONDS,
     DHEError,
@@ -180,6 +183,12 @@ class DHEClientTransportMixin:
                 self._record_pairing_failed(err)
             await self._close_session(ctx)
             raise
+        except RuntimeError as err:
+            err = _runtime_transport_error_or_raise(err)
+            if self._pairing_active:
+                self._record_pairing_failed(err)
+            await self._close_session(ctx)
+            raise
 
     async def _request_initial_token(self, *, timeout_seconds: float = 120.0) -> str:
         ctx = await self._open_session("")
@@ -288,6 +297,13 @@ class DHEClientTransportMixin:
                                             "continuing polling while waiting for pairing_result: %s",
                                             _diagnostic_error(err),
                                         )
+                                    except RuntimeError as err:
+                                        err = _runtime_transport_error_or_raise(err)
+                                        _LOGGER.debug(
+                                            "Manual pairing websocket upgrade unavailable; "
+                                            "continuing polling while waiting for pairing_result: %s",
+                                            _diagnostic_error(err),
+                                        )
                                 _LOGGER.debug(
                                     "Token received without pairing_request during manual pairing; "
                                     "waiting for explicit pairing_result from DHE."
@@ -326,6 +342,10 @@ class DHEClientTransportMixin:
                 raise DHEError("Token received but DHE pairing confirmation did not complete in time")
             raise DHEError("Token request timeout")
         except _DHE_TRANSPORT_EXCEPTIONS as err:
+            self._record_pairing_failed(err)
+            raise
+        except RuntimeError as err:
+            err = _runtime_transport_error_or_raise(err)
             self._record_pairing_failed(err)
             raise
         finally:
@@ -461,8 +481,18 @@ class DHEClientTransportMixin:
                     errors.append(f"{label}: {type(err).__name__}")
                     if websocket is not None and not websocket.closed:
                         await websocket.close()
+                except RuntimeError as err:
+                    err = _runtime_transport_error_or_raise(err)
+                    errors.append(f"{label}: {type(err).__name__}")
+                    if websocket is not None and not websocket.closed:
+                        await websocket.close()
             raise DHEError("; ".join(errors) or "probe timeout")
         except _DHE_TRANSPORT_EXCEPTIONS as err:
+            if websocket is not None and not websocket.closed:
+                await websocket.close()
+            raise DHEError(f"DHE websocket upgrade failed: {err}") from err
+        except RuntimeError as err:
+            err = _runtime_transport_error_or_raise(err)
             if websocket is not None and not websocket.closed:
                 await websocket.close()
             raise DHEError(f"DHE websocket upgrade failed: {err}") from err
@@ -477,6 +507,14 @@ class DHEClientTransportMixin:
         except asyncio.CancelledError:
             return
         except _DHE_TRANSPORT_EXCEPTIONS as err:
+            if not self._stopped.is_set():
+                await self._force_reconnect(
+                    ctx,
+                    immediate_availability=True,
+                    reason=f"Heartbeat failed: {_diagnostic_error(err)}",
+                )
+        except RuntimeError as err:
+            err = _runtime_transport_error_or_raise(err)
             if not self._stopped.is_set():
                 await self._force_reconnect(
                     ctx,
