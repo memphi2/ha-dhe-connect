@@ -157,6 +157,15 @@ ERROR_STATUS_OPTIONS = (
     "target_below_inlet",
 )
 ERROR_STATUS_INLET_ATTRIBUTE_REFRESH_SECONDS = 120.0
+DIAGNOSTIC_VOLATILE_ATTRIBUTE_KEYS = frozenset(
+    {
+        "last_message_age_seconds",
+        "last_message_command",
+        "last_message_received_at",
+        "last_message_summary",
+        "message_count",
+    }
+)
 
 
 DIAGNOSTIC_SENSOR_DESCRIPTIONS: tuple[StiebelDHEDiagnosticSensorEntityDescription, ...] = (
@@ -1034,6 +1043,7 @@ class StiebelDHEDiagnosticSensor(StiebelDHEEntityMixin, SensorEntity):
         self._attr_available = False
         self._attr_native_value: int | str | None = None
         self._attr_extra_state_attributes = {}
+        self._last_written_diagnostic_signature: tuple[Any, ...] | None = None
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to diagnostic updates."""
@@ -1050,6 +1060,10 @@ class StiebelDHEDiagnosticSensor(StiebelDHEEntityMixin, SensorEntity):
     def _handle_diagnostic_update(self, state: dict[str, Any]) -> None:
         """Handle diagnostic state updates from the persistent client."""
         self._apply_diagnostic_state(state)
+        signature = self._diagnostic_write_signature()
+        if signature == self._last_written_diagnostic_signature:
+            return
+        self._last_written_diagnostic_signature = signature
         self.async_write_ha_state()
 
     def _apply_diagnostic_state(self, state: dict[str, Any]) -> None:
@@ -1065,8 +1079,18 @@ class StiebelDHEDiagnosticSensor(StiebelDHEEntityMixin, SensorEntity):
         self._attr_extra_state_attributes = {
             key: value
             for key, value in state.items()
-            if key != self.entity_description.diagnostic_key
+            if (
+                key != self.entity_description.diagnostic_key
+                and key not in DIAGNOSTIC_VOLATILE_ATTRIBUTE_KEYS
+            )
         }
+
+    def _diagnostic_write_signature(self) -> tuple[Any, ...]:
+        return (
+            self._attr_available,
+            self._attr_native_value,
+            dict(self._attr_extra_state_attributes or {}),
+        )
 
     def _no_reconnect_value(self) -> str:
         language = str(getattr(self.hass.config, "language", "") or "").lower()
