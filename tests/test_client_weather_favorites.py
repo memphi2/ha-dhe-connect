@@ -61,12 +61,17 @@ def _load_component_module(module_name: str):
 
 
 def _load_client():
+    _load_component_module("client_types")
     _load_component_module("client_mapping")
+    _load_component_module("client_diagnostics")
+    _load_component_module("client_errors")
     _load_component_module("connection_helpers")
     _load_component_module("engineio_helpers")
     _load_component_module("flow_helpers")
     _load_component_module("pairing_helpers")
     _load_component_module("protocol")
+    _load_component_module("client_value_helpers")
+    _load_component_module("client_transport")
     return _load_component_module("client")
 
 
@@ -1164,6 +1169,33 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
             kwargs["reason"],
             "Heartbeat failed: RuntimeError: socket write failed",
         )
+
+    async def test_websocket_heartbeat_does_not_hide_programming_runtime_errors(
+        self,
+    ) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        DHESession = client_module.DHESession
+
+        websocket = types.SimpleNamespace(closed=False)
+        client = DHEClient.__new__(DHEClient)
+        client._stopped = client_module.asyncio.Event()
+        client._send_websocket_packet = AsyncMock(
+            side_effect=RuntimeError("unexpected invalid state")
+        )
+        client._force_reconnect = AsyncMock()
+        ctx = DHESession(
+            url_token="token",
+            sid="sid",
+            websocket=websocket,
+            ping_interval=0,
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "unexpected invalid state"):
+            await DHEClient._websocket_ping_loop(client, ctx)
+
+        client._send_websocket_packet.assert_awaited_once_with(ctx, "2")
+        client._force_reconnect.assert_not_awaited()
 
     async def test_initial_values_reread_nominal_power_on_each_session(self) -> None:
         client_module = _load_client()
