@@ -61,6 +61,7 @@ class StiebelDHEWeatherLocationSelect(StiebelDHEEntityMixin, SelectEntity):
         self._attr_current_option: str | None = None
         self._attr_options: list[str] = []
         self._attr_extra_state_attributes = {"weather_path": "ste.app.weather"}
+        self._last_written_select_signature: tuple[Any, ...] | None = None
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE weather and availability updates."""
@@ -85,24 +86,42 @@ class StiebelDHEWeatherLocationSelect(StiebelDHEEntityMixin, SelectEntity):
                 self._client.available,
                 self._have_weather_state,
             )
-            self.async_write_ha_state()
+            self._write_select_state(force=True)
             _LOGGER.error("Could not select DHE weather location: %s", err)
             raise
 
         self._apply_weather_state(self._client.last_weather_state)
-        self.async_write_ha_state()
+        self._write_select_state(force=True)
 
     @callback
     def _handle_weather_update(self, state: dict[str, Any]) -> None:
         """Handle weather state updates from the persistent client."""
         self._apply_weather_state(state)
-        self.async_write_ha_state()
+        self._write_select_state()
 
     @callback
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
         self._attr_available = connected_and_ready(available, self._have_weather_state)
+        self._write_select_state()
+
+    def _write_select_state(self, *, force: bool = False) -> bool:
+        """Write weather select state only when visible state changed."""
+        signature = self._select_write_signature()
+        if not force and signature == self._last_written_select_signature:
+            return False
+        self._last_written_select_signature = signature
         self.async_write_ha_state()
+        return True
+
+    def _select_write_signature(self) -> tuple[Any, ...]:
+        """Return stable select fields that should trigger a state write."""
+        return (
+            self._attr_available,
+            self._attr_current_option,
+            tuple(self._attr_options),
+            dict(self._attr_extra_state_attributes or {}),
+        )
 
     def _apply_weather_state(self, state: dict[str, Any]) -> None:
         location = state.get("location")

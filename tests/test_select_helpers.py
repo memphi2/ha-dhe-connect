@@ -129,6 +129,34 @@ class TestSelectHelpers(unittest.TestCase):
         self.assertEqual(list(mapping.values())[0], current)
         self.assertEqual(len(mapping), 2)
 
+    def test_weather_select_skips_duplicate_state_writes(self) -> None:
+        select_module = _load_select_module()
+        location = {"Name": "Berlin", "Country": "Germany", "LocationId": "ID=1"}
+        state = {"location": location, "favorites": [location]}
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+            available = True
+            last_weather_state = state
+
+        entity = select_module.StiebelDHEWeatherLocationSelect(
+            entry_id="test-entry",
+            name="Test DHE",
+            client=_FakeClient(),
+        )
+        writes: list[str | None] = []
+        entity.async_write_ha_state = lambda: writes.append(entity._attr_current_option)
+
+        entity._handle_weather_update(dict(state))
+        entity._handle_weather_update(dict(state))
+        entity._handle_availability_update(True)
+        entity._handle_availability_update(False)
+
+        self.assertEqual(writes, ["Berlin, Germany", "Berlin, Germany"])
+        self.assertFalse(entity._attr_available)
+
 
 if __name__ == "__main__":
     unittest.main()

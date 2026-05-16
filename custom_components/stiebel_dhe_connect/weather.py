@@ -70,6 +70,7 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
         self._client_available = client.available
         self._forecast: list[dict[str, Any]] = []
         self._have_weather_state = False
+        self._last_written_weather_signature: tuple[Any, ...] | None = None
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE weather updates."""
@@ -89,8 +90,8 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
     def _handle_weather_update(self, state: dict[str, Any]) -> None:
         """Handle weather updates from the persistent client."""
         self._apply_weather_state(state)
-        self.async_write_ha_state()
-        self._schedule_forecast_listener_update()
+        if self._write_weather_state():
+            self._schedule_forecast_listener_update()
 
     @callback
     def _handle_availability_update(self, available: bool) -> None:
@@ -100,7 +101,27 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
             self._client_available,
             self._have_weather_state,
         )
+        self._write_weather_state()
+
+    def _write_weather_state(self, *, force: bool = False) -> bool:
+        """Write weather state only when recorder-visible state changed."""
+        signature = self._weather_write_signature()
+        if not force and signature == self._last_written_weather_signature:
+            return False
+        self._last_written_weather_signature = signature
         self.async_write_ha_state()
+        return True
+
+    def _weather_write_signature(self) -> tuple[Any, ...]:
+        """Return stable weather fields that should trigger a state write."""
+        return (
+            self._attr_available,
+            self._attr_condition,
+            self._attr_native_temperature,
+            self._attr_name,
+            list(self._forecast),
+            dict(self._attr_extra_state_attributes or {}),
+        )
 
     def _schedule_forecast_listener_update(self) -> None:
         update_listeners = getattr(self, "async_update_listeners", None)
