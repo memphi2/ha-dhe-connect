@@ -525,7 +525,7 @@ async def _validate_setup_pairing(
         )
     except asyncio.CancelledError:
         raise
-    except (DHEError, TimeoutError, OSError, aiohttp.ClientError) as err:
+    except (DHEError, TimeoutError, OSError, RuntimeError, aiohttp.ClientError) as err:
         pairing_state = str(probe_client.diagnostic_state.get("pairing_state") or "")
         return map_pairing_error(err, pairing_state)
     return None

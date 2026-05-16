@@ -179,7 +179,7 @@ def _install_fake_integration_modules() -> None:
     ] = fake_entity_state
 
     fake_pairing = types.ModuleType("custom_components.stiebel_dhe_connect.pairing_helpers")
-    fake_pairing.map_pairing_error = lambda error: str(error)
+    fake_pairing.map_pairing_error = lambda error, *_args: str(error)
     fake_pairing.pairing_notification_text = lambda *_args: ("DHE Pairing", "pairing")
     fake_pairing.pairing_result_success = (
         lambda result: True if str(result).strip().lower() in {"true", "1"} else None
@@ -443,3 +443,41 @@ class TestConnectionOptionsConnectivity(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(result["type"], "form")
         self.assertEqual(result["step_id"], "connection_pairing_confirm")
+
+
+class TestSetupPairingValidation(unittest.IsolatedAsyncioTestCase):
+    """Validate setup-pairing error mapping."""
+
+    def setUp(self) -> None:
+        self.config_flow = _load_config_flow()
+
+    async def test_validate_setup_pairing_maps_runtime_transport_errors(self) -> None:
+        module = self.config_flow
+        module._async_clear_setup_token_files = AsyncMock()
+        module.map_pairing_error = (
+            lambda error, pairing_state: f"{pairing_state}: {error}"
+        )
+
+        class _FakeClient:
+            diagnostic_state = {"pairing_state": "requesting_token"}
+
+            def __init__(self, **_kwargs: object) -> None:
+                pass
+
+            async def validate_setup_authentication(
+                self,
+                *,
+                timeout_seconds: float,
+            ) -> None:
+                raise RuntimeError("websocket closed")
+
+        module.DHEClient = _FakeClient
+
+        result = await module._validate_setup_pairing(
+            object(),
+            "172.16.2.124",
+            80,
+            "token.json",
+        )
+
+        self.assertEqual(result, "requesting_token: websocket closed")

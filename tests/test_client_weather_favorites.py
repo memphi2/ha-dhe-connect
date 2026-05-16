@@ -128,7 +128,7 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
             location,
         )
 
-    async def test_command_retry_does_not_wrap_programming_errors(self) -> None:
+    async def test_command_retry_recovers_from_runtime_transport_errors(self) -> None:
         client_module = _load_client()
         DHEClient = client_module.DHEClient
         client = DHEClient.__new__(DHEClient)
@@ -137,19 +137,25 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         client._ctx = object()
         client._ensure_ready = AsyncMock()
         client._force_reconnect = AsyncMock()
+        attempts = 0
 
         async def _operation(_ctx):
-            raise RuntimeError("unexpected bug")
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise RuntimeError("socket closing")
+            return "ok"
 
-        with self.assertRaisesRegex(RuntimeError, "unexpected bug"):
-            await DHEClient._run_command_with_reconnect_retry(
-                client,
-                "Could not run command",
-                _operation,
-            )
+        result = await DHEClient._run_command_with_reconnect_retry(
+            client,
+            "Could not run command",
+            _operation,
+        )
 
-        client._ensure_ready.assert_awaited_once()
-        client._force_reconnect.assert_not_awaited()
+        self.assertEqual(result, "ok")
+        self.assertEqual(attempts, 2)
+        self.assertEqual(client._ensure_ready.await_count, 2)
+        client._force_reconnect.assert_awaited_once()
 
     async def test_add_weather_favorite_existing_and_refresh_timeout_no_toggle(self) -> None:
         client_module = _load_client()
