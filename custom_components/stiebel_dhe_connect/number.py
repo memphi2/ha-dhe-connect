@@ -237,6 +237,7 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
         self._attr_native_value: float | None = None
         self._timer_duration_seconds: int | None = None
         self._child_safety_temperature_limit_raw: float | None = None
+        self._last_written_number_signature: tuple[object, ...] | None = None
         self._apply_dynamic_limits()
 
     @property
@@ -427,14 +428,14 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
                 )
         except DHEError as err:
             self._attr_available = self._attr_native_value is not None
-            self.async_write_ha_state()
+            self._write_number_state(force=True)
             _LOGGER.error("Could not set DHE number %s: %s", self.entity_description.key, err)
             raise
 
         self._attr_native_value = self._client_value_to_native(confirmed)
         self._attr_available = True
         self._update_extra_state_attributes()
-        self.async_write_ha_state()
+        self._write_number_state(force=True)
 
     @callback
     def _handle_measurement_update(self, odb_id: int, value: MeasurementValue) -> None:
@@ -450,20 +451,42 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
                 else False
             )
             self._update_extra_state_attributes()
-            self.async_write_ha_state()
+            self._write_number_state()
             return
 
         self._attr_native_value = native_value
         self._attr_available = True
         self._update_extra_state_attributes()
-        self.async_write_ha_state()
+        self._write_number_state()
 
     @callback
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
         if self.entity_description.temperature_memory_slot is not None:
             self._attr_available = available
-            self.async_write_ha_state()
+            self._write_number_state()
             return
         self._attr_available = value_available(available, self._attr_native_value)
+        self._write_number_state()
+
+    def _write_number_state(self, *, force: bool = False) -> bool:
+        """Write number state only when visible state changed."""
+        signature = self._number_write_signature()
+        if not force and signature == getattr(
+            self,
+            "_last_written_number_signature",
+            None,
+        ):
+            return False
+        self._last_written_number_signature = signature
         self.async_write_ha_state()
+        return True
+
+    def _number_write_signature(self) -> tuple[object, ...]:
+        """Return stable number fields that should trigger a state write."""
+        return (
+            self._attr_available,
+            self._attr_native_value,
+            getattr(self, "_attr_native_max_value", None),
+            dict(self._attr_extra_state_attributes or {}),
+        )
