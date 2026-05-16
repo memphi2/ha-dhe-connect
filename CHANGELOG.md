@@ -8,6 +8,7 @@
 - Weather/radio remove flows now avoid index drift by refreshing favorites only on initial options-form render.
 - Weather favorite add/remove/toggle now accepts raw `location_id` values more robustly.
 - Reduced recorder/state-write noise for high-churn telemetry sensors with delta/time filtering.
+- Saving-monitor updates now refresh only the changed category payload, and climate inlet/outlet telemetry writes are throttled by delta/time.
 
 ### Fixed
 
@@ -17,6 +18,7 @@
 
 - Added regression coverage for stricter temperature-memory confirmation behavior.
 - Added sensor recorder/write-filter coverage for noisy telemetry entities.
+- Added regression coverage for saving-monitor category refresh behavior and climate telemetry write throttling.
 
 ## v1.2.2b1 - 2026-05-16
 

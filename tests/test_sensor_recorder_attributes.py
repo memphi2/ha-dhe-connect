@@ -81,6 +81,14 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         sensor_module = _load_sensor_module()
         self.assertEqual(sensor_module.SENSOR_WRITE_FILTERS["water_flow"], (1.0, 45.0))
         self.assertEqual(sensor_module.SENSOR_WRITE_FILTERS["power"], (1.5, 45.0))
+        self.assertEqual(
+            sensor_module.SENSOR_WRITE_FILTERS["saving_monitor_consumption_water"],
+            (0.25, 60.0),
+        )
+        self.assertEqual(
+            sensor_module.SENSOR_WRITE_FILTERS["saving_monitor_activation_rate"],
+            (1.0, 120.0),
+        )
 
     def test_flow_filter_blocks_small_jitter_but_allows_large_delta_or_interval(self) -> None:
         sensor_module = _load_sensor_module()

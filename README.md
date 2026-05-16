@@ -594,6 +594,14 @@ If a DHE ODB readback is marked with `isValid: false`, it is not published as a 
 
 ODB ID `66` is command-only and is not read at startup.
 
+### State-write throttling
+
+To keep Home Assistant recorder growth under control, the integration throttles high-churn telemetry:
+
+- Climate inlet/outlet telemetry writes only when the temperature changes by at least `0.5 C`, or after `120` seconds without a write.
+- Saving-monitor sensors update only for the category received from the DHE command (`consumption`, `possible`, `real` or `ActivationRate`) instead of refreshing every saving-monitor sensor on every message.
+- Saving-monitor sensor entities additionally use per-entity delta/time write filters to suppress jitter writes.
+
 ## Availability and reconnect behavior
 
 The client runs a single persistent session loop. Home Assistant entities subscribe to cached setpoint, measurement, online, availability and reconnect callbacks. When an entity is added after a value was already received, the current cached value is delivered immediately.

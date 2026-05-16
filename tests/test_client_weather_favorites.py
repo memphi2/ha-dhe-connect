@@ -333,6 +333,103 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
             notification_id=client._pairing_notification_id,
         )
 
+    async def test_saving_monitor_updates_only_changed_category(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        client = DHEClient.__new__(DHEClient)
+        client._last_saving_monitor_values = {
+            "possible": {
+                "water_l": 4.0,
+                "energy_kwh": 1.5,
+                "co2_kg": 0.2,
+                "value_eur": 1.0,
+            },
+            "real": {
+                "water_l": 2.0,
+                "energy_kwh": 0.8,
+                "co2_kg": 0.1,
+                "value_eur": 0.4,
+            },
+        }
+        calls: list[tuple[int, float, str, str]] = []
+
+        def _capture_update(
+            measurement_id: int,
+            value: float,
+            category: str,
+            field: str,
+        ) -> None:
+            calls.append((measurement_id, value, category, field))
+
+        client._update_saving_monitor_sensor = _capture_update
+
+        DHEClient._handle_saving_monitor_value(
+            client,
+            "set:ste.app.savingMonitor:consumption",
+            {
+                "water_l": 12.34,
+                "energy_Wh": 234.0,
+                "emission_Co2Kg": 0.56,
+                "value_E": 2.1,
+            },
+        )
+
+        expected_ids = set(
+            client_module.SAVING_MONITOR_SENSOR_FIELDS["consumption"].values()
+        )
+        self.assertEqual({measurement_id for measurement_id, *_ in calls}, expected_ids)
+        self.assertEqual({category for _, _, category, _ in calls}, {"consumption"})
+
+    async def test_saving_monitor_attributes_do_not_include_other_categories(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        client = DHEClient.__new__(DHEClient)
+        client._last_measurement_attributes = {}
+        client._last_saving_monitor_values = {
+            "activation_rate": 33.3,
+            "possible": {"water_l": 1.0},
+            "real": {"water_l": 2.0},
+            "consumption": {"water_l": 3.0},
+        }
+
+        captured_calls: list[tuple[int, float, bool]] = []
+
+        def _capture_measurement(
+            odb_id: int,
+            value: float,
+            *,
+            force_update: bool = False,
+        ) -> None:
+            captured_calls.append((odb_id, value, force_update))
+
+        client._handle_measurement = _capture_measurement
+
+        DHEClient._update_saving_monitor_sensor(
+            client,
+            client_module.ID_SAVING_MONITOR_POSSIBLE_WATER,
+            1.0,
+            "possible",
+            "water_l",
+        )
+
+        attributes = client._last_measurement_attributes[
+            client_module.ID_SAVING_MONITOR_POSSIBLE_WATER
+        ]
+        self.assertIn("possible", attributes)
+        self.assertNotIn("real", attributes)
+        self.assertNotIn("consumption", attributes)
+        self.assertNotIn("activation_rate", attributes)
+        self.assertEqual(
+            captured_calls,
+            [
+                (
+                    client_module.ID_SAVING_MONITOR_POSSIBLE_WATER,
+                    1.0,
+                    True,
+                )
+            ],
+        )
+
     async def test_set_price_rolls_back_when_second_write_fails(self) -> None:
         client_module = _load_client()
         DHEClient = client_module.DHEClient
