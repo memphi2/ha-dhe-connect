@@ -359,9 +359,10 @@ class DHEClient:
             field: [] for field in RADIO_CATALOG_FIELDS
         }
         self._last_radio_genres: list[str] = []
-        self._radio_catalog_generations: dict[str, int] = {
-            field: 0 for field in RADIO_CATALOG_FIELDS
-        }
+        self._radio_catalog_generations: dict[str, int] = dict.fromkeys(
+            RADIO_CATALOG_FIELDS,
+            0,
+        )
         self._radio_stations_generation = 0
         self._radio_favorites_generation = 0
         self._radio_genres_generation = 0
@@ -554,10 +555,8 @@ class DHEClient:
         self._runner = None
         if runner:
             runner.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await runner
-            except asyncio.CancelledError:
-                pass
         ctx = self._ctx
         self._ctx = None
         self._ready.clear()
@@ -586,10 +585,8 @@ class DHEClient:
             )
         finally:
             if ctx is not None:
-                try:
+                with contextlib.suppress(Exception):  # noqa: BLE001
                     await self._close_session(ctx)
-                except Exception:  # noqa: BLE001
-                    pass
             self._ctx = None
             self._ready.clear()
             self._set_online(False)
@@ -624,13 +621,13 @@ class DHEClient:
     ) -> _T:
         async with self._command_lock:
             for attempt in range(COMMAND_RETRY_ATTEMPTS):
-                try:
+                try:  # noqa: PERF203
                     await self._ensure_ready(timeout=timeout)
                     ctx = self._ctx
                     if ctx is None:
                         raise DHEError("DHE session is not connected")
                     return await operation(ctx)
-                except Exception as err:  # noqa: BLE001
+                except Exception as err:  # noqa: BLE001, PERF203
                     if on_error is not None:
                         on_error()
                     if attempt == 0:
@@ -937,17 +934,20 @@ class DHEClient:
 
         async def _operation(ctx: DHESession) -> bool:
             favorites = self._radio_favorites()
+            is_favorite = _radio_station_in_list(station_id, favorites)
             try:
                 favorites = await self._request_radio_favorites(ctx)
-            except DHEError:
-                if not _radio_station_in_list(station_id, favorites):
+                is_favorite = _radio_station_in_list(station_id, favorites)
+            except DHEError as err:
+                if not is_favorite:
                     raise DHEError(
                         "Cannot safely add DHE radio favorite without a fresh favorite list"
-                    )
+                    ) from err
 
-            if not _radio_station_in_list(station_id, favorites):
+            if not is_favorite:
                 favorites = await self._assign_radio_favorite_and_wait(ctx, station_id)
-                if not _radio_station_in_list(station_id, favorites):
+                is_favorite = _radio_station_in_list(station_id, favorites)
+                if not is_favorite:
                     raise DHEError(f"DHE radio favorite {station_id} did not change")
 
             if select:
@@ -956,10 +956,8 @@ class DHEClient:
                     RADIO_STATION_ASSIGN_COMMAND,
                     station_id,
                 )
-                try:
+                with contextlib.suppress(DHEError):
                     await self._wait_for_radio_station(station_id)
-                except DHEError:
-                    pass
             return True
 
         return await self._run_command_with_reconnect_retry(
@@ -973,11 +971,13 @@ class DHEClient:
 
         async def _operation(ctx: DHESession) -> bool:
             favorites = await self._request_radio_favorites(ctx)
-            if not _radio_station_in_list(station_id, favorites):
+            is_favorite = _radio_station_in_list(station_id, favorites)
+            if not is_favorite:
                 return True
 
             favorites = await self._assign_radio_favorite_and_wait(ctx, station_id)
-            if _radio_station_in_list(station_id, favorites):
+            is_favorite = _radio_station_in_list(station_id, favorites)
+            if is_favorite:
                 raise DHEError("DHE radio favorite did not change")
             return True
 
@@ -992,10 +992,8 @@ class DHEClient:
 
         async def _operation(ctx: DHESession) -> bool:
             await self._send_ste_command(ctx, RADIO_STATION_ASSIGN_COMMAND, station_id)
-            try:
+            with contextlib.suppress(DHEError):
                 await self._wait_for_radio_station(station_id)
-            except DHEError:
-                pass
             return True
 
         return await self._run_command_with_reconnect_retry(
@@ -1074,21 +1072,24 @@ class DHEClient:
             payload = _copy_json_like_value(location)
 
             favorites = self._weather_favorites()
+            is_favorite = _weather_location_in_list(payload, favorites)
             try:
                 favorites = await self._request_weather_favorites(ctx)
-            except DHEError:
-                if _weather_location_in_list(payload, favorites):
+                is_favorite = _weather_location_in_list(payload, favorites)
+            except DHEError as err:
+                if is_favorite:
                     return True
 
                 raise DHEError(
                     "Cannot safely add DHE weather favorite without a fresh favorite list"
-                )
-            if _weather_location_in_list(payload, favorites):
+                ) from err
+            if is_favorite:
                 return True
 
             location_id = _weather_location_id(payload)
             favorites = await self._assign_weather_favorite_and_wait(ctx, payload)
-            if not _weather_location_in_list(payload, favorites):
+            is_favorite = _weather_location_in_list(payload, favorites)
+            if not is_favorite:
                 raise DHEError("DHE weather favorite did not change")
             await self._send_ste_command(ctx, WEATHER_LOCATION_GET_COMMAND, location_id)
             await self._wait_for_weather_location(location_id)
@@ -1109,17 +1110,19 @@ class DHEClient:
             favorites = self._weather_favorites()
             try:
                 favorites = await self._request_weather_favorites(ctx)
-            except DHEError:
+            except DHEError as err:
                 raise DHEError(
                     "Cannot safely remove DHE weather favorite without a fresh "
                     "favorite list"
-                )
+                ) from err
 
-            if not _weather_location_in_list(payload, favorites):
+            is_favorite = _weather_location_in_list(payload, favorites)
+            if not is_favorite:
                 return True
 
             favorites = await self._assign_weather_favorite_and_wait(ctx, payload)
-            if _weather_location_in_list(payload, favorites):
+            is_favorite = _weather_location_in_list(payload, favorites)
+            if is_favorite:
                 raise DHEError("DHE weather favorite did not change")
             return True
 
@@ -1225,10 +1228,8 @@ class DHEClient:
                 "command": ODB_ASSIGN_COMMAND,
                 "value": {"id": ID_SETPOINT_REQUEST, "value": request_value},
             }))
-            try:
+            with contextlib.suppress(Exception):  # noqa: BLE001
                 await self._request_setpoint(ctx)
-            except Exception:  # noqa: BLE001
-                pass
             return True
 
         return await self._run_command_with_reconnect_retry(
@@ -1556,7 +1557,7 @@ class DHEClient:
 
     async def _run_loop(self) -> None:
         while not self._stopped.is_set():
-            try:
+            try:  # noqa: PERF203
                 self._ctx = await self._open_authenticated_session()
                 self._record_session_connected()
                 self._update_diagnostics(
@@ -1572,7 +1573,7 @@ class DHEClient:
                 while not self._stopped.is_set() and self._ctx is not None:
                     for event in await self._read_events_once(self._ctx):
                         await self._handle_runtime_event(event)
-            except asyncio.CancelledError:
+            except asyncio.CancelledError:  # noqa: PERF203
                 raise
             except Exception as err:  # noqa: BLE001
                 self._update_diagnostics(
@@ -1598,10 +1599,8 @@ class DHEClient:
                     )
                     await self._stopped.wait()
                     return
-                try:
+                with contextlib.suppress(TimeoutError):
                     await asyncio.wait_for(self._stopped.wait(), timeout=10)
-                except TimeoutError:
-                    pass
 
     async def _open_authenticated_session(
         self,
@@ -1913,14 +1912,10 @@ class DHEClient:
             and not ping_task.done()
         ):
             ping_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await ping_task
-            except asyncio.CancelledError:
-                pass
-        try:
+        with contextlib.suppress(Exception):  # noqa: BLE001
             await self._post_packet(ctx, f"41/{NS}")
-        except Exception:  # noqa: BLE001
-            pass
         websocket = ctx.websocket
         ctx.websocket = None
         if websocket is not None and not websocket.closed:
@@ -3222,16 +3217,12 @@ class DHEClient:
         )
 
     async def _request_optional_odb_value(self, ctx: DHESession, odb_id: int) -> None:
-        try:
+        with contextlib.suppress(Exception):  # noqa: BLE001
             await self._request_odb_value(ctx, odb_id)
-        except Exception:  # noqa: BLE001
-            pass
 
     async def _request_optional_app_value(self, ctx: DHESession, command: str) -> None:
-        try:
+        with contextlib.suppress(Exception):  # noqa: BLE001
             await self._request_app_value(ctx, command)
-        except Exception:  # noqa: BLE001
-            pass
 
     def _new_setpoint_future(self, expected: float | None = None) -> asyncio.Future[float]:
         self._clear_pending_future(None)
@@ -3666,10 +3657,8 @@ class DHEClient:
             )
             with os.fdopen(file_descriptor, "w", encoding="utf-8") as file:
                 file.write(token)
-            try:
+            with contextlib.suppress(OSError):
                 os.chmod(tmp_path, stat.S_IRUSR | stat.S_IWUSR)
-            except OSError:
-                pass
             os.replace(tmp_path, self.token_path)
 
         await self.hass.async_add_executor_job(_write)
@@ -3678,9 +3667,7 @@ class DHEClient:
         self._token = ""
 
         def _delete() -> None:
-            try:
+            with contextlib.suppress(FileNotFoundError):
                 os.remove(self.token_path)
-            except FileNotFoundError:
-                pass
 
         await self.hass.async_add_executor_job(_delete)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from typing import Any
 
 
@@ -11,7 +12,5 @@ async def cancel_task_if_pending(task: asyncio.Task[Any]) -> None:
     if task.done():
         return
     task.cancel()
-    try:
+    with contextlib.suppress(asyncio.CancelledError):
         await task
-    except asyncio.CancelledError:
-        pass

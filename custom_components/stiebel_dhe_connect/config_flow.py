@@ -384,11 +384,7 @@ def _weather_search_schema(
             DEFAULT_WEATHER_COUNTRY_ID,
         )
 
-    country_validator: Any
-    if country_options:
-        country_validator = vol.In(country_options)
-    else:
-        country_validator = str
+    country_validator: Any = vol.In(country_options) if country_options else str
 
     return vol.Schema(
         {

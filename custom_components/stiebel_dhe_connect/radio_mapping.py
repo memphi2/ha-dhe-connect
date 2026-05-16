@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from typing import Any
 
 
@@ -45,14 +46,22 @@ def radio_attributes(state: dict[str, Any]) -> dict[str, Any]:
 def source_option_map(stations_value: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """Build source options, disambiguating duplicate station labels by id."""
     labels = [source_label(station) for station in stations_value]
-    duplicated = {label for label in labels if labels.count(label) > 1}
+    label_counts = Counter(labels)
     options: dict[str, dict[str, Any]] = {}
+    seen_options: set[str] = set()
 
     for station, label in zip(stations_value, labels, strict=True):
         current_station_id = station_id(station)
         option = label
-        if label in duplicated and current_station_id is not None:
+        if label_counts[label] > 1 and current_station_id is not None:
             option = f"{label} ({current_station_id})"
+        if option in seen_options:
+            suffix = 2
+            option = f"{label} #{suffix}"
+            while option in seen_options:
+                suffix += 1
+                option = f"{label} #{suffix}"
+        seen_options.add(option)
         options[option] = station
     return options
 

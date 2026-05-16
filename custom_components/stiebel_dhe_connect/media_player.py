@@ -160,10 +160,7 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
             raise HomeAssistantError("No DHE radio favorites available")
         current_index = self._current_source_index(sources)
         if current_index < 0:
-            if offset < 0:
-                next_source = sources[-1]
-            else:
-                next_source = sources[0]
+            next_source = sources[-1] if offset < 0 else sources[0]
         else:
             next_source = sources[(current_index + offset) % len(sources)]
         await self.async_select_source(next_source)
@@ -175,7 +172,7 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
         station_id = self._current_station_id()
         if station_id is not None:
             for index, source in enumerate(sources):
-                if _station_id(self._sources_by_option[source]) == station_id:
+                if radio.station_id(self._sources_by_option[source]) == station_id:
                     return index
         return -1
 
