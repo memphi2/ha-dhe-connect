@@ -146,6 +146,7 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
             _LOGGER.error("Could not select DHE radio source: %s", err)
             raise
         self._attr_source = source
+        self._radio_off_requested = False
         self._attr_available = True
         self._write_radio_state(force=True)
 

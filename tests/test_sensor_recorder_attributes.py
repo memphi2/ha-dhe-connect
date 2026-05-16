@@ -175,14 +175,8 @@ class TestSensorRecorderAttributes(unittest.TestCase):
             sensor_module.SENSOR_WRITE_FILTERS["saving_monitor_activation_rate"],
             (1.0, 120.0),
         )
-        self.assertIn(
-            "saving_monitor_consumption_energy",
-            sensor_module.SENSOR_ATTRIBUTE_REFRESH_KEYS,
-        )
-        self.assertNotIn(
-            "energy_consumption_total",
-            sensor_module.SENSOR_ATTRIBUTE_REFRESH_KEYS,
-        )
+        self.assertIn("chart", sensor_module.StiebelDHESensor._unrecorded_attributes)
+        self.assertIn("possible", sensor_module.StiebelDHESensor._unrecorded_attributes)
 
     def test_flow_filter_blocks_small_jitter_but_allows_large_delta_or_interval(self) -> None:
         sensor_module = _load_sensor_module()
@@ -269,7 +263,100 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         sensor._last_written_monotonic = -1_000_000_000.0
         self.assertTrue(sensor._should_write_measurement_state(10.01))
 
-    def test_saving_monitor_attributes_refresh_when_value_is_unchanged(self) -> None:
+    def test_recorded_attribute_changes_write_when_value_is_unchanged(self) -> None:
+        sensor_module = _load_sensor_module()
+        description = next(
+            item
+            for item in sensor_module.SENSOR_DESCRIPTIONS
+            if item.key == "energy_consumption_total"
+        )
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+
+            def __init__(self) -> None:
+                self.last_measurement_attributes = {
+                    description.odb_id: {
+                        "source_command": "set:ste.app.consumption:energyYears",
+                        "chart": [20.0],
+                        "cost_eur": 2.0,
+                    }
+                }
+
+        client = _FakeClient()
+        sensor = sensor_module.StiebelDHESensor(
+            entry_id="test-entry",
+            name="Test DHE",
+            client=client,
+            description=description,
+        )
+        writes: list[float | str | None] = []
+        sensor.async_write_ha_state = lambda: writes.append(sensor._attr_native_value)
+        sensor._attr_extra_state_attributes = {
+            "source_command": "set:ste.app.consumption:energyYears",
+            "period": "years",
+            "chart": [20.0],
+            "cost_eur": 1.0,
+        }
+        sensor._last_written_native_value = 20.0
+        sensor._last_written_monotonic = time.monotonic()
+        sensor._last_written_recorded_attributes = sensor._recorded_state_attributes()
+
+        sensor._handle_measurement_update(description.odb_id, 20.0)
+
+        self.assertEqual(
+            writes,
+            [20.0],
+        )
+
+    def test_unrecorded_attribute_changes_still_respect_value_filter(self) -> None:
+        sensor_module = _load_sensor_module()
+        description = next(
+            item
+            for item in sensor_module.SENSOR_DESCRIPTIONS
+            if item.key == "energy_consumption_total"
+        )
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+
+            def __init__(self) -> None:
+                self.last_measurement_attributes = {
+                    description.odb_id: {
+                        "source_command": "set:ste.app.consumption:energyYears",
+                        "chart": [10.0, 10.01],
+                        "cost_eur": 1.0,
+                    }
+                }
+
+        client = _FakeClient()
+        sensor = sensor_module.StiebelDHESensor(
+            entry_id="test-entry",
+            name="Test DHE",
+            client=client,
+            description=description,
+        )
+        writes: list[float | str | None] = []
+        sensor.async_write_ha_state = lambda: writes.append(sensor._attr_native_value)
+        sensor._attr_extra_state_attributes = {
+            "source_command": "set:ste.app.consumption:energyYears",
+            "period": "years",
+            "chart": [10.0],
+            "cost_eur": 1.0,
+        }
+        sensor._last_written_native_value = 20.0
+        sensor._last_written_monotonic = time.monotonic()
+        sensor._last_written_recorded_attributes = sensor._recorded_state_attributes()
+
+        sensor._handle_measurement_update(description.odb_id, 20.01)
+
+        self.assertEqual(writes, [])
+
+    def test_unrecorded_saving_monitor_details_do_not_write_without_value_change(self) -> None:
         sensor_module = _load_sensor_module()
         description = next(
             item
@@ -317,55 +404,15 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         }
         sensor._last_written_native_value = 2.0
         sensor._last_written_monotonic = time.monotonic()
+        sensor._last_written_recorded_attributes = sensor._recorded_state_attributes()
 
         sensor._handle_measurement_update(description.odb_id, 2.0)
 
-        self.assertEqual(writes, [2.0])
+        self.assertEqual(writes, [])
         self.assertEqual(
             sensor._attr_extra_state_attributes["possible"]["water_l"],
             4.0,
         )
-
-    def test_consumption_attribute_changes_still_respect_value_filter(self) -> None:
-        sensor_module = _load_sensor_module()
-        description = next(
-            item
-            for item in sensor_module.SENSOR_DESCRIPTIONS
-            if item.key == "energy_consumption_total"
-        )
-
-        class _FakeClient:
-            host = "127.0.0.1"
-            port = 8443
-            legacy_device_identifier = None
-
-            def __init__(self) -> None:
-                self.last_measurement_attributes = {
-                    description.odb_id: {
-                        "source_command": "set:ste.app.consumption:energyYears",
-                        "chart": [10.0, 10.01],
-                    }
-                }
-
-        client = _FakeClient()
-        sensor = sensor_module.StiebelDHESensor(
-            entry_id="test-entry",
-            name="Test DHE",
-            client=client,
-            description=description,
-        )
-        writes: list[float | str | None] = []
-        sensor.async_write_ha_state = lambda: writes.append(sensor._attr_native_value)
-        sensor._attr_extra_state_attributes = {
-            "source_command": "set:ste.app.consumption:energyYears",
-            "chart": [10.0],
-        }
-        sensor._last_written_native_value = 20.0
-        sensor._last_written_monotonic = time.monotonic()
-
-        sensor._handle_measurement_update(description.odb_id, 20.01)
-
-        self.assertEqual(writes, [])
 
     def test_error_status_sensor_does_not_write_for_inlet_jitter(self) -> None:
         sensor_module = _load_sensor_module()

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
 import time
 from typing import Any
@@ -137,10 +138,6 @@ SENSOR_WRITE_FILTERS: dict[str, tuple[float, float]] = {
     "saving_monitor_real_co2": (0.05, 60.0),
     "saving_monitor_real_cost": (0.05, 60.0),
 }
-SENSOR_ATTRIBUTE_REFRESH_KEYS = frozenset(
-    key for key in SENSOR_WRITE_FILTERS if key.startswith("saving_monitor_")
-)
-
 CONNECTION_STATE_OPTIONS = (
     "starting",
     "connected",
@@ -710,11 +707,9 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
             self._max_write_interval_seconds = None
         else:
             self._min_write_delta, self._max_write_interval_seconds = filter_values
-        self._write_on_attribute_change = (
-            description.key in SENSOR_ATTRIBUTE_REFRESH_KEYS
-        )
         self._last_written_native_value: MeasurementValue = None
         self._last_written_monotonic: float | None = None
+        self._last_written_recorded_attributes: dict[str, Any] | None = None
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE measurements and start the persistent session."""
@@ -732,6 +727,7 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
             self._attr_available = self._attr_native_value is not None
             self._last_written_native_value = self._attr_native_value
             self._last_written_monotonic = time.monotonic()
+            self._last_written_recorded_attributes = self._recorded_state_attributes()
 
     def _convert_value(self, value: MeasurementValue) -> MeasurementValue:
         """Convert the raw client value for display."""
@@ -760,24 +756,35 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
             ),
         )
 
+    def _recorded_state_attributes(self) -> dict[str, Any]:
+        """Return state attributes that are visible to the recorder."""
+        return {
+            key: deepcopy(value)
+            for key, value in (self._attr_extra_state_attributes or {}).items()
+            if key not in self._unrecorded_attributes
+        }
+
     @callback
     def _handle_measurement_update(self, odb_id: int, value: MeasurementValue) -> None:
         """Handle converted measurement updates from the persistent client."""
         if odb_id != self.entity_description.odb_id:
             return
 
-        previous_attributes = dict(self._attr_extra_state_attributes or {})
         self._update_extra_state_attributes()
-        attributes_changed = self._attr_extra_state_attributes != previous_attributes
+        recorded_attributes = self._recorded_state_attributes()
+        recorded_attributes_changed = (
+            recorded_attributes != self._last_written_recorded_attributes
+        )
         self._attr_native_value = self._convert_value(value)
         self._attr_available = self._attr_native_value is not None
         if not self._should_write_measurement_state(
             self._attr_native_value,
-            attributes_changed=attributes_changed,
+            recorded_attributes_changed=recorded_attributes_changed,
         ):
             return
         self._last_written_native_value = self._attr_native_value
         self._last_written_monotonic = time.monotonic()
+        self._last_written_recorded_attributes = recorded_attributes
         self.async_write_ha_state()
 
     @callback
@@ -793,10 +800,10 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
         self,
         new_value: MeasurementValue,
         *,
-        attributes_changed: bool = False,
+        recorded_attributes_changed: bool = False,
     ) -> bool:
         """Return whether this measurement update should write a new HA state."""
-        if attributes_changed and self._write_on_attribute_change:
+        if recorded_attributes_changed:
             return True
         previous_value = self._last_written_native_value
         if previous_value is None or new_value is None:
