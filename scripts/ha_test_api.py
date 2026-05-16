@@ -458,6 +458,18 @@ def _parse_args() -> argparse.Namespace:
         help="Environment variable that contains the HA password.",
     )
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    parser.add_argument(
+        "--login-wait-timeout",
+        type=float,
+        default=60.0,
+        help="Seconds to wait for HA auth providers before login.",
+    )
+    parser.add_argument(
+        "--login-wait-interval",
+        type=float,
+        default=2.0,
+        help="Polling interval while waiting for HA auth providers before login.",
+    )
     parser.add_argument("--restart", action="store_true")
     parser.add_argument(
         "--restart-request-timeout",
@@ -500,6 +512,13 @@ def main() -> int:
         return 1
 
     api = HomeAssistantApi(args.url)
+    if not api.wait_online(
+        timeout=args.login_wait_timeout,
+        interval=args.login_wait_interval,
+    ):
+        print("FAIL: HA auth providers did not become reachable")
+        return 1
+
     refresh_token = ""
     exit_code = 0
     try:

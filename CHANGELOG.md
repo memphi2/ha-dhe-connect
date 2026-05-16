@@ -5,6 +5,7 @@
 ### Added
 
 - Added a reusable Home Assistant API test helper for authenticated restart checks, service smoke tests and localhost test-token cleanup.
+- Added a release-readiness helper that bundles version, documentation-link, changelog, tag, GitHub release, clean-tree, whitespace, secret-scan and optional HA smoke checks.
 - Added focused regression coverage for closed-session RuntimeError retry behavior, setup-pairing RuntimeError mapping and price rollback failure diagnostics.
 - Moved the detailed Socket.IO / Engine.IO / ODB protocol reference out of the README into `docs/protocol.md`.
 
@@ -15,7 +16,7 @@
 - Extracted shared DHE client exceptions, session/event models, callbacks and value aliases into `client_types.py` so `client.py` stays focused on runtime behavior.
 - Narrowed command and config-flow exception handling so programming errors are no longer retried or hidden as generic DHE failures.
 - Kept transport-like RuntimeError recovery for reconnect races, including closed aiohttp sessions.
-- Slimmed the README by keeping setup, entity and validation guidance there while moving protocol internals to dedicated documentation.
+- Slimmed the README by keeping setup, high-level entity and validation guidance there while moving protocol internals and the full entity reference to dedicated documentation.
 
 ### Fixed
 

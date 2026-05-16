@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -240,6 +242,38 @@ class TestHATestApi(unittest.TestCase):
 
         self.assertTrue(result)
         self.assertEqual(request_json.call_count, 3)
+
+    def test_main_waits_for_auth_providers_before_login(self) -> None:
+        class _Api:
+            def __init__(self, _url: str) -> None:
+                pass
+
+            def wait_online(self, **_kwargs) -> bool:
+                return False
+
+            def login(self, *_args):
+                raise AssertionError("login should not run before HA is reachable")
+
+        with (
+            patch.object(ha_test_api, "HomeAssistantApi", _Api),
+            patch.dict(os.environ, {"HA_TEST_PASSWORD": "secret"}),
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "ha_test_api.py",
+                    "--username",
+                    "test-user",
+                    "--login-wait-timeout",
+                    "0.1",
+                    "--login-wait-interval",
+                    "0",
+                ],
+            ),
+        ):
+            result = ha_test_api.main()
+
+        self.assertEqual(result, 1)
 
 
 class _FakeServiceApi:
