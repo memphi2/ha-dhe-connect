@@ -1,5 +1,23 @@
 ﻿# Changelog
 
+## v1.2.3 - 2026-05-16
+
+### Changed
+
+- Added climate `turn_on` / `turn_off` support by mapping to HVAC `heat` / `off`.
+- Weather/radio remove flows now avoid index drift by refreshing favorites only on initial options-form render.
+- Weather favorite add/remove/toggle now accepts raw `location_id` values more robustly.
+- Reduced recorder/state-write noise for high-churn telemetry sensors with delta/time filtering.
+
+### Fixed
+
+- Corrected temperature-memory confirmation generation baseline handling to avoid false confirmations.
+
+### Tests
+
+- Added regression coverage for stricter temperature-memory confirmation behavior.
+- Added sensor recorder/write-filter coverage for noisy telemetry entities.
+
 ## v1.2.2b1 - 2026-05-16
 
 ### Added
