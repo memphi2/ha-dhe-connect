@@ -84,6 +84,65 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         self.assertIn("inlet_temperature", attributes)
         self.assertIn("inlet_minus_setpoint", attributes)
 
+    def test_diagnostic_sensor_skips_volatile_message_updates(self) -> None:
+        sensor_module = _load_sensor_module()
+        description = next(
+            item
+            for item in sensor_module.DIAGNOSTIC_SENSOR_DESCRIPTIONS
+            if item.key == "connection_state"
+        )
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+
+        sensor = sensor_module.StiebelDHEDiagnosticSensor(
+            entry_id="test-entry",
+            name="Test DHE",
+            client=_FakeClient(),
+            description=description,
+        )
+        writes: list[str | int | None] = []
+        sensor.async_write_ha_state = lambda: writes.append(sensor._attr_native_value)
+
+        sensor._handle_diagnostic_update(
+            {
+                "connection_state": "connected",
+                "session_id": "sid-1",
+                "last_message_age_seconds": 0,
+                "last_message_command": "set:ste.common.odb:value",
+                "last_message_received_at": "2026-05-16T12:00:00Z",
+                "last_message_summary": {"id": 13, "value": 21.0},
+                "message_count": 1,
+            }
+        )
+        sensor._handle_diagnostic_update(
+            {
+                "connection_state": "connected",
+                "session_id": "sid-1",
+                "last_message_age_seconds": 1,
+                "last_message_command": "set:ste.app.consumption:waterYears",
+                "last_message_received_at": "2026-05-16T12:00:01Z",
+                "last_message_summary": {"id": 14, "value": 38.0},
+                "message_count": 2,
+            }
+        )
+
+        self.assertEqual(writes, ["connected"])
+        self.assertEqual(sensor._attr_extra_state_attributes, {"session_id": "sid-1"})
+
+        sensor._handle_diagnostic_update(
+            {
+                "connection_state": "connected",
+                "session_id": "sid-2",
+                "last_message_received_at": "2026-05-16T12:00:02Z",
+            }
+        )
+
+        self.assertEqual(writes, ["connected", "connected"])
+        self.assertEqual(sensor._attr_extra_state_attributes, {"session_id": "sid-2"})
+
     def test_flow_and_power_write_filters_use_stricter_thresholds(self) -> None:
         sensor_module = _load_sensor_module()
         self.assertEqual(sensor_module.SENSOR_WRITE_FILTERS["water_flow"], (1.0, 45.0))
