@@ -153,6 +153,63 @@ class TestClimateWriteFilters(unittest.TestCase):
         finally:
             climate_module.time.monotonic = original_monotonic
 
+    def test_flat_temperature_still_gets_periodic_write(self) -> None:
+        climate_module = _load_climate_module()
+        entity = _build_entity(climate_module)
+
+        calls: list[str] = []
+        entity.async_write_ha_state = lambda: calls.append("write")
+
+        monotonic_value = 0.0
+        original_monotonic = climate_module.time.monotonic
+        climate_module.time.monotonic = lambda: monotonic_value
+        try:
+            entity._handle_measurement_update(climate_module.ID_INLET_TEMPERATURE, 10.0)
+            self.assertEqual(len(calls), 1)
+
+            monotonic_value = 140.0
+            entity._handle_measurement_update(climate_module.ID_INLET_TEMPERATURE, 10.0)
+            self.assertEqual(len(calls), 2)
+        finally:
+            climate_module.time.monotonic = original_monotonic
+
+    def test_repeated_heating_state_measurement_is_not_rewritten(self) -> None:
+        climate_module = _load_climate_module()
+        entity = _build_entity(climate_module)
+
+        calls: list[str] = []
+        entity.async_write_ha_state = lambda: calls.append("write")
+
+        entity._handle_measurement_update(
+            climate_module.ID_WATER_HEATING_ENABLED,
+            True,
+        )
+        entity._handle_measurement_update(
+            climate_module.ID_WATER_HEATING_ENABLED,
+            True,
+        )
+        entity._handle_measurement_update(
+            climate_module.ID_WATER_HEATING_ENABLED,
+            False,
+        )
+
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(entity._attr_hvac_mode, climate_module.HVACMode.OFF)
+
+    def test_repeated_setpoint_update_is_not_rewritten(self) -> None:
+        climate_module = _load_climate_module()
+        entity = _build_entity(climate_module)
+
+        calls: list[str] = []
+        entity.async_write_ha_state = lambda: calls.append("write")
+
+        entity._handle_setpoint_update(38.0)
+        entity._handle_setpoint_update(38.0)
+        entity._handle_setpoint_update(39.0)
+
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(entity._attr_target_temperature, 39.0)
+
 
 class TestClimateHvacControls(unittest.IsolatedAsyncioTestCase):
     """Validate Home Assistant climate on/off service behavior."""
