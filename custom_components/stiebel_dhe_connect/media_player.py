@@ -34,6 +34,11 @@ from .runtime_helpers import get_runtime_data
 _LOGGER = logging.getLogger(__name__)
 
 STATE_IDLE = MediaPlayerState.IDLE if MediaPlayerState is not None else "idle"
+STATE_OFF = (
+    MediaPlayerState.OFF
+    if MediaPlayerState is not None and hasattr(MediaPlayerState, "OFF")
+    else "off"
+)
 STATE_PAUSED = MediaPlayerState.PAUSED if MediaPlayerState is not None else "paused"
 STATE_PLAYING = MediaPlayerState.PLAYING if MediaPlayerState is not None else "playing"
 
@@ -85,6 +90,7 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
         self._attr_state = None
         self._attr_volume_level = None
         self._have_radio_state = False
+        self._radio_off_requested = False
         self._sources_by_option: dict[str, dict[str, Any]] = {}
 
     async def async_added_to_hass(self) -> None:
@@ -108,8 +114,8 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
         await self.async_media_play()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        """Pause radio playback."""
-        await self.async_media_pause()
+        """Turn off radio playback."""
+        await self._set_playing(False, state=STATE_OFF, off_requested=True)
 
     async def async_set_volume_level(self, volume: float) -> None:
         """Set radio volume."""
@@ -143,14 +149,20 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
         """Select the previous DHE radio favorite."""
         await self._select_relative_source(-1)
 
-    async def _set_playing(self, playing: bool) -> None:
+    async def _set_playing(
+        self,
+        playing: bool,
+        *,
+        state: str | None = None,
+        off_requested: bool = False,
+    ) -> None:
         try:
-            self._attr_state = (
-                STATE_PLAYING if await self._client.set_radio_play(playing) else STATE_PAUSED
-            )
+            accepted_playing = await self._client.set_radio_play(playing)
         except DHEError as err:
             _LOGGER.error("Could not set DHE radio playback: %s", err)
             raise
+        self._radio_off_requested = off_requested
+        self._attr_state = state or (STATE_PLAYING if accepted_playing else STATE_PAUSED)
         self._attr_available = True
         self.async_write_ha_state()
 
@@ -222,9 +234,12 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
         """Apply HA playback state from the DHE radio state."""
         play = state.get("play")
         if play is True:
+            self._radio_off_requested = False
             self._attr_state = STATE_PLAYING
         elif play is False:
-            self._attr_state = STATE_PAUSED
+            self._attr_state = (
+                STATE_OFF if getattr(self, "_radio_off_requested", False) else STATE_PAUSED
+            )
         elif state:
             self._attr_state = STATE_IDLE
 
