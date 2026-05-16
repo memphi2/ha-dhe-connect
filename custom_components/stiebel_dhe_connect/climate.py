@@ -173,6 +173,7 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
     def _handle_measurement_update(self, odb_id: int, value: MeasurementValue) -> None:
         """Handle measurement updates for inlet and outlet temperatures."""
         temperature_update = odb_id in (ID_INLET_TEMPERATURE, ID_OUTLET_TEMPERATURE)
+        target_below_inlet_before = self._target_below_inlet()
         write_update = True
         if odb_id == ID_INLET_TEMPERATURE:
             self._inlet_temperature = self._coerce_temperature(value)
@@ -199,6 +200,9 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
             self._apply_dynamic_max_temperature()
         else:
             return
+
+        if temperature_update and self._target_below_inlet() != target_below_inlet_before:
+            write_update = True
 
         if not write_update:
             return

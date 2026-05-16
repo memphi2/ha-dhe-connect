@@ -184,6 +184,27 @@ class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(player._attr_state, media_player.STATE_PAUSED)
         self.assertFalse(player._radio_off_requested)
 
+    async def test_source_selection_clears_requested_off_state(self) -> None:
+        media_player = _load_media_player_module()
+        station = {"Id": 2, "Name": "WDR 2"}
+        player = media_player.StiebelDHERadioMediaPlayer.__new__(
+            media_player.StiebelDHERadioMediaPlayer
+        )
+        player._client = types.SimpleNamespace(
+            select_radio_station=AsyncMock(return_value=None)
+        )
+        player._sources_by_option = {"WDR 2": station}
+        player._radio_off_requested = True
+        player._attr_available = False
+        player.async_write_ha_state = Mock()
+
+        await player.async_select_source("WDR 2")
+
+        player._client.select_radio_station.assert_awaited_once_with(station)
+        self.assertEqual(player._attr_source, "WDR 2")
+        self.assertFalse(player._radio_off_requested)
+        player.async_write_ha_state.assert_called_once()
+
     def test_playback_update_preserves_requested_off_state(self) -> None:
         media_player = _load_media_player_module()
         player = media_player.StiebelDHERadioMediaPlayer.__new__(
