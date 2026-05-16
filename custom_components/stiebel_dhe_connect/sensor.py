@@ -29,8 +29,21 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .client import (
-    BRUSH_TIMER_PATH,
     DHEClient,
+    MeasurementValue,
+)
+from .client_mapping import DEVICE_STATUS_OPTIONS, DEVICE_STATUS_SERVICE_REQUIRED
+from .entity_helpers import StiebelDHEEntityMixin
+from .entity_state_helpers import (
+    coerce_float,
+    connected_or_known_available,
+    format_minutes_duration,
+    measurement_attribute_text,
+    merge_state_attributes,
+    value_available,
+)
+from .protocol import (
+    BRUSH_TIMER_PATH,
     ID_BATH_FILL_CURRENT_VOLUME,
     ID_BATH_FILL_REMAINING_VOLUME,
     ID_BRUSH_TIMER_REMAINING,
@@ -71,18 +84,7 @@ from .client import (
     ID_WATER_CONSUMPTION_YEAR,
     ID_WATER_CONSUMPTION_YEARS,
     ID_WATER_FLOW,
-    MeasurementValue,
     SHOWER_TIMER_PATH,
-)
-from .client_mapping import DEVICE_STATUS_OPTIONS, DEVICE_STATUS_SERVICE_REQUIRED
-from .entity_helpers import StiebelDHEEntityMixin
-from .entity_state_helpers import (
-    coerce_float,
-    connected_or_known_available,
-    format_minutes_duration,
-    measurement_attribute_text,
-    merge_state_attributes,
-    value_available,
 )
 from .runtime_helpers import get_runtime_data
 

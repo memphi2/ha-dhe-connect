@@ -15,11 +15,6 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .client import (
-    ID_CHILD_SAFETY_ACTIVE,
-    ID_CHILD_SAFETY_TEMPERATURE_LIMIT,
-    ID_INLET_TEMPERATURE,
-    ID_OUTLET_TEMPERATURE,
-    ID_WATER_HEATING_ENABLED,
     DHEClient,
     DHEError,
     MeasurementValue,
@@ -32,6 +27,13 @@ from .entity_state_helpers import (
     clamp_temperature,
     climate_max_temperature,
     normalize_internal_scald_protection,
+)
+from .protocol import (
+    ID_CHILD_SAFETY_ACTIVE,
+    ID_CHILD_SAFETY_TEMPERATURE_LIMIT,
+    ID_INLET_TEMPERATURE,
+    ID_OUTLET_TEMPERATURE,
+    ID_WATER_HEATING_ENABLED,
 )
 from .runtime_helpers import get_runtime_data
 

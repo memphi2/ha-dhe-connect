@@ -15,15 +15,8 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .client import (
-    CO2_EMISSION_MAX,
     DHEClient,
     DHEError,
-    ELECTRICITY_PRICE_MAX,
-    ID_APP_CURRENCY,
-    ID_CO2_EMISSION,
-    ID_ELECTRICITY_PRICE,
-    ID_WATER_PRICE,
-    WATER_PRICE_MAX,
 )
 from .config_flow_mapping import (
     default_radio_catalog_value as _default_radio_catalog_value,
@@ -53,6 +46,15 @@ from .entity_state_helpers import (
     normalize_internal_scald_protection,
 )
 from .pairing_helpers import map_pairing_error
+from .protocol import (
+    CO2_EMISSION_MAX,
+    ELECTRICITY_PRICE_MAX,
+    ID_APP_CURRENCY,
+    ID_CO2_EMISSION,
+    ID_ELECTRICITY_PRICE,
+    ID_WATER_PRICE,
+    WATER_PRICE_MAX,
+)
 from .service_helpers import WEATHER_RESULT_NUMBER_MAX
 from .token_file_helpers import (
     LEGACY_TOKEN_FILE,

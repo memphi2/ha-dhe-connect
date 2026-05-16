@@ -18,17 +18,9 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .client import (
-    BRUSH_TIMER_PATH,
     DHEClient,
     DHEError,
-    ID_BATH_FILL_TARGET_VOLUME,
-    ID_BRUSH_TIMER_DURATION,
-    ID_CHILD_SAFETY_TEMPERATURE_LIMIT,
-    ID_ECO_FLOW_LIMIT,
-    ID_SHOWER_TIMER_DURATION,
     MeasurementValue,
-    SHOWER_TIMER_PATH,
-    TEMPERATURE_MEMORY_SLOT_MEASUREMENTS,
 )
 from .config_entry_helpers import merged_entry_data
 from .entity_helpers import (
@@ -48,6 +40,16 @@ from .entity_state_helpers import (
     normalize_internal_scald_protection,
     seconds_to_minutes,
     value_available,
+)
+from .protocol import (
+    BRUSH_TIMER_PATH,
+    ID_BATH_FILL_TARGET_VOLUME,
+    ID_BRUSH_TIMER_DURATION,
+    ID_CHILD_SAFETY_TEMPERATURE_LIMIT,
+    ID_ECO_FLOW_LIMIT,
+    ID_SHOWER_TIMER_DURATION,
+    SHOWER_TIMER_PATH,
+    TEMPERATURE_MEMORY_SLOT_MEASUREMENTS,
 )
 from .runtime_helpers import get_runtime_data
 
