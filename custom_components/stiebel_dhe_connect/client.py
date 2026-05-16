@@ -3401,7 +3401,7 @@ class DHEClient:
         app_packets: list[str] = []
         for packet in packets:
             stripped = packet.strip("\x00\x1e\ufffd")
-            if stripped == "1" or stripped == "41" or stripped.startswith("41/"):
+            if stripped in {"1", "41"} or stripped.startswith("41/"):
                 return [DHEEvent("__closed", None)]
             if stripped == "2":
                 await self._post_packet(ctx, "3")
@@ -3431,7 +3431,7 @@ class DHEClient:
         app_packets: list[str] = []
         for packet in packets:
             stripped = packet.strip("\x00\x1e\ufffd")
-            if stripped == "1" or stripped == "41" or stripped.startswith("41/"):
+            if stripped in {"1", "41"} or stripped.startswith("41/"):
                 return [DHEEvent("__closed", None)]
             if stripped == "2":
                 await self._send_websocket_packet(ctx, "3")
