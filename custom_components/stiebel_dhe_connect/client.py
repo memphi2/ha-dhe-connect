@@ -218,9 +218,17 @@ _DHE_COMMAND_EXCEPTIONS = (
     TimeoutError,
     OSError,
     ValueError,
-    RuntimeError,
 )
-_DHE_TRANSPORT_EXCEPTIONS = _DHE_COMMAND_EXCEPTIONS
+_DHE_TRANSPORT_EXCEPTIONS = (*_DHE_COMMAND_EXCEPTIONS, RuntimeError)
+_RUNTIME_TRANSPORT_ERROR_MARKERS = (
+    "cannot write to closing transport",
+    "connection closed",
+    "connector is closed",
+    "session is closed",
+    "socket",
+    "transport",
+    "websocket",
+)
 
 
 def _round_to_half_c(value: float) -> float:
@@ -282,6 +290,11 @@ def _values_equal(a: ODBValue | None, b: ODBValue | None) -> bool:
     if isinstance(a, bool) or isinstance(b, bool):
         return bool(a) is bool(b)
     return abs(float(a) - float(b)) < 0.001
+
+
+def _is_runtime_transport_error(err: RuntimeError) -> bool:
+    message = str(err).lower()
+    return any(marker in message for marker in _RUNTIME_TRANSPORT_ERROR_MARKERS)
 
 
 def _summarize_radio_value(value: Any) -> Any:
@@ -721,6 +734,7 @@ class DHEClient:
     ) -> _T:
         async with self._command_lock:
             for attempt in range(COMMAND_RETRY_ATTEMPTS):
+                command_error: Exception
                 try:  # noqa: PERF203
                     await self._ensure_ready(timeout=timeout)
                     ctx = self._ctx
@@ -728,13 +742,18 @@ class DHEClient:
                         raise DHEError("DHE session is not connected")
                     return await operation(ctx)
                 except _DHE_COMMAND_EXCEPTIONS as err:  # noqa: PERF203
-                    if on_error is not None:
-                        on_error()
-                    if attempt == 0:
-                        await self._force_reconnect(reason=_diagnostic_error(err))
-                        await asyncio.sleep(COMMAND_RETRY_DELAY_SECONDS)
-                        continue
-                    raise DHEError(f"{error_message}: {err}") from err
+                    command_error = err
+                except RuntimeError as err:
+                    if not _is_runtime_transport_error(err):
+                        raise
+                    command_error = err
+                if on_error is not None:
+                    on_error()
+                if attempt == 0:
+                    await self._force_reconnect(reason=_diagnostic_error(command_error))
+                    await asyncio.sleep(COMMAND_RETRY_DELAY_SECONDS)
+                    continue
+                raise DHEError(f"{error_message}: {command_error}") from command_error
         raise DHEError(error_message)
 
     async def _run_command_without_reconnect_retry(
@@ -753,6 +772,10 @@ class DHEClient:
                 return await operation(ctx)
             except _DHE_COMMAND_EXCEPTIONS as err:
                 raise DHEError(f"{error_message}: {err}") from err
+            except RuntimeError as err:
+                if _is_runtime_transport_error(err):
+                    raise DHEError(f"{error_message}: {err}") from err
+                raise
 
     def _begin_manual_pairing(self, state: str, message: str, *, notify: bool) -> None:
         """Prepare a pairing attempt that must end with an explicit DHE result."""
@@ -1316,16 +1339,35 @@ class DHEClient:
         old_cents = self._last_measurements.get(cents_odb_id)
         total_cents = round(_clamp(float(value), 0.0, max_value) * 100)
         euros, cents = divmod(total_cents, 100)
+        attempted_components: list[tuple[int, MeasurementValue]] = []
         try:
+            attempted_components.append((euros_odb_id, old_euros))
             await self.write_odb_value(euros_odb_id, euros)
+            attempted_components.append((cents_odb_id, old_cents))
             await self.write_odb_value(cents_odb_id, cents)
-        except DHEError:
-            if old_euros is not None and old_cents is not None:
-                with contextlib.suppress(DHEError):
-                    await self.write_odb_value(euros_odb_id, old_euros)
-                    await self.write_odb_value(cents_odb_id, old_cents)
+        except (DHEError, RuntimeError) as err:
+            rollback_errors = await self._rollback_price_components(attempted_components)
+            if rollback_errors:
+                raise DHEError(
+                    f"{err}; price rollback failed: {'; '.join(rollback_errors)}"
+                ) from err
             raise
         return total_cents / 100.0
+
+    async def _rollback_price_components(
+        self,
+        components: list[tuple[int, MeasurementValue]],
+    ) -> list[str]:
+        """Best-effort restore of price components after a partial write."""
+        errors: list[str] = []
+        for odb_id, old_value in reversed(components):
+            if old_value is None:
+                continue
+            try:
+                await self.write_odb_value(odb_id, old_value)
+            except (DHEError, RuntimeError) as err:
+                errors.append(f"ODB id {odb_id}: {err}")
+        return errors
 
     async def press_temperature_memory(self, memory_slot: int) -> bool:
         try:
