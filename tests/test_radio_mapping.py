@@ -55,6 +55,17 @@ class TestRadioDisplayMapping(unittest.TestCase):
 
         self.assertEqual(list(options), ["WDR 2 (1)", "WDR 2 (2)", "1Live"])
 
+    def test_source_option_map_disambiguates_duplicate_labels_without_ids(self) -> None:
+        options = self.radio.source_option_map(
+            [
+                {"Name": "WDR 2"},
+                {"Name": "WDR 2"},
+                {"Name": "WDR 2"},
+            ]
+        )
+
+        self.assertEqual(list(options), ["WDR 2", "WDR 2 #2", "WDR 2 #3"])
+
     def test_source_for_station_matches_by_id(self) -> None:
         sources = {
             "WDR 2 (1)": {"Id": 1, "Name": "WDR 2"},

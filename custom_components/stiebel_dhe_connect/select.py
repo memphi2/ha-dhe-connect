@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 import logging
 from typing import Any
 
@@ -148,32 +149,26 @@ def _weather_location_option_map(
         locations.insert(0, current_location)
 
     labels = _weather_location_labels(locations)
-    return {
-        label: location
-        for label, location in zip(labels, locations, strict=False)
-    }
+    return dict(zip(labels, locations, strict=True))
 
 
 def _weather_location_labels(locations: list[dict[str, Any]]) -> list[str]:
     base_labels = [_base_weather_location_label(location) for location in locations]
-    duplicate_labels = {
-        label for label in base_labels if base_labels.count(label) > 1
-    }
+    label_counts = Counter(base_labels)
     labels: list[str] = []
     used_labels: set[str] = set()
 
-    for location, base_label in zip(locations, base_labels, strict=False):
+    for location, base_label in zip(locations, base_labels, strict=True):
         label = base_label
-        if label in duplicate_labels:
-            country = str(location.get("Country") or "").strip()
-            if country:
-                label = f"{base_label}, {country}"
-        if label in used_labels:
+        if label_counts[base_label] > 1:
             location_id = str(location.get("LocationId") or "").strip()
             if location_id:
-                label = f"{label} ({location_id})"
+                label = f"{base_label} ({location_id})"
         if label in used_labels:
-            label = f"{label} #{len(used_labels) + 1}"
+            suffix = 2
+            while f"{label} #{suffix}" in used_labels:
+                suffix += 1
+            label = f"{label} #{suffix}"
         labels.append(label)
         used_labels.add(label)
     return labels
