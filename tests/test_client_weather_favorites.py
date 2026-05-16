@@ -678,6 +678,92 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
                 "Family",
             )
 
+    async def test_shower_timer_writes_use_shower_timer_path(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+
+        client = DHEClient.__new__(DHEClient)
+        client._write_app_value = AsyncMock(side_effect=[5.0, False, 0.0])
+        client._handle_measurement = Mock()
+
+        duration = await DHEClient.set_shower_timer_duration_minutes(client, 5.0)
+        activation = await DHEClient.set_shower_timer_activation(client, False)
+        reset = await DHEClient.reset_shower_timer(client)
+
+        self.assertEqual(duration, 5.0)
+        self.assertFalse(activation)
+        self.assertTrue(reset)
+        self.assertEqual(
+            client._write_app_value.await_args_list[0].args,
+            (
+                "assign:ste.app.showerTimer:durationMilliseconds",
+                300000,
+                client_module.ID_SHOWER_TIMER_DURATION,
+                5.0,
+            ),
+        )
+        self.assertEqual(
+            client._write_app_value.await_args_list[1].args,
+            (
+                "assign:ste.app.showerTimer:activation",
+                False,
+                client_module.ID_SHOWER_TIMER_ACTIVATION,
+                False,
+            ),
+        )
+        self.assertEqual(
+            client._write_app_value.await_args_list[2].args,
+            (
+                "assign:ste.app.showerTimer:reset",
+                True,
+                client_module.ID_SHOWER_TIMER_REMAINING,
+                0.0,
+            ),
+        )
+
+    async def test_brush_timer_writes_keep_brush_timer_path(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+
+        client = DHEClient.__new__(DHEClient)
+        client._write_app_value = AsyncMock(side_effect=[4.0, True, 0.0])
+        client._handle_measurement = Mock()
+
+        duration = await DHEClient.set_brush_timer_duration_minutes(client, 4.0)
+        activation = await DHEClient.set_brush_timer_activation(client, True)
+        reset = await DHEClient.reset_brush_timer(client)
+
+        self.assertEqual(duration, 4.0)
+        self.assertTrue(activation)
+        self.assertTrue(reset)
+        self.assertEqual(
+            client._write_app_value.await_args_list[0].args,
+            (
+                "assign:ste.app.brushTimer:durationMilliseconds",
+                240000,
+                client_module.ID_BRUSH_TIMER_DURATION,
+                4.0,
+            ),
+        )
+        self.assertEqual(
+            client._write_app_value.await_args_list[1].args,
+            (
+                "assign:ste.app.brushTimer:activation",
+                True,
+                client_module.ID_BRUSH_TIMER_ACTIVATION,
+                True,
+            ),
+        )
+        self.assertEqual(
+            client._write_app_value.await_args_list[2].args,
+            (
+                "assign:ste.app.brushTimer:reset",
+                True,
+                client_module.ID_BRUSH_TIMER_REMAINING,
+                0.0,
+            ),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
