@@ -34,6 +34,8 @@ from .entity_state_helpers import (
 from .runtime_helpers import get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
+_CLIMATE_FEATURE_TURN_ON = getattr(ClimateEntityFeature, "TURN_ON", 0)
+_CLIMATE_FEATURE_TURN_OFF = getattr(ClimateEntityFeature, "TURN_OFF", 0)
 
 
 async def async_setup_entry(
@@ -58,7 +60,11 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
 
     _attr_has_entity_name = True
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
-    _attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE
+    _attr_supported_features = (
+        ClimateEntityFeature.TARGET_TEMPERATURE
+        | _CLIMATE_FEATURE_TURN_ON
+        | _CLIMATE_FEATURE_TURN_OFF
+    )
     _attr_hvac_modes = [HVACMode.HEAT, HVACMode.OFF]
     _attr_hvac_mode = HVACMode.HEAT
     _attr_min_temp = 20.0
@@ -362,3 +368,11 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
             return
 
         raise ValueError(f"Unsupported HVAC mode: {hvac_mode}")
+
+    async def async_turn_on(self) -> None:
+        """Turn water heating on."""
+        await self.async_set_hvac_mode(HVACMode.HEAT)
+
+    async def async_turn_off(self) -> None:
+        """Turn water heating off."""
+        await self.async_set_hvac_mode(HVACMode.OFF)

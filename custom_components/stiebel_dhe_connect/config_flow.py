@@ -886,7 +886,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
         """Remove a DHE weather favorite."""
         errors: dict[str, str] = {}
         client = self._client_or_mark_not_loaded(errors)
-        if client is not None:
+        if client is not None and user_input is None:
             try:
                 self._weather_favorites = await client.list_weather_favorites()
             except DHEError:
@@ -1066,7 +1066,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
         """Remove a DHE radio favorite."""
         errors: dict[str, str] = {}
         client = self._client_or_mark_not_loaded(errors)
-        if client is not None:
+        if client is not None and user_input is None:
             try:
                 self._radio_favorites = await client.list_radio_favorites()
             except DHEError:
