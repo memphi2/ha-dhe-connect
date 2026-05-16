@@ -28,10 +28,8 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .client import (
-    DHEClient,
-    MeasurementValue,
-)
+from .client import DHEClient
+from .client_types import MeasurementValue
 from .client_mapping import DEVICE_STATUS_OPTIONS, DEVICE_STATUS_SERVICE_REQUIRED
 from .entity_helpers import StiebelDHEEntityMixin
 from .entity_state_helpers import (

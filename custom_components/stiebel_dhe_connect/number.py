@@ -17,11 +17,8 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .client import (
-    DHEClient,
-    DHEError,
-    MeasurementValue,
-)
+from .client import DHEClient
+from .client_types import DHEError, MeasurementValue
 from .config_entry_helpers import merged_entry_data
 from .entity_helpers import (
     StiebelDHEEntityMixin,

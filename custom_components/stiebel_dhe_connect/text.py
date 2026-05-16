@@ -12,11 +12,8 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .client import (
-    DHEClient,
-    DHEError,
-    MeasurementValue,
-)
+from .client import DHEClient
+from .client_types import DHEError, MeasurementValue
 from .entity_helpers import (
     StiebelDHEEntityMixin,
     temperature_memory_enabled_default,

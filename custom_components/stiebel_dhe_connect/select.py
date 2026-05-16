@@ -13,7 +13,8 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .client import DHEClient, DHEError
+from .client import DHEClient
+from .client_types import DHEError
 from .entity_helpers import StiebelDHEEntityMixin
 from .entity_state_helpers import connected_and_ready
 from .runtime_helpers import get_runtime_data
