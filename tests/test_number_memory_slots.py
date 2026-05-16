@@ -176,6 +176,38 @@ class TestTemperatureMemoryNumbers(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(entity._attr_available)
         entity.async_write_ha_state.assert_called_once()
 
+    def test_repeated_number_measurement_is_not_rewritten(self) -> None:
+        number_module = _load_number_module()
+        description = next(
+            item
+            for item in number_module.STATIC_NUMBER_DESCRIPTIONS
+            if item.key == "eco_flow_limit"
+        )
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+            available = True
+            last_measurement_attributes = {}
+
+        entity = number_module.StiebelDHENumber(
+            entry=types.SimpleNamespace(data={}, options={}),
+            entry_id="test-entry",
+            name="Test DHE",
+            client=_FakeClient(),
+            description=description,
+        )
+        writes: list[float | None] = []
+        entity.async_write_ha_state = lambda: writes.append(entity._attr_native_value)
+
+        entity._handle_measurement_update(description.odb_id, 8.0)
+        entity._handle_measurement_update(description.odb_id, 8.0)
+        entity._handle_availability_update(True)
+        entity._handle_measurement_update(description.odb_id, 8.5)
+
+        self.assertEqual(writes, [8.0, 8.5])
+
 
 if __name__ == "__main__":
     unittest.main()
