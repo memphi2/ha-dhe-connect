@@ -10,6 +10,7 @@ from homeassistant.components.climate.const import ClimateEntityFeature, HVACMod
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .client import (
@@ -58,6 +59,8 @@ async def async_setup_entry(
 class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
     """Stiebel DHE setpoint entity with persistent local WebSocket session."""
 
+    # Explicitly opt out of legacy automatic TURN_ON/TURN_OFF feature handling.
+    _enable_turn_on_off_backwards_compatibility = False
     _attr_has_entity_name = True
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_supported_features = (
@@ -367,7 +370,7 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
             self.async_write_ha_state()
             return
 
-        raise ValueError(f"Unsupported HVAC mode: {hvac_mode}")
+        raise HomeAssistantError(f"Unsupported HVAC mode: {hvac_mode}")
 
     async def async_turn_on(self) -> None:
         """Turn water heating on."""

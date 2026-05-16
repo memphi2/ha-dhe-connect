@@ -22,6 +22,7 @@ except ImportError:  # pragma: no cover - compatibility with older HA versions
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .client import DHEClient, DHEError
@@ -124,7 +125,7 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
         """Select a DHE radio favorite."""
         station = self._sources_by_option.get(source)
         if station is None:
-            raise ValueError(f"Unknown DHE radio source: {source}")
+            raise HomeAssistantError(f"Unknown DHE radio source: {source}")
         try:
             await self._client.select_radio_station(station)
         except DHEError as err:
@@ -156,7 +157,7 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
     async def _select_relative_source(self, offset: int) -> None:
         sources = list(self._sources_by_option)
         if not sources:
-            raise ValueError("No DHE radio favorites available")
+            raise HomeAssistantError("No DHE radio favorites available")
         current_index = self._current_source_index(sources)
         if current_index < 0:
             if offset < 0:
