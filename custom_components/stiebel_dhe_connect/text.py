@@ -108,6 +108,12 @@ class StiebelDHEText(StiebelDHEEntityMixin, TextEntity, RestoreEntity):
         )
         self._attr_available = False
         self._attr_native_value: str | None = None
+        self._base_extra_state_attributes = {
+            "temperature_memory_slot": self.entity_description.temperature_memory_slot,
+            "memory_id": self.entity_description.temperature_memory_slot - 1,
+            "source_command": "set:ste.common.temperature:memory",
+        }
+        self._last_written_text_signature: tuple[object, ...] | None = None
         self._update_extra_state_attributes()
 
     async def async_added_to_hass(self) -> None:
@@ -128,6 +134,7 @@ class StiebelDHEText(StiebelDHEEntityMixin, TextEntity, RestoreEntity):
         if last_state and last_state.state not in {"unknown", "unavailable"}:
             self._attr_native_value = last_state.state
             self._attr_available = True
+            self._update_extra_state_attributes()
 
     async def async_set_value(self, value: str) -> None:
         """Set the DHE temperature memory name."""
@@ -138,14 +145,14 @@ class StiebelDHEText(StiebelDHEEntityMixin, TextEntity, RestoreEntity):
             )
         except DHEError as err:
             self._attr_available = self._attr_native_value is not None
-            self.async_write_ha_state()
+            self._write_text_state(force=True)
             _LOGGER.error("Could not set DHE text %s: %s", self.entity_description.key, err)
             raise
 
         self._attr_native_value = confirmed
         self._attr_available = True
         self._update_extra_state_attributes()
-        self.async_write_ha_state()
+        self._write_text_state(force=True)
 
     @callback
     def _handle_measurement_update(self, odb_id: int, value: MeasurementValue) -> None:
@@ -159,13 +166,34 @@ class StiebelDHEText(StiebelDHEEntityMixin, TextEntity, RestoreEntity):
         else:
             self._attr_available = True
         self._update_extra_state_attributes()
-        self.async_write_ha_state()
+        self._write_text_state()
 
     @callback
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
         self._attr_available = available
+        self._write_text_state()
+
+    def _write_text_state(self, *, force: bool = False) -> bool:
+        """Write text state only when visible state changed."""
+        signature = self._text_write_signature()
+        if not force and signature == getattr(
+            self,
+            "_last_written_text_signature",
+            None,
+        ):
+            return False
+        self._last_written_text_signature = signature
         self.async_write_ha_state()
+        return True
+
+    def _text_write_signature(self) -> tuple[object, ...]:
+        """Return stable text fields that should trigger a state write."""
+        return (
+            self._attr_available,
+            self._attr_native_value,
+            dict(self._attr_extra_state_attributes or {}),
+        )
 
     def _set_value_from_client(self) -> bool:
         attributes = self._client.last_measurement_attributes.get(
@@ -179,10 +207,11 @@ class StiebelDHEText(StiebelDHEEntityMixin, TextEntity, RestoreEntity):
         return True
 
     def _update_extra_state_attributes(self) -> None:
+        base_attributes = dict(self._base_extra_state_attributes)
+        if self._attr_native_value is not None:
+            base_attributes["name"] = self._attr_native_value
         self._attr_extra_state_attributes = merge_state_attributes(
-            {
-                "temperature_memory_slot": self.entity_description.temperature_memory_slot,
-            },
+            base_attributes,
             self._client.last_measurement_attributes.get(
                 self.entity_description.measurement_id,
                 {},
