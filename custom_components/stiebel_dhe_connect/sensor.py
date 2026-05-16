@@ -153,6 +153,7 @@ ERROR_STATUS_OPTIONS = (
     "service_required",
     "target_below_inlet",
 )
+ERROR_STATUS_INLET_ATTRIBUTE_REFRESH_SECONDS = 120.0
 
 
 DIAGNOSTIC_SENSOR_DESCRIPTIONS: tuple[StiebelDHEDiagnosticSensorEntityDescription, ...] = (
@@ -835,6 +836,10 @@ class StiebelDHEErrorStatusSensor(StiebelDHEEntityMixin, SensorEntity):
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = ERROR_STATUS_OPTIONS
     _attr_icon = "mdi:alert-octagon-outline"
+    _unrecorded_attributes = frozenset({
+        "inlet_temperature",
+        "inlet_minus_setpoint",
+    })
 
     def __init__(self, entry_id: str, name: str, client: DHEClient) -> None:
         """Initialize the general error status sensor."""
@@ -849,6 +854,8 @@ class StiebelDHEErrorStatusSensor(StiebelDHEEntityMixin, SensorEntity):
         self._device_status: str | None = None
         self._attr_available = False
         self._attr_native_value: str | None = None
+        self._last_written_status_signature: tuple[Any, ...] | None = None
+        self._last_inlet_attribute_write_monotonic: float | None = None
         self._update_status()
 
     async def async_added_to_hass(self) -> None:
@@ -869,16 +876,17 @@ class StiebelDHEErrorStatusSensor(StiebelDHEEntityMixin, SensorEntity):
         device_status = self._client.last_measurements.get(ID_DEVICE_STATUS)
         self._device_status = str(device_status) if isinstance(device_status, str) else None
         self._update_status()
-        self.async_write_ha_state()
+        self._write_status_state(force=True)
 
     @callback
     def _handle_setpoint_update(self, value: float) -> None:
         self._setpoint = self._coerce_temperature(value)
         self._update_status()
-        self.async_write_ha_state()
+        self._write_status_state()
 
     @callback
     def _handle_measurement_update(self, odb_id: int, value: MeasurementValue) -> None:
+        inlet_update = odb_id == ID_INLET_TEMPERATURE
         if odb_id == ID_INLET_TEMPERATURE:
             self._inlet_temperature = self._coerce_temperature(value)
         elif odb_id == ID_DEVICE_STATUS:
@@ -886,7 +894,9 @@ class StiebelDHEErrorStatusSensor(StiebelDHEEntityMixin, SensorEntity):
         else:
             return
         self._update_status()
-        self.async_write_ha_state()
+        self._write_status_state(
+            force=inlet_update and self._should_refresh_inlet_attributes()
+        )
 
     @callback
     def _handle_availability_update(self, available: bool) -> None:
@@ -897,7 +907,7 @@ class StiebelDHEErrorStatusSensor(StiebelDHEEntityMixin, SensorEntity):
             self._device_status,
         )
         self._update_status()
-        self.async_write_ha_state()
+        self._write_status_state()
 
     def _update_status(self) -> None:
         below_inlet = (
@@ -937,6 +947,38 @@ class StiebelDHEErrorStatusSensor(StiebelDHEEntityMixin, SensorEntity):
             self._attr_extra_state_attributes["inlet_minus_setpoint"] = round(
                 self._inlet_temperature - self._setpoint, 2
             )
+
+    def _write_status_state(self, *, force: bool = False) -> None:
+        """Write the entity only when stable error-status fields changed."""
+        signature = self._status_write_signature()
+        if not force and signature == self._last_written_status_signature:
+            return
+        self._last_written_status_signature = signature
+        self._last_inlet_attribute_write_monotonic = time.monotonic()
+        self.async_write_ha_state()
+
+    def _should_refresh_inlet_attributes(self) -> bool:
+        last_write = self._last_inlet_attribute_write_monotonic
+        if last_write is None:
+            return True
+        return (
+            time.monotonic() - last_write
+        ) >= ERROR_STATUS_INLET_ATTRIBUTE_REFRESH_SECONDS
+
+    def _status_write_signature(self) -> tuple[Any, ...]:
+        """Return stable fields that should trigger a recorder-visible write."""
+        attributes = self._attr_extra_state_attributes or {}
+        return (
+            self._attr_available,
+            self._attr_native_value,
+            attributes.get("online"),
+            attributes.get("connected"),
+            attributes.get("active_error"),
+            attributes.get("setpoint_temperature"),
+            attributes.get("setpoint_below_inlet"),
+            attributes.get("device_status"),
+            attributes.get("device_service_required"),
+        )
 
     @staticmethod
     def _coerce_temperature(value: MeasurementValue) -> float | None:

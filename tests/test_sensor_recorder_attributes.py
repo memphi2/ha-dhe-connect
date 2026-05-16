@@ -77,6 +77,13 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         self.assertIn("consumption", attributes)
         self.assertIn("activation_rate", attributes)
 
+    def test_error_status_sensor_excludes_dynamic_inlet_attributes(self) -> None:
+        sensor_module = _load_sensor_module()
+        attributes = sensor_module.StiebelDHEErrorStatusSensor._unrecorded_attributes
+
+        self.assertIn("inlet_temperature", attributes)
+        self.assertIn("inlet_minus_setpoint", attributes)
+
     def test_flow_and_power_write_filters_use_stricter_thresholds(self) -> None:
         sensor_module = _load_sensor_module()
         self.assertEqual(sensor_module.SENSOR_WRITE_FILTERS["water_flow"], (1.0, 45.0))
@@ -153,6 +160,108 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         sensor._last_written_native_value = 10.0
         sensor._last_written_monotonic = -1_000_000_000.0
         self.assertTrue(sensor._should_write_measurement_state(10.01))
+
+    def test_error_status_sensor_does_not_write_for_inlet_jitter(self) -> None:
+        sensor_module = _load_sensor_module()
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+            online = True
+            available = True
+            last_setpoint = 38.0
+            last_measurements = {}
+
+        sensor = sensor_module.StiebelDHEErrorStatusSensor(
+            entry_id="test-entry",
+            name="Test DHE",
+            client=_FakeClient(),
+        )
+        writes: list[str | None] = []
+        sensor.async_write_ha_state = lambda: writes.append(sensor._attr_native_value)
+        sensor._setpoint = 38.0
+        sensor._inlet_temperature = 10.0
+        sensor._update_status()
+        sensor._write_status_state(force=True)
+        writes.clear()
+
+        sensor._handle_measurement_update(sensor_module.ID_INLET_TEMPERATURE, 10.1)
+        sensor._handle_measurement_update(sensor_module.ID_INLET_TEMPERATURE, 10.3)
+
+        self.assertEqual(writes, [])
+
+        sensor._handle_measurement_update(sensor_module.ID_INLET_TEMPERATURE, 38.1)
+
+        self.assertEqual(writes, ["target_below_inlet"])
+        self.assertEqual(sensor._attr_native_value, "target_below_inlet")
+
+        sensor._handle_measurement_update(sensor_module.ID_INLET_TEMPERATURE, 38.3)
+
+        self.assertEqual(writes, ["target_below_inlet"])
+
+    def test_error_status_sensor_refreshes_inlet_attributes_after_interval(self) -> None:
+        sensor_module = _load_sensor_module()
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+            online = True
+            available = True
+            last_setpoint = 38.0
+            last_measurements = {}
+
+        sensor = sensor_module.StiebelDHEErrorStatusSensor(
+            entry_id="test-entry",
+            name="Test DHE",
+            client=_FakeClient(),
+        )
+        writes: list[str | None] = []
+        sensor.async_write_ha_state = lambda: writes.append(sensor._attr_native_value)
+        sensor._setpoint = 38.0
+        sensor._inlet_temperature = 10.0
+        sensor._update_status()
+        sensor._write_status_state(force=True)
+        writes.clear()
+
+        sensor._last_inlet_attribute_write_monotonic = -1_000_000_000.0
+        sensor._handle_measurement_update(sensor_module.ID_INLET_TEMPERATURE, 10.2)
+
+        self.assertEqual(writes, ["ok"])
+
+    def test_error_status_sensor_writes_for_device_status_change(self) -> None:
+        sensor_module = _load_sensor_module()
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+            online = True
+            available = True
+            last_setpoint = 38.0
+            last_measurements = {}
+
+        sensor = sensor_module.StiebelDHEErrorStatusSensor(
+            entry_id="test-entry",
+            name="Test DHE",
+            client=_FakeClient(),
+        )
+        writes: list[str | None] = []
+        sensor.async_write_ha_state = lambda: writes.append(sensor._attr_native_value)
+        sensor._setpoint = 38.0
+        sensor._inlet_temperature = 10.0
+        sensor._update_status()
+        sensor._write_status_state(force=True)
+        writes.clear()
+
+        sensor._handle_measurement_update(
+            sensor_module.ID_DEVICE_STATUS,
+            sensor_module.DEVICE_STATUS_SERVICE_REQUIRED,
+        )
+
+        self.assertEqual(writes, ["service_required"])
+        self.assertEqual(sensor._attr_native_value, "service_required")
 
 
 if __name__ == "__main__":
