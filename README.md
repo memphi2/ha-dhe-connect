@@ -618,7 +618,7 @@ The repository includes a lightweight validation script:
 python scripts/check_integration.py
 ```
 
-It checks the manifest, HACS metadata, required repository files, translation key parity and Python syntax without writing bytecode artifacts. The same check runs in the `Validate` GitHub Actions workflow.
+It checks the manifest, HACS metadata, required repository files, release-note source of truth, translation key parity and Python syntax without writing bytecode artifacts. The same check runs in the `Validate` GitHub Actions workflow.
 
 
 ## Security notes

@@ -92,6 +92,8 @@ def check_repository_files(version: str) -> None:
         _fail("README current version does not match manifest version")
     if f"## v{version}" not in changelog:
         _fail("CHANGELOG is missing a section for the manifest version")
+    if (ROOT / "info.md").exists():
+        _fail("legacy info.md release notes must not be restored; use CHANGELOG.md")
 
 
 def check_translations() -> None:
