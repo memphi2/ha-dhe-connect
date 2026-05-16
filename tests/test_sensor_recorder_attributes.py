@@ -211,6 +211,35 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         sensor._last_written_monotonic = -1_000_000_000.0
         self.assertTrue(sensor._should_write_measurement_state(5.4))
 
+    def test_availability_update_writes_only_on_effective_sensor_change(self) -> None:
+        sensor_module = _load_sensor_module()
+        description = next(
+            item for item in sensor_module.SENSOR_DESCRIPTIONS if item.key == "water_flow"
+        )
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+
+        sensor = sensor_module.StiebelDHESensor(
+            entry_id="test-entry",
+            name="Test DHE",
+            client=_FakeClient(),
+            description=description,
+        )
+        writes: list[bool] = []
+        sensor.async_write_ha_state = lambda: writes.append(sensor._attr_available)
+        sensor._attr_native_value = 5.0
+        sensor._attr_available = True
+
+        sensor._handle_availability_update(True)
+        sensor._handle_availability_update(False)
+        sensor._handle_availability_update(False)
+        sensor._handle_availability_update(True)
+
+        self.assertEqual(writes, [False, True])
+
     def test_consumption_filter_blocks_small_jitter_but_allows_interval(self) -> None:
         sensor_module = _load_sensor_module()
         description = next(
