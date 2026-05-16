@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, date as date_type, datetime, time as time_type, tzinfo
 from typing import Any
 
 
@@ -55,13 +55,19 @@ def deduplicate_forecast_days(days: list[dict[str, Any]]) -> list[dict[str, Any]
     return deduped
 
 
-def forecast_from_day(day: dict[str, Any]) -> dict[str, Any] | None:
+def forecast_from_day(
+    day: dict[str, Any],
+    *,
+    time_zone: tzinfo | None = None,
+) -> dict[str, Any] | None:
     """Build one HA daily forecast item from one DHE day."""
     date = day.get("date")
     if not date:
         return None
 
-    forecast: dict[str, Any] = {"datetime": f"{date}T00:00:00+00:00"}
+    forecast: dict[str, Any] = {
+        "datetime": forecast_datetime_from_date(str(date), time_zone=time_zone)
+    }
     condition = daily_condition_from_day(day)
     tmax = number(day.get("tmax"))
     tmin = number(day.get("tmin"))
@@ -75,6 +81,25 @@ def forecast_from_day(day: dict[str, Any]) -> dict[str, Any] | None:
     if precipitation is not None:
         forecast["precipitation_probability"] = precipitation
     return forecast
+
+
+def forecast_datetime_from_date(
+    date: str,
+    *,
+    time_zone: tzinfo | None = None,
+) -> str:
+    """Return UTC RFC3339 for the HA-local start of a DHE forecast day."""
+    try:
+        forecast_date = date_type.fromisoformat(date)
+    except ValueError:
+        return f"{date}T00:00:00+00:00"
+
+    local_midnight = datetime.combine(
+        forecast_date,
+        time_type.min,
+        tzinfo=time_zone or UTC,
+    )
+    return local_midnight.astimezone(UTC).isoformat()
 
 
 def weather_attributes(

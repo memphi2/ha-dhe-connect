@@ -6,6 +6,7 @@ from datetime import datetime
 import importlib.util
 from pathlib import Path
 import unittest
+from zoneinfo import ZoneInfo
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -75,6 +76,26 @@ class TestWeatherForecastMapping(unittest.TestCase):
         forecast = self.weather.forecast_from_day({"date": "2026-12-31"})
 
         self.assertEqual(forecast, {"datetime": "2026-12-31T00:00:00+00:00"})
+
+    def test_forecast_from_day_converts_local_midnight_to_utc(self) -> None:
+        forecast = self.weather.forecast_from_day(
+            {"date": "2026-05-10"},
+            time_zone=ZoneInfo("America/New_York"),
+        )
+
+        self.assertEqual(forecast, {"datetime": "2026-05-10T04:00:00+00:00"})
+
+    def test_forecast_datetime_keeps_local_calendar_date_when_rendered(self) -> None:
+        forecast_time = self.weather.forecast_datetime_from_date(
+            "2026-05-10",
+            time_zone=ZoneInfo("America/Los_Angeles"),
+        )
+
+        local_time = datetime.fromisoformat(forecast_time).astimezone(
+            ZoneInfo("America/Los_Angeles")
+        )
+        self.assertEqual(local_time.date().isoformat(), "2026-05-10")
+        self.assertEqual(local_time.hour, 0)
 
     def test_forecast_from_day_requires_date(self) -> None:
         self.assertIsNone(self.weather.forecast_from_day({"tmax": 19}))
