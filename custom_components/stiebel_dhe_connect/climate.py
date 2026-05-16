@@ -109,6 +109,7 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
         self._target_before_heating_off: float | None = None
         self._last_written_temperatures: dict[int, float | None] = {}
         self._last_written_temperature_monotonic: dict[int, float] = {}
+        self._last_written_state_signature: tuple[Any, ...] | None = None
         self._update_extra_state_attributes()
 
     def _update_extra_state_attributes(self) -> None:
@@ -166,12 +167,12 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
             self._target_before_heating_off = value
         self._attr_available = True
         self._connection_state = "connected"
-        self._update_extra_state_attributes()
-        self.async_write_ha_state()
+        self._write_climate_state()
 
     @callback
     def _handle_measurement_update(self, odb_id: int, value: MeasurementValue) -> None:
         """Handle measurement updates for inlet and outlet temperatures."""
+        temperature_update = odb_id in (ID_INLET_TEMPERATURE, ID_OUTLET_TEMPERATURE)
         write_update = True
         if odb_id == ID_INLET_TEMPERATURE:
             self._inlet_temperature = self._coerce_temperature(value)
@@ -211,8 +212,7 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
             self._last_written_temperatures[odb_id] = current
             self._last_written_temperature_monotonic[odb_id] = time.monotonic()
 
-        self._update_extra_state_attributes()
-        self.async_write_ha_state()
+        self._write_climate_state(force=temperature_update)
 
     @callback
     def _handle_availability_update(self, available: bool) -> None:
@@ -228,8 +228,36 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
             self._attr_available = False
             self._connection_state = "unavailable"
 
+        self._write_climate_state()
+
+    def _write_climate_state(self, *, force: bool = False) -> None:
+        """Write climate state only when recorder-visible state changed."""
         self._update_extra_state_attributes()
+        signature = self._climate_write_signature()
+        if not force and signature == self._last_written_state_signature:
+            return
+        self._last_written_state_signature = signature
         self.async_write_ha_state()
+
+    def _climate_write_signature(self) -> tuple[Any, ...]:
+        """Return stable climate fields that should trigger a state write."""
+        attributes = self._attr_extra_state_attributes or {}
+        return (
+            self._attr_available,
+            self._connection_state,
+            self._attr_hvac_mode,
+            self._attr_target_temperature,
+            self._attr_current_temperature,
+            self._attr_max_temp,
+            self._inlet_temperature,
+            self._outlet_temperature,
+            self._water_heating_enabled,
+            self._child_safety_active,
+            self._child_safety_temperature_limit,
+            self._child_safety_temperature_limit_raw,
+            attributes.get("setpoint_below_inlet_temperature"),
+            attributes.get("inlet_minus_setpoint"),
+        )
 
     def _sync_temperatures_from_measurements(self) -> None:
         """Initialize inlet/outlet values from the last known measurements."""
@@ -347,8 +375,7 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
             self._target_before_heating_off = self._attr_target_temperature
             self._attr_available = True
             self._connection_state = "connected"
-            self._update_extra_state_attributes()
-            self.async_write_ha_state()
+            self._write_climate_state(force=True)
         except DHEError as err:
             _LOGGER.error("Could not set DHE temperature: %s", err)
             raise
@@ -368,8 +395,7 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
             )
             self._attr_available = True
             self._connection_state = "connected"
-            self._update_extra_state_attributes()
-            self.async_write_ha_state()
+            self._write_climate_state(force=True)
             return
 
         if hvac_mode == HVACMode.HEAT:
@@ -408,8 +434,7 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
                 )
             self._attr_available = True
             self._connection_state = "connected"
-            self._update_extra_state_attributes()
-            self.async_write_ha_state()
+            self._write_climate_state(force=True)
             return
 
         raise HomeAssistantError(f"Unsupported HVAC mode: {hvac_mode}")
