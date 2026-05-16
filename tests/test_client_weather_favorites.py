@@ -1048,6 +1048,7 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
 
     async def test_open_session_uses_structured_open_payload(self) -> None:
         client_module = _load_client()
+        protocol_module = _load_protocol()
         DHEClient = client_module.DHEClient
 
         client = DHEClient.__new__(DHEClient)
@@ -1066,7 +1067,7 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ctx.websocket_sid, "websocket sid")
         self.assertEqual(ctx.url_token, "token value")
         self.assertEqual(ctx.ping_interval, 15.0)
-        client._post_packet.assert_awaited_once_with(ctx, f"40/{client_module.NS}")
+        client._post_packet.assert_awaited_once_with(ctx, f"40/{protocol_module.NS}")
 
     def test_parse_socketio_events_continues_after_malformed_frame(self) -> None:
         client_module = _load_client()
@@ -1087,11 +1088,12 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
 
     async def test_websocket_upgrade_leaves_control_ping_handling_enabled(self) -> None:
         client_module = _load_client()
+        transport_module = _load_component_module("client_transport")
         DHEClient = client_module.DHEClient
         DHESession = client_module.DHESession
 
         message = types.SimpleNamespace(
-            type=client_module.aiohttp.WSMsgType.TEXT,
+            type=transport_module.aiohttp.WSMsgType.TEXT,
             data="3probe",
         )
 
