@@ -391,7 +391,7 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
             client.token_path = os.path.join(temp_dir, "token.txt")
             await DHEClient._save_token(client, "super-secret-token")
 
-            with open(client.token_path, "r", encoding="utf-8") as file:
+            with open(client.token_path, encoding="utf-8") as file:
                 self.assertEqual(file.read(), "super-secret-token")
 
             if os.name == "posix":
