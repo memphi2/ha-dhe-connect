@@ -84,6 +84,7 @@ def check_repository_files(version: str) -> None:
         "hacs.json",
         "custom_components/stiebel_dhe_connect/services.yaml",
         "custom_components/stiebel_dhe_connect/brand/icon.png",
+        "custom_components/stiebel_dhe_connect/brand/logo.png",
     ):
         if not (ROOT / relative).exists():
             _fail(f"required file missing: {relative}")
