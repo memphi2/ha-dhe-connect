@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import closing
 import json
 from pathlib import Path
 import sqlite3
@@ -17,7 +18,7 @@ def _write_json(path: Path, payload: dict) -> None:
 
 
 def _create_recorder_db(path: Path) -> None:
-    with sqlite3.connect(path) as conn:
+    with closing(sqlite3.connect(path)) as conn:
         conn.executescript(
             """
             CREATE TABLE states_meta (
@@ -37,6 +38,7 @@ def _create_recorder_db(path: Path) -> None:
             );
             """
         )
+        conn.commit()
 
 
 def _insert_state(
@@ -48,7 +50,7 @@ def _insert_state(
     state: str,
     attributes: dict | None = None,
 ) -> None:
-    with sqlite3.connect(path) as conn:
+    with closing(sqlite3.connect(path)) as conn:
         conn.execute(
             "INSERT OR IGNORE INTO states_meta(metadata_id, entity_id) VALUES(?, ?)",
             (metadata_id, entity_id),
@@ -76,6 +78,7 @@ def _insert_state(
             """,
             (state_id, metadata_id, state, attributes_id, float(state_id)),
         )
+        conn.commit()
 
 
 class TestHaTestSmoke(unittest.TestCase):
@@ -378,13 +381,69 @@ class TestHaTestSmoke(unittest.TestCase):
                 db_path,
                 ha_test_smoke.enabled_entity_ids(entries),
             )
-            failures = [
-                result.message
-                for result in ha_test_smoke.evaluate_state_health(entries, states)
-                if not result.ok
-            ]
+            results = ha_test_smoke.evaluate_state_health(entries, states)
 
-            self.assertIn("sensor.dhe_connect_reconnect_count='2'", failures)
+            self.assertTrue(all(result.ok for result in results), results)
+            self.assertIn(
+                "sensor.dhe_connect_reconnect_count='2' baseline reconnect count",
+                [result.message for result in results],
+            )
+
+    def test_reconnect_stability_fails_on_monitor_increment(self) -> None:
+        before = {
+            "sensor.dhe_connect_reconnects": ha_test_smoke.LatestState(
+                entity_id="sensor.dhe_connect_reconnects",
+                state="1",
+                attributes={},
+                state_id=1,
+                last_updated=1.0,
+            )
+        }
+        after = {
+            "sensor.dhe_connect_reconnects": ha_test_smoke.LatestState(
+                entity_id="sensor.dhe_connect_reconnects",
+                state="2",
+                attributes={},
+                state_id=2,
+                last_updated=2.0,
+            )
+        }
+
+        results = ha_test_smoke.evaluate_reconnect_stability(before, after)
+
+        self.assertFalse(results[0].ok)
+        self.assertEqual(
+            results[0].message,
+            "sensor.dhe_connect_reconnects reconnect count increased 1->2",
+        )
+
+    def test_reconnect_stability_allows_existing_baseline(self) -> None:
+        before = {
+            "sensor.dhe_connect_reconnects": ha_test_smoke.LatestState(
+                entity_id="sensor.dhe_connect_reconnects",
+                state="1",
+                attributes={},
+                state_id=1,
+                last_updated=1.0,
+            )
+        }
+        after = {
+            "sensor.dhe_connect_reconnects": ha_test_smoke.LatestState(
+                entity_id="sensor.dhe_connect_reconnects",
+                state="1",
+                attributes={},
+                state_id=2,
+                last_updated=2.0,
+            )
+        }
+
+        results = ha_test_smoke.evaluate_reconnect_stability(before, after)
+
+        self.assertTrue(results[0].ok)
+        self.assertEqual(
+            results[0].message,
+            "sensor.dhe_connect_reconnects reconnect count stable at 1",
+        )
 
     def test_recorder_write_counter_groups_by_entity(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -461,12 +520,12 @@ class TestHaTestSmoke(unittest.TestCase):
             self.assertNotIn("secret", results[0].message)
             self.assertNotIn(private_host, results[0].message)
 
-    def test_log_scan_fails_when_no_log_sources_exist(self) -> None:
+    def test_log_scan_skips_when_no_log_sources_exist(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             results = ha_test_smoke.scan_logs(Path(temp_dir))
 
-            self.assertFalse(results[0].ok)
-            self.assertIn("no Home Assistant log files found", results[0].message)
+            self.assertTrue(results[0].ok)
+            self.assertIn("DHE log scan skipped", results[0].message)
 
     def test_log_scan_limits_itself_to_recent_lines(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
