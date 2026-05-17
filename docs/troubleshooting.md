@@ -119,6 +119,34 @@ power, live temperature, consumption and saving-monitor entities. Unexpected idl
 writers should be investigated from the top-writer list printed by the smoke
 check.
 
+Numeric sensor write filters suppress small jitter, but current flow and current
+power still publish visible runtime changes of at least `0.2` and every
+transition between `0` and a non-zero value. Timer remaining values and bath-fill
+volumes are intentionally unfiltered so they stay live in the UI. If one of
+these values appears stuck after an operation starts or stops, treat that as a
+stale-state bug rather than expected recorder throttling.
+
+Home Assistant records normal state changes unless the recorder is configured to
+exclude the affected entities. If current flow or current power should stay live
+in dashboards but not grow the recorder database, exclude the concrete entity
+IDs in the Home Assistant recorder configuration. The same applies if optional
+timer or bath-fill entities should be visible live but should not keep a
+long-term history.
+
+Example, adjusted to the actual entity IDs from your Home Assistant instance:
+
+```yaml
+recorder:
+  exclude:
+    entities:
+      - sensor.dhe_connect_water_flow
+      - sensor.dhe_connect_power
+      - sensor.dhe_connect_shower_timer_remaining
+      - sensor.dhe_connect_brush_timer_remaining
+      - sensor.dhe_connect_bath_fill_remaining_volume
+      - sensor.dhe_connect_bath_fill_current_volume
+```
+
 ## Weather Favorites
 
 Weather favorite selection mirrors the DHE web interface:
