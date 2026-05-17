@@ -219,6 +219,35 @@ class TestReleaseCheck(unittest.TestCase):
         self.assertEqual(result.args, ("missing-cli", "--version"))
         self.assertIn("missing executable", result.stderr)
 
+    def test_command_failed_message_redacts_auth_context(self) -> None:
+        private_host = ".".join(("172", "16", "1", "147"))
+        result = release_check.CommandResult(
+            args=(
+                "python",
+                "scripts/ha_test_api.py",
+                "--url",
+                f"http://{private_host}:8123/?token=abc123",
+                "--password",
+                "secret",
+            ),
+            returncode=1,
+            stdout="",
+            stderr=(
+                "access_token=def456 Authorization: Bearer ghijk "
+                f"password=secret http://user:secret@{private_host}:8123"
+            ),
+        )
+
+        message = release_check._command_failed_message(result)
+
+        self.assertIn("<redacted>", message)
+        self.assertIn("<private-host>", message)
+        self.assertNotIn("abc123", message)
+        self.assertNotIn("def456", message)
+        self.assertNotIn("ghijk", message)
+        self.assertNotIn("secret", message)
+        self.assertNotIn(private_host, message)
+
     def test_secret_scan_rejects_tracked_token_storage_path(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
