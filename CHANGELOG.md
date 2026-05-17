@@ -16,6 +16,7 @@
 
 - Broadened the scoped type-checking gate from helper and mapping modules to the integration setup module, the composed client facade, Home Assistant platform entities and additional runtime helpers.
 - Added explicit Protocol-based command context typing for the DHE command mixins and included those command modules in the scoped type gate.
+- Added the config and options flow module to the scoped type gate with an explicit options-client Protocol.
 - Added explicit platform-entity type annotations where Home Assistant attributes were previously inferred too narrowly for the wider type gate.
 - Added Ruff linting to the GitHub `Validate` workflow so CI now enforces the same lint gate as local release checks.
 - Added explicit README notes for unofficial status, trademark use, original artwork and MIT licensing scope.
@@ -32,7 +33,7 @@
 
 - Local test suite: `346 passed`, `22 subtests passed`.
 - Integration repository check: `scripts/check_integration.py`.
-- Type gate: `scripts/check_typing.py` over 42 modules.
+- Type gate: `scripts/check_typing.py` over 44 modules.
 - Ruff: `ruff check custom_components/stiebel_dhe_connect tests scripts`.
 - HA-Test smoke: copied to the mounted Home Assistant test config, restarted Home Assistant, verified DHE connection health and ran mounted smoke checks with localhost-token cleanup.
 - Release-readiness check prepared with `v1.4.1` tag and GitHub release expected absent.

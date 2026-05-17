@@ -5,7 +5,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from typing import Any
+from collections.abc import Sequence
+from typing import Any, Protocol, cast
 
 import aiohttp
 import voluptuous as vol
@@ -87,6 +88,55 @@ ID_APP_CURRENCY = _ID_APP_CURRENCY
 _currency_options = _schema_currency_options
 
 _LOGGER = logging.getLogger(__name__)
+
+
+class _OptionsFlowClient(Protocol):
+    """Client surface used by the options flow."""
+
+    async def set_currency(self, currency: str) -> str: ...
+
+    async def set_electricity_price(self, euros_per_kwh: float) -> float: ...
+
+    async def set_water_price(self, euros_per_m3: float) -> float: ...
+
+    async def set_co2_emission(self, kg_per_kwh: float) -> float: ...
+
+    async def list_weather_countries(self) -> list[dict[str, Any]]: ...
+
+    async def search_weather_locations(
+        self,
+        name: str,
+        country_id: int | float | str,
+    ) -> list[dict[str, Any]]: ...
+
+    async def list_weather_favorites(self) -> list[dict[str, Any]]: ...
+
+    async def add_weather_favorite(self, location: dict[str, Any]) -> bool: ...
+
+    async def remove_weather_favorite(self, location: dict[str, Any]) -> bool: ...
+
+    async def list_radio_catalog(self, attribute: str) -> list[str]: ...
+
+    async def search_radio_stations(
+        self,
+        attribute: str,
+        value: str,
+        *,
+        search_text: str | None = None,
+    ) -> list[dict[str, Any]]: ...
+
+    async def list_radio_favorites(self) -> list[dict[str, Any]]: ...
+
+    async def add_radio_favorite(
+        self,
+        station: dict[str, Any] | int | str,
+        *,
+        select: bool = True,
+    ) -> bool: ...
+
+    async def remove_radio_favorite(self, station: dict[str, Any] | int | str) -> bool:
+        ...
+
 
 def _apply_validation_error(errors: dict[str, str], err: ValueError) -> None:
     """Map validation exceptions to form fields."""
@@ -189,6 +239,7 @@ async def _async_clear_setup_token_files(
 
     def _delete() -> list[str]:
         paths = set(explicit_paths)
+        token_file_names: Sequence[str]
         try:
             token_file_names = os.listdir(storage_path)
         except OSError:
@@ -259,7 +310,10 @@ async def _validate_setup_pairing(
     return None
 
 
-class StiebelDHEConnectConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
+    config_entries.ConfigFlow,
+    domain=DOMAIN,
+):
     """Handle a config flow for Stiebel DHE Connect."""
 
     VERSION = 1
@@ -357,7 +411,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
         self._weather_favorites: list[dict[str, Any]] = []
         self._weather_results: list[dict[str, Any]] = []
         self._pending_connection_data: dict[str, Any] | None = None
-        self._menu_options = [
+        self._menu_options: list[str] = [
             "connection",
             "device_settings",
             "weather_favorite",
@@ -373,7 +427,10 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
             data=dict(self.config_entry.options),
         )
 
-    def _client_or_mark_not_loaded(self, errors: dict[str, str]) -> Any | None:
+    def _client_or_mark_not_loaded(
+        self,
+        errors: dict[str, str],
+    ) -> _OptionsFlowClient | None:
         """Return runtime client or mark the step as not loaded."""
         client = self._client()
         if client is None:
@@ -485,7 +542,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
         client = self._client_or_mark_not_loaded(errors)
 
         defaults = _device_settings_defaults(client) if client is not None else {}
-        if user_input is not None and not errors:
+        if user_input is not None and not errors and client is not None:
             try:
                 currency = str(
                     user_input.get(ATTR_CURRENCY) or CURRENCY_UNCHANGED
@@ -543,7 +600,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
         country_options = _weather_country_options(self._weather_countries)
         defaults = user_input or {}
 
-        if user_input is not None and not errors:
+        if user_input is not None and not errors and client is not None:
             search_name = str(user_input.get(CONF_NAME, "")).strip()
             if not search_name:
                 errors[CONF_NAME] = "required"
@@ -588,7 +645,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
         if not result_options and "base" not in errors:
             errors["base"] = "no_results"
 
-        if user_input is not None and not errors:
+        if user_input is not None and not errors and client is not None:
             try:
                 selected = int(user_input[ATTR_RESULT])
                 location = self._weather_results[selected]
@@ -626,7 +683,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
         if not favorite_options and not errors:
             errors["base"] = "no_favorites"
 
-        if user_input is not None and not errors:
+        if user_input is not None and not errors and client is not None:
             try:
                 selected = int(user_input[ATTR_RESULT])
                 location = self._weather_favorites[selected]
@@ -706,7 +763,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
         ):
             errors["base"] = "no_radio_catalog"
 
-        if user_input is not None and not errors:
+        if user_input is not None and not errors and client is not None:
             catalog_value = str(user_input.get(ATTR_RADIO_SELECTION, "")).strip()
             search_text = str(user_input.get(ATTR_RADIO_FILTER_TEXT, "")).strip()
             if search_type in RADIO_CATALOG_SEARCH_TYPES and not catalog_value:
@@ -768,7 +825,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
         if not result_options and "base" not in errors:
             errors["base"] = "no_results"
 
-        if user_input is not None and not errors:
+        if user_input is not None and not errors and client is not None:
             try:
                 selected = int(user_input[ATTR_RESULT])
                 station = self._radio_results[selected]
@@ -806,7 +863,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
         if not favorite_options and not errors:
             errors["base"] = "no_radio_favorites"
 
-        if user_input is not None and not errors:
+        if user_input is not None and not errors and client is not None:
             try:
                 selected = int(user_input[ATTR_RESULT])
                 station = self._radio_favorites[selected]
@@ -824,7 +881,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
             errors=errors,
         )
 
-    def _client(self) -> Any | None:
+    def _client(self) -> _OptionsFlowClient | None:
         """Return the runtime DHE client for this config entry."""
         runtime = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
-        return getattr(runtime, "client", None)
+        return cast(_OptionsFlowClient | None, getattr(runtime, "client", None))
