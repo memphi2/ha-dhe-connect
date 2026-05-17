@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Expanded fake DHE Engine.IO coverage for stored-token authentication, setup pairing, manual token-before-result pairing, rejected pairing and closed-session handling.
+
 ### Changed
 
 - Extended the scoped type gate to include the DHE runtime, app-runtime, transport and pairing mixins.

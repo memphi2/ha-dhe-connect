@@ -38,6 +38,9 @@ physical heater:
 - Socket.IO namespace open.
 - WebSocket probe and upgrade.
 - Runtime message parsing.
+- Stored-token authentication and setup-pairing confirmation.
+- Manual pairing where a token arrives before the final pairing result.
+- Rejected pairing and closed-session handling.
 - Command readback confirmation for setpoint and water-heating writes.
 - Command-level temperature-memory generation/readback.
 - Radio favorite add and station selection readback.
