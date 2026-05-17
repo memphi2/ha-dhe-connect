@@ -1,7 +1,7 @@
 [tool.mypy]
 python_version = "3.12"
 ignore_missing_imports = true
-follow_imports = "silent"
+follow_imports = "skip"
 files = [
     "custom_components/stiebel_dhe_connect/client_diagnostics.py",
     "custom_components/stiebel_dhe_connect/client_errors.py",
@@ -14,3 +14,7 @@ files = [
     "custom_components/stiebel_dhe_connect/radio_mapping.py",
     "custom_components/stiebel_dhe_connect/weather_mapping.py",
 ]
+
+[tool.pytest.ini_options]
+addopts = "-p no:homeassistant"
+asyncio_mode = "auto"

@@ -43,13 +43,13 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.14"
 
       - name: Install repository check dependencies
-        run: python -m pip install "aiohttp>=3.9,<4" "mypy>=1.13,<2"
+        run: python -m pip install "aiohttp>=3.9,<4" "mypy>=1.13,<2" "pytest-homeassistant-custom-component>=0.13.230,<0.14"
 
       - name: Run unit tests
-        run: python -m unittest discover tests
+        run: python -m pytest -q
 
       - name: Run integration checks
         run: python scripts/check_integration.py
