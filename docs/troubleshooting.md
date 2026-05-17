@@ -79,10 +79,10 @@ value.
 
 Diagnostic ODB total and saving sensors use stricter startup handling:
 
-- `Heating energy (ODB)`
-- `Hot water volume (ODB)`
-- `Possible energy saving (ODB)`
-- `Actual water saving (ODB)`
+- `Heating energy`
+- `Hot water volume`
+- `Possible energy saving`
+- `Actual water saving`
 
 For these sensors, a direct startup or entity-enable readback of `0` is treated
 as a placeholder. The entity stays available with `unknown` until the DHE sends
@@ -93,6 +93,10 @@ the same source. `ODB_Gsprt_Energie` tracks the saving-monitor possible energy
 value in observed DHE traffic. `ODB_Gsprt_KW_Volumen` tracks the saving-monitor
 real water-saving value. `ODB_WW_Volumen` remains a hot-water-volume ODB value
 even when its current value is close to a saving-monitor water value.
+
+The Home Assistant entity names intentionally omit protocol labels such as
+`ODB`. The entity reference keeps the exact ODB ID and web-interface name in the
+source column for debugging.
 
 ## Recorder Writes Too Much
 
@@ -174,6 +178,9 @@ own output, but Home Assistant backups and raw `.storage` files can still contai
 sensitive data. Treat them as private.
 
 ## Development Smoke Checks
+
+The complete validation flow is documented in
+[validation.md](validation.md). The short version:
 
 For a mounted Home Assistant test configuration:
 

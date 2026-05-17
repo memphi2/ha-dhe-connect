@@ -34,6 +34,17 @@ Development and protocol mapping for this release were assisted by OpenAI Codex.
 - Weather entity for the DHE forecast payload with favorite location selection.
 - General diagnostic status, reconnect count, connection details, scald-protection diagnostics, ODB protocol diagnostics and device information.
 
+## Documentation
+
+| Topic | Document |
+|---|---|
+| Installation and normal use | This README |
+| Entity list, attributes and service examples | [docs/entities.md](docs/entities.md) |
+| Pairing, connectivity and recorder troubleshooting | [docs/troubleshooting.md](docs/troubleshooting.md) |
+| Protocol and ODB mapping notes for maintainers | [docs/protocol.md](docs/protocol.md) |
+| Local tests, HA smoke checks and release-readiness flow | [docs/validation.md](docs/validation.md) |
+| Security and token-handling notes | [SECURITY.md](SECURITY.md) |
+
 ## Installation
 
 ### HACS custom repository
@@ -165,7 +176,7 @@ Diagnostic sensors expose the current client connection state and the last recon
 
 ## Validation
 
-The repository includes a lightweight validation script:
+For day-to-day development, run:
 
 ```bash
 python scripts/check_integration.py
@@ -173,51 +184,7 @@ python scripts/check_integration.py
 
 It checks the manifest, HACS metadata, required repository files, release-note source of truth, translation key parity and Python syntax without writing bytecode artifacts. The same check runs in the `Validate` GitHub Actions workflow.
 
-The release validation also includes a scoped static type gate, Home Assistant
-fixture runtime tests for setup, reload, unload and multi-entry behavior, and a
-fake DHE Engine.IO test server for transport and command-readback flows.
-
-For a mounted Home Assistant test configuration, run the smoke check:
-
-```bash
-python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log
-```
-
-It reads Home Assistant's entity registry, recorder database, current log files and auth storage from the mounted config directory. It does not need Home Assistant credentials and does not print stored DHE tokens.
-The log scan fails if no Home Assistant log file is available; enable file logging or include the fault log when that is the only mounted log source.
-
-To also check recorder churn after a restart or live interaction, add a monitor window:
-
-```bash
-python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log --monitor-seconds 90
-```
-
-The monitor fails when DHE entities write too many recorder rows during the selected interval. Use this after copying the integration to the HA test instance and restarting Home Assistant.
-
-Run this recorder monitor while the DHE is idle when you want to validate database churn. If the device-status sensor reports water running (`status_2`, or the observed transition state `status_4`), or the last usage duration changes during the monitor window, the smoke check treats the window as operational and skips the idle recorder-write limits while still checking connection health, reconnect count and log errors.
-
-For live Home Assistant API checks against a test instance, set the connection
-details through environment variables and run:
-
-```bash
-HA_TEST_URL=http://homeassistant.local:8123 \
-HA_TEST_USERNAME=your-ha-user \
-HA_TEST_PASSWORD=your-ha-password \
-python scripts/ha_test_api.py --config /mnt/ha-test-config --service-smoke --cleanup-localhost-tokens
-```
-
-The API helper can also request and wait for a Home Assistant restart with
-`--restart`. It revokes the temporary HA refresh token after the check and, when
-`--cleanup-localhost-tokens` is set, removes leftover localhost tokens from the
-mounted test configuration if the revoke endpoint is unavailable.
-
-Before publishing a release, run the release-readiness helper:
-
-```bash
-python scripts/release_check.py --run-local-checks --ha-config /mnt/ha-test-config --ha-monitor-seconds 90
-```
-
-It checks manifest, README, changelog and docs links for version consistency, confirms the next tag and GitHub release are still absent by default, runs whitespace and tracked-file secret scans, and can include local tests plus mounted Home Assistant smoke checks. After publishing, rerun it with `--expect-tag present --expect-github-release present`.
+The full validation and release-readiness flow, including type checks, fake-DHE tests, Home Assistant fixture tests, mounted HA smoke checks and release checks, lives in [docs/validation.md](docs/validation.md).
 
 ## Security notes
 
@@ -227,10 +194,11 @@ It checks manifest, README, changelog and docs links for version consistency, co
 - Tokens are not intentionally written to normal logs.
 - Diagnostic and validation helpers redact private host, token and credential context before printing command or smoke-test failures.
 - Treat Home Assistant backups and mounted config directories as sensitive because they can contain integration tokens.
+- See [SECURITY.md](SECURITY.md) for token storage, redaction and reporting details.
 
 ## Troubleshooting
 
-For detailed pairing, connectivity, recorder, favorites, memory-slot and debug-log guidance, see [docs/troubleshooting.md](docs/troubleshooting.md).
+For detailed pairing, connectivity, recorder, favorites, memory-slot and debug-log guidance, see [docs/troubleshooting.md](docs/troubleshooting.md). Start there before deleting tokens or recreating entries.
 
 | Symptom | Check |
 |---|---|
@@ -240,12 +208,7 @@ For detailed pairing, connectivity, recorder, favorites, memory-slot and debug-l
 | Service call hits the wrong DHE | In multi-device setups always include `entry_id` in service data |
 | Pairing repeats | Enable and use the disabled-by-default `Repair pairing` button first. During setup, stale legacy token files are removed automatically; if needed, delete matching `/config/.storage/stiebel_dhe_connect_token*.txt` files and pair again |
 | Entities stay unavailable | Check the `Connection state` / `Error status` diagnostic sensors and Home Assistant logs for DHE session errors |
-| Optional memory entities show `unknown` | Keep unused memory slots 3 to 12 disabled, or create those memory slots on the DHE before enabling their Home Assistant number/text/button entities |
 | Reconnect counter increases often | Confirm the WebSocket connection is not blocked and no second client is fighting for the DHE session |
-| Radio entity has no station/title | Open or change the radio once on the DHE UI so the device publishes station metadata |
-| Water entity missing from dashboard | Wait for Home Assistant statistics discovery, which can take up to two hours |
-| Temperature write fails | Check DHE limits, locks, device mode and local reachability |
-| Timer reset does not update | Confirm that the DHE accepts the matching brush/shower timer reset command |
 
 ## Disclaimer
 

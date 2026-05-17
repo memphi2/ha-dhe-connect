@@ -11,6 +11,8 @@
 
 - Broadened the scoped type-checking gate from helper and mapping modules to the integration setup module, the composed client facade, Home Assistant platform entities and additional runtime helpers.
 - Added explicit platform-entity type annotations where Home Assistant attributes were previously inferred too narrowly for the wider type gate.
+- Slimmed the README into a clearer user-facing entry point and moved detailed validation, HA smoke and release-readiness guidance into `docs/validation.md`.
+- Clarified that protocol labels such as `ODB` are source/debugging details and not part of the user-facing entity names.
 
 ### Fixed
 

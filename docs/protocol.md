@@ -4,6 +4,11 @@ This document captures the observed local protocol used by the STIEBEL ELTRON DH
 
 The protocol is intentionally treated as an implementation detail. Use the Home Assistant entities and services for normal automation; use this reference when maintaining the integration, debugging device traffic or extending the ODB mapping.
 
+Protocol names in this document are not necessarily Home Assistant display
+names. User-facing names are kept in the translation files and summarized in
+[entities.md](entities.md); this file keeps raw command names, ODB IDs and
+observed web-interface labels.
+
 ## Transport Overview
 
 The DHE web UI uses Socket.IO over Engine.IO v3. The integration mirrors that behavior closely:
