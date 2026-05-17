@@ -568,6 +568,45 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
             ],
         )
 
+    async def test_device_info_value_updates_device_info_measurement(self) -> None:
+        client_module = _load_client()
+        protocol_module = _load_protocol()
+        DHEClient = client_module.DHEClient
+        client = DHEClient.__new__(DHEClient)
+        client._last_app_values = {}
+        client._last_device_info = {}
+        client._last_measurement_attributes = {}
+        captured_calls: list[tuple[int, str, bool]] = []
+
+        def _capture_measurement(
+            odb_id: int,
+            value: str,
+            *,
+            force_update: bool = False,
+        ) -> None:
+            captured_calls.append((odb_id, value, force_update))
+
+        client._handle_measurement = _capture_measurement
+
+        DHEClient._handle_device_info_value(
+            client,
+            "set:ste.common.version:gadgetData",
+            {
+                "type": {"value": "DHE Connect"},
+                "id": {"value": "device-1"},
+                "wlan": {"value": "wifi-mac"},
+                "bluetooth": {"value": "bt-mac"},
+            },
+        )
+
+        attributes = client._last_measurement_attributes[protocol_module.ID_DEVICE_INFO]
+        self.assertEqual(attributes["device_type"], "DHE Connect")
+        self.assertEqual(attributes["device_id"], "device-1")
+        self.assertEqual(
+            captured_calls,
+            [(protocol_module.ID_DEVICE_INFO, "DHE Connect", True)],
+        )
+
     async def test_set_price_rolls_back_when_second_write_fails(self) -> None:
         client_module = _load_client()
         DHEClient = client_module.DHEClient
