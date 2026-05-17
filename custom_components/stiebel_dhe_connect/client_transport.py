@@ -49,7 +49,7 @@ def _websocket_timeout(timeout: float) -> Any:
     timeout_cls = getattr(aiohttp, "ClientWSTimeout", None)
     if timeout_cls is None:
         return timeout
-    return timeout_cls(ws_receive=timeout, ws_close=timeout)
+    return timeout_cls(ws_close=timeout)
 
 
 class DHEClientTransportMixin:

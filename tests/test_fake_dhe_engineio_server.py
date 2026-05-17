@@ -12,9 +12,17 @@ import aiohttp
 from aiohttp import web
 
 try:
-    from tests.test_client_weather_favorites import _load_client, _load_protocol
+    from tests.test_client_weather_favorites import (
+        _load_client,
+        _load_component_module,
+        _load_protocol,
+    )
 except ModuleNotFoundError:
-    from test_client_weather_favorites import _load_client, _load_protocol
+    from test_client_weather_favorites import (
+        _load_client,
+        _load_component_module,
+        _load_protocol,
+    )
 
 
 def _decode_length_prefixed_packets(body: str) -> list[str]:
@@ -131,6 +139,17 @@ class FakeDHEEngineIOServer:
 
 class TestFakeDHEEngineIOServer(unittest.IsolatedAsyncioTestCase):
     """Exercise real HTTP/WebSocket transport against the fake DHE server."""
+
+    def test_websocket_timeout_preserves_idle_receive(self) -> None:
+        transport_module = _load_component_module("client_transport")
+
+        timeout = transport_module._websocket_timeout(8.0)
+
+        if hasattr(timeout, "ws_receive"):
+            self.assertIsNone(timeout.ws_receive)
+            self.assertEqual(timeout.ws_close, 8.0)
+        else:
+            self.assertEqual(timeout, 8.0)
 
     async def test_client_polling_session_reads_fake_dhe_events(self) -> None:
         client_module = _load_client()
