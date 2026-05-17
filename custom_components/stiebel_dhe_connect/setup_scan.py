@@ -57,6 +57,19 @@ def _is_rfc1918_network(network: IPv4Network) -> bool:
     return any(network.subnet_of(private) for private in RFC1918_NETWORKS)
 
 
+def _netmask_prefix_length(mask_text: str) -> int:
+    """Return the prefix length for a dotted IPv4 netmask."""
+    try:
+        mask = IPv4Address(mask_text)
+    except ValueError as err:
+        raise ValueError("invalid_scan_subnet") from err
+
+    inverted = (~int(mask)) & 0xFFFFFFFF
+    if inverted & (inverted + 1):
+        raise ValueError("invalid_scan_subnet")
+    return 32 - inverted.bit_length()
+
+
 def dhe_response_evidence(body: bytes, headers: Any) -> tuple[str, ...]:
     """Return evidence markers that make a response look like the DHE web UI."""
     text = body.decode("utf-8", errors="ignore").lower()
@@ -112,7 +125,8 @@ def parse_scan_subnet(value: Any) -> IPv4Network | None:
     try:
         parts = text.split()
         if len(parts) == 2:
-            parsed_network = ip_network(f"{parts[0]}/{parts[1]}", strict=False)
+            prefix_length = _netmask_prefix_length(parts[1])
+            parsed_network = ip_network(f"{parts[0]}/{prefix_length}", strict=False)
         elif len(parts) > 2:
             raise ValueError("invalid_scan_subnet")
         elif "/" in text:

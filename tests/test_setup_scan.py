@@ -94,6 +94,14 @@ class TestSetupScan(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "scan_subnet_too_large"):
             setup_scan.parse_scan_subnet("192.168.0.0 255.255.0.0")
 
+    def test_parse_scan_subnet_rejects_wildcard_masks(self) -> None:
+        with self.assertRaisesRegex(ValueError, "invalid_scan_subnet"):
+            setup_scan.parse_scan_subnet("192.168.2.0 0.0.0.255")
+
+    def test_parse_scan_subnet_rejects_non_contiguous_netmasks(self) -> None:
+        with self.assertRaisesRegex(ValueError, "invalid_scan_subnet"):
+            setup_scan.parse_scan_subnet("192.168.2.0 255.255.255.1")
+
     def test_parse_scan_subnet_rejects_non_private_networks(self) -> None:
         with self.assertRaisesRegex(ValueError, "invalid_scan_subnet"):
             setup_scan.parse_scan_subnet("8.8.8.0 255.255.255.0")
