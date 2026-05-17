@@ -310,6 +310,12 @@ def _command_failed_message(result: CommandResult) -> str:
     return f"{command} failed with exit code {result.returncode}: {detail}"
 
 
+def _result_line(result: CheckResult) -> str:
+    """Return one sanitized release-check result line."""
+    prefix = "PASS" if result.ok else "FAIL"
+    return f"{prefix}: {redact_sensitive_text(result.message)}"
+
+
 def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Check release readiness for the current repository state.",
@@ -426,8 +432,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     results = collect_results(args, run_command)
     failed = False
     for result in results:
-        prefix = "PASS" if result.ok else "FAIL"
-        print(f"{prefix}: {result.message}")
+        print(_result_line(result))
         failed = failed or not result.ok
     if failed:
         return 1
