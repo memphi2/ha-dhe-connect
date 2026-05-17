@@ -652,7 +652,7 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
         if description.key not in DEFAULT_ENABLED_SENSOR_KEYS:
             self._attr_entity_registry_enabled_default = False
         if description.timer_path:
-            self._base_extra_state_attributes = {
+            self._base_extra_state_attributes: dict[str, object] = {
                 "timer_path": description.timer_path,
                 "timer_property": description.timer_property,
             }

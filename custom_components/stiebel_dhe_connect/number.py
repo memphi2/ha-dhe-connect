@@ -220,7 +220,7 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
             description.entity_registry_enabled_default
         )
         if description.timer_path:
-            base_attributes = {
+            base_attributes: dict[str, object] = {
                 "timer_path": description.timer_path,
                 "timer_property": description.timer_property,
             }

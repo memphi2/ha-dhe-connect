@@ -89,15 +89,15 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
         )
         self._attr_available = False
         self._attr_extra_state_attributes = {"radio_path": "ste.app.radio"}
-        self._attr_media_artist = None
-        self._attr_media_content_id = None
-        self._attr_media_content_type = None
-        self._attr_media_image_url = None
-        self._attr_media_title = None
-        self._attr_source = None
-        self._attr_source_list = []
-        self._attr_state = None
-        self._attr_volume_level = None
+        self._attr_media_artist: str | None = None
+        self._attr_media_content_id: str | None = None
+        self._attr_media_content_type: str | None = None
+        self._attr_media_image_url: str | None = None
+        self._attr_media_title: str | None = None
+        self._attr_source: str | None = None
+        self._attr_source_list: list[str] = []
+        self._attr_state: str | None = None
+        self._attr_volume_level: float | None = None
         self._have_radio_state = False
         self._radio_off_requested = False
         self._sources_by_option: dict[str, dict[str, Any]] = {}
@@ -189,8 +189,9 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
         await self.async_select_source(next_source)
 
     def _current_source_index(self, sources: list[str]) -> int:
-        if self._attr_source in sources:
-            return sources.index(self._attr_source)
+        current_source = self._attr_source
+        if current_source in sources:
+            return sources.index(current_source)
 
         station_id = self._current_station_id()
         if station_id is not None:

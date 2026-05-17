@@ -131,7 +131,11 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
                 self._child_safety_temperature_limit_raw
             ),
         }
-        if target_below_inlet:
+        if (
+            target_below_inlet
+            and self._inlet_temperature is not None
+            and self._attr_target_temperature is not None
+        ):
             self._attr_extra_state_attributes["inlet_minus_setpoint"] = round(
                 self._inlet_temperature - self._attr_target_temperature, 2
             )

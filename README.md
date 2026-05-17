@@ -10,7 +10,7 @@ The integration talks directly to the DHE web interface on your local network. I
 
 ## Status
 
-- Current version: `1.4.0`
+- Current version: `1.4.1`
 - Release channel: stable
 - Home Assistant setup: UI config flow
 - HACS type: custom integration
@@ -172,6 +172,10 @@ python scripts/check_integration.py
 ```
 
 It checks the manifest, HACS metadata, required repository files, release-note source of truth, translation key parity and Python syntax without writing bytecode artifacts. The same check runs in the `Validate` GitHub Actions workflow.
+
+The release validation also includes a scoped static type gate, Home Assistant
+fixture runtime tests for setup, reload, unload and multi-entry behavior, and a
+fake DHE Engine.IO test server for transport and command-readback flows.
 
 For a mounted Home Assistant test configuration, run the smoke check:
 
