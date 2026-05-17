@@ -5,12 +5,13 @@ from __future__ import annotations
 from typing import Any
 
 DEVICE_STATUS_NORMAL = "normal"
+DEVICE_STATUS_WATER_RUNNING = "status_2"
 DEVICE_STATUS_SERVICE_REQUIRED = "service_required"
 DEVICE_STATUS_UNKNOWN = "unknown"
 DEVICE_STATUS_OPTIONS = (
     "status_0",
     DEVICE_STATUS_NORMAL,
-    "status_2",
+    DEVICE_STATUS_WATER_RUNNING,
     DEVICE_STATUS_SERVICE_REQUIRED,
     "status_4",
     "status_5",

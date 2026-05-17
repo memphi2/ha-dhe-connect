@@ -6,10 +6,15 @@ from contextlib import closing
 import json
 from pathlib import Path
 import sqlite3
+import sys
 import tempfile
 import unittest
 
-from scripts import ha_test_smoke
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts import ha_test_smoke  # noqa: E402
 
 
 def _write_json(path: Path, payload: dict) -> None:
@@ -286,6 +291,64 @@ class TestHaTestSmoke(unittest.TestCase):
             self.assertTrue(all(result.ok for result in results), results)
             self.assertIn(
                 "connection-state sensor disabled or not present; skipped",
+                [result.message for result in results],
+            )
+
+    def test_state_health_allows_known_pending_runtime_entities(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "home-assistant_v2.db"
+            _create_recorder_db(db_path)
+            _insert_state(
+                db_path,
+                state_id=1,
+                metadata_id=1,
+                entity_id="climate.dhe_connect",
+                state="heat",
+                attributes={"connection_state": "connected"},
+            )
+            _insert_state(
+                db_path,
+                state_id=2,
+                metadata_id=2,
+                entity_id="sensor.dhe_connect_heating_energy_total",
+                state="unavailable",
+            )
+            _insert_state(
+                db_path,
+                state_id=3,
+                metadata_id=3,
+                entity_id="text.dhe_connect_memory_4_name",
+                state="unknown",
+            )
+            entries = [
+                ha_test_smoke.EntityRegistryEntry(
+                    "climate.dhe_connect",
+                    "climate",
+                    "stiebel_dhe_connect",
+                ),
+                ha_test_smoke.EntityRegistryEntry(
+                    "sensor.dhe_connect_heating_energy_total",
+                    "sensor",
+                    "stiebel_dhe_connect",
+                    translation_key="heating_energy_total",
+                ),
+                ha_test_smoke.EntityRegistryEntry(
+                    "text.dhe_connect_memory_4_name",
+                    "text",
+                    "stiebel_dhe_connect",
+                    translation_key="temperature_memory_4_name",
+                ),
+            ]
+
+            states = ha_test_smoke.load_latest_states(
+                db_path,
+                ha_test_smoke.enabled_entity_ids(entries),
+            )
+            results = ha_test_smoke.evaluate_state_health(entries, states)
+
+            self.assertTrue(all(result.ok for result in results), results)
+            self.assertIn(
+                "2 optional DHE entities are waiting for real runtime values",
                 [result.message for result in results],
             )
 

@@ -22,6 +22,10 @@
 ### Fixed
 
 - Kept `client.py` below the repository size guard after the previous client split work.
+- Enabled current water flow and current power sensors by default for live dashboard visibility.
+- Refreshed disabled-by-default sensor values on demand when those entities are enabled while the DHE session is already running.
+- Ignored startup/request-read zero placeholders for the diagnostic ODB total and saving values while still accepting runtime zero updates emitted by the DHE.
+- Documented DHE web-interface ODB IDs for total/saving diagnostic values and labelled device status code `2` as water running.
 - Tightened command retry handling so unsupported broad RuntimeError cases are no longer treated as command retries.
 - Preserved recoverable handling for known aiohttp/WebSocket close races during runtime transport operations.
 

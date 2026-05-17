@@ -12,6 +12,7 @@ from .client_constants import (
     COMMAND_CONFIRMATION_TIMEOUT,
     COMMAND_READBACK_INTERVAL,
     DEFAULT_NOMINAL_POWER_KW,
+    ODB_READBACK_REQUEST_WINDOW_SECONDS,
     WEATHER_CATALOG_TIMEOUT,
 )
 from .client_diagnostics import (
@@ -39,6 +40,9 @@ from .client_types import (
     DHESession,
     DHESessionClosed,
     MeasurementValue,
+    ODB_READ_SOURCE_REQUESTED,
+    ODB_READ_SOURCE_RUNTIME,
+    ODBReadSource,
     ODBValue,
 )
 from .client_value_helpers import (
@@ -47,6 +51,7 @@ from .client_value_helpers import (
     raw_to_bool as _raw_to_bool,
     raw_to_float as _raw_to_float,
     raw_to_water_heating_enabled as _raw_to_water_heating_enabled,
+    should_publish_odb_readback as _should_publish_odb_readback,
     values_equal as _values_equal,
 )
 from .flow_helpers import (
@@ -89,6 +94,7 @@ from .protocol import (
     ODB_NONNEGATIVE_VALUE_IDS,
     ODB_SET_COMMAND,
     ODB_TENTHS_TEMPERATURE_IDS,
+    ODB_ZERO_REQUEST_READBACK_IGNORE_IDS,
     PRICE_CENTS_COMPONENT_MAX,
     PRICE_COMPONENT_IDS,
     PRICE_EUROS_COMPONENT_MAX_BY_ID,
@@ -200,10 +206,12 @@ class DHEClientRuntimeMixin(DHEClientRuntimeAppMixin):
         except (TypeError, ValueError):
             self._log_unhandled_ste_command(command, value)
             return
+        source = self._odb_read_source(command, odb_id)
         self._handle_odb_value(
             odb_id,
             value.get("value"),
             is_valid=value.get("isValid"),
+            source=source,
         )
 
     def _handle_radio_value(self, command: str, raw_value: Any) -> None:
@@ -463,12 +471,27 @@ class DHEClientRuntimeMixin(DHEClientRuntimeAppMixin):
     def _handle_odb_child_safety_active_value(self, raw_value: Any) -> None:
         self._handle_measurement(ID_CHILD_SAFETY_ACTIVE, _raw_to_bool(raw_value))
 
-    def _handle_odb_value(self, odb_id: int, raw_value: Any, *, is_valid: Any = None) -> None:
+    def _handle_odb_value(
+        self,
+        odb_id: int,
+        raw_value: Any,
+        *,
+        is_valid: Any = None,
+        source: ODBReadSource = ODB_READ_SOURCE_RUNTIME,
+    ) -> None:
         if is_valid is False:
             if int(odb_id) not in KNOWN_ODB_VALUE_IDS:
                 self._log_unknown_odb_value(odb_id, raw_value, is_valid=False)
             return
         try:
+            if (
+                not _should_publish_odb_readback(
+                    odb_id,
+                    raw_value,
+                    source=source,
+                )
+            ):
+                return
             handler = self._odb_value_handlers.get(odb_id)
             if handler is not None:
                 handler(raw_value)
@@ -493,6 +516,30 @@ class DHEClientRuntimeMixin(DHEClientRuntimeAppMixin):
             self._log_unknown_odb_value(odb_id, raw_value, is_valid=is_valid)
         except (TypeError, ValueError):
             return
+
+    def _odb_read_source(self, command: Any, odb_id: int) -> ODBReadSource:
+        """Classify an incoming ODB value as requested readback or runtime update."""
+        if command == ODB_SET_COMMAND and self._consume_odb_read_request(odb_id):
+            return ODB_READ_SOURCE_REQUESTED
+        return ODB_READ_SOURCE_RUNTIME
+
+    def _mark_odb_read_requested(self, odb_id: int) -> None:
+        """Track zero-placeholder-sensitive reads until their first readback."""
+        odb_id = int(odb_id)
+        if odb_id not in ODB_ZERO_REQUEST_READBACK_IGNORE_IDS:
+            return
+        pending = getattr(self, "_pending_odb_read_deadlines", None)
+        if pending is None:
+            pending = self._pending_odb_read_deadlines = {}
+        pending[odb_id] = time.monotonic() + ODB_READBACK_REQUEST_WINDOW_SECONDS
+
+    def _consume_odb_read_request(self, odb_id: int) -> bool:
+        """Return whether an ODB value is the readback for a recent request."""
+        pending = getattr(self, "_pending_odb_read_deadlines", None)
+        if pending is None:
+            return False
+        deadline = pending.pop(int(odb_id), None)
+        return deadline is not None and deadline >= time.monotonic()
 
     def _log_unhandled_ste_command(self, command: Any, value: Any) -> None:
         if not isinstance(command, str) or not command.startswith(

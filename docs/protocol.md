@@ -134,7 +134,7 @@ Required startup reads seed the interactive entities:
 | `30` | Total hot water volume |
 | `31` | Current bath fill volume |
 | `33` | Water heating enabled state, used by the climate entity |
-| `34` | Device status; status code `3` is exposed through the error status sensor |
+| `34` | Device status; raw `2` indicates water is running, raw `3` is exposed through the error status sensor |
 | `61` | Electricity price euros |
 | `62` | Water price euros |
 | `63` | Possible energy saving |
@@ -235,7 +235,7 @@ Mapped ODB values are converted before publishing to Home Assistant:
 | `31` | Raw whole liters as current bath fill volume |
 | `32` | Known wellness normalized time value; cached when valid but not exposed as an entity |
 | `33` | Inverted heating-disabled flag: raw `0` means water heating enabled, raw `1` means off |
-| `34` | Device status enum; raw `1` = normal, raw `3` = service required |
+| `34` | Device status enum; raw `1` = normal, raw `2` = water running, raw `3` = service required, raw `4` observed as a water-running transition |
 | `61` and `70` | Combined to the electricity price options value as euros plus cents; euros `0` to `32767`, cents `0` to `99` |
 | `62` and `71` | Combined to the water price options value as euros plus cents; euros `0` to `32767`, cents `0` to `99` |
 | `63` | Raw `kWh` possible energy saving |
@@ -246,7 +246,11 @@ Mapped ODB values are converted before publishing to Home Assistant:
 
 If a DHE ODB readback is marked with `isValid: false`, it is not published as a normal entity state. Unknown ODB values are logged at debug level for protocol discovery, including the numeric ID, the known Webfrontend ODB name when available, the raw value and the `isValid` flag. Known-but-unexposed values such as ODB IDs `32` and `68` are recognized so they do not pollute debug logs.
 
+For ODB IDs `29`, `30`, `63` and `64`, a numeric `0` returned as the immediate readback for a `get:ste.common.odb:value` request is also ignored. These diagnostic totals/savings can report `0` when queried at startup even though the DHE has not emitted a fresh operational value yet. A spontaneous DHE runtime update with value `0` is accepted.
+
 ODB ID `66` is command-only and is not read at startup.
+
+The DHE web interface names the relevant diagnostic ODB entries as `ODB_Heizen_Energie` (WebSocket ID `29`), `ODB_WW_Volumen` (ID `30`), `ODB_St_Geraet_Ba` (ID `34`), `ODB_Gsprt_Energie` (ID `63`) and `ODB_Gsprt_KW_Volumen` (ID `64`). These are distinct from the app-level consumption and saving-monitor commands even when the display names look similar.
 
 ## Recorder Write Throttling
 

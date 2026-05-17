@@ -5,13 +5,16 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Final, Literal
 
 
 DEFAULT_ENGINEIO_PING_INTERVAL_SECONDS = 25.0
 
 ODBValue = bool | float
 MeasurementValue = bool | float | str | None
+ODBReadSource = Literal["requested", "runtime"]
+ODB_READ_SOURCE_REQUESTED: Final[ODBReadSource] = "requested"
+ODB_READ_SOURCE_RUNTIME: Final[ODBReadSource] = "runtime"
 SetpointCallback = Callable[[float], None]
 AvailabilityCallback = Callable[[bool], None]
 OnlineCallback = Callable[[bool], None]
