@@ -45,6 +45,13 @@ WEBSOCKET_UPGRADE_TIMEOUT = 8.0
 AUTH_POLL_TIMEOUT_SECONDS = 10.0
 
 
+def _websocket_timeout(timeout: float) -> Any:
+    timeout_cls = getattr(aiohttp, "ClientWSTimeout", None)
+    if timeout_cls is None:
+        return timeout
+    return timeout_cls(ws_close=timeout)
+
+
 class DHEClientTransportMixin:
     """Transport, authentication and token persistence methods for DHEClient."""
 
@@ -446,7 +453,7 @@ class DHEClientTransportMixin:
                         autoping=True,
                         heartbeat=None,
                         headers=self._websocket_headers(sid),
-                        timeout=WEBSOCKET_UPGRADE_TIMEOUT,
+                        timeout=_websocket_timeout(WEBSOCKET_UPGRADE_TIMEOUT),
                     )
                     await websocket.send_str("2probe")
                     deadline = time.monotonic() + WEBSOCKET_UPGRADE_TIMEOUT
