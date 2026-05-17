@@ -7,6 +7,7 @@
 - Expanded the fake DHE Engine.IO test server coverage with a command-level water-heating flow that posts the ODB write, accepts the DHE readback confirmation and verifies the follow-up set-request sync.
 - Expanded fake DHE command-level coverage for setpoint readback, temperature-memory generation/readback and radio favorite selection.
 - Expanded the real Home Assistant fixture runtime suite to cover setup, reload, unload, multi-entry service lifetime and climate entity unique-ID separation.
+- Expanded Home Assistant fixture coverage for multi-entry service routing, entity-registry stability across reload and runtime availability recovery.
 
 ### Changed
 
@@ -23,7 +24,7 @@
 
 ### Validation
 
-- Local test suite: `337 passed`, `22 subtests passed`.
+- Local test suite: `340 passed`, `22 subtests passed`.
 - Integration repository check: `scripts/check_integration.py`.
 - Type gate: `scripts/check_typing.py` over 42 modules.
 - Ruff: `ruff check custom_components/stiebel_dhe_connect tests scripts`.

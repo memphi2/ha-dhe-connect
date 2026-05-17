@@ -47,8 +47,11 @@ entry setup paths instead of only isolated stubs:
 - Setup and unload.
 - Reload cleanup and restart behavior.
 - Multiple configured DHE entries.
+- Multi-entry service routing.
 - Service registration lifetime.
 - Entity-registry unique-ID separation.
+- Entity-registry stability across reload.
+- Runtime availability callbacks and recovery.
 
 These tests are not a replacement for live hardware checks, but they catch
 regressions that pure helper tests cannot see.
