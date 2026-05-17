@@ -548,6 +548,189 @@ class TestHaTestSmoke(unittest.TestCase):
                 },
             )
 
+    def test_recorder_state_values_load_after_marker(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "home-assistant_v2.db"
+            _create_recorder_db(db_path)
+            _insert_state(
+                db_path,
+                state_id=1,
+                metadata_id=1,
+                entity_id="sensor.dhe_connect_geratestatus",
+                state="normal",
+            )
+            _insert_state(
+                db_path,
+                state_id=2,
+                metadata_id=1,
+                entity_id="sensor.dhe_connect_geratestatus",
+                state="status_2",
+            )
+            _insert_state(
+                db_path,
+                state_id=3,
+                metadata_id=1,
+                entity_id="sensor.dhe_connect_geratestatus",
+                state="normal",
+            )
+
+            values = ha_test_smoke.load_recorder_state_values(
+                db_path,
+                ["sensor.dhe_connect_geratestatus"],
+                after_state_id=1,
+            )
+
+            self.assertEqual(
+                values,
+                {"sensor.dhe_connect_geratestatus": ["status_2", "normal"]},
+            )
+
+    def test_device_status_ids_use_registry_translation_key_and_recorder_fallback(
+        self,
+    ) -> None:
+        entries = [
+            ha_test_smoke.EntityRegistryEntry(
+                "sensor.custom_device_mode",
+                "sensor",
+                "stiebel_dhe_connect",
+                translation_key="device_status",
+            ),
+            ha_test_smoke.EntityRegistryEntry(
+                "sensor.disabled_device_mode",
+                "sensor",
+                "stiebel_dhe_connect",
+                disabled_by="user",
+                translation_key="device_status",
+            ),
+        ]
+        states = {
+            "sensor.dhe_connect_geratestatus": ha_test_smoke.LatestState(
+                entity_id="sensor.dhe_connect_geratestatus",
+                state="status_2",
+                attributes={},
+                state_id=1,
+                last_updated=1.0,
+            )
+        }
+
+        entity_ids = ha_test_smoke.device_status_entity_ids(entries, states)
+
+        self.assertEqual(
+            entity_ids,
+            ["sensor.custom_device_mode", "sensor.dhe_connect_geratestatus"],
+        )
+
+    def test_last_usage_duration_ids_use_registry_translation_key_and_fallback(
+        self,
+    ) -> None:
+        entries = [
+            ha_test_smoke.EntityRegistryEntry(
+                "sensor.custom_usage_duration",
+                "sensor",
+                "stiebel_dhe_connect",
+                translation_key="last_usage_time",
+            ),
+            ha_test_smoke.EntityRegistryEntry(
+                "sensor.disabled_usage_duration",
+                "sensor",
+                "stiebel_dhe_connect",
+                disabled_by="user",
+                translation_key="last_usage_time",
+            ),
+        ]
+        states = {
+            "sensor.dhe_connect_letzte_nutzungsdauer": ha_test_smoke.LatestState(
+                entity_id="sensor.dhe_connect_letzte_nutzungsdauer",
+                state="2:34",
+                attributes={},
+                state_id=1,
+                last_updated=1.0,
+            )
+        }
+
+        entity_ids = ha_test_smoke.last_usage_duration_entity_ids(entries, states)
+
+        self.assertEqual(
+            entity_ids,
+            [
+                "sensor.custom_usage_duration",
+                "sensor.dhe_connect_letzte_nutzungsdauer",
+            ],
+        )
+
+    def test_recorder_window_detects_water_from_baseline_status(self) -> None:
+        states = {
+            "sensor.dhe_connect_geratestatus": ha_test_smoke.LatestState(
+                entity_id="sensor.dhe_connect_geratestatus",
+                state="status_2",
+                attributes={},
+                state_id=1,
+                last_updated=1.0,
+            )
+        }
+
+        self.assertTrue(
+            ha_test_smoke.recorder_window_has_water_running(states, {})
+        )
+
+    def test_recorder_window_detects_water_from_status_history(self) -> None:
+        self.assertTrue(
+            ha_test_smoke.recorder_window_has_water_running(
+                {},
+                {"sensor.dhe_connect_geratestatus": ["normal", "status_2"]},
+            )
+        )
+
+    def test_recorder_window_detects_completed_last_usage(self) -> None:
+        reason = ha_test_smoke.recorder_operational_reason(
+            baseline_status_states={},
+            status_history={},
+            last_usage_duration_history={
+                "sensor.dhe_connect_letzte_nutzungsdauer": ["2:34"]
+            },
+        )
+
+        self.assertEqual(
+            reason,
+            "completed usage detected via last usage duration",
+        )
+
+    def test_recorder_window_prefers_running_status_over_usage_duration(self) -> None:
+        reason = ha_test_smoke.recorder_operational_reason(
+            baseline_status_states={},
+            status_history={"sensor.dhe_connect_geratestatus": ["status_2"]},
+            last_usage_duration_history={
+                "sensor.dhe_connect_letzte_nutzungsdauer": ["2:34"]
+            },
+        )
+
+        self.assertEqual(reason, "water running detected via device status")
+
+    def test_recorder_write_limits_are_skipped_while_water_runs(self) -> None:
+        results = ha_test_smoke.evaluate_recorder_writes(
+            {
+                "sensor.dhe_connect_current_water_flow": 20,
+                "sensor.dhe_connect_current_power": 8,
+            },
+            max_total_writes=10,
+            max_entity_writes=5,
+            operational_reason="water running detected via device status",
+        )
+
+        self.assertTrue(all(result.ok for result in results), results)
+        self.assertIn("water running detected", results[0].message)
+        self.assertIn("idle limits skipped", results[0].message)
+
+    def test_recorder_write_limits_fail_for_idle_churn(self) -> None:
+        results = ha_test_smoke.evaluate_recorder_writes(
+            {"sensor.dhe_connect_current_water_flow": 20},
+            max_total_writes=10,
+            max_entity_writes=5,
+        )
+
+        self.assertFalse(results[0].ok)
+        self.assertFalse(results[1].ok)
+
     def test_log_scan_reports_dhe_errors(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             config = Path(temp_dir)

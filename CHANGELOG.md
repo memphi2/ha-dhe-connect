@@ -18,6 +18,8 @@
 - Reduced radio and weather recorder-visible attributes so large catalog/search payloads do not churn the Home Assistant database.
 - Narrowed RuntimeError transport recovery so only known socket/session shutdown races are handled as reconnectable transport failures.
 - Made HA smoke recorder checks tolerant of operational restart windows while still failing high-churn steady-state writes.
+- Made HA smoke recorder checks detect device-status water-running windows and completed last-usage windows before applying idle recorder-write limits.
+- Pinned external HACS and Hassfest validation actions to commit SHAs for reproducible release checks.
 
 ### Fixed
 
@@ -25,6 +27,7 @@
 - Enabled current water flow and current power sensors by default for live dashboard visibility.
 - Refreshed disabled-by-default sensor values on demand when those entities are enabled while the DHE session is already running.
 - Ignored startup/request-read zero placeholders for the diagnostic ODB total and saving values while still accepting runtime zero updates emitted by the DHE.
+- Kept diagnostic ODB total and saving sensors available with `unknown` state while waiting for their first real runtime value.
 - Documented DHE web-interface ODB IDs for total/saving diagnostic values and labelled device status code `2` as water running.
 - Tightened command retry handling so unsupported broad RuntimeError cases are no longer treated as command retries.
 - Preserved recoverable handling for known aiohttp/WebSocket close races during runtime transport operations.
@@ -35,7 +38,7 @@
 
 ### Validation
 
-- Local test suite: `304 passed`.
+- Local test suite: `327 passed`, `18 subtests passed`.
 - Integration repository check: `scripts/check_integration.py`.
 - Type gate: `scripts/check_typing.py`.
 - Ruff: `ruff check .`.

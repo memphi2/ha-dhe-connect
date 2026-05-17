@@ -293,6 +293,43 @@ class TestSensorRecorderAttributes(unittest.TestCase):
             app_command="get:ste.app.showerTimer:remainingMilliseconds",
         )
 
+    def test_zero_guarded_diagnostic_sensors_stay_available_without_value(self) -> None:
+        sensor_module = _load_sensor_module()
+        protocol_module = _load_component_module("protocol")
+        descriptions = [
+            item
+            for item in sensor_module.SENSOR_DESCRIPTIONS
+            if item.odb_id in protocol_module.ODB_ZERO_REQUEST_READBACK_IGNORE_IDS
+        ]
+
+        self.assertEqual(
+            {item.key for item in descriptions},
+            {
+                "heating_energy_total",
+                "hot_water_volume_total",
+                "possible_energy_saving",
+                "possible_water_saving",
+            },
+        )
+        self.assertTrue(all(item.available_without_value for item in descriptions))
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+            online = True
+
+        for description in descriptions:
+            sensor = sensor_module.StiebelDHESensor(
+                entry_id="test-entry",
+                name="Test DHE",
+                client=_FakeClient(),
+                description=description,
+            )
+
+            self.assertTrue(sensor._available_from_value(True, None))
+            self.assertFalse(sensor._available_from_value(False, None))
+
     def test_availability_update_writes_only_on_effective_sensor_change(self) -> None:
         sensor_module = _load_sensor_module()
         description = next(
