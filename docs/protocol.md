@@ -249,6 +249,14 @@ Mapped ODB values are converted before publishing to Home Assistant:
 | `68` | Known currency mode enum; ignored because currency is handled through `ste.common.currency:value` |
 | `69` | CO2 emission decoded as `raw / 1000` kg/kWh, raw range `0` to `32767` |
 
+ODB readback responses may arrive as `get:ste.common.odb:value`,
+`set:ste.common.odb:value` or `assign:ste.common.odb:value` messages. `get`
+readbacks and non-placeholder-sensitive `set`/`assign` readbacks are treated as
+fresh device state and are forwarded to measurement entities even when the value
+matches the client cache. For the zero-placeholder-sensitive IDs below,
+spontaneous `set`/`assign` updates remain runtime updates so real zero totals are
+not dropped while a startup read is pending.
+
 If a DHE ODB readback is marked with `isValid: false`, it is not published as a normal entity state. Unknown ODB values are logged at debug level for protocol discovery, including the numeric ID, the known Webfrontend ODB name when available, the raw value and the `isValid` flag. Known-but-unexposed values such as ODB IDs `32` and `68` are recognized so they do not pollute debug logs.
 
 For ODB IDs `29`, `30`, `63` and `64`, a numeric `0` returned as the immediate readback for a `get:ste.common.odb:value` request is also ignored. These diagnostic totals/savings can report `0` when queried at startup even though the DHE has not emitted a fresh operational value yet. A spontaneous DHE runtime update with value `0` is accepted.

@@ -1399,7 +1399,127 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         client._handle_measurement.assert_called_once_with(
             protocol_module.ID_ODB_HOT_WATER_VOLUME,
             1.0,
+            force_update=True,
         )
+
+    async def test_get_odb_readback_forces_regular_startup_measurement_update(
+        self,
+    ) -> None:
+        client_module = _load_client()
+        protocol_module = _load_protocol()
+        client_types = _load_component_module("client_types")
+        DHEClient = client_module.DHEClient
+        DHEEvent = client_types.DHEEvent
+
+        client = DHEClient.__new__(DHEClient)
+        published: list[tuple[int, object]] = []
+        client._diagnostic_callbacks = set()
+        client._diagnostic_state = {}
+        client._last_measurements = {protocol_module.ID_WATER_FLOW: 0.0}
+        client._last_measurement_attributes = {}
+        client._last_message_monotonic = None
+        client._measurement_callbacks = {
+            lambda odb_id, value: published.append((odb_id, value))
+        }
+        client._message_count = 0
+        client._pending_odb_read_deadlines = {}
+        client._pending_write_expected = None
+        client._pending_write_future = None
+        client._pending_write_id = None
+        client._odb_value_handlers = {
+            protocol_module.ID_WATER_FLOW: (
+                DHEClient._handle_odb_water_flow_value.__get__(client, DHEClient)
+            ),
+        }
+
+        DHEClient._mark_odb_read_requested(client, protocol_module.ID_WATER_FLOW)
+        await DHEClient._handle_runtime_event(
+            client,
+            DHEEvent(
+                "message",
+                {
+                    "command": protocol_module.ODB_GET_COMMAND,
+                    "value": {
+                        "id": protocol_module.ID_WATER_FLOW,
+                        "value": 0,
+                        "isValid": True,
+                    },
+                },
+            ),
+        )
+
+        self.assertEqual(published, [(protocol_module.ID_WATER_FLOW, 0.0)])
+
+    async def test_requested_zero_diagnostic_get_readbacks_are_still_ignored(
+        self,
+    ) -> None:
+        client_module = _load_client()
+        protocol_module = _load_protocol()
+        client_types = _load_component_module("client_types")
+        DHEClient = client_module.DHEClient
+        DHEEvent = client_types.DHEEvent
+
+        client = DHEClient.__new__(DHEClient)
+        client._diagnostic_callbacks = set()
+        client._diagnostic_state = {}
+        client._handle_measurement = Mock()
+        client._last_message_monotonic = None
+        client._message_count = 0
+        client._pending_odb_read_deadlines = {}
+        client._odb_value_handlers = {}
+
+        odb_id = protocol_module.ID_ODB_HOT_WATER_VOLUME
+        DHEClient._mark_odb_read_requested(client, odb_id)
+        await DHEClient._handle_runtime_event(
+            client,
+            DHEEvent(
+                "message",
+                {
+                    "command": protocol_module.ODB_GET_COMMAND,
+                    "value": {"id": odb_id, "value": 0, "isValid": True},
+                },
+            ),
+        )
+
+        client._handle_measurement.assert_not_called()
+
+    async def test_pending_diagnostic_zero_set_updates_remain_runtime_updates(
+        self,
+    ) -> None:
+        client_module = _load_client()
+        protocol_module = _load_protocol()
+        client_types = _load_component_module("client_types")
+        DHEClient = client_module.DHEClient
+        DHEEvent = client_types.DHEEvent
+
+        client = DHEClient.__new__(DHEClient)
+        client._diagnostic_callbacks = set()
+        client._diagnostic_state = {}
+        client._handle_measurement = Mock()
+        client._last_message_monotonic = None
+        client._message_count = 0
+        client._pending_odb_read_deadlines = {}
+        client._odb_value_handlers = {}
+
+        odb_id = protocol_module.ID_ODB_HOT_WATER_VOLUME
+        DHEClient._mark_odb_read_requested(client, odb_id)
+        await DHEClient._handle_runtime_event(
+            client,
+            DHEEvent(
+                "message",
+                {
+                    "command": protocol_module.ODB_SET_COMMAND,
+                    "value": {"id": odb_id, "value": 0, "isValid": True},
+                },
+            ),
+        )
+
+        client._handle_measurement.assert_called_once_with(
+            odb_id,
+            0.0,
+            force_update=False,
+        )
+        self.assertTrue(DHEClient._consume_odb_read_request(client, odb_id))
 
     def test_odb_read_request_tracking_expires_after_one_response(self) -> None:
         client_module = _load_client()
@@ -1413,7 +1533,18 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
             client,
             protocol_module.ID_WATER_FLOW,
         )
-        self.assertEqual(client._pending_odb_read_deadlines, {})
+        self.assertTrue(
+            DHEClient._consume_odb_read_request(
+                client,
+                protocol_module.ID_WATER_FLOW,
+            )
+        )
+        self.assertFalse(
+            DHEClient._consume_odb_read_request(
+                client,
+                protocol_module.ID_WATER_FLOW,
+            )
+        )
 
         DHEClient._mark_odb_read_requested(
             client,

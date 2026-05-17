@@ -159,7 +159,7 @@ class DHEClient(
         self._pending_write_expected: ODBValue | None = None
         self._pending_odb_read_deadlines: dict[int, float] = {}
         self._socketio_message_id = random.randint(1, 99)
-        self._odb_value_handlers: dict[int, Callable[[Any], None]] = {
+        self._odb_value_handlers: dict[int, Callable[..., None]] = {
             ID_SETPOINT: self._handle_odb_setpoint_value,
             ID_WATER_FLOW: self._handle_odb_water_flow_value,
             ID_POWER_PERCENT: self._handle_odb_power_percent_value,
