@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components import persistent_notification
 
@@ -20,6 +20,9 @@ from .pairing_helpers import (
 
 _LOGGER = logging.getLogger(__name__)
 
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+
 MAX_PAIRING_AUTO_RETRIES = 3
 PAIRING_NOTIFICATION_ID_PREFIX = "stiebel_dhe_connect_pairing"
 PAIRING_CONFIRM_HINT_NOTIFICATION_ID_PREFIX = (
@@ -29,6 +32,22 @@ PAIRING_CONFIRM_HINT_NOTIFICATION_ID_PREFIX = (
 
 class DHEClientPairingMixin:
     """Pairing state, diagnostics and persistent-notification helpers."""
+
+    if TYPE_CHECKING:
+        hass: HomeAssistant
+        host: str
+        port: int
+        _diagnostic_state: dict[str, Any]
+        _manual_pairing_requested: bool
+        _pairing_active: bool
+        _pairing_confirmed_success: bool
+        _pairing_failed_explicit: bool
+        _pairing_request_seen: bool
+        _pairing_retry_attempts: int
+        _pause_auto_reconnect_for_pairing: bool
+        _require_pairing_confirmation: bool
+
+        def _update_diagnostics(self, **updates: Any) -> None: ...
 
     def _begin_manual_pairing(self, state: str, message: str, *, notify: bool) -> None:
         """Prepare a pairing attempt that must end with an explicit DHE result."""

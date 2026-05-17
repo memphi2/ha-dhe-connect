@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Extended the scoped type gate to include the DHE runtime, app-runtime, transport and pairing mixins.
+
 ## v1.4.1 - 2026-05-17
 
 ### Added

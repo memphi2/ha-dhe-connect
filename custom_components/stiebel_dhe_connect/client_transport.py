@@ -10,7 +10,8 @@ import os
 import re
 import stat
 import time
-from typing import Any
+from collections.abc import Callable, Coroutine
+from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
 import aiohttp
@@ -29,6 +30,7 @@ from .client_types import (
     DHEEvent,
     DHESession,
     DHESessionClosed,
+    ReconnectCallback,
 )
 from .engineio_helpers import (
     balanced_json_array as _balanced_json_array,
@@ -40,6 +42,9 @@ from .pairing_helpers import pairing_result_success as _pairing_result_success
 from .protocol import NS
 
 _LOGGER = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
 
 WEBSOCKET_UPGRADE_TIMEOUT = 8.0
 AUTH_POLL_TIMEOUT_SECONDS = 10.0
@@ -54,6 +59,72 @@ def _websocket_timeout(timeout: float) -> Any:
 
 class DHEClientTransportMixin:
     """Transport, authentication and token persistence methods for DHEClient."""
+
+    if TYPE_CHECKING:
+        base_url: str
+        hass: HomeAssistant
+        name: str
+        port: int
+        token_path: str
+        _available: bool
+        _ctx: DHESession | None
+        _has_connected: bool
+        _manual_pairing_requested: bool
+        _pairing_active: bool
+        _pairing_confirmed_success: bool
+        _pairing_failed_explicit: bool
+        _pairing_request_seen: bool
+        _pairing_retry_attempts: int
+        _pause_auto_reconnect_for_pairing: bool
+        _ready: asyncio.Event
+        _reconnect_callbacks: set[ReconnectCallback]
+        _reconnect_count: int
+        _require_pairing_confirmation: bool
+        _send_lock: asyncio.Lock
+        _session: aiohttp.ClientSession
+        _socketio_message_id: int
+        _stopped: asyncio.Event
+        _token: str | None
+        _url_host: str
+
+        def _record_pairing_progress(
+            self,
+            state: str,
+            message: str,
+            *,
+            notify: bool = False,
+            result: Any | None = None,
+        ) -> None: ...
+
+        def _record_pairing_requested(self) -> None: ...
+
+        def _record_pairing_result(self, result: Any) -> None: ...
+
+        def _record_pairing_failed(self, error: BaseException) -> None: ...
+
+        def _set_online(self, online: bool) -> None: ...
+
+        def _set_available(
+            self,
+            available: bool,
+            *,
+            immediate: bool = False,
+        ) -> None: ...
+
+        def _update_diagnostics(self, **updates: Any) -> None: ...
+
+        def _notify_callbacks(
+            self,
+            callback_name: str,
+            callbacks: set[Callable[..., None]],
+            *args: Any,
+        ) -> None: ...
+
+        def _create_background_task(
+            self,
+            coro: Coroutine[Any, Any, Any],
+            name: str,
+        ) -> asyncio.Task[Any]: ...
 
     async def _open_authenticated_session(
         self,
@@ -191,9 +262,9 @@ class DHEClientTransportMixin:
             await self._close_session(ctx)
             raise
         except RuntimeError as err:
-            err = _runtime_transport_error_or_raise(err)
+            transport_err = _runtime_transport_error_or_raise(err)
             if self._pairing_active:
-                self._record_pairing_failed(err)
+                self._record_pairing_failed(transport_err)
             await self._close_session(ctx)
             raise
 
@@ -305,11 +376,11 @@ class DHEClientTransportMixin:
                                             _diagnostic_error(err),
                                         )
                                     except RuntimeError as err:
-                                        err = _runtime_transport_error_or_raise(err)
+                                        transport_err = _runtime_transport_error_or_raise(err)
                                         _LOGGER.debug(
                                             "Manual pairing websocket upgrade unavailable; "
                                             "continuing polling while waiting for pairing_result: %s",
-                                            _diagnostic_error(err),
+                                            _diagnostic_error(transport_err),
                                         )
                                 _LOGGER.debug(
                                     "Token received without pairing_request during manual pairing; "
@@ -352,8 +423,8 @@ class DHEClientTransportMixin:
             self._record_pairing_failed(err)
             raise
         except RuntimeError as err:
-            err = _runtime_transport_error_or_raise(err)
-            self._record_pairing_failed(err)
+            transport_err = _runtime_transport_error_or_raise(err)
+            self._record_pairing_failed(transport_err)
             raise
         finally:
             await self._close_session(ctx)
@@ -489,8 +560,8 @@ class DHEClientTransportMixin:
                     if websocket is not None and not websocket.closed:
                         await websocket.close()
                 except RuntimeError as err:
-                    err = _runtime_transport_error_or_raise(err)
-                    errors.append(f"{label}: {type(err).__name__}")
+                    transport_err = _runtime_transport_error_or_raise(err)
+                    errors.append(f"{label}: {type(transport_err).__name__}")
                     if websocket is not None and not websocket.closed:
                         await websocket.close()
             raise DHEError("; ".join(errors) or "probe timeout")
@@ -499,10 +570,10 @@ class DHEClientTransportMixin:
                 await websocket.close()
             raise DHEError(f"DHE websocket upgrade failed: {err}") from err
         except RuntimeError as err:
-            err = _runtime_transport_error_or_raise(err)
+            transport_err = _runtime_transport_error_or_raise(err)
             if websocket is not None and not websocket.closed:
                 await websocket.close()
-            raise DHEError(f"DHE websocket upgrade failed: {err}") from err
+            raise DHEError(f"DHE websocket upgrade failed: {transport_err}") from err
 
     async def _websocket_ping_loop(self, ctx: DHESession) -> None:
         try:
@@ -521,12 +592,12 @@ class DHEClientTransportMixin:
                     reason=f"Heartbeat failed: {_diagnostic_error(err)}",
                 )
         except RuntimeError as err:
-            err = _runtime_transport_error_or_raise(err)
+            transport_err = _runtime_transport_error_or_raise(err)
             if not self._stopped.is_set():
                 await self._force_reconnect(
                     ctx,
                     immediate_availability=True,
-                    reason=f"Heartbeat failed: {_diagnostic_error(err)}",
+                    reason=f"Heartbeat failed: {_diagnostic_error(transport_err)}",
                 )
 
     async def _read_events_once(self, ctx: DHESession) -> list[DHEEvent]:
