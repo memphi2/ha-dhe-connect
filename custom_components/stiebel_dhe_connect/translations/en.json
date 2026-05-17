@@ -2,8 +2,16 @@
   "config": {
     "step": {
       "user": {
-        "title": "Set up Stiebel DHE Connect",
-        "description": "Configure the local connection to your DHE Connect and the physical Tmax jumper position. The pairing request starts in the next step.",
+        "title": "Start setup",
+        "description": "Manual setup is the default. Enable the search only when Home Assistant should scan a subnet for DHE Connect first. If no subnet is entered, the current local subnet is used.",
+        "data": {
+          "scan_automatically": "Scan a subnet for DHE Connect",
+          "scan_subnet": "Subnet to scan (for example 192.168.1.0 255.255.255.0)"
+        }
+      },
+      "manual": {
+        "title": "Configure DHE connection",
+        "description": "{scan_status}\n\nThe pairing request starts in the next step.",
         "data": {
           "host": "IP address or hostname",
           "port": "Port",
@@ -11,17 +19,16 @@
           "internal_scald_protection": "Internal scald protection (Tmax jumper)"
         }
       },
+      "network_scan": {
+        "title": "Search for DHE Connect"
+      },
       "pairing_confirm": {
         "title": "Confirm pairing",
         "description": "Click OK now. The pairing request appears on the DHE afterwards, and confirmation on the device must be completed there. The integration is only created after successful pairing and login."
-      },
-      "discovery_confirm": {
-        "title": "Set up discovered DHE",
-        "description": "Home Assistant discovered this DHE on the local network. Select the physical Tmax jumper position before pairing.",
-        "data": {
-          "internal_scald_protection": "Internal scald protection (Tmax jumper)"
-        }
       }
+    },
+    "progress": {
+      "scan_dhe": "Searching the selected subnet for DHE Connect on port 8443"
     },
     "error": {
       "pairing_timeout": "Pairing was not confirmed on the DHE in time. Please try again.",
@@ -34,13 +41,14 @@
       "auth_timeout": "Authentication on the DHE timed out. Please try again.",
       "cannot_connect": "Could not connect to the DHE. Check the IP address and port.",
       "invalid_host": "Invalid host. Enter only an IP address or hostname, without path, username or port.",
+      "invalid_scan_subnet": "Invalid subnet. Example: 192.168.1.0 255.255.255.0",
+      "scan_subnet_too_large": "The subnet is too large. Use a smaller private IPv4 subnet, for example 192.168.1.0 255.255.255.0.",
       "embedded_port_not_supported": "Do not include the port in the host field (for example \"192.168.1.10\"). Enter the port only in the port field.",
       "invalid_port": "Invalid port. The port must be between 1 and 65535.",
       "invalid_internal_scald_protection": "Invalid Tmax jumper position."
     },
     "abort": {
-      "already_configured": "Stiebel DHE Connect is already configured.",
-      "already_in_progress": "Configuration for this DHE is already in progress."
+      "already_configured": "Stiebel DHE Connect is already configured."
     }
   },
   "options": {

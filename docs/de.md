@@ -55,11 +55,16 @@ Danach Home Assistant neu starten und die Integration ueber die UI hinzufuegen.
 
 ## Einrichtung und Pairing
 
-Wenn Home Assistant den DHE per Zeroconf/mDNS findet, werden Host, Port und
-Geraetename automatisch uebernommen. Dann fragt die UI nur nach der physischen
-`Tmax`-Jumperposition, bevor das normale Pairing startet.
+Beim Hinzufuegen fragt Home Assistant zuerst, ob ein Subnetz durchsucht oder
+direkt manuell eingerichtet werden soll. Die Suche ist optional und prueft nur
+DHE-aehnliche Webinterfaces auf Port `8443`. Bleibt das Subnetzfeld leer, wird
+das aktuelle lokale Subnetz verwendet. Alternativ kann ein IPv4-Netz mit
+normaler Netzmaske eingetragen werden, zum Beispiel
+`192.168.1.0 255.255.255.0`. Wenn ein Kandidat gefunden wird, oeffnet die
+normale Maske mit vorbelegtem Host und Port. Wenn nichts gefunden wird, oeffnet
+dieselbe Maske fuer manuelle Eingabe.
 
-Bei manueller Einrichtung fragt die UI nach:
+Die UI fragt nach:
 
 | Feld | Beispiel | Hinweis |
 |---|---|---|

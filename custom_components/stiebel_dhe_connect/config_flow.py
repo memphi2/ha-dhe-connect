@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from ipaddress import IPv4Network
 import logging
 import os
 from collections.abc import Sequence
@@ -15,7 +16,6 @@ from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from .client import (
     DHEClient,
@@ -47,7 +47,6 @@ from .config_flow_schemas import (
     currency_options as _schema_currency_options,
     device_settings_defaults as _device_settings_defaults,
     device_settings_schema as _device_settings_schema,
-    discovery_schema as _discovery_schema,
     optional_float as _optional_float,
     radio_catalog_schema as _radio_catalog_schema,
     radio_search_type_schema as _radio_search_type_schema,
@@ -77,6 +76,12 @@ from .protocol import (
     ID_APP_CURRENCY as _ID_APP_CURRENCY,
     WATER_PRICE_MAX,
 )
+from .setup_scan import (
+    DHEHostCandidate,
+    async_scan_dhe_hosts,
+    candidate_defaults,
+    parse_scan_subnet,
+)
 from .token_file_helpers import (
     LEGACY_TOKEN_FILE,
     legacy_token_file_for_entry,
@@ -88,7 +93,9 @@ from .token_file_helpers import (
 SETUP_PAIRING_TIMEOUT_SECONDS = 180.0
 ID_APP_CURRENCY = _ID_APP_CURRENCY
 _currency_options = _schema_currency_options
-DHE_ZEROCONF_TYPE = "_ste-dhe._tcp.local."
+CONF_SCAN_AUTOMATICALLY = "scan_automatically"
+CONF_SCAN_SUBNET = "scan_subnet"
+SETUP_SCAN_PROGRESS_ACTION = "scan_dhe"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -185,24 +192,39 @@ def _is_target_used_by_other_entry(
     return False
 
 
-def _discovery_title(discovery_info: ZeroconfServiceInfo) -> str:
-    """Return a readable title from a DHE Zeroconf service."""
-    candidates = (
-        discovery_info.name,
-        discovery_info.hostname,
-    )
-    for candidate in candidates:
-        title = str(candidate or "").strip()
-        if not title:
-            continue
-        if title.endswith(f".{DHE_ZEROCONF_TYPE}"):
-            title = title[: -len(f".{DHE_ZEROCONF_TYPE}")]
-        if title.endswith(".local."):
-            title = title[: -len(".local.")]
-        title = title.strip().strip(".")
-        if title:
-            return title
-    return DEFAULT_NAME
+def _scan_status_text(
+    hass: HomeAssistant,
+    *,
+    scanned: bool,
+    found: int,
+    available: int,
+    failed: bool = False,
+) -> str:
+    """Return localized setup-scan status text for the setup form."""
+    language = str(getattr(hass.config, "language", "") or "").lower()
+    if language.startswith("de"):
+        if not scanned and not failed:
+            return "Host/IP, Port und Tmax-Jumperposition eintragen."
+        if failed:
+            return "Die automatische Suche ist fehlgeschlagen; bitte Host und Port manuell eintragen."
+        if found == 0:
+            return "Es wurde kein DHE gefunden; bitte Host und Port manuell eintragen."
+        if available == 0:
+            return "Gefundene DHE-Ziele sind bereits konfiguriert; bitte bei Bedarf ein anderes Ziel manuell eintragen."
+        if available == 1:
+            return "Ein DHE wurde gefunden und Host/Port sind vorbelegt."
+        return f"{available} DHE-Kandidaten wurden gefunden; der erste ist vorbelegt."
+    if failed:
+        return "Automatic search failed; enter host and port manually."
+    if not scanned:
+        return "Enter host/IP, port and physical Tmax jumper position."
+    if found == 0:
+        return "No DHE was found; enter host and port manually."
+    if available == 0:
+        return "Found DHE targets are already configured; enter another target manually if needed."
+    if available == 1:
+        return "Found one DHE and prefilled host/port."
+    return f"Found {available} DHE candidates; the first one is prefilled."
 
 
 def _abs_config_path(hass: HomeAssistant, path: str) -> str:
@@ -341,51 +363,149 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
 
     VERSION = 1
     _pending_setup_data: dict[str, Any] | None
-    _discovered_target: tuple[str, int] | None
+    _setup_scan_task: asyncio.Task[list[DHEHostCandidate]] | None
+    _setup_scan_candidates: list[DHEHostCandidate]
+    _setup_scan_done: bool
+    _setup_scan_failed: bool
+    _setup_scan_networks: list[IPv4Network] | None
 
     def __init__(self) -> None:
         self._pending_setup_data = None
-        self._discovered_target = None
+        self._setup_scan_task = None
+        self._setup_scan_candidates = []
+        self._setup_scan_done = False
+        self._setup_scan_failed = False
+        self._setup_scan_networks = None
 
-    def is_matching(self, other_flow: Any) -> bool:
-        """Return whether another flow is configuring the same discovered DHE."""
-        return self._discovered_target is not None and self._discovered_target == getattr(
-            other_flow,
-            "_discovered_target",
-            None,
+    def _available_scan_candidates(self) -> list[DHEHostCandidate]:
+        """Return scan candidates not already configured."""
+        return [
+            candidate
+            for candidate in self._setup_scan_candidates
+            if not _is_target_used_by_other_entry(
+                self.hass,
+                candidate.host,
+                candidate.port,
+            )
+        ]
+
+    def _setup_scan_defaults(self) -> dict[str, Any]:
+        """Return user-form defaults based on setup scan results."""
+        available = self._available_scan_candidates()
+        if not available:
+            return {}
+        return candidate_defaults(available[0])
+
+    def _setup_scan_placeholders(self) -> dict[str, str]:
+        """Return description placeholders for the setup form."""
+        available = self._available_scan_candidates()
+        return {
+            "scan_status": _scan_status_text(
+                self.hass,
+                scanned=self._setup_scan_done,
+                found=len(self._setup_scan_candidates),
+                available=len(available),
+                failed=self._setup_scan_failed,
+            )
+        }
+
+    def _show_setup_choice_form(
+        self,
+        errors: dict[str, str] | None = None,
+    ) -> config_entries.ConfigFlowResult:
+        """Show automatic subnet scan vs manual setup choice."""
+        return self.async_show_form(
+            step_id="user",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_SCAN_AUTOMATICALLY, default=False): bool,
+                    vol.Optional(CONF_SCAN_SUBNET, default=""): str,
+                }
+            ),
+            errors=errors or {},
         )
 
-    async def async_step_zeroconf(self, discovery_info: ZeroconfServiceInfo):
-        """Handle a discovered DHE Connect device."""
+    def _show_user_form(
+        self,
+        *,
+        step_id: str = "manual",
+        errors: dict[str, str] | None = None,
+        defaults: dict[str, Any] | None = None,
+    ) -> config_entries.ConfigFlowResult:
+        """Show the manual setup form with optional scan defaults."""
+        merged_defaults = dict(self._setup_scan_defaults())
+        if defaults:
+            merged_defaults.update(defaults)
+        return self.async_show_form(
+            step_id=step_id,
+            data_schema=_schema(self.hass, merged_defaults),
+            errors=errors or {},
+            description_placeholders=self._setup_scan_placeholders(),
+        )
+
+    async def _async_handle_setup_scan(self) -> config_entries.ConfigFlowResult | None:
+        """Start or finish the optional setup scan."""
+        if self._setup_scan_done:
+            return None
+        if self._setup_scan_task is None:
+            self._setup_scan_task = self.hass.async_create_task(
+                async_scan_dhe_hosts(self.hass, networks=self._setup_scan_networks),
+            )
+            return self.async_show_progress(
+                step_id="network_scan",
+                progress_action=SETUP_SCAN_PROGRESS_ACTION,
+                progress_task=self._setup_scan_task,
+            )
+        if not self._setup_scan_task.done():
+            return self.async_show_progress(
+                step_id="network_scan",
+                progress_action=SETUP_SCAN_PROGRESS_ACTION,
+                progress_task=self._setup_scan_task,
+            )
         try:
-            host = normalize_host(discovery_info.host)
-            port = validate_port(discovery_info.port or DEFAULT_PORT)
-        except (TypeError, ValueError):
-            return self.async_abort(reason="cannot_connect")
-
-        if _is_target_used_by_other_entry(self.hass, host, port):
-            return self.async_abort(reason="already_configured")
-
-        self._discovered_target = (host, port)
-        if self.hass.config_entries.flow.async_has_matching_flow(self):
-            return self.async_abort(reason="already_in_progress")
-
-        name = _discovery_title(discovery_info)
-        if not await _can_connect(self.hass, host, port):
-            return self.async_abort(reason="cannot_connect")
-
-        self.context["title_placeholders"] = {"name": name}
-        self._pending_setup_data = {
-            CONF_HOST: host,
-            CONF_PORT: port,
-            CONF_NAME: name,
-            "token_file": token_file_for_target(host, port),
-        }
-        return await self.async_step_discovery_confirm()
+            self._setup_scan_candidates = self._setup_scan_task.result()
+        except (aiohttp.ClientError, OSError, RuntimeError, TimeoutError) as err:
+            self._setup_scan_candidates = []
+            self._setup_scan_failed = True
+            _LOGGER.debug("DHE setup scan failed: %s", err)
+        self._setup_scan_done = True
+        self._setup_scan_task = None
+        return self.async_show_progress_done(next_step_id="manual")
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
-        """Handle the initial step."""
+        """Handle the initial setup choice."""
+        if not user_input:
+            return self._show_setup_choice_form()
+
+        if CONF_HOST in user_input:
+            return await self.async_step_manual(user_input)
+
+        if user_input.get(CONF_SCAN_AUTOMATICALLY):
+            try:
+                scan_subnet = parse_scan_subnet(user_input.get(CONF_SCAN_SUBNET))
+            except ValueError as err:
+                return self._show_setup_choice_form({CONF_SCAN_SUBNET: str(err)})
+            self._setup_scan_networks = [scan_subnet] if scan_subnet else None
+            return await self.async_step_network_scan()
+
+        return await self.async_step_manual()
+
+    async def async_step_network_scan(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ):
+        """Scan the current local subnet when the user explicitly requests it."""
+        scan_result = await self._async_handle_setup_scan()
+        if scan_result is not None:
+            return scan_result
+        return await self.async_step_manual()
+
+    async def async_step_manual(self, user_input: dict[str, Any] | None = None):
+        """Handle manual setup, optionally prefilled by a completed scan."""
         errors: dict[str, str] = {}
+
+        if not user_input:
+            return self._show_user_form(errors=errors)
 
         if user_input is not None:
             try:
@@ -416,41 +536,14 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
                     }
                     return await self.async_step_pairing_confirm()
 
-        return self.async_show_form(
-            step_id="user",
-            data_schema=_schema(self.hass),
-            errors=errors,
-        )
+        return self._show_user_form(errors=errors, defaults=user_input)
 
-    async def async_step_discovery_confirm(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ):
-        """Ask only for the physical jumper before pairing a discovered DHE."""
-        if self._pending_setup_data is None:
-            return await self.async_step_user()
-
-        errors: dict[str, str] = {}
-        if user_input is not None:
-            try:
-                internal_scald_protection = str(
-                    user_input.get(CONF_INTERNAL_SCALD_PROTECTION) or ""
-                ).strip()
-                if internal_scald_protection not in INTERNAL_SCALD_PROTECTION_OPTIONS:
-                    raise ValueError("invalid_internal_scald_protection")
-            except ValueError as err:
-                _apply_validation_error(errors, err)
-            else:
-                self._pending_setup_data[CONF_INTERNAL_SCALD_PROTECTION] = (
-                    internal_scald_protection
-                )
-                return await self.async_step_pairing_confirm()
-
-        return self.async_show_form(
-            step_id="discovery_confirm",
-            data_schema=_discovery_schema(self.hass, self._pending_setup_data),
-            errors=errors,
-        )
+    @callback
+    def async_remove(self) -> None:
+        """Cancel a running setup scan when the flow is removed."""
+        if self._setup_scan_task is not None and not self._setup_scan_task.done():
+            self._setup_scan_task.cancel()
+        self._setup_scan_task = None
 
     async def async_step_pairing_confirm(
         self, user_input: dict[str, Any] | None = None

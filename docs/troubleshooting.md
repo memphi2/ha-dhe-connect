@@ -53,6 +53,21 @@ Use the config flow fields exactly as intended:
 Do not enter `http://`, `https://`, paths, query strings, usernames, passwords
 or embedded ports in the host field.
 
+## Setup Scan Finds Nothing
+
+When adding the integration, Home Assistant asks whether it should scan a subnet
+for DHE-like web interfaces on port `8443`. Leave the subnet field empty to scan
+the current local subnet, or enter an IPv4 network with a normal netmask, for
+example `192.168.1.0 255.255.255.0`. The scan is only a setup convenience. If
+you skip it or it finds nothing, enter the DHE host/IP and port manually.
+
+If the DHE web interface opens from a browser but the scan does not find it:
+
+1. Confirm that Home Assistant can route to the same DHE subnet.
+2. Confirm that port `8443` is reachable from the Home Assistant host.
+3. Enter the DHE address manually in the setup form.
+4. Continue with the normal pairing confirmation.
+
 ## Cannot Connect
 
 When the integration cannot connect:
@@ -66,21 +81,6 @@ When the integration cannot connect:
 The integration reconnects automatically after socket closes and short DHE
 session drops. Repeated reconnects are visible through the `Reconnects` and
 `Last reconnect reason` sensors.
-
-## Zeroconf Discovery Does Not Appear
-
-The DHE advertises `_ste-dhe._tcp.local.` on the local network. If Home
-Assistant does not show a discovered DHE:
-
-1. Confirm that the Home Assistant `zeroconf` integration is enabled.
-2. Confirm that Home Assistant and the DHE are on a network where mDNS packets
-   can cross VLAN, firewall and Wi-Fi isolation boundaries.
-3. Open the DHE web interface manually from the Home Assistant network.
-4. If discovery still does not appear, use manual setup with host, port and
-   physical `Tmax` jumper position.
-
-Zeroconf setup only pre-fills host, port and device name. Pairing on the DHE
-display is still required before the config entry is created.
 
 ## Entities Stay Unavailable
 

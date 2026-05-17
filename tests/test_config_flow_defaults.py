@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import importlib.util
+from ipaddress import ip_network
 import sys
 import types
 from pathlib import Path
@@ -16,56 +18,46 @@ CONFIG_FLOW_PATH = (
 )
 PACKAGE_ROOT = ROOT / "custom_components"
 MODULE_NAME = "custom_components.stiebel_dhe_connect.config_flow"
-_FAKE_MODULE_NAMES = (
+_MISSING = object()
+_RESTORED_MODULE_PREFIXES = (
     "homeassistant",
-    "homeassistant.const",
-    "homeassistant.config_entries",
-    "homeassistant.core",
-    "homeassistant.helpers",
-    "homeassistant.helpers.aiohttp_client",
-    "homeassistant.helpers.service_info",
-    "homeassistant.helpers.service_info.zeroconf",
     "custom_components",
-    "custom_components.stiebel_dhe_connect",
-    MODULE_NAME,
-    "custom_components.stiebel_dhe_connect.client",
-    "custom_components.stiebel_dhe_connect.client_types",
-    "custom_components.stiebel_dhe_connect.config_entry_helpers",
-    "custom_components.stiebel_dhe_connect.config_flow_mapping",
-    "custom_components.stiebel_dhe_connect.connection_helpers",
-    "custom_components.stiebel_dhe_connect.const",
-    "custom_components.stiebel_dhe_connect.entity_state_helpers",
-    "custom_components.stiebel_dhe_connect.pairing_helpers",
-    "custom_components.stiebel_dhe_connect.protocol",
-    "custom_components.stiebel_dhe_connect.service_helpers",
-    "custom_components.stiebel_dhe_connect.token_file_helpers",
 )
-_ORIGINAL_MODULES: dict[str, types.ModuleType | None] | None = None
 
 
-def _snapshot_import_modules() -> None:
-    global _ORIGINAL_MODULES
-    if _ORIGINAL_MODULES is None:
-        _ORIGINAL_MODULES = {name: sys.modules.get(name) for name in _FAKE_MODULE_NAMES}
+def _snapshot_modules() -> dict[str, object]:
+    return {
+        name: module
+        for name, module in sys.modules.items()
+        if name in _RESTORED_MODULE_PREFIXES
+        or any(name.startswith(f"{prefix}.") for prefix in _RESTORED_MODULE_PREFIXES)
+    }
 
 
-def _restore_import_modules() -> None:
-    if _ORIGINAL_MODULES is None:
-        return
-    for name, module in _ORIGINAL_MODULES.items():
-        if module is None:
+def _restore_modules(snapshot: dict[str, object]) -> None:
+    for name in list(sys.modules):
+        if name in _RESTORED_MODULE_PREFIXES or any(
+            name.startswith(f"{prefix}.") for prefix in _RESTORED_MODULE_PREFIXES
+        ):
             sys.modules.pop(name, None)
-        else:
+    for name, module in snapshot.items():
+        if module is not _MISSING:
             sys.modules[name] = module
 
 
 class _RestoresImportModules:
+    """Restore fake modules installed by lightweight config-flow tests."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self._module_snapshot = _snapshot_modules()
+
     def tearDown(self) -> None:
-        _restore_import_modules()
+        _restore_modules(self._module_snapshot)
+        super().tearDown()
 
 
 def _install_fake_homeassistant() -> None:
-    _snapshot_import_modules()
     fake_homeassistant = types.ModuleType("homeassistant")
     fake_homeassistant.const = types.ModuleType("homeassistant.const")
     fake_homeassistant.const.CONF_HOST = "host"
@@ -89,17 +81,12 @@ def _install_fake_homeassistant() -> None:
 
     fake_helpers = types.ModuleType("homeassistant.helpers")
     fake_aiohttp_client = types.ModuleType("homeassistant.helpers.aiohttp_client")
-    fake_service_info = types.ModuleType("homeassistant.helpers.service_info")
-    fake_zeroconf = types.ModuleType("homeassistant.helpers.service_info.zeroconf")
-    fake_zeroconf.ZeroconfServiceInfo = type("ZeroconfServiceInfo", (), {})
 
     async def async_get_clientsession(*args, **kwargs):  # noqa: ANN001
         return None
 
     fake_aiohttp_client.async_get_clientsession = async_get_clientsession
     fake_helpers.aiohttp_client = fake_aiohttp_client
-    fake_helpers.service_info = fake_service_info
-    fake_service_info.zeroconf = fake_zeroconf
 
     sys.modules["homeassistant"] = fake_homeassistant
     sys.modules["homeassistant.const"] = fake_homeassistant.const
@@ -107,8 +94,6 @@ def _install_fake_homeassistant() -> None:
     sys.modules["homeassistant.core"] = fake_core
     sys.modules["homeassistant.helpers"] = fake_helpers
     sys.modules["homeassistant.helpers.aiohttp_client"] = fake_aiohttp_client
-    sys.modules["homeassistant.helpers.service_info"] = fake_service_info
-    sys.modules["homeassistant.helpers.service_info.zeroconf"] = fake_zeroconf
 
 
 def _install_fake_voluptuous() -> None:
@@ -148,7 +133,6 @@ def _install_fake_voluptuous() -> None:
 
 
 def _install_fake_integration_modules() -> None:
-    _snapshot_import_modules()
     package_module = types.ModuleType("custom_components")
     package_module.__path__ = [str(PACKAGE_ROOT)]  # type: ignore[attr-defined]
     sys.modules["custom_components"] = package_module
@@ -282,6 +266,7 @@ class TestDeviceSettingsDefaults(_RestoresImportModules, unittest.TestCase):
     """Validate currency fallbacks for device settings defaults."""
 
     def setUp(self) -> None:
+        super().setUp()
         self.config_flow = _load_config_flow()
 
     def test_device_settings_defaults_uses_device_currency_when_available(self) -> None:
@@ -344,6 +329,7 @@ class TestDeviceSettingsOptionsFlow(
     """Validate device settings options flow does not write unchanged currency."""
 
     def setUp(self) -> None:
+        super().setUp()
         self.config_flow = _load_config_flow()
         self.flow = self.config_flow.StiebelDHEConnectOptionsFlow()
         self.entry_id = "entry-device-settings"
@@ -396,6 +382,7 @@ class TestConnectionOptionsConnectivity(
     """Check options flow connection step connectivity policy."""
 
     def setUp(self) -> None:
+        super().setUp()
         self.config_flow = _load_config_flow()
         self.flow = self.config_flow.StiebelDHEConnectOptionsFlow()
         self.entry_id = "entry-connection-options"
@@ -506,115 +493,193 @@ class TestConnectionOptionsConnectivity(
         self.assertEqual(result["step_id"], "connection_pairing_confirm")
 
 
-class TestZeroconfConfigFlow(
+class TestSetupScanConfigFlow(
     _RestoresImportModules,
     unittest.IsolatedAsyncioTestCase,
 ):
-    """Validate discovered setup only asks for DHE-specific local choices."""
+    """Check optional setup scan flow behavior."""
 
     def setUp(self) -> None:
+        super().setUp()
         self.config_flow = _load_config_flow()
         self.flow = self.config_flow.StiebelDHEConnectConfigFlow()
-        self.flow.context = {}
-
-        class _FlowManager:
-            def async_has_matching_flow(self, _flow: object) -> bool:
-                return False
 
         class _ConfigEntries:
-            flow = _FlowManager()
-
             def async_entries(self, _domain: str):  # noqa: ANN001
                 return []
 
+        self._tasks: list[asyncio.Task] = []
+
+        def _create_task(coro):  # noqa: ANN001
+            task = asyncio.create_task(coro)
+            self._tasks.append(task)
+            return task
+
         self.flow.hass = types.SimpleNamespace(
+            async_create_task=_create_task,
             config=types.SimpleNamespace(language="en"),
             config_entries=_ConfigEntries(),
+        )
+        self.flow.async_show_progress = types.MethodType(
+            lambda _self, **kwargs: {
+                "type": "progress",
+                "step_id": kwargs.get("step_id"),
+                "progress_action": kwargs.get("progress_action"),
+            },
+            self.flow,
+        )
+        self.flow.async_show_progress_done = types.MethodType(
+            lambda _self, **kwargs: {
+                "type": "progress_done",
+                "step_id": kwargs.get("next_step_id"),
+            },
+            self.flow,
         )
         self.flow.async_show_form = types.MethodType(
             lambda _self, **kwargs: {
                 "type": "form",
                 "step_id": kwargs.get("step_id"),
+                "data_schema": kwargs.get("data_schema"),
+                "description_placeholders": kwargs.get("description_placeholders", {}),
                 "errors": kwargs.get("errors", {}),
             },
             self.flow,
         )
-        self.flow.async_abort = types.MethodType(
-            lambda _self, **kwargs: {
-                "type": "abort",
-                "reason": kwargs.get("reason"),
-            },
-            self.flow,
-        )
 
-    async def test_zeroconf_flow_asks_for_jumper_then_pairing_confirm(self) -> None:
-        self.config_flow._can_connect = AsyncMock(return_value=True)
-        discovery_info = types.SimpleNamespace(
-            host="192.0.2.124",
-            port=8443,
-            hostname="DHE-JA06.local.",
-            name="DHE Connect DHE-JA06._ste-dhe._tcp.local.",
-        )
+    async def test_user_step_shows_setup_choice_before_scan(self) -> None:
+        self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
 
-        result = await self.flow.async_step_zeroconf(discovery_info)
+        result = await self.flow.async_step_user()
 
-        self.config_flow._can_connect.assert_awaited_once_with(
-            self.flow.hass,
-            "192.0.2.124",
-            8443,
-        )
         self.assertEqual(result["type"], "form")
-        self.assertEqual(result["step_id"], "discovery_confirm")
-        self.assertEqual(
-            self.flow.context["title_placeholders"]["name"],
-            "DHE Connect DHE-JA06",
+        self.assertEqual(result["step_id"], "user")
+        self.config_flow.async_scan_dhe_hosts.assert_not_called()
+        defaults = {}
+        for marker in result["data_schema"].schema:
+            key = getattr(marker, "key", getattr(marker, "schema", None))
+            default = getattr(marker, "default", None)
+            if callable(default):
+                default = default()
+            defaults[key] = default
+        self.assertFalse(defaults[self.config_flow.CONF_SCAN_AUTOMATICALLY])
+        self.assertEqual(defaults[self.config_flow.CONF_SCAN_SUBNET], "")
+
+    async def test_user_step_manual_choice_shows_manual_form_without_scan(self) -> None:
+        self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
+
+        result = await self.flow.async_step_user(
+            {self.config_flow.CONF_SCAN_AUTOMATICALLY: False}
         )
-        self.assertEqual(
-            self.flow._pending_setup_data,
+
+        self.assertEqual(result["type"], "form")
+        self.assertEqual(result["step_id"], "manual")
+        self.assertIn(
+            "Enter host/IP",
+            result["description_placeholders"]["scan_status"],
+        )
+        self.config_flow.async_scan_dhe_hosts.assert_not_called()
+
+    async def test_user_step_scan_uses_custom_subnet(self) -> None:
+        self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
+
+        result = await self.flow.async_step_user(
             {
-                self.config_flow.CONF_HOST: "192.0.2.124",
-                self.config_flow.CONF_PORT: 8443,
-                self.config_flow.CONF_NAME: "DHE Connect DHE-JA06",
-                "token_file": "token_192.0.2.124_8443.json",
-            },
+                self.config_flow.CONF_SCAN_AUTOMATICALLY: True,
+                self.config_flow.CONF_SCAN_SUBNET: "192.168.2.0 255.255.255.0",
+            }
         )
 
-        result = await self.flow.async_step_discovery_confirm(
-            {self.config_flow.CONF_INTERNAL_SCALD_PROTECTION: "55"}
+        self.assertEqual(result["type"], "progress")
+        await self._tasks[0]
+        self.config_flow.async_scan_dhe_hosts.assert_awaited_once_with(
+            self.flow.hass,
+            networks=[ip_network("192.168.2.0/24")],
+        )
+
+    async def test_user_step_scan_rejects_invalid_subnet(self) -> None:
+        self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
+
+        result = await self.flow.async_step_user(
+            {
+                self.config_flow.CONF_SCAN_AUTOMATICALLY: True,
+                self.config_flow.CONF_SCAN_SUBNET: "192.168.0.0 255.255.0.0",
+            }
         )
 
         self.assertEqual(result["type"], "form")
-        self.assertEqual(result["step_id"], "pairing_confirm")
-        self.assertEqual(
-            self.flow._pending_setup_data[
-                self.config_flow.CONF_INTERNAL_SCALD_PROTECTION
-            ],
-            "55",
+        self.assertEqual(result["step_id"], "user")
+        self.assertEqual(result["errors"]["scan_subnet"], "scan_subnet_too_large")
+        self.config_flow.async_scan_dhe_hosts.assert_not_called()
+
+    async def test_user_step_runs_scan_then_prefills_manual_form(self) -> None:
+        self.config_flow.async_scan_dhe_hosts = AsyncMock(
+            return_value=[
+                self.config_flow.DHEHostCandidate(
+                    "192.0.2.124",
+                    8443,
+                    ("STE DHE App",),
+                )
+            ]
         )
 
-    async def test_zeroconf_flow_aborts_duplicate_target_before_connect(self) -> None:
-        self.config_flow._can_connect = AsyncMock(return_value=True)
-        existing_entry = types.SimpleNamespace(
-            data={
-                self.config_flow.CONF_HOST: "192.0.2.124",
-                self.config_flow.CONF_PORT: 8443,
-            },
-            options={},
-        )
-        self.flow.hass.config_entries.async_entries = lambda _domain: [existing_entry]
-
-        result = await self.flow.async_step_zeroconf(
-            types.SimpleNamespace(
-                host="192.0.2.124",
-                port=8443,
-                hostname="DHE-JA06.local.",
-                name="DHE Connect DHE-JA06._ste-dhe._tcp.local.",
-            )
+        result = await self.flow.async_step_user(
+            {self.config_flow.CONF_SCAN_AUTOMATICALLY: True}
         )
 
-        self.assertEqual(result["type"], "abort")
-        self.assertEqual(result["reason"], "already_configured")
-        self.config_flow._can_connect.assert_not_awaited()
+        self.assertEqual(result["type"], "progress")
+        self.assertEqual(result["step_id"], "network_scan")
+        self.assertEqual(result["progress_action"], "scan_dhe")
+        await self._tasks[0]
+
+        result = await self.flow.async_step_network_scan({})
+
+        self.assertEqual(result["type"], "progress_done")
+
+        result = await self.flow.async_step_manual()
+
+        defaults = {}
+        for marker in result["data_schema"].schema:
+            key = getattr(marker, "key", getattr(marker, "schema", None))
+            default = getattr(marker, "default", None)
+            if callable(default):
+                default = default()
+            defaults[key] = default
+        self.assertEqual(defaults[self.config_flow.CONF_HOST], "192.0.2.124")
+        self.assertEqual(defaults[self.config_flow.CONF_PORT], 8443)
+        self.assertIn("Found one DHE", result["description_placeholders"]["scan_status"])
+
+    async def test_user_step_falls_back_to_manual_form_when_scan_finds_nothing(
+        self,
+    ) -> None:
+        self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
+
+        result = await self.flow.async_step_user(
+            {self.config_flow.CONF_SCAN_AUTOMATICALLY: True}
+        )
+
+        self.assertEqual(result["type"], "progress")
+        await self._tasks[0]
+        result = await self.flow.async_step_network_scan()
+        self.assertEqual(result["type"], "progress_done")
+        result = await self.flow.async_step_manual()
+
+        self.assertEqual(result["type"], "form")
+        self.assertEqual(result["step_id"], "manual")
+        self.assertIn("No DHE", result["description_placeholders"]["scan_status"])
+
+    async def test_network_scan_treats_empty_progress_poll_as_scan_poll(self) -> None:
+        self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
+
+        result = await self.flow.async_step_network_scan()
+
+        self.assertEqual(result["type"], "progress")
+        await self._tasks[0]
+        result = await self.flow.async_step_network_scan({})
+        self.assertEqual(result["type"], "progress_done")
+        result = await self.flow.async_step_manual({})
+
+        self.assertEqual(result["type"], "form")
+        self.assertEqual(result["errors"], {})
 
 
 class TestSetupPairingValidation(
@@ -624,6 +689,7 @@ class TestSetupPairingValidation(
     """Validate setup-pairing error mapping."""
 
     def setUp(self) -> None:
+        super().setUp()
         self.config_flow = _load_config_flow()
 
     async def test_validate_setup_pairing_maps_runtime_transport_errors(self) -> None:

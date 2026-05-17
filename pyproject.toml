@@ -46,6 +46,7 @@ files = [
     "custom_components/stiebel_dhe_connect/sensor.py",
     "custom_components/stiebel_dhe_connect/sensor_diagnostics.py",
     "custom_components/stiebel_dhe_connect/service_helpers.py",
+    "custom_components/stiebel_dhe_connect/setup_scan.py",
     "custom_components/stiebel_dhe_connect/switch.py",
     "custom_components/stiebel_dhe_connect/text.py",
     "custom_components/stiebel_dhe_connect/token_file_helpers.py",

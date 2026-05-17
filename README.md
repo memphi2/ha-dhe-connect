@@ -10,7 +10,7 @@ The integration talks directly to the DHE web interface on your local network. I
 
 ## Status
 
-- Current version: `1.5.0`
+- Current version: `1.4.2`
 - Release channel: stable
 - Home Assistant setup: UI config flow
 - HACS type: custom integration
@@ -103,6 +103,14 @@ To use different local artwork, replace those files with PNGs using the same fil
 
 ## Configuration
 
+When the integration is added, Home Assistant first asks whether it should scan
+a subnet or continue with manual setup. The scan is optional and only checks for
+DHE-like web interfaces on port `8443`. Leave the subnet field empty to scan the
+current local subnet, or enter an IPv4 network with a normal netmask, for
+example `192.168.1.0 255.255.255.0`. If a candidate is found, the normal setup
+form opens with host and port pre-filled. If no candidate is found, the same
+form opens for manual entry.
+
 The config flow asks for:
 
 | Field | Example | Notes |
@@ -115,13 +123,6 @@ The config flow asks for:
 The host field intentionally rejects URLs with paths, usernames, query strings or embedded ports. The port must be between `1` and `65535`.
 
 On first connection Home Assistant validates the DHE pairing before the integration entry is created.
-
-### Zeroconf discovery
-
-If Home Assistant discovers a DHE through mDNS/Zeroconf (`_ste-dhe._tcp.local.`),
-the config flow pre-fills the discovered host, port and device name. The user
-only needs to choose the physical `Tmax` jumper position, then confirm pairing
-on the DHE display.
 
 ### Multiple devices
 
