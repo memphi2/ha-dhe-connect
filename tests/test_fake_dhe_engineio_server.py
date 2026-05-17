@@ -519,6 +519,121 @@ class TestFakeDHEEngineIOServer(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(client.last_radio_state["station"]["Id"], 4301)
         self.assertEqual(client.last_radio_state["favorites"][0]["Id"], 4301)
 
+    async def test_add_weather_favorite_selects_location_with_fake_dhe_readbacks(
+        self,
+    ) -> None:
+        client_module = _load_client()
+        protocol_module = _load_protocol()
+        location = {
+            "LocationId": "fixture-weather-1",
+            "Name": "Fixture City",
+            "Country": "Testland",
+        }
+
+        async with FakeDHEEngineIOServer(protocol_module.NS) as server:
+            async with _connected_fake_client(client_module, server) as (
+                DHEClient,
+                client,
+                ctx,
+            ):
+                command_task = asyncio.create_task(
+                    DHEClient.add_weather_favorite(client, location)
+                )
+
+                await server.wait_for_posted_packet(
+                    protocol_module.WEATHER_FAVORITES_GET_COMMAND,
+                )
+                await _queue_message_and_handle(
+                    server,
+                    client,
+                    ctx,
+                    protocol_module.WEATHER_FAVORITES_SET_COMMAND,
+                    [],
+                )
+
+                favorite_packet = await server.wait_for_posted_packet(
+                    protocol_module.WEATHER_FAVORITE_ASSIGN_COMMAND,
+                )
+                self.assertIn('"LocationId":"fixture-weather-1"', favorite_packet)
+                await _queue_message_and_handle(
+                    server,
+                    client,
+                    ctx,
+                    protocol_module.WEATHER_FAVORITES_SET_COMMAND,
+                    [location],
+                )
+
+                location_packet = await server.wait_for_posted_packet(
+                    protocol_module.WEATHER_LOCATION_GET_COMMAND,
+                )
+                self.assertIn('"value":"fixture-weather-1"', location_packet)
+                await _queue_message_and_handle(
+                    server,
+                    client,
+                    ctx,
+                    protocol_module.WEATHER_LOCATION_SET_COMMAND,
+                    {"Location": location},
+                )
+                result = await asyncio.wait_for(command_task, timeout=1)
+
+        self.assertTrue(result)
+        self.assertEqual(
+            client.last_weather_state["location"]["LocationId"],
+            "fixture-weather-1",
+        )
+        self.assertEqual(
+            client.last_weather_state["favorites"][0]["LocationId"],
+            "fixture-weather-1",
+        )
+
+    async def test_remove_weather_favorite_confirms_with_fake_dhe_readback(
+        self,
+    ) -> None:
+        client_module = _load_client()
+        protocol_module = _load_protocol()
+        location = {
+            "LocationId": "fixture-weather-2",
+            "Name": "Fixture Bay",
+            "Country": "Testland",
+        }
+
+        async with FakeDHEEngineIOServer(protocol_module.NS) as server:
+            async with _connected_fake_client(client_module, server) as (
+                DHEClient,
+                client,
+                ctx,
+            ):
+                command_task = asyncio.create_task(
+                    DHEClient.remove_weather_favorite(client, location)
+                )
+
+                await server.wait_for_posted_packet(
+                    protocol_module.WEATHER_FAVORITES_GET_COMMAND,
+                )
+                await _queue_message_and_handle(
+                    server,
+                    client,
+                    ctx,
+                    protocol_module.WEATHER_FAVORITES_SET_COMMAND,
+                    [location],
+                )
+
+                favorite_packet = await server.wait_for_posted_packet(
+                    protocol_module.WEATHER_FAVORITE_ASSIGN_COMMAND,
+                )
+                self.assertIn('"LocationId":"fixture-weather-2"', favorite_packet)
+                await _queue_message_and_handle(
+                    server,
+                    client,
+                    ctx,
+                    protocol_module.WEATHER_FAVORITES_SET_COMMAND,
+                    [],
+                )
+                result = await asyncio.wait_for(command_task, timeout=1)
+
+        self.assertTrue(result)
+        self.assertEqual(client.last_weather_state["favorites"], [])
+
 
 class _FakeConfig:
     def path(self, value: str) -> str:
