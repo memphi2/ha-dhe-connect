@@ -7,6 +7,7 @@ import contextlib
 import time
 from typing import Any
 
+from .client_command_context import command_context as _command_context
 from .client_constants import APP_COMMAND_CONFIRMATION_TIMEOUT
 from .client_types import DHEError, DHESession
 from .client_value_helpers import (
@@ -37,6 +38,7 @@ class DHEClientTemperatureMemoryCommandsMixin:
             measurement_id = TEMPERATURE_MEMORY_ID_TO_MEASUREMENT[memory_id]
         except KeyError as err:
             raise DHEError(f"Unsupported temperature memory slot: {memory_slot}") from err
+        client = _command_context(self)
 
         async def _operation(ctx: DHESession) -> bool:
             temperature = await self._get_temperature_memory_temperature(
@@ -45,15 +47,15 @@ class DHEClientTemperatureMemoryCommandsMixin:
                 measurement_id,
             )
             request_value = _build_temperature_memory_button_value(temperature)
-            await self._post_packet(ctx, self._message_packet({
+            await client._post_packet(ctx, client._message_packet({
                 "command": ODB_ASSIGN_COMMAND,
                 "value": {"id": ID_SETPOINT_REQUEST, "value": request_value},
             }))
             with contextlib.suppress(DHEError):
-                await self._request_setpoint(ctx)
+                await client._request_setpoint(ctx)
             return True
 
-        return await self._run_command_with_reconnect_retry(
+        return await client._run_command_with_reconnect_retry(
             f"Could not press DHE temperature memory {memory_slot}",
             _operation,
         )
@@ -68,7 +70,8 @@ class DHEClientTemperatureMemoryCommandsMixin:
         if temperature is not None:
             return temperature
 
-        await self._request_app_value(ctx, TEMP_MEMORY_GET_COMMAND)
+        client = _command_context(self)
+        await client._request_app_value(ctx, TEMP_MEMORY_GET_COMMAND)
         deadline = time.monotonic() + APP_COMMAND_CONFIRMATION_TIMEOUT
         while time.monotonic() < deadline:
             temperature = self._cached_temperature_memory_temperature(measurement_id)
@@ -78,16 +81,17 @@ class DHEClientTemperatureMemoryCommandsMixin:
         raise DHEError(f"DHE temperature memory {memory_slot} is not available yet")
 
     async def _refresh_temperature_memories(self, ctx: DHESession) -> None:
-        generation = self._temperature_memory_generation
-        await self._request_app_value(ctx, TEMP_MEMORY_GET_COMMAND)
+        client = _command_context(self)
+        generation = client._temperature_memory_generation
+        await client._request_app_value(ctx, TEMP_MEMORY_GET_COMMAND)
         deadline = time.monotonic() + APP_COMMAND_CONFIRMATION_TIMEOUT
         while time.monotonic() < deadline:
-            if self._temperature_memory_generation != generation:
+            if client._temperature_memory_generation != generation:
                 return
             await asyncio.sleep(0.1)
 
     def _cached_temperature_memory_temperature(self, measurement_id: int) -> float | None:
-        value = self._last_measurements.get(measurement_id)
+        value = _command_context(self)._last_measurements.get(measurement_id)
         if value is None or isinstance(value, bool):
             return None
         return _round_to_half_c(_clamp(float(value), 20.0, 60.0))
@@ -102,14 +106,19 @@ class DHEClientTemperatureMemoryCommandsMixin:
         return memory_id, measurement_id
 
     def _temperature_memory_exists(self, memory_id: int, measurement_id: int) -> bool:
-        return memory_id in self._temperature_memory_ids_seen or measurement_id in self._last_measurements
+        client = _command_context(self)
+        return (
+            memory_id in client._temperature_memory_ids_seen
+            or measurement_id in client._last_measurements
+        )
 
     def _can_create_temperature_memory(self, memory_id: int) -> bool:
-        if len(self._temperature_memory_ids_seen) >= TEMPERATURE_MEMORY_MAX_SLOTS:
+        ids_seen = _command_context(self)._temperature_memory_ids_seen
+        if len(ids_seen) >= TEMPERATURE_MEMORY_MAX_SLOTS:
             return False
-        if not self._temperature_memory_ids_seen:
+        if not ids_seen:
             return memory_id == 0
-        return memory_id == max(self._temperature_memory_ids_seen) + 1
+        return memory_id == max(ids_seen) + 1
 
     def _temperature_memory_payload(
         self,
@@ -138,8 +147,9 @@ class DHEClientTemperatureMemoryCommandsMixin:
 
         async def _operation(ctx: DHESession) -> float:
             await self._refresh_temperature_memories(ctx)
-            before_generation = self._temperature_memory_generation
-            attributes = self._last_measurement_attributes.get(measurement_id, {})
+            client = _command_context(self)
+            before_generation = client._temperature_memory_generation
+            attributes = client._last_measurement_attributes.get(measurement_id, {})
             name = str(attributes.get("name", DEFAULT_TEMPERATURE_MEMORY_NAMES[memory_id]))
             payload = self._temperature_memory_payload(
                 memory_id,
@@ -147,12 +157,12 @@ class DHEClientTemperatureMemoryCommandsMixin:
                 name,
                 requested,
             )
-            await self._post_packet(ctx, self._message_packet({
+            await client._post_packet(ctx, client._message_packet({
                 "command": TEMP_MEMORY_ASSIGN_COMMAND,
                 "value": payload,
             }))
             await self._refresh_temperature_memories(ctx)
-            if self._temperature_memory_generation == before_generation:
+            if client._temperature_memory_generation == before_generation:
                 raise DHEError(
                     f"DHE temperature memory {memory_slot} was not confirmed"
                 )
@@ -164,7 +174,7 @@ class DHEClientTemperatureMemoryCommandsMixin:
                 )
             return confirmed
 
-        return await self._run_command_with_reconnect_retry(
+        return await _command_context(self)._run_command_with_reconnect_retry(
             f"Could not set DHE temperature memory {memory_slot}",
             _operation,
         )
@@ -178,7 +188,8 @@ class DHEClientTemperatureMemoryCommandsMixin:
 
         async def _operation(ctx: DHESession) -> str:
             await self._refresh_temperature_memories(ctx)
-            before_generation = self._temperature_memory_generation
+            client = _command_context(self)
+            before_generation = client._temperature_memory_generation
             temperature = (
                 self._cached_temperature_memory_temperature(measurement_id)
                 or DEFAULT_NEW_TEMPERATURE_MEMORY_C
@@ -189,16 +200,16 @@ class DHEClientTemperatureMemoryCommandsMixin:
                 requested_name,
                 temperature,
             )
-            await self._post_packet(ctx, self._message_packet({
+            await client._post_packet(ctx, client._message_packet({
                 "command": TEMP_MEMORY_ASSIGN_COMMAND,
                 "value": payload,
             }))
             await self._refresh_temperature_memories(ctx)
-            if self._temperature_memory_generation == before_generation:
+            if client._temperature_memory_generation == before_generation:
                 raise DHEError(
                     f"DHE temperature memory {memory_slot} name was not confirmed"
                 )
-            attributes = self._last_measurement_attributes.get(measurement_id, {})
+            attributes = client._last_measurement_attributes.get(measurement_id, {})
             confirmed_name = str(attributes.get("name", "")).strip()
             if confirmed_name != requested_name:
                 raise DHEError(
@@ -207,7 +218,7 @@ class DHEClientTemperatureMemoryCommandsMixin:
                 )
             return confirmed_name
 
-        return await self._run_command_with_reconnect_retry(
+        return await _command_context(self)._run_command_with_reconnect_retry(
             f"Could not set DHE temperature memory {memory_slot} name",
             _operation,
         )
@@ -219,7 +230,8 @@ class DHEClientTemperatureMemoryCommandsMixin:
             await self._refresh_temperature_memories(ctx)
             if not self._temperature_memory_exists(memory_id, measurement_id):
                 raise DHEError(f"DHE temperature memory {memory_slot} is not available")
-            await self._post_packet(ctx, self._message_packet({
+            client = _command_context(self)
+            await client._post_packet(ctx, client._message_packet({
                 "command": TEMP_MEMORY_ASSIGN_COMMAND,
                 "value": {
                     "id": memory_id,
@@ -231,7 +243,7 @@ class DHEClientTemperatureMemoryCommandsMixin:
                 raise DHEError(f"DHE temperature memory {memory_slot} was not deleted")
             return True
 
-        return await self._run_command_with_reconnect_retry(
+        return await _command_context(self)._run_command_with_reconnect_retry(
             f"Could not delete DHE temperature memory {memory_slot}",
             _operation,
         )

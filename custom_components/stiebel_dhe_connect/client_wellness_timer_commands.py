@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .client_command_context import command_context as _command_context
 from .client_constants import APP_COMMAND_CONFIRMATION_TIMEOUT
 from .client_types import DHEError, DHESession, ODBValue
 from .client_value_helpers import clamp as _clamp
@@ -29,25 +30,31 @@ class DHEClientWellnessTimerCommandsMixin:
     """Wellness shower and app timer write helpers."""
 
     async def set_wellness_cold_prevention(self, enabled: bool) -> bool:
+        client = _command_context(self)
         if enabled:
-            await self.write_odb_value(ID_WELLNESS_SHOWER_PROGRAM, WELLNESS_COLD_PREVENTION_PROGRAM_ID)
-            await self.write_odb_value(ID_WELLNESS_ACTIVE, True)
+            await client.write_odb_value(
+                ID_WELLNESS_SHOWER_PROGRAM,
+                WELLNESS_COLD_PREVENTION_PROGRAM_ID,
+            )
+            await client.write_odb_value(ID_WELLNESS_ACTIVE, True)
             return True
 
-        await self.write_odb_value(ID_WELLNESS_ACTIVE, False)
-        self._handle_measurement(ID_WELLNESS_ACTIVE, False, force_update=True)
-        self._handle_measurement(ID_WELLNESS_SHOWER_PROGRAM, 0.0, force_update=True)
+        await client.write_odb_value(ID_WELLNESS_ACTIVE, False)
+        client._handle_measurement(ID_WELLNESS_ACTIVE, False, force_update=True)
+        client._handle_measurement(ID_WELLNESS_SHOWER_PROGRAM, 0.0, force_update=True)
         return False
 
     async def set_wellness_shower_program(self, program_id: int) -> bool:
-        await self.write_odb_value(ID_WELLNESS_SHOWER_PROGRAM, int(program_id))
-        await self.write_odb_value(ID_WELLNESS_ACTIVE, True)
+        client = _command_context(self)
+        await client.write_odb_value(ID_WELLNESS_SHOWER_PROGRAM, int(program_id))
+        await client.write_odb_value(ID_WELLNESS_ACTIVE, True)
         return True
 
     async def stop_wellness_shower_program(self) -> bool:
-        await self.write_odb_value(ID_WELLNESS_ACTIVE, False)
-        self._handle_measurement(ID_WELLNESS_ACTIVE, False, force_update=True)
-        self._handle_measurement(ID_WELLNESS_SHOWER_PROGRAM, 0.0, force_update=True)
+        client = _command_context(self)
+        await client.write_odb_value(ID_WELLNESS_ACTIVE, False)
+        client._handle_measurement(ID_WELLNESS_ACTIVE, False, force_update=True)
+        client._handle_measurement(ID_WELLNESS_SHOWER_PROGRAM, 0.0, force_update=True)
         return False
 
     async def set_brush_timer_duration_minutes(self, minutes: float) -> float:
@@ -94,23 +101,35 @@ class DHEClientWellnessTimerCommandsMixin:
 
     async def run_wellness_shower_program_winter_refresh(self) -> bool:
         """Trigger the wellness shower program 'Winter refresh'."""
+        client = _command_context(self)
         for _ in range(2):
-            await self.write_odb_value(ID_WELLNESS_SHOWER_PROGRAM, WINTER_REFRESH_PROGRAM_ID)
-            await self.write_odb_value(ID_WELLNESS_ACTIVE, True)
+            await client.write_odb_value(
+                ID_WELLNESS_SHOWER_PROGRAM,
+                WINTER_REFRESH_PROGRAM_ID,
+            )
+            await client.write_odb_value(ID_WELLNESS_ACTIVE, True)
         return True
 
     async def run_wellness_shower_program_summer_fitness(self) -> bool:
         """Trigger the wellness shower program 'Summer fitness'."""
+        client = _command_context(self)
         for _ in range(2):
-            await self.write_odb_value(ID_WELLNESS_SHOWER_PROGRAM, SUMMER_FITNESS_PROGRAM_ID)
-            await self.write_odb_value(ID_WELLNESS_ACTIVE, True)
+            await client.write_odb_value(
+                ID_WELLNESS_SHOWER_PROGRAM,
+                SUMMER_FITNESS_PROGRAM_ID,
+            )
+            await client.write_odb_value(ID_WELLNESS_ACTIVE, True)
         return True
 
     async def run_wellness_shower_program_circulation_support(self) -> bool:
         """Trigger the wellness shower program 'Circulation support'."""
+        client = _command_context(self)
         for _ in range(2):
-            await self.write_odb_value(ID_WELLNESS_SHOWER_PROGRAM, CIRCULATION_SUPPORT_PROGRAM_ID)
-            await self.write_odb_value(ID_WELLNESS_ACTIVE, True)
+            await client.write_odb_value(
+                ID_WELLNESS_SHOWER_PROGRAM,
+                CIRCULATION_SUPPORT_PROGRAM_ID,
+            )
+            await client.write_odb_value(ID_WELLNESS_ACTIVE, True)
         return True
 
     async def _set_app_timer_duration_minutes(
@@ -139,31 +158,37 @@ class DHEClientWellnessTimerCommandsMixin:
         return bool(confirmed)
 
     async def _reset_app_timer(self, path: str, activation_id: int, remaining_id: int) -> bool:
+        client = _command_context(self)
         await self._write_app_value(
             f"assign:{path}:reset",
             True,
             remaining_id,
             0.0,
         )
-        self._handle_measurement(remaining_id, 0.0, force_update=True)
-        self._handle_measurement(activation_id, False, force_update=True)
+        client._handle_measurement(remaining_id, 0.0, force_update=True)
+        client._handle_measurement(activation_id, False, force_update=True)
         return True
 
     async def _write_app_value(self, command: str, value: Any, measurement_id: int, expected: ODBValue) -> ODBValue:
+        client = _command_context(self)
+
         async def _operation(ctx: DHESession) -> ODBValue:
-            future = self._new_write_future(measurement_id, expected)
-            await self._post_packet(ctx, self._message_packet({"command": command, "value": value}))
+            future = client._new_write_future(measurement_id, expected)
+            await client._post_packet(
+                ctx,
+                client._message_packet({"command": command, "value": value}),
+            )
             try:
-                return await self._wait_for_app_write_confirmation(future)
+                return await client._wait_for_app_write_confirmation(future)
             except TimeoutError as err:
-                self._clear_pending_write_future(None)
+                client._clear_pending_write_future(None)
                 raise DHEError(
                     f"No DHE app confirmation for {command} within "
                     f"{APP_COMMAND_CONFIRMATION_TIMEOUT:.1f}s"
                 ) from err
 
-        return await self._run_command_with_reconnect_retry(
+        return await client._run_command_with_reconnect_retry(
             f"Could not write DHE app command {command}",
             _operation,
-            on_error=lambda: self._clear_pending_write_future(None),
+            on_error=lambda: client._clear_pending_write_future(None),
         )
