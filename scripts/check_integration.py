@@ -11,6 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 INTEGRATION = ROOT / "custom_components" / "stiebel_dhe_connect"
 TRANSLATIONS = INTEGRATION / "translations"
+CLIENT_MODULE_MAX_BYTES = 50 * 1024
 
 
 def _load_json(path: Path) -> dict:
@@ -96,6 +97,15 @@ def check_repository_files(version: str) -> None:
         _fail("legacy info.md release notes must not be restored; use CHANGELOG.md")
 
 
+def check_client_module_size() -> None:
+    client = INTEGRATION / "client.py"
+    size = client.stat().st_size
+    if size > CLIENT_MODULE_MAX_BYTES:
+        _fail(
+            f"client.py is {size} bytes, expected <= {CLIENT_MODULE_MAX_BYTES} bytes"
+        )
+
+
 def check_translations() -> None:
     en = _load_json(TRANSLATIONS / "en.json")
     de = _load_json(TRANSLATIONS / "de.json")
@@ -133,6 +143,7 @@ def main() -> None:
     version = check_manifest()
     check_hacs()
     check_repository_files(version)
+    check_client_module_size()
     check_translations()
     check_compile()
     check_unit_tests()

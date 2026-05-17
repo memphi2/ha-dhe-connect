@@ -475,7 +475,7 @@ class TestSetupPairingValidation(unittest.IsolatedAsyncioTestCase):
 
         result = await module._validate_setup_pairing(
             object(),
-            "172.16.2.124",
+            "192.0.2.124",
             80,
             "token.json",
         )
