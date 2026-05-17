@@ -96,11 +96,11 @@ from .protocol import (
     ODB_ASSIGN_COMMAND,
     ODB_DEBUG_NAMES,
     ODB_DECILITER_VALUE_IDS,
+    ODB_GET_COMMAND,
     ODB_IGNORED_VALUE_IDS,
     ODB_NONNEGATIVE_VALUE_IDS,
     ODB_SET_COMMAND,
     ODB_TENTHS_TEMPERATURE_IDS,
-    ODB_ZERO_REQUEST_READBACK_IGNORE_IDS,
     PRICE_CENTS_COMPONENT_MAX,
     PRICE_COMPONENT_IDS,
     PRICE_EUROS_COMPONENT_MAX_BY_ID,
@@ -151,7 +151,7 @@ class DHEClientRuntimeMixin(DHEClientRuntimeAppMixin):
         _measurement_callbacks: set[MeasurementCallback]
         _message_count: int
         _nominal_power_kw: float
-        _odb_value_handlers: dict[int, Callable[[Any], None]]
+        _odb_value_handlers: dict[int, Callable[..., None]]
         _pending_expected_setpoint: float | None
         _pending_odb_read_deadlines: dict[int, float]
         _pending_setpoint_future: asyncio.Future[float] | None
@@ -252,7 +252,7 @@ class DHEClientRuntimeMixin(DHEClientRuntimeAppMixin):
                 _summarize_radio_value(value),
             )
             return
-        if command not in {ODB_SET_COMMAND, ODB_ASSIGN_COMMAND}:
+        if command not in {ODB_GET_COMMAND, ODB_SET_COMMAND, ODB_ASSIGN_COMMAND}:
             self._log_unhandled_ste_command(command, value)
             return
         if not isinstance(value, dict):
@@ -475,59 +475,147 @@ class DHEClientRuntimeMixin(DHEClientRuntimeAppMixin):
             message_count=self._message_count,
         )
 
-    def _handle_odb_setpoint_value(self, raw_value: Any) -> None:
+    def _handle_odb_setpoint_value(
+        self,
+        raw_value: Any,
+        *,
+        force_update: bool = False,
+    ) -> None:
         self._handle_setpoint(_raw_tenths_to_c(_raw_to_float(raw_value)))
 
-    def _handle_odb_water_flow_value(self, raw_value: Any) -> None:
-        self._handle_measurement(ID_WATER_FLOW, _raw_to_float(raw_value) / 10.0)
+    def _handle_odb_water_flow_value(
+        self,
+        raw_value: Any,
+        *,
+        force_update: bool = False,
+    ) -> None:
+        self._handle_measurement(
+            ID_WATER_FLOW,
+            _raw_to_float(raw_value) / 10.0,
+            force_update=force_update,
+        )
 
-    def _handle_odb_power_percent_value(self, raw_value: Any) -> None:
+    def _handle_odb_power_percent_value(
+        self,
+        raw_value: Any,
+        *,
+        force_update: bool = False,
+    ) -> None:
         self._last_power_fraction = _raw_to_float(raw_value) / 100.0
         self._handle_measurement(
             ID_POWER_PERCENT,
             self._last_power_fraction * self._nominal_power_kw,
+            force_update=force_update,
         )
 
-    def _handle_odb_nominal_power_value(self, raw_value: Any) -> None:
+    def _handle_odb_nominal_power_value(
+        self,
+        raw_value: Any,
+        *,
+        force_update: bool = False,
+    ) -> None:
         self._nominal_power_kw = self._raw_nominal_power_to_kw(_raw_to_float(raw_value))
-        self._handle_measurement(ID_NOMINAL_POWER, self._nominal_power_kw)
+        self._handle_measurement(
+            ID_NOMINAL_POWER,
+            self._nominal_power_kw,
+            force_update=force_update,
+        )
         if self._last_power_fraction is not None:
             self._handle_measurement(
                 ID_POWER_PERCENT,
                 self._last_power_fraction * self._nominal_power_kw,
+                force_update=force_update,
             )
 
-    def _handle_odb_bath_fill_target_value(self, raw_value: Any) -> None:
+    def _handle_odb_bath_fill_target_value(
+        self,
+        raw_value: Any,
+        *,
+        force_update: bool = False,
+    ) -> None:
         self._handle_measurement(
             ID_BATH_FILL_TARGET_VOLUME,
             self._convert_odb_value(ID_BATH_FILL_TARGET_VOLUME, raw_value),
+            force_update=force_update,
         )
         self._refresh_bath_fill_remaining()
 
-    def _handle_odb_bath_fill_current_value(self, raw_value: Any) -> None:
-        self._handle_measurement(ID_BATH_FILL_CURRENT_VOLUME, max(0.0, _raw_to_float(raw_value)))
+    def _handle_odb_bath_fill_current_value(
+        self,
+        raw_value: Any,
+        *,
+        force_update: bool = False,
+    ) -> None:
+        self._handle_measurement(
+            ID_BATH_FILL_CURRENT_VOLUME,
+            max(0.0, _raw_to_float(raw_value)),
+            force_update=force_update,
+        )
         self._refresh_bath_fill_remaining()
 
-    def _handle_odb_protocol_version_value(self, raw_value: Any) -> None:
+    def _handle_odb_protocol_version_value(
+        self,
+        raw_value: Any,
+        *,
+        force_update: bool = False,
+    ) -> None:
         self._handle_measurement(
             ID_PROTOCOL_VERSION,
             round(max(0.0, _raw_to_float(raw_value))),
+            force_update=force_update,
         )
 
-    def _handle_odb_water_heating_enabled_value(self, raw_value: Any) -> None:
-        self._handle_measurement(ID_WATER_HEATING_ENABLED, _raw_to_water_heating_enabled(raw_value))
+    def _handle_odb_water_heating_enabled_value(
+        self,
+        raw_value: Any,
+        *,
+        force_update: bool = False,
+    ) -> None:
+        self._handle_measurement(
+            ID_WATER_HEATING_ENABLED,
+            _raw_to_water_heating_enabled(raw_value),
+            force_update=force_update,
+        )
 
-    def _handle_odb_scald_protection_active_value(self, raw_value: Any) -> None:
-        self._handle_measurement(ID_SCALD_PROTECTION_ACTIVE, _raw_to_bool(raw_value))
+    def _handle_odb_scald_protection_active_value(
+        self,
+        raw_value: Any,
+        *,
+        force_update: bool = False,
+    ) -> None:
+        self._handle_measurement(
+            ID_SCALD_PROTECTION_ACTIVE,
+            _raw_to_bool(raw_value),
+            force_update=force_update,
+        )
 
-    def _handle_odb_device_status_value(self, raw_value: Any) -> None:
-        self._handle_device_status(raw_value)
+    def _handle_odb_device_status_value(
+        self,
+        raw_value: Any,
+        *,
+        force_update: bool = False,
+    ) -> None:
+        self._handle_device_status(raw_value, force_update=force_update)
 
-    def _handle_odb_co2_emission_value(self, raw_value: Any) -> None:
-        self._handle_co2_emission(raw_value)
+    def _handle_odb_co2_emission_value(
+        self,
+        raw_value: Any,
+        *,
+        force_update: bool = False,
+    ) -> None:
+        self._handle_co2_emission(raw_value, force_update=force_update)
 
-    def _handle_odb_child_safety_active_value(self, raw_value: Any) -> None:
-        self._handle_measurement(ID_CHILD_SAFETY_ACTIVE, _raw_to_bool(raw_value))
+    def _handle_odb_child_safety_active_value(
+        self,
+        raw_value: Any,
+        *,
+        force_update: bool = False,
+    ) -> None:
+        self._handle_measurement(
+            ID_CHILD_SAFETY_ACTIVE,
+            _raw_to_bool(raw_value),
+            force_update=force_update,
+        )
 
     def _handle_odb_value(
         self,
@@ -550,26 +638,47 @@ class DHEClientRuntimeMixin(DHEClientRuntimeAppMixin):
                 )
             ):
                 return
+            force_update = source == ODB_READ_SOURCE_REQUESTED
             handler = self._odb_value_handlers.get(odb_id)
             if handler is not None:
-                handler(raw_value)
+                handler(raw_value, force_update=force_update)
                 return
             if odb_id in ODB_TENTHS_TEMPERATURE_IDS:
-                self._handle_measurement(odb_id, _raw_tenths_to_c(_raw_to_float(raw_value)))
+                self._handle_measurement(
+                    odb_id,
+                    _raw_tenths_to_c(_raw_to_float(raw_value)),
+                    force_update=force_update,
+                )
                 return
             if odb_id in ODB_NONNEGATIVE_VALUE_IDS:
-                self._handle_measurement(odb_id, max(0.0, _raw_to_float(raw_value)))
+                self._handle_measurement(
+                    odb_id,
+                    max(0.0, _raw_to_float(raw_value)),
+                    force_update=force_update,
+                )
                 return
             if odb_id in ODB_DECILITER_VALUE_IDS:
-                self._handle_measurement(odb_id, max(0.0, _raw_to_float(raw_value)) / 10.0)
+                self._handle_measurement(
+                    odb_id,
+                    max(0.0, _raw_to_float(raw_value)) / 10.0,
+                    force_update=force_update,
+                )
                 return
             if odb_id in PRICE_COMPONENT_IDS:
-                self._handle_price_component(odb_id, raw_value)
+                self._handle_price_component(
+                    odb_id,
+                    raw_value,
+                    force_update=force_update,
+                )
                 return
             if odb_id in ODB_IGNORED_VALUE_IDS:
                 return
             if odb_id in WRITABLE_OPTION_IDS:
-                self._handle_measurement(odb_id, self._convert_odb_value(odb_id, raw_value))
+                self._handle_measurement(
+                    odb_id,
+                    self._convert_odb_value(odb_id, raw_value),
+                    force_update=force_update,
+                )
                 return
             self._log_unknown_odb_value(odb_id, raw_value, is_valid=is_valid)
         except (TypeError, ValueError):
@@ -577,15 +686,17 @@ class DHEClientRuntimeMixin(DHEClientRuntimeAppMixin):
 
     def _odb_read_source(self, command: Any, odb_id: int) -> ODBReadSource:
         """Classify an incoming ODB value as requested readback or runtime update."""
-        if command == ODB_SET_COMMAND and self._consume_odb_read_request(odb_id):
+        if command in {
+            ODB_GET_COMMAND,
+            ODB_SET_COMMAND,
+            ODB_ASSIGN_COMMAND,
+        } and self._consume_odb_read_request(odb_id):
             return ODB_READ_SOURCE_REQUESTED
         return ODB_READ_SOURCE_RUNTIME
 
     def _mark_odb_read_requested(self, odb_id: int) -> None:
-        """Track zero-placeholder-sensitive reads until their first readback."""
+        """Track explicit ODB reads until their first readback."""
         odb_id = int(odb_id)
-        if odb_id not in ODB_ZERO_REQUEST_READBACK_IGNORE_IDS:
-            return
         self._pending_odb_read_deadlines[odb_id] = (
             time.monotonic() + ODB_READBACK_REQUEST_WINDOW_SECONDS
         )
@@ -632,7 +743,13 @@ class DHEClientRuntimeMixin(DHEClientRuntimeAppMixin):
             force_update=previous_attributes != attributes,
         )
 
-    def _handle_price_component(self, odb_id: int, raw_value: Any) -> None:
+    def _handle_price_component(
+        self,
+        odb_id: int,
+        raw_value: Any,
+        *,
+        force_update: bool = False,
+    ) -> None:
         value = round(_raw_to_float(raw_value))
         measurement_id, euros_odb_id, cents_odb_id = PRICE_COMPONENT_IDS[odb_id]
         if odb_id == cents_odb_id:
@@ -640,7 +757,7 @@ class DHEClientRuntimeMixin(DHEClientRuntimeAppMixin):
         else:
             max_euros = PRICE_EUROS_COMPONENT_MAX_BY_ID.get(euros_odb_id, 9)
             value = int(_clamp(value, 0, max_euros))
-        self._handle_measurement(odb_id, float(value))
+        self._handle_measurement(odb_id, float(value), force_update=force_update)
 
         euros_value = self._last_measurements.get(euros_odb_id)
         cents_value = self._last_measurements.get(cents_odb_id)
@@ -660,13 +777,22 @@ class DHEClientRuntimeMixin(DHEClientRuntimeAppMixin):
         self._handle_measurement(
             measurement_id,
             price,
-            force_update=previous_attributes != attributes,
+            force_update=force_update or previous_attributes != attributes,
         )
 
-    def _handle_co2_emission(self, raw_value: Any) -> None:
+    def _handle_co2_emission(
+        self,
+        raw_value: Any,
+        *,
+        force_update: bool = False,
+    ) -> None:
         raw = _raw_to_float(raw_value)
         value = self._raw_to_co2_emission(raw)
-        self._handle_measurement(ID_CO2_EMISSION_RAW, raw)
+        self._handle_measurement(
+            ID_CO2_EMISSION_RAW,
+            raw,
+            force_update=force_update,
+        )
         attributes = {
             "source_odb_id": ID_CO2_EMISSION_RAW,
             "raw_value": raw,
@@ -676,10 +802,15 @@ class DHEClientRuntimeMixin(DHEClientRuntimeAppMixin):
         self._handle_measurement(
             ID_CO2_EMISSION,
             value,
-            force_update=previous_attributes != attributes,
+            force_update=force_update or previous_attributes != attributes,
         )
 
-    def _handle_device_status(self, raw_value: Any) -> None:
+    def _handle_device_status(
+        self,
+        raw_value: Any,
+        *,
+        force_update: bool = False,
+    ) -> None:
         raw = int(_raw_to_float(raw_value))
         status = _device_status_key(raw)
         attributes = {
@@ -692,7 +823,7 @@ class DHEClientRuntimeMixin(DHEClientRuntimeAppMixin):
         self._handle_measurement(
             ID_DEVICE_STATUS,
             status,
-            force_update=previous_attributes != attributes,
+            force_update=force_update or previous_attributes != attributes,
         )
 
     @staticmethod
