@@ -54,12 +54,16 @@ The Home Assistant fixture tests exercise the integration through real HA config
 entry setup paths instead of only isolated stubs:
 
 - Setup and unload.
+- Config-flow setup pairing entry creation.
+- Config-flow duplicate-target rejection.
+- Options-flow connection target changes with pairing confirmation.
 - Reload cleanup and restart behavior.
 - Multiple configured DHE entries.
 - Multi-entry service routing.
 - Service registration lifetime.
 - Entity-registry unique-ID separation.
 - Entity-registry stability across reload.
+- Disabled-by-default repair-pairing button enablement and service press.
 - Runtime availability callbacks and recovery.
 - Cached weather service candidate resolution.
 - Runtime measurement, reconnect and diagnostic sensor callbacks.

@@ -4,6 +4,7 @@
 
 ### Added
 
+- Expanded Home Assistant fixture coverage for config-flow pairing entry creation, duplicate-target rejection, connection options pairing and the repair-pairing button.
 - Expanded fake DHE Engine.IO coverage for stored-token authentication, setup pairing, manual token-before-result pairing, rejected pairing and closed-session handling.
 
 ### Changed
