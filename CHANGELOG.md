@@ -20,6 +20,7 @@
 
 ### Fixed
 
+- Made HA API service smoke turn the radio back off 30 seconds after selecting a test source.
 - Made the Home Assistant fixture runtime test self-contained when run directly by ensuring the repository root is importable before loading the custom integration package.
 
 ### Validation

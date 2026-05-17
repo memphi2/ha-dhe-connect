@@ -101,6 +101,10 @@ The helper tries to revoke its temporary refresh token. If Home Assistant
 rejects that revoke request, use `--cleanup-localhost-tokens` with the mounted
 config so leftover localhost tokens are removed from `.storage/auth`.
 
+When `--service-smoke` selects a radio source, it turns the radio off again
+after 30 seconds by default. Use `--radio-auto-off-seconds` only when a longer
+manual listening window is needed.
+
 ## Release Readiness
 
 Before publishing a release, run:
