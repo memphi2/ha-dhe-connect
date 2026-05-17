@@ -11,6 +11,11 @@ import subprocess
 import sys
 from typing import Callable, Sequence
 
+try:
+    from scripts.ha_test_redaction import redact_sensitive_text
+except ModuleNotFoundError:
+    from ha_test_redaction import redact_sensitive_text
+
 
 ROOT = Path(__file__).resolve().parents[1]
 INTEGRATION = ROOT / "custom_components" / "stiebel_dhe_connect"
@@ -298,8 +303,8 @@ def run_ha_service_smoke(
 
 
 def _command_failed_message(result: CommandResult) -> str:
-    command = " ".join(result.args)
-    detail = (result.stderr or result.stdout or "").strip()
+    command = redact_sensitive_text(" ".join(result.args))
+    detail = redact_sensitive_text((result.stderr or result.stdout or "").strip())
     if len(detail) > 1000:
         detail = detail[-1000:]
     return f"{command} failed with exit code {result.returncode}: {detail}"
