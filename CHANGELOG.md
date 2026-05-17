@@ -38,7 +38,7 @@
 - Local test suite: `247 passed`, `2 subtests passed`.
 - Integration repository check: `scripts/check_integration.py`.
 - Ruff: `ruff check custom_components/stiebel_dhe_connect tests scripts`.
-- HA-Test `172.16.1.147`: deployed the release-prep branch, restarted Home Assistant and verified DHE `172.16.2.124:8443` stayed connected.
+- HA-Test private lab: deployed the release-prep branch, restarted Home Assistant and verified the private DHE endpoint stayed connected.
 - HA-Test service smoke: `climate.turn_off`, `climate.turn_on`, `media_player.turn_off` and `media_player.select_source`.
 - HA-Test recorder monitor: `recorder writes total=0 limit=10` over 90s.
 - GitHub Validate workflow: HACS, Hassfest and repository checks.

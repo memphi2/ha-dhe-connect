@@ -90,9 +90,9 @@ class TestEntityHelpers(unittest.TestCase):
 
     def test_build_device_info_uses_host_port_identifier(self) -> None:
         self.assertEqual(
-            self.helpers.build_device_info("10.0.0.5", 8443, "Bathroom DHE"),
+            self.helpers.build_device_info("192.0.2.5", 8443, "Bathroom DHE"),
             {
-                "identifiers": {("stiebel_dhe_connect", "10.0.0.5:8443")},
+                "identifiers": {("stiebel_dhe_connect", "192.0.2.5:8443")},
                 "manufacturer": "STIEBEL ELTRON",
                 "model": "DHE Connect",
                 "name": "Bathroom DHE",
@@ -101,17 +101,17 @@ class TestEntityHelpers(unittest.TestCase):
 
     def test_build_device_info_can_preserve_legacy_identifier(self) -> None:
         device_info = self.helpers.build_device_info(
-            "10.0.0.5",
+            "192.0.2.5",
             9443,
             "Bathroom DHE",
-            "10.0.0.5",
+            "192.0.2.5",
         )
 
         self.assertEqual(
             device_info["identifiers"],
             {
-                ("stiebel_dhe_connect", "10.0.0.5"),
-                ("stiebel_dhe_connect", "10.0.0.5:9443"),
+                ("stiebel_dhe_connect", "192.0.2.5"),
+                ("stiebel_dhe_connect", "192.0.2.5:9443"),
             },
         )
 
