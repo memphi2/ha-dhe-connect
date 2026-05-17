@@ -9,6 +9,7 @@ files = [
     "custom_components/stiebel_dhe_connect/button.py",
     "custom_components/stiebel_dhe_connect/client.py",
     "custom_components/stiebel_dhe_connect/client_command_context.py",
+    "custom_components/stiebel_dhe_connect/client_command_runner.py",
     "custom_components/stiebel_dhe_connect/client_commands.py",
     "custom_components/stiebel_dhe_connect/client_constants.py",
     "custom_components/stiebel_dhe_connect/client_diagnostics.py",

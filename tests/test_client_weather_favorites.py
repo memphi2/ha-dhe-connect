@@ -73,6 +73,7 @@ def _load_client():
     _load_component_module("protocol")
     _load_component_module("client_value_helpers")
     _load_component_module("client_pairing")
+    _load_component_module("client_command_runner")
     _load_component_module("client_radio_commands")
     _load_component_module("client_weather_commands")
     _load_component_module("client_temperature_memory_commands")
