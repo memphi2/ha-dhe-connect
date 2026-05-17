@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+No unreleased changes.
+
+## v1.4.2 - 2026-05-17
+
 ### Added
 
 - Added a German quick-start and operations guide for installation, pairing, entities, recorder behavior, security and legal notes.
@@ -17,6 +21,15 @@
 - Fixed stale live sensor states found during live user testing by making all numerically filtered sensor entities publish transitions between zero and non-zero immediately, so current flow, current power and other high-churn values cannot remain stale after start or stop events.
 - Reduced the live-state write threshold for current water flow and current power to `0.2`, while keeping timer remaining values and bath-fill volumes unfiltered so they continue to update live.
 - Fixed startup readback refresh behavior found during live user testing by accepting `get:ste.common.odb:value` startup readbacks and forcing requested non-placeholder ODB readbacks through the measurement callbacks, so startup refreshes can clear stale current power or flow states even when the value equals the client cache.
+
+### Validation
+
+- Local test suite: `364 passed`, `46 subtests passed`.
+- Integration repository check: `scripts/check_integration.py`.
+- Type gate: `scripts/check_typing.py` over 48 source files.
+- Ruff: `ruff check custom_components/stiebel_dhe_connect tests scripts`.
+- HA-Test smoke: mounted Home Assistant config smoke with DHE connection healthy, reconnects stable at `0`, localhost test tokens at `0` and idle recorder thresholds correctly skipped for an observed completed-usage window.
+- Release-readiness check prepared with `v1.4.2` tag and GitHub release expected absent.
 
 ## v1.4.1 - 2026-05-17
 
