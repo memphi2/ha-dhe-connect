@@ -92,6 +92,7 @@ def check_repository_files(version: str) -> None:
         "custom_components/stiebel_dhe_connect/brand/icon.png",
         "custom_components/stiebel_dhe_connect/brand/logo.png",
         "docs/troubleshooting.md",
+        "docs/validation.md",
     ):
         if not (ROOT / relative).exists():
             _fail(f"required file missing: {relative}")
@@ -103,6 +104,8 @@ def check_repository_files(version: str) -> None:
         _fail("CHANGELOG is missing a section for the manifest version")
     if "[docs/troubleshooting.md](docs/troubleshooting.md)" not in readme:
         _fail("README troubleshooting reference points to docs/troubleshooting.md")
+    if "[docs/validation.md](docs/validation.md)" not in readme:
+        _fail("README validation reference points to docs/validation.md")
     if (ROOT / "info.md").exists():
         _fail("legacy info.md release notes must not be restored; use CHANGELOG.md")
 

@@ -1,6 +1,6 @@
 # Entity Reference
 
-Home Assistant entity names are translated through `translations/en.json` and `translations/de.json`. The tables below use the English names and list the underlying DHE source for maintainers.
+Home Assistant entity names are translated through `translations/en.json` and `translations/de.json`. The tables below use the English names and list the underlying DHE source for maintainers. User-facing entity names avoid protocol markers such as `ODB`; the source column records when a value comes from an ODB ID.
 
 ## Climate
 
@@ -114,11 +114,11 @@ data:
 | Water consumption week | `L` | `water`, disabled by default | `total_increasing` | `set:ste.app.consumption:waterWeek` |
 | Water consumption year | `m3` | `water`, disabled by default | `total_increasing` | `set:ste.app.consumption:waterYear` |
 | Total water consumption | `m3` | `water` | `total_increasing` | `set:ste.app.consumption:waterYears` |
-| Hot water volume (ODB) | `m3` | `water`, disabled by default | `total_increasing` | ODB ID `30 / 10` |
+| Hot water volume | `m3` | `water`, disabled by default | `total_increasing` | ODB ID `30 / 10` |
 | Energy consumption week | `kWh` | `energy`, disabled by default | `total` | `set:ste.app.consumption:energyWeek` |
-| Heating energy (ODB) | `kWh` | `energy`, disabled by default | `total_increasing` | ODB ID `29` |
-| Possible energy saving (ODB) | `kWh` | `energy`, diagnostic, disabled by default | `measurement` | ODB ID `63` |
-| Actual water saving (ODB) | `m3` | `water`, diagnostic, disabled by default | `measurement` | ODB ID `64 / 10` |
+| Heating energy | `kWh` | `energy`, disabled by default | `total_increasing` | ODB ID `29` |
+| Possible energy saving | `kWh` | `energy`, diagnostic, disabled by default | `measurement` | ODB ID `63` |
+| Actual water saving | `m3` | `water`, diagnostic, disabled by default | `measurement` | ODB ID `64 / 10` |
 | Energy consumption year | `kWh` | `energy`, disabled by default | `total` | `set:ste.app.consumption:energyYear` |
 | Total energy consumption | `kWh` | `energy` | `total` | `set:ste.app.consumption:energyYears` |
 | Last usage water | `L` | disabled by default | `measurement` | `set:ste.app.consumption:lastUsage.water` |
@@ -152,7 +152,7 @@ data:
 
 Consumption sensors expose the DHE chart array as a `chart` attribute and the reported cost as `cost_eur` where available. Saving monitor sensors expose the latest `possible`, `real`, `consumption` and `activation_rate` payloads as attributes. Large chart and catalog payloads are deduplicated before entity writes so repeated DHE messages do not continuously grow the recorder database.
 
-The browser UI exposes ODB IDs `29` (`ODB_Heizen_Energie`), `30` (`ODB_WW_Volumen`), `63` (`ODB_Gsprt_Energie`) and `64` (`ODB_Gsprt_KW_Volumen`) separately from the `ste.app.consumption:*` and `ste.app.savingMonitor:*` app payloads. The DHE web app labels saving-monitor `possible` as potential saving and saving-monitor `real` as actual saving. Live comparison shows ODB ID `63` tracking the saving-monitor possible energy value, while ODB ID `64` tracks the saving-monitor real water-saving value, so the ODB entities are named accordingly. ODB ID `30` remains the raw DHE hot-water volume value and is not a saving-monitor entity even when its current value is close to one of the saving-monitor water values. These ODB values stay disabled by default because they are diagnostic protocol values. A `0` returned only as the direct answer to a startup or entity-enable read request is ignored for these IDs; while the DHE connection is active they remain available with an `unknown` state until a real runtime value arrives. A later DHE runtime update with value `0` is still accepted.
+The browser UI exposes ODB IDs `29` (`ODB_Heizen_Energie`), `30` (`ODB_WW_Volumen`), `63` (`ODB_Gsprt_Energie`) and `64` (`ODB_Gsprt_KW_Volumen`) separately from the `ste.app.consumption:*` and `ste.app.savingMonitor:*` app payloads. The DHE web app labels saving-monitor `possible` as potential saving and saving-monitor `real` as actual saving. Live comparison shows ODB ID `63` tracking the saving-monitor possible energy value, while ODB ID `64` tracks the saving-monitor real water-saving value, so the Home Assistant entities are named by meaning and the protocol source is kept in this reference. ODB ID `30` remains the raw DHE hot-water volume value and is not a saving-monitor entity even when its current value is close to one of the saving-monitor water values. These ODB values stay disabled by default because they are diagnostic protocol values. A `0` returned only as the direct answer to a startup or entity-enable read request is ignored for these IDs; while the DHE connection is active they remain available with an `unknown` state until a real runtime value arrives. A later DHE runtime update with value `0` is still accepted.
 
 ## Numbers
 
