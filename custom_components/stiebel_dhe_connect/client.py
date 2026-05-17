@@ -159,6 +159,7 @@ class DHEClient(
         self._pending_write_future: asyncio.Future[ODBValue] | None = None
         self._pending_write_id: int | None = None
         self._pending_write_expected: ODBValue | None = None
+        self._pending_odb_read_deadlines: dict[int, float] = {}
         self._socketio_message_id = random.randint(1, 99)
         self._odb_value_handlers: dict[int, Callable[[Any], None]] = {
             ID_SETPOINT: self._handle_odb_setpoint_value,
@@ -379,6 +380,29 @@ class DHEClient(
             await self.start()
         return True
 
+    async def request_measurement_refresh(
+        self,
+        *,
+        odb_id: int | None = None,
+        app_command: str | None = None,
+    ) -> None:
+        """Request one measurement again for an entity enabled at runtime."""
+        if odb_id is None and app_command is None:
+            return
+
+        async def _operation(ctx: DHESession) -> None:
+            if app_command is not None:
+                await self._request_app_value(ctx, app_command)
+                return
+            if odb_id is not None:
+                await self._request_odb_value(ctx, odb_id)
+
+        await self._run_command_without_reconnect_retry(
+            "Could not refresh DHE measurement",
+            _operation,
+            timeout=10.0,
+        )
+
     async def _run_command_with_reconnect_retry(
         self,
         error_message: str,
@@ -502,11 +526,18 @@ class DHEClient(
             await self._request_optional_app_value(ctx, command)
 
     async def _request_odb_value(self, ctx: DHESession, odb_id: int) -> None:
-        await self._send_ste_command(
-            ctx,
-            ODB_GET_COMMAND,
-            {"id": odb_id, "value": ""},
-        )
+        self._mark_odb_read_requested(odb_id)
+        sent = False
+        try:
+            await self._send_ste_command(
+                ctx,
+                ODB_GET_COMMAND,
+                {"id": odb_id, "value": ""},
+            )
+            sent = True
+        finally:
+            if not sent:
+                self._consume_odb_read_request(odb_id)
 
     async def _request_app_value(self, ctx: DHESession, command: str) -> None:
         await self._send_ste_command(ctx, command, "")

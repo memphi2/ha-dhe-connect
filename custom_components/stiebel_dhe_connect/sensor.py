@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from copy import deepcopy
 from dataclasses import dataclass
 import time
@@ -110,6 +111,8 @@ class StiebelDHESensorEntityDescription(SensorEntityDescription):
 
 
 DEFAULT_ENABLED_SENSOR_KEYS = {
+    "power",
+    "water_flow",
     "water_consumption_total",
     "energy_consumption_total",
 }
@@ -685,6 +688,36 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
             self._last_written_native_value = self._attr_native_value
             self._last_written_monotonic = time.monotonic()
             self._last_written_recorded_attributes = self._recorded_state_attributes()
+        elif self._client.online:
+            self.hass.async_create_task(
+                self._async_refresh_missing_measurement(),
+                name=f"stiebel_dhe_connect_refresh_{self.entity_description.key}",
+            )
+
+    async def _async_refresh_missing_measurement(self) -> None:
+        """Request this entity's value when it is enabled after startup."""
+        with contextlib.suppress(Exception):  # noqa: BLE001
+            await self._client.request_measurement_refresh(
+                odb_id=self.entity_description.odb_id,
+                app_command=self._refresh_app_command(),
+            )
+
+    def _refresh_app_command(self) -> str | None:
+        """Return the app command that can refresh this sensor, if any."""
+        if (
+            self.entity_description.timer_path is not None
+            and self.entity_description.timer_property is not None
+        ):
+            return (
+                f"get:{self.entity_description.timer_path}:"
+                f"{self.entity_description.timer_property}"
+            )
+        source_command = self.entity_description.source_command
+        if source_command is None or not source_command.startswith("set:"):
+            return None
+        if source_command.endswith(":*"):
+            return None
+        return source_command.replace("set:", "get:", 1)
 
     def _convert_value(self, value: MeasurementValue) -> MeasurementValue:
         """Convert the raw client value for display."""

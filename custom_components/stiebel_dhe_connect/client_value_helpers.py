@@ -4,8 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from .client_types import ODBValue
+from .client_types import (
+    ODB_READ_SOURCE_REQUESTED,
+    ODBReadSource,
+    ODBValue,
+)
 from .protocol import (
+    ODB_ZERO_REQUEST_READBACK_IGNORE_IDS,
     TEMPERATURE_MEMORY_BUTTON_ADDR,
     WATER_HEATING_OFF_RAW,
     WATER_HEATING_ON_RAW,
@@ -66,6 +71,20 @@ def raw_to_bool(value: Any) -> bool:
 def raw_to_water_heating_enabled(value: Any) -> bool:
     """Decode ODB id 33 value to water-heating enabled state."""
     return int(raw_to_float(value)) == WATER_HEATING_ON_RAW
+
+
+def should_publish_odb_readback(
+    odb_id: int,
+    raw_value: Any,
+    *,
+    source: ODBReadSource,
+) -> bool:
+    """Return whether an ODB readback should update Home Assistant state."""
+    if source != ODB_READ_SOURCE_REQUESTED:
+        return True
+    if odb_id not in ODB_ZERO_REQUEST_READBACK_IGNORE_IDS:
+        return True
+    return raw_to_float(raw_value) != 0.0
 
 
 def water_heating_enabled_to_raw(enabled: bool) -> int:

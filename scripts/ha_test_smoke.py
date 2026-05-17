@@ -36,6 +36,7 @@ class EntityRegistryEntry:
     domain: str
     platform: str
     disabled_by: str | None = None
+    translation_key: str | None = None
 
 
 @dataclass(frozen=True)
@@ -86,12 +87,16 @@ def load_entity_registry(config: Path) -> list[EntityRegistryEntry]:
         disabled_by = raw.get("disabled_by")
         if disabled_by is not None:
             disabled_by = str(disabled_by)
+        translation_key = raw.get("translation_key")
+        if translation_key is not None:
+            translation_key = str(translation_key)
         entries.append(
             EntityRegistryEntry(
                 entity_id=entity_id,
                 domain=domain,
                 platform=platform,
                 disabled_by=disabled_by,
+                translation_key=translation_key,
             )
         )
     return sorted(entries, key=lambda item: item.entity_id)
@@ -311,6 +316,32 @@ def _reconnect_counts(states: dict[str, LatestState]) -> dict[str, float]:
     return counts
 
 
+def _is_optional_temperature_memory_translation_key(translation_key: str) -> bool:
+    parts = translation_key.split("_")
+    if len(parts) != 4 or parts[:2] != ["temperature", "memory"]:
+        return False
+    if parts[3] not in {"name", "temperature"}:
+        return False
+    try:
+        slot = int(parts[2])
+    except ValueError:
+        return False
+    return 3 <= slot <= 12
+
+
+def _allows_pending_runtime_value(entry: EntityRegistryEntry | None) -> bool:
+    if entry is None or entry.translation_key is None:
+        return False
+    if entry.translation_key in {
+        "heating_energy_total",
+        "hot_water_volume_total",
+        "possible_energy_saving",
+        "possible_water_saving",
+    }:
+        return True
+    return _is_optional_temperature_memory_translation_key(entry.translation_key)
+
+
 def evaluate_reconnect_stability(
     before: dict[str, LatestState],
     after: dict[str, LatestState],
@@ -349,6 +380,7 @@ def evaluate_state_health(
     """Evaluate current DHE states for common HA-test regressions."""
     enabled_entries = [entry for entry in entries if entry.disabled_by is None]
     enabled_ids = [entry.entity_id for entry in enabled_entries]
+    enabled_by_id = {entry.entity_id: entry for entry in enabled_entries}
     results: list[CheckResult] = []
 
     if enabled_ids:
@@ -450,13 +482,27 @@ def evaluate_state_health(
                 )
             )
 
+    pending_runtime_values = 0
     for state in sorted(states.values(), key=lambda item: item.entity_id):
         if state.entity_id.startswith("button."):
             continue
         if state.state in BAD_STATES:
+            if _allows_pending_runtime_value(enabled_by_id.get(state.entity_id)):
+                pending_runtime_values += 1
+                continue
             results.append(
                 CheckResult(False, f"{state.entity_id} has bad state {state.state!r}")
             )
+    if pending_runtime_values:
+        results.append(
+            CheckResult(
+                True,
+                (
+                    f"{pending_runtime_values} optional DHE entities are waiting "
+                    "for real runtime values"
+                ),
+            )
+        )
 
     return results
 

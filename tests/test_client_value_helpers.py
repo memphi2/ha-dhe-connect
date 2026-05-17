@@ -47,11 +47,17 @@ def _load_client_value_helpers():
     return _load_component_module("client_value_helpers")
 
 
+def _load_client_types():
+    return _load_component_module("client_types")
+
+
 class TestClientValueHelpers(unittest.TestCase):
     """Validate pure DHE value conversion helpers."""
 
     def setUp(self) -> None:
         self.helpers = _load_client_value_helpers()
+        self.client_types = _load_client_types()
+        self.protocol = _load_component_module("protocol")
 
     def test_temperature_rounding_and_clamping(self) -> None:
         self.assertEqual(self.helpers.round_to_half_c(42.24), 42.0)
@@ -89,6 +95,38 @@ class TestClientValueHelpers(unittest.TestCase):
         self.assertEqual(
             self.helpers.water_heating_enabled_to_raw(False),
             self.helpers.WATER_HEATING_OFF_RAW,
+        )
+
+    def test_requested_odb_zero_placeholder_filter_is_limited_to_selected_ids(
+        self,
+    ) -> None:
+        self.assertFalse(
+            self.helpers.should_publish_odb_readback(
+                self.protocol.ID_HOT_WATER_VOLUME_TOTAL,
+                "0",
+                source=self.client_types.ODB_READ_SOURCE_REQUESTED,
+            )
+        )
+        self.assertTrue(
+            self.helpers.should_publish_odb_readback(
+                self.protocol.ID_HOT_WATER_VOLUME_TOTAL,
+                "1",
+                source=self.client_types.ODB_READ_SOURCE_REQUESTED,
+            )
+        )
+        self.assertTrue(
+            self.helpers.should_publish_odb_readback(
+                self.protocol.ID_HOT_WATER_VOLUME_TOTAL,
+                "0",
+                source=self.client_types.ODB_READ_SOURCE_RUNTIME,
+            )
+        )
+        self.assertTrue(
+            self.helpers.should_publish_odb_readback(
+                self.protocol.ID_WATER_FLOW,
+                "0",
+                source=self.client_types.ODB_READ_SOURCE_REQUESTED,
+            )
         )
 
     def test_temperature_memory_button_value_packs_address_and_temperature(self) -> None:

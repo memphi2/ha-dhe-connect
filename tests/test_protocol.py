@@ -48,6 +48,15 @@ class TestODBProtocolConstants(unittest.TestCase):
         self.assertIn(self.protocol.ID_WELLNESS_TIME_NORMALIZED, nonnegative)
         self.assertIn(self.protocol.ID_HOT_WATER_VOLUME_TOTAL, deciliters)
         self.assertEqual(
+            set(self.protocol.ODB_ZERO_REQUEST_READBACK_IGNORE_IDS),
+            {
+                self.protocol.ID_HEATING_ENERGY_TOTAL,
+                self.protocol.ID_HOT_WATER_VOLUME_TOTAL,
+                self.protocol.ID_POSSIBLE_ENERGY_SAVING,
+                self.protocol.ID_POSSIBLE_WATER_SAVING,
+            },
+        )
+        self.assertEqual(
             ignored,
             {self.protocol.ID_CURRENCY_MODE, self.protocol.ID_SETPOINT_REQUEST},
         )

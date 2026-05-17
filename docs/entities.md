@@ -102,14 +102,14 @@ data:
 
 | Entity | Unit | Class / category | State class | Source / scaling |
 |---|---:|---|---|---|
-| Current water flow | `L/min` | `volume_flow_rate`, disabled by default | `measurement` | ODB ID `15 / 10` |
-| Current power consumption | `kW` | `power`, disabled by default | `measurement` | ODB ID `16 / 100 * nominal_power_kw` |
+| Current water flow | `L/min` | `volume_flow_rate` | `measurement` | ODB ID `15 / 10` |
+| Current power consumption | `kW` | `power` | `measurement` | ODB ID `16 / 100 * nominal_power_kw` |
 | Nominal power | `kW` | `power`, disabled by default | none | ODB ID `20` |
 | Operating duration | `h` | `duration`, diagnostic, disabled by default | `total_increasing` | ODB ID `18`, raw hours |
 | Inlet temperature | `C` | `temperature`, diagnostic, disabled by default | `measurement` | ODB ID `13 / 10` |
 | Outlet temperature | `C` | `temperature`, diagnostic, disabled by default | `measurement` | ODB ID `14 / 10` |
 | Scald protection temperature limit | `C` | `temperature`, diagnostic, disabled by default | none | ODB ID `24 / 10` |
-| Device status | text | `enum`, diagnostic, disabled by default | none | ODB ID `34`; status code `3` is also surfaced through the error status sensor |
+| Device status | text | `enum`, diagnostic, disabled by default | none | ODB ID `34`; status code `2` means water is running, status code `3` is surfaced through the error status sensor |
 | Protocol version | text | diagnostic, disabled by default | none | ODB ID `67` |
 | Water consumption week | `L` | `water`, disabled by default | `total_increasing` | `set:ste.app.consumption:waterWeek` |
 | Water consumption year | `m3` | `water`, disabled by default | `total_increasing` | `set:ste.app.consumption:waterYear` |
@@ -151,6 +151,8 @@ data:
 | Bluetooth MAC | text | diagnostic, disabled by default | none | `set:ste.common.version:gadgetData.bluetooth` |
 
 Consumption sensors expose the DHE chart array as a `chart` attribute and the reported cost as `cost_eur` where available. Saving monitor sensors expose the latest `possible`, `real`, `consumption` and `activation_rate` payloads as attributes. Large chart and catalog payloads are deduplicated before entity writes so repeated DHE messages do not continuously grow the recorder database.
+
+The browser UI exposes ODB IDs `29` (`ODB_Heizen_Energie`), `30` (`ODB_WW_Volumen`), `63` (`ODB_Gsprt_Energie`) and `64` (`ODB_Gsprt_KW_Volumen`) separately from the `ste.app.consumption:*` and `ste.app.savingMonitor:*` app payloads. They stay disabled by default because they are diagnostic protocol values. A `0` returned only as the direct answer to a startup or entity-enable read request is ignored for these IDs; a later DHE runtime update with value `0` is still accepted.
 
 ## Numbers
 

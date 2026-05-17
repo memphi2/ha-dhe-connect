@@ -1277,6 +1277,171 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(requested_odb_ids, list(protocol_module.INITIAL_VALUE_IDS))
         self.assertEqual(requested_odb_ids.count(protocol_module.ID_NOMINAL_POWER), 1)
 
+    async def test_runtime_measurement_refresh_requests_one_odb_or_app_value(self) -> None:
+        client_module = _load_client()
+        protocol_module = _load_protocol()
+        DHEClient = client_module.DHEClient
+        DHESession = client_module.DHESession
+
+        client = DHEClient.__new__(DHEClient)
+        ctx = DHESession(url_token="token", sid="sid")
+
+        async def _run_without_retry(_message, operation, *, timeout=45.0):
+            self.assertEqual(timeout, 10.0)
+            return await operation(ctx)
+
+        client._run_command_without_reconnect_retry = _run_without_retry
+        client._request_odb_value = AsyncMock()
+        client._request_app_value = AsyncMock()
+
+        await DHEClient.request_measurement_refresh(
+            client,
+            odb_id=protocol_module.ID_HOT_WATER_VOLUME_TOTAL,
+        )
+        await DHEClient.request_measurement_refresh(
+            client,
+            app_command="get:ste.app.showerTimer:remainingMilliseconds",
+        )
+
+        client._request_odb_value.assert_awaited_once_with(
+            ctx,
+            protocol_module.ID_HOT_WATER_VOLUME_TOTAL,
+        )
+        client._request_app_value.assert_awaited_once_with(
+            ctx,
+            "get:ste.app.showerTimer:remainingMilliseconds",
+        )
+
+    def test_invalid_known_odb_readbacks_are_ignored(self) -> None:
+        client_module = _load_client()
+        protocol_module = _load_protocol()
+        DHEClient = client_module.DHEClient
+
+        client = DHEClient.__new__(DHEClient)
+        client._odb_value_handlers = {}
+        client._handle_measurement = Mock()
+
+        for odb_id, raw_value in (
+            (protocol_module.ID_HEATING_ENERGY_TOTAL, "12,5"),
+            (protocol_module.ID_HOT_WATER_VOLUME_TOTAL, "42"),
+            (protocol_module.ID_POSSIBLE_ENERGY_SAVING, "7"),
+            (protocol_module.ID_POSSIBLE_WATER_SAVING, "15"),
+        ):
+            DHEClient._handle_odb_value(
+                client,
+                odb_id,
+                raw_value,
+                is_valid=False,
+            )
+
+        client._handle_measurement.assert_not_called()
+
+    def test_requested_zero_diagnostic_odb_readbacks_are_ignored(self) -> None:
+        client_module = _load_client()
+        client_types = _load_component_module("client_types")
+        protocol_module = _load_protocol()
+        DHEClient = client_module.DHEClient
+
+        client = DHEClient.__new__(DHEClient)
+        client._odb_value_handlers = {}
+        client._handle_measurement = Mock()
+
+        for odb_id in protocol_module.ODB_ZERO_REQUEST_READBACK_IGNORE_IDS:
+            DHEClient._handle_odb_value(
+                client,
+                odb_id,
+                "0",
+                source=client_types.ODB_READ_SOURCE_REQUESTED,
+            )
+
+        client._handle_measurement.assert_not_called()
+
+    def test_spontaneous_zero_diagnostic_odb_updates_are_published(self) -> None:
+        client_module = _load_client()
+        client_types = _load_component_module("client_types")
+        protocol_module = _load_protocol()
+        DHEClient = client_module.DHEClient
+
+        client = DHEClient.__new__(DHEClient)
+        client._odb_value_handlers = {}
+        client._handle_measurement = Mock()
+
+        for odb_id in protocol_module.ODB_ZERO_REQUEST_READBACK_IGNORE_IDS:
+            DHEClient._handle_odb_value(
+                client,
+                odb_id,
+                "0",
+                source=client_types.ODB_READ_SOURCE_RUNTIME,
+            )
+
+        self.assertEqual(client._handle_measurement.call_count, 4)
+        for call in client._handle_measurement.call_args_list:
+            self.assertEqual(call.args[1], 0.0)
+
+    def test_requested_nonzero_diagnostic_odb_readbacks_are_published(self) -> None:
+        client_module = _load_client()
+        client_types = _load_component_module("client_types")
+        protocol_module = _load_protocol()
+        DHEClient = client_module.DHEClient
+
+        client = DHEClient.__new__(DHEClient)
+        client._odb_value_handlers = {}
+        client._handle_measurement = Mock()
+
+        DHEClient._handle_odb_value(
+            client,
+            protocol_module.ID_HOT_WATER_VOLUME_TOTAL,
+            "10",
+            source=client_types.ODB_READ_SOURCE_REQUESTED,
+        )
+
+        client._handle_measurement.assert_called_once_with(
+            protocol_module.ID_HOT_WATER_VOLUME_TOTAL,
+            1.0,
+        )
+
+    def test_odb_read_request_tracking_expires_after_one_response(self) -> None:
+        client_module = _load_client()
+        protocol_module = _load_protocol()
+        DHEClient = client_module.DHEClient
+
+        client = DHEClient.__new__(DHEClient)
+        client._pending_odb_read_deadlines = {}
+
+        DHEClient._mark_odb_read_requested(
+            client,
+            protocol_module.ID_WATER_FLOW,
+        )
+        self.assertEqual(client._pending_odb_read_deadlines, {})
+
+        DHEClient._mark_odb_read_requested(
+            client,
+            protocol_module.ID_HOT_WATER_VOLUME_TOTAL,
+        )
+
+        self.assertTrue(
+            DHEClient._consume_odb_read_request(
+                client,
+                protocol_module.ID_HOT_WATER_VOLUME_TOTAL,
+            )
+        )
+        self.assertFalse(
+            DHEClient._consume_odb_read_request(
+                client,
+                protocol_module.ID_HOT_WATER_VOLUME_TOTAL,
+            )
+        )
+
+        client._pending_odb_read_deadlines[
+            protocol_module.ID_HOT_WATER_VOLUME_TOTAL
+        ] = 0.0
+        self.assertFalse(
+            DHEClient._consume_odb_read_request(
+                client,
+                protocol_module.ID_HOT_WATER_VOLUME_TOTAL,
+            )
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

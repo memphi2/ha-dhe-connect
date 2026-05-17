@@ -128,6 +128,10 @@ class TestDeviceStatusMapping(unittest.TestCase):
 
     def test_device_status_key_maps_known_codes(self) -> None:
         self.assertEqual(self.mapping.device_status_key(1), "normal")
+        self.assertEqual(
+            self.mapping.device_status_key(2),
+            self.mapping.DEVICE_STATUS_WATER_RUNNING,
+        )
         self.assertEqual(self.mapping.device_status_key("3"), "service_required")
         self.assertEqual(self.mapping.device_status_key(8), "status_8")
 
@@ -139,6 +143,7 @@ class TestDeviceStatusMapping(unittest.TestCase):
     def test_device_status_problem_matches_wrench_code(self) -> None:
         self.assertTrue(self.mapping.device_status_problem(3))
         self.assertFalse(self.mapping.device_status_problem(1))
+        self.assertFalse(self.mapping.device_status_problem(2))
         self.assertFalse(self.mapping.device_status_problem(4))
 
 

@@ -28,7 +28,7 @@ Development and protocol mapping for this release were assisted by OpenAI Codex.
 - Target temperature control through the DHE ODB command interface, including Climate limits that respect the physical `Tmax` jumper and the active child-safety limit.
 - Temperature memory controls for all 12 supported slots; slots 3 to 12 are disabled by default.
 - Eco mode, Eco flow limit, bath fill, child safety, wellness controls, brush timer and shower timer controls.
-- Total water and energy consumption sensors are enabled by default; detailed live, possible saving, last usage, timer and saving-monitor sensors start disabled to keep the device card tidy.
+- Current water flow, current power, total water and total energy consumption sensors are enabled by default; possible saving, last usage, timer and saving-monitor sensors start disabled to keep the device card tidy.
 - Compact radio media player for station metadata, current title, short-description fallback, playback, volume and favorites.
 - Options-flow radio search by full text, DHE genre catalog, country catalog or city catalog.
 - Weather entity for the DHE forecast payload with favorite location selection.
@@ -134,8 +134,8 @@ The integration creates one Home Assistant device per configured DHE target and 
 - Climate target temperature with `heat`/`off` support.
 - Radio media player with favorites as selectable sources.
 - Weather entity and weather-location select for DHE forecast favorites.
-- Water and energy consumption totals enabled by default for Home Assistant dashboards.
-- Detailed live telemetry, saving-monitor, diagnostic, timer, memory and protocol entities disabled by default to keep the device page manageable.
+- Current water flow, current power and water/energy consumption totals enabled by default for Home Assistant dashboards.
+- Additional live telemetry, saving-monitor, diagnostic, timer, memory and protocol entities disabled by default to keep the device page manageable.
 
 The full entity table, attributes, service examples and underlying DHE sources live in [docs/entities.md](docs/entities.md).
 

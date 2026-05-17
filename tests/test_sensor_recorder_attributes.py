@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 from pathlib import Path
 import types
 import sys
 import time
 import unittest
+from unittest.mock import AsyncMock
 
 try:
     from tests.test_aiohttp_stubs import _ensure_aiohttp_stub
@@ -157,6 +159,8 @@ class TestSensorRecorderAttributes(unittest.TestCase):
 
     def test_flow_and_power_write_filters_use_stricter_thresholds(self) -> None:
         sensor_module = _load_sensor_module()
+        self.assertIn("water_flow", sensor_module.DEFAULT_ENABLED_SENSOR_KEYS)
+        self.assertIn("power", sensor_module.DEFAULT_ENABLED_SENSOR_KEYS)
         self.assertEqual(sensor_module.SENSOR_WRITE_FILTERS["water_flow"], (1.0, 45.0))
         self.assertEqual(sensor_module.SENSOR_WRITE_FILTERS["power"], (1.5, 45.0))
         self.assertEqual(
@@ -204,6 +208,90 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         sensor._last_written_native_value = 5.0
         sensor._last_written_monotonic = -1_000_000_000.0
         self.assertTrue(sensor._should_write_measurement_state(5.4))
+
+    def test_sensor_refresh_command_uses_timer_or_source_command(self) -> None:
+        sensor_module = _load_sensor_module()
+        shower_description = next(
+            item
+            for item in sensor_module.SENSOR_DESCRIPTIONS
+            if item.key == "shower_timer_remaining"
+        )
+        consumption_description = next(
+            item
+            for item in sensor_module.SENSOR_DESCRIPTIONS
+            if item.key == "water_consumption_total"
+        )
+        derived_description = next(
+            item
+            for item in sensor_module.SENSOR_DESCRIPTIONS
+            if item.key == "bath_fill_remaining_volume"
+        )
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+
+        shower_sensor = sensor_module.StiebelDHESensor(
+            entry_id="test-entry",
+            name="Test DHE",
+            client=_FakeClient(),
+            description=shower_description,
+        )
+        consumption_sensor = sensor_module.StiebelDHESensor(
+            entry_id="test-entry",
+            name="Test DHE",
+            client=_FakeClient(),
+            description=consumption_description,
+        )
+        derived_sensor = sensor_module.StiebelDHESensor(
+            entry_id="test-entry",
+            name="Test DHE",
+            client=_FakeClient(),
+            description=derived_description,
+        )
+
+        self.assertEqual(
+            shower_sensor._refresh_app_command(),
+            "get:ste.app.showerTimer:remainingMilliseconds",
+        )
+        self.assertEqual(
+            consumption_sensor._refresh_app_command(),
+            "get:ste.app.consumption:waterYears",
+        )
+        self.assertIsNone(derived_sensor._refresh_app_command())
+
+    def test_missing_sensor_refresh_requests_current_value(self) -> None:
+        sensor_module = _load_sensor_module()
+        protocol_module = _load_component_module("protocol")
+        description = next(
+            item
+            for item in sensor_module.SENSOR_DESCRIPTIONS
+            if item.key == "shower_timer_remaining"
+        )
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+
+            def __init__(self) -> None:
+                self.request_measurement_refresh = AsyncMock()
+
+        client = _FakeClient()
+        sensor = sensor_module.StiebelDHESensor(
+            entry_id="test-entry",
+            name="Test DHE",
+            client=client,
+            description=description,
+        )
+
+        asyncio.run(sensor._async_refresh_missing_measurement())
+
+        client.request_measurement_refresh.assert_awaited_once_with(
+            odb_id=protocol_module.ID_SHOWER_TIMER_REMAINING,
+            app_command="get:ste.app.showerTimer:remainingMilliseconds",
+        )
 
     def test_availability_update_writes_only_on_effective_sensor_change(self) -> None:
         sensor_module = _load_sensor_module()
