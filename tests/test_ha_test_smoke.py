@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from contextlib import closing
+from contextlib import redirect_stdout
+import io
 import json
 from pathlib import Path
 import sqlite3
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -84,6 +87,16 @@ def _insert_state(
             (state_id, metadata_id, state, attributes_id, float(state_id)),
         )
         conn.commit()
+
+
+def _write_entity_registry(
+    config: Path,
+    entities: list[dict[str, object]],
+) -> None:
+    _write_json(
+        config / ".storage" / "core.entity_registry",
+        {"data": {"entities": entities}},
+    )
 
 
 class TestHaTestSmoke(unittest.TestCase):
@@ -823,6 +836,103 @@ class TestHaTestSmoke(unittest.TestCase):
             results = ha_test_smoke.scan_logs(config)
 
             self.assertTrue(all(result.ok for result in results), results)
+
+    def test_main_passes_against_synthetic_ci_recorder_fixture(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = Path(temp_dir)
+            db_path = config / "home-assistant_v2.db"
+            _create_recorder_db(db_path)
+            _write_entity_registry(
+                config,
+                [
+                    {
+                        "entity_id": "climate.dhe_connect",
+                        "platform": "stiebel_dhe_connect",
+                        "disabled_by": None,
+                    },
+                    {
+                        "entity_id": "sensor.dhe_connect_connection_state",
+                        "platform": "stiebel_dhe_connect",
+                        "disabled_by": None,
+                    },
+                    {
+                        "entity_id": "sensor.dhe_connect_reconnect_count",
+                        "platform": "stiebel_dhe_connect",
+                        "disabled_by": None,
+                    },
+                    {
+                        "entity_id": "sensor.dhe_connect_device_status",
+                        "platform": "stiebel_dhe_connect",
+                        "disabled_by": None,
+                        "translation_key": "device_status",
+                    },
+                    {
+                        "entity_id": "sensor.dhe_connect_last_usage_time",
+                        "platform": "stiebel_dhe_connect",
+                        "disabled_by": None,
+                        "translation_key": "last_usage_time",
+                    },
+                ],
+            )
+            _insert_state(
+                db_path,
+                state_id=1,
+                metadata_id=1,
+                entity_id="climate.dhe_connect",
+                state="heat",
+                attributes={"connection_state": "connected"},
+            )
+            _insert_state(
+                db_path,
+                state_id=2,
+                metadata_id=2,
+                entity_id="sensor.dhe_connect_connection_state",
+                state="connected",
+            )
+            _insert_state(
+                db_path,
+                state_id=3,
+                metadata_id=3,
+                entity_id="sensor.dhe_connect_reconnect_count",
+                state="0",
+            )
+            _insert_state(
+                db_path,
+                state_id=4,
+                metadata_id=4,
+                entity_id="sensor.dhe_connect_device_status",
+                state="normal",
+            )
+            _insert_state(
+                db_path,
+                state_id=5,
+                metadata_id=5,
+                entity_id="sensor.dhe_connect_last_usage_time",
+                state="0",
+            )
+            (config / "home-assistant.log").write_text(
+                "2026-05-17 INFO custom_components.stiebel_dhe_connect ready\n",
+                encoding="utf-8",
+            )
+
+            output = io.StringIO()
+            with (
+                redirect_stdout(output),
+                patch.object(ha_test_smoke.time, "sleep"),
+            ):
+                result = ha_test_smoke.main([
+                    "--config",
+                    str(config),
+                    "--db",
+                    str(db_path),
+                    "--monitor-seconds",
+                    "1",
+                ])
+
+        self.assertEqual(result, 0, output.getvalue())
+        self.assertIn("loaded 5 enabled DHE entities", output.getvalue())
+        self.assertIn("recorder writes total=0", output.getvalue())
+        self.assertIn("reconnect count stable at 0", output.getvalue())
 
 
 if __name__ == "__main__":

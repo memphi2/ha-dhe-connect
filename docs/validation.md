@@ -69,6 +69,11 @@ state, recorder state, current logs, DHE connection state, reconnect count and
 temporary localhost HA tokens. It does not need Home Assistant credentials and
 does not print stored DHE tokens.
 
+CI also runs a synthetic mounted-config fixture for this smoke path. That test
+builds a minimal entity registry, recorder database and log file, then executes
+the same smoke runner including recorder-write monitoring without requiring a
+live Home Assistant instance.
+
 To monitor recorder churn, add a time window:
 
 ```bash
