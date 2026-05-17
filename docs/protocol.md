@@ -255,3 +255,7 @@ To keep Home Assistant recorder growth under control, the integration throttles 
 - Climate inlet/outlet telemetry writes only when the temperature changes by at least `0.5 C`, or after `120` seconds without a write.
 - Saving-monitor sensors update only for the category received from the DHE command (`consumption`, `possible`, `real` or `ActivationRate`) instead of refreshing every saving-monitor sensor on every message.
 - Saving-monitor sensor entities additionally use per-entity delta/time write filters to suppress jitter writes.
+
+Repeated raw payloads from weather, radio catalog/search, consumption chart and saving-monitor detail messages are kept in memory only when they are needed for commands, options flows or entity attributes. They are not written repeatedly as normal Home Assistant state changes. Attribute-only updates still write when the recorder-visible value actually changes, for example a selected radio source, weather favorite or climate `target_below_inlet` transition.
+
+Known-but-unexposed ODB values are deliberately recognized and ignored at normal log levels. This keeps protocol discovery useful without filling Home Assistant logs or recorder history with stable internal device values.

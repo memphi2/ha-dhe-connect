@@ -1,12 +1,42 @@
 # Changelog
 
-## v1.3.3 - Unreleased
+## v1.4.0 - 2026-05-17
+
+### Added
+
+- Added a scoped type-checking gate so release validation catches typing regressions in the integration package.
+- Added a Home Assistant fixture runtime test that loads the integration through a lightweight HA-style setup path.
+- Added a fake DHE Engine.IO transport test server to exercise polling, namespace open, authentication and WebSocket upgrade behavior without a physical device.
+- Added original mark-safe PNG brand assets for the integration icon and logo.
 
 ### Changed
 
-- Bumped the integration version to `1.3.3` for the next patch release cycle.
+- Bumped the integration version to `1.4.0` for the next stable release.
 - Extracted pure DHE client value conversion helpers out of `client.py` to keep the runtime client focused on connection and command behavior.
+- Split command feature mixins and runtime app handlers out of the central client modules to keep the hot runtime path easier to review.
+- Split diagnostic sensor definitions and config-flow schema builders into dedicated modules.
+- Reduced radio and weather recorder-visible attributes so large catalog/search payloads do not churn the Home Assistant database.
 - Narrowed RuntimeError transport recovery so only known socket/session shutdown races are handled as reconnectable transport failures.
+- Made HA smoke recorder checks tolerant of operational restart windows while still failing high-churn steady-state writes.
+
+### Fixed
+
+- Kept `client.py` below the repository size guard after the previous client split work.
+- Tightened command retry handling so unsupported broad RuntimeError cases are no longer treated as command retries.
+- Preserved recoverable handling for known aiohttp/WebSocket close races during runtime transport operations.
+
+### Security
+
+- Redacted private host, URL, auth-header, token and credential context from client diagnostics, HA smoke output and release-check command/result output.
+
+### Validation
+
+- Local test suite: `304 passed`.
+- Integration repository check: `scripts/check_integration.py`.
+- Type gate: `scripts/check_typing.py`.
+- Ruff: `ruff check .`.
+- HA-Test smoke: mounted Home Assistant config smoke checks with recorder monitoring and localhost token cleanup.
+- GitHub Validate workflow: HACS, Hassfest and repository checks across the merged release-prep PRs.
 
 ## v1.3.2 - 2026-05-16
 

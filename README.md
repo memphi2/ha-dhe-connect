@@ -10,7 +10,7 @@ The integration talks directly to the DHE web interface on your local network. I
 
 ## Status
 
-- Current version: `1.3.3`
+- Current version: `1.4.0`
 - Release channel: stable
 - Home Assistant setup: UI config flow
 - HACS type: custom integration
@@ -62,15 +62,16 @@ Copy the integration directory to:
 
 After copying, restart Home Assistant and add `Stiebel DHE Connect` from the UI.
 
-### Custom logo
+### Custom artwork
 
-The integration icon is stored as:
+The integration ships original, project-local PNG artwork:
 
 ```text
 /config/custom_components/stiebel_dhe_connect/brand/icon.png
+/config/custom_components/stiebel_dhe_connect/brand/logo.png
 ```
 
-To use a different local logo, replace that file with another PNG using the same filename, then restart Home Assistant and refresh the browser cache if the old icon is still shown. HACS or manual updates can overwrite the file, so keep a copy of custom artwork and reapply it after updating if needed.
+To use different local artwork, replace those files with PNGs using the same filenames, then restart Home Assistant and refresh the browser cache if the old artwork is still shown. HACS or manual updates can overwrite the files, so keep a copy of custom artwork and reapply it after updating if needed.
 
 ## Configuration
 
@@ -78,7 +79,7 @@ The config flow asks for:
 
 | Field | Example | Notes |
 |---|---|---|
-| Host | `192.168.1.100` | IP address or hostname only |
+| Host | `dhe.local` | IP address or hostname only |
 | Port | `8443` | DHE web interface port |
 | Device name | `DHE Connect` | Name shown in Home Assistant |
 | Internal scald protection (Tmax jumper) | `60` | Physical `Tmax` jumper position; options are `43`, `50`, `55`, `60` and `no_jumper` |
@@ -189,6 +190,8 @@ python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log
 
 The monitor fails when DHE entities write too many recorder rows during the selected interval. Use this after copying the integration to the HA test instance and restarting Home Assistant.
 
+Run this recorder monitor while the DHE is idle when you want to validate database churn. If water is running, live flow, temperature, power, consumption and saving-monitor entities are expected to write more often. In that case use the smoke output to check connection health, reconnect count and log errors instead of treating the idle recorder limit as meaningful.
+
 For live Home Assistant API checks against a test instance, set the connection
 details through environment variables and run:
 
@@ -218,6 +221,8 @@ It checks manifest, README, changelog and docs links for version consistency, co
 - Do not expose the DHE web interface or port `8443` to the internet.
 - The pairing token is stored under Home Assistant's configuration directory.
 - Tokens are not intentionally written to normal logs.
+- Diagnostic and validation helpers redact private host, token and credential context before printing command or smoke-test failures.
+- Treat Home Assistant backups and mounted config directories as sensitive because they can contain integration tokens.
 
 ## Troubleshooting
 
@@ -229,6 +234,7 @@ It checks manifest, README, changelog and docs links for version consistency, co
 | Service call hits the wrong DHE | In multi-device setups always include `entry_id` in service data |
 | Pairing repeats | Enable and use the disabled-by-default `Repair pairing` button first. During setup, stale legacy token files are removed automatically; if needed, delete matching `/config/.storage/stiebel_dhe_connect_token*.txt` files and pair again |
 | Entities stay unavailable | Check the `Connection state` / `Error status` diagnostic sensors and Home Assistant logs for DHE session errors |
+| Optional memory entities show `unknown` | Keep unused memory slots 3 to 12 disabled, or create those memory slots on the DHE before enabling their Home Assistant number/text/button entities |
 | Reconnect counter increases often | Confirm the WebSocket connection is not blocked and no second client is fighting for the DHE session |
 | Radio entity has no station/title | Open or change the radio once on the DHE UI so the device publishes station metadata |
 | Water entity missing from dashboard | Wait for Home Assistant statistics discovery, which can take up to two hours |
