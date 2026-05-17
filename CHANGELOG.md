@@ -16,6 +16,8 @@
 - Added explicit Protocol-based command context typing for the DHE command mixins and included those command modules in the scoped type gate.
 - Added explicit platform-entity type annotations where Home Assistant attributes were previously inferred too narrowly for the wider type gate.
 - Added Ruff linting to the GitHub `Validate` workflow so CI now enforces the same lint gate as local release checks.
+- Added explicit README notes for unofficial status, trademark use, original artwork and MIT licensing scope.
+- Split command retry execution into a dedicated runner mixin so the central client class keeps less transport policy code.
 - Slimmed the README into a clearer user-facing entry point and moved detailed validation, HA smoke and release-readiness guidance into `docs/validation.md`.
 - Clarified that protocol labels such as `ODB` are source/debugging details and not part of the user-facing entity names.
 

@@ -6,22 +6,20 @@ import contextlib
 import logging
 import os
 import random
-from collections.abc import Awaitable, Callable
-from typing import Any, TypeVar
+from collections.abc import Callable
+from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
+from .client_command_runner import DHEClientCommandRunnerMixin
 from .client_commands import DHEClientCommandsMixin
 from .client_constants import (
     AVAILABILITY_DROP_GRACE_SECONDS,
-    COMMAND_RETRY_ATTEMPTS,
-    COMMAND_RETRY_DELAY_SECONDS,
     DEFAULT_NOMINAL_POWER_KW,
 )
 from .client_diagnostics import diagnostic_error as _diagnostic_error
 from .client_errors import (
-    DHE_COMMAND_EXCEPTIONS as _DHE_COMMAND_EXCEPTIONS,
     DHE_TRANSPORT_EXCEPTIONS as _DHE_TRANSPORT_EXCEPTIONS,
     runtime_transport_error_or_raise as _runtime_transport_error_or_raise,
     suppress_transport_errors as _suppress_transport_errors,
@@ -69,12 +67,12 @@ from .protocol import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-_T = TypeVar("_T")
 
 
 class DHEClient(
     DHEClientPairingMixin,
     DHEClientCommandsMixin,
+    DHEClientCommandRunnerMixin,
     DHEClientRuntimeMixin,
     DHEClientTransportMixin,
 ):
@@ -402,56 +400,6 @@ class DHEClient(
             _operation,
             timeout=10.0,
         )
-
-    async def _run_command_with_reconnect_retry(
-        self,
-        error_message: str,
-        operation: Callable[[DHESession], Awaitable[_T]],
-        *,
-        timeout: float = 45.0,
-        on_error: Callable[[], None] | None = None,
-    ) -> _T:
-        async with self._command_lock:
-            for attempt in range(COMMAND_RETRY_ATTEMPTS):
-                command_error: Exception
-                try:  # noqa: PERF203
-                    await self._ensure_ready(timeout=timeout)
-                    ctx = self._ctx
-                    if ctx is None:
-                        raise DHEError("DHE session is not connected")
-                    return await operation(ctx)
-                except _DHE_COMMAND_EXCEPTIONS as err:  # noqa: PERF203
-                    command_error = err
-                except RuntimeError as err:
-                    command_error = _runtime_transport_error_or_raise(err)
-                if on_error is not None:
-                    on_error()
-                if attempt == 0:
-                    await self._force_reconnect(reason=_diagnostic_error(command_error))
-                    await asyncio.sleep(COMMAND_RETRY_DELAY_SECONDS)
-                    continue
-                raise DHEError(f"{error_message}: {command_error}") from command_error
-        raise DHEError(error_message)
-
-    async def _run_command_without_reconnect_retry(
-        self,
-        error_message: str,
-        operation: Callable[[DHESession], Awaitable[_T]],
-        *,
-        timeout: float = 45.0,
-    ) -> _T:
-        async with self._command_lock:
-            try:
-                await self._ensure_ready(timeout=timeout)
-                ctx = self._ctx
-                if ctx is None:
-                    raise DHEError("DHE session is not connected")
-                return await operation(ctx)
-            except _DHE_COMMAND_EXCEPTIONS as err:
-                raise DHEError(f"{error_message}: {err}") from err
-            except RuntimeError as err:
-                err = _runtime_transport_error_or_raise(err)
-                raise DHEError(f"{error_message}: {err}") from err
 
     async def _run_loop(self) -> None:
         while not self._stopped.is_set():

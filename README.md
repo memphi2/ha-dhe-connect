@@ -22,6 +22,22 @@ This is a custom integration and should be used on a trusted local network.
 
 Development and protocol mapping for this release were assisted by OpenAI Codex.
 
+## Legal Notes
+
+This project is an unofficial community integration. It is not affiliated with,
+endorsed by or sponsored by STIEBEL ELTRON, Home Assistant, HACS or their
+respective owners.
+
+Product and project names are used only to describe compatibility and the target
+ecosystem. The bundled `brand/icon.png` and `brand/logo.png` files are original
+project artwork and intentionally do not include vendor logos or copied product
+marks.
+
+Unless a file states otherwise, the code, documentation and bundled project
+artwork in this repository are licensed under the MIT License. The license does
+not grant rights to third-party trademarks, the DHE device firmware, the vendor
+web interface or other third-party assets.
+
 ## Highlights
 
 - Fully local Socket.IO / Engine.IO v3 session with browser-style heartbeat handling and automatic reconnect diagnostics.
@@ -209,7 +225,3 @@ For detailed pairing, connectivity, recorder, favorites, memory-slot and debug-l
 | Pairing repeats | Enable and use the disabled-by-default `Repair pairing` button first. During setup, stale legacy token files are removed automatically; if needed, delete matching `/config/.storage/stiebel_dhe_connect_token*.txt` files and pair again |
 | Entities stay unavailable | Check the `Connection state` / `Error status` diagnostic sensors and Home Assistant logs for DHE session errors |
 | Reconnect counter increases often | Confirm the WebSocket connection is not blocked and no second client is fighting for the DHE session |
-
-## Disclaimer
-
-This is an unofficial custom integration. It is not affiliated with, endorsed by, sponsored by or approved by STIEBEL ELTRON. Product names are used only to describe compatibility with the local DHE Connect web interface. STIEBEL ELTRON trademarks and logos are not included or licensed by this project.
