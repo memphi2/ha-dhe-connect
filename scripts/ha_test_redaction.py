@@ -25,7 +25,7 @@ TOKEN_WHITESPACE_RE = re.compile(
     r"([\"']?)"
 )
 TOKENISH_WHITESPACE_RE = re.compile(
-    r"(?i)\b(password|code)"
+    r"(?i)(?<!exit )\b(password|code)"
     r"(\s+)"
     r"([\"']?)"
     r"(?!(?:reset|blue)\b)"

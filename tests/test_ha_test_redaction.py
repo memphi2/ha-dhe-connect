@@ -62,6 +62,11 @@ class TestHATestRedaction(unittest.TestCase):
 
         self.assertEqual(text, "code blue station and password reset forecast")
 
+    def test_preserves_exit_code_diagnostics(self) -> None:
+        text = redact_sensitive_text("python failed with exit code 1")
+
+        self.assertEqual(text, "python failed with exit code 1")
+
 
 if __name__ == "__main__":
     unittest.main()

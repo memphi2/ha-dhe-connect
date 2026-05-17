@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contextlib import redirect_stdout
+from io import StringIO
 import json
 from pathlib import Path
 import tempfile
@@ -247,6 +249,65 @@ class TestReleaseCheck(unittest.TestCase):
         self.assertNotIn("ghijk", message)
         self.assertNotIn("secret", message)
         self.assertNotIn(private_host, message)
+
+    def test_result_line_redacts_auth_context(self) -> None:
+        private_host = ".".join(("192", "168", "0", "20"))
+        result = release_check.CheckResult(
+            False,
+            (
+                f"http://user:secret@{private_host}:8123/?token=abc123 "
+                "authorization secret"
+            ),
+        )
+
+        line = release_check._result_line(result)
+
+        self.assertEqual(line.count("<redacted>"), 3)
+        self.assertIn("<private-host>", line)
+        self.assertNotIn("abc123", line)
+        self.assertNotIn("secret", line)
+        self.assertNotIn(private_host, line)
+
+    def test_main_prints_redacted_result_messages(self) -> None:
+        private_host = ".".join(("10", "0", "0", "5"))
+        result = release_check.CheckResult(
+            False,
+            (
+                f"failed against http://{private_host}:8123/?token=abc123 "
+                "access_token def456"
+            ),
+        )
+        output = StringIO()
+
+        with (
+            patch("scripts.release_check.collect_results", return_value=[result]),
+            redirect_stdout(output),
+        ):
+            exit_code = release_check.main([])
+
+        printed = output.getvalue()
+        self.assertEqual(exit_code, 1)
+        self.assertIn("<private-host>", printed)
+        self.assertIn("<redacted>", printed)
+        self.assertNotIn("abc123", printed)
+        self.assertNotIn("def456", printed)
+        self.assertNotIn(private_host, printed)
+
+    def test_main_preserves_exit_code_diagnostics(self) -> None:
+        result = release_check.CheckResult(
+            False,
+            "python failed with exit code 1",
+        )
+        output = StringIO()
+
+        with (
+            patch("scripts.release_check.collect_results", return_value=[result]),
+            redirect_stdout(output),
+        ):
+            exit_code = release_check.main([])
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn("exit code 1", output.getvalue())
 
     def test_secret_scan_rejects_tracked_token_storage_path(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
