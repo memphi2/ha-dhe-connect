@@ -14,13 +14,6 @@
       "pairing_confirm": {
         "title": "Pairing bestätigen",
         "description": "Jetzt OK klicken. Danach erscheint die Pairing-Anfrage am DHE und die Bestätigung muss dort vollständig abgeschlossen werden. Die Integration wird erst nach erfolgreichem Pairing und Login angelegt."
-      },
-      "discovery_confirm": {
-        "title": "Gefundenen DHE einrichten",
-        "description": "Home Assistant hat diesen DHE im lokalen Netzwerk gefunden. Vor dem Pairing nur die physische Tmax-Jumperposition auswählen.",
-        "data": {
-          "internal_scald_protection": "Interner Verbrühschutz (Tmax-Jumper)"
-        }
       }
     },
     "error": {
@@ -39,8 +32,7 @@
       "invalid_internal_scald_protection": "Ungültige Tmax-Jumperposition."
     },
     "abort": {
-      "already_configured": "Stiebel DHE Connect ist bereits konfiguriert.",
-      "already_in_progress": "Die Einrichtung dieses DHE läuft bereits."
+      "already_configured": "Stiebel DHE Connect ist bereits konfiguriert."
     }
   },
   "options": {

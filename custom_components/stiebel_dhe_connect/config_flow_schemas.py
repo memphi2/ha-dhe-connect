@@ -82,28 +82,6 @@ def schema(
     )
 
 
-def discovery_schema(
-    hass: HomeAssistant,
-    defaults: dict[str, Any] | None = None,
-) -> vol.Schema:
-    """Build the discovery confirmation schema."""
-    defaults = defaults or {}
-    internal_scald_protection = normalize_internal_scald_protection(
-        defaults.get(
-            CONF_INTERNAL_SCALD_PROTECTION,
-            INTERNAL_SCALD_PROTECTION_DEFAULT,
-        )
-    )
-    return vol.Schema(
-        {
-            vol.Required(
-                CONF_INTERNAL_SCALD_PROTECTION,
-                default=internal_scald_protection,
-            ): vol.In(internal_scald_protection_options(hass)),
-        }
-    )
-
-
 def string_default(value: Any) -> str:
     if value in (None, ""):
         return ""

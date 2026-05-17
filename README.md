@@ -10,7 +10,7 @@ The integration talks directly to the DHE web interface on your local network. I
 
 ## Status
 
-- Current version: `1.5.0`
+- Current version: `1.4.2`
 - Release channel: stable
 - Home Assistant setup: UI config flow
 - HACS type: custom integration
@@ -115,13 +115,6 @@ The config flow asks for:
 The host field intentionally rejects URLs with paths, usernames, query strings or embedded ports. The port must be between `1` and `65535`.
 
 On first connection Home Assistant validates the DHE pairing before the integration entry is created.
-
-### Zeroconf discovery
-
-If Home Assistant discovers a DHE through mDNS/Zeroconf (`_ste-dhe._tcp.local.`),
-the config flow pre-fills the discovered host, port and device name. The user
-only needs to choose the physical `Tmax` jumper position, then confirm pairing
-on the DHE display.
 
 ### Multiple devices
 

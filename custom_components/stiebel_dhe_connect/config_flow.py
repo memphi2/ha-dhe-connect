@@ -15,7 +15,6 @@ from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from .client import (
     DHEClient,
@@ -47,7 +46,6 @@ from .config_flow_schemas import (
     currency_options as _schema_currency_options,
     device_settings_defaults as _device_settings_defaults,
     device_settings_schema as _device_settings_schema,
-    discovery_schema as _discovery_schema,
     optional_float as _optional_float,
     radio_catalog_schema as _radio_catalog_schema,
     radio_search_type_schema as _radio_search_type_schema,
@@ -88,7 +86,6 @@ from .token_file_helpers import (
 SETUP_PAIRING_TIMEOUT_SECONDS = 180.0
 ID_APP_CURRENCY = _ID_APP_CURRENCY
 _currency_options = _schema_currency_options
-DHE_ZEROCONF_TYPE = "_ste-dhe._tcp.local."
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -183,26 +180,6 @@ def _is_target_used_by_other_entry(
         if target == (host, port):
             return True
     return False
-
-
-def _discovery_title(discovery_info: ZeroconfServiceInfo) -> str:
-    """Return a readable title from a DHE Zeroconf service."""
-    candidates = (
-        discovery_info.name,
-        discovery_info.hostname,
-    )
-    for candidate in candidates:
-        title = str(candidate or "").strip()
-        if not title:
-            continue
-        if title.endswith(f".{DHE_ZEROCONF_TYPE}"):
-            title = title[: -len(f".{DHE_ZEROCONF_TYPE}")]
-        if title.endswith(".local."):
-            title = title[: -len(".local.")]
-        title = title.strip().strip(".")
-        if title:
-            return title
-    return DEFAULT_NAME
 
 
 def _abs_config_path(hass: HomeAssistant, path: str) -> str:
@@ -341,47 +318,9 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
 
     VERSION = 1
     _pending_setup_data: dict[str, Any] | None
-    _discovered_target: tuple[str, int] | None
 
     def __init__(self) -> None:
         self._pending_setup_data = None
-        self._discovered_target = None
-
-    def is_matching(self, other_flow: Any) -> bool:
-        """Return whether another flow is configuring the same discovered DHE."""
-        return self._discovered_target is not None and self._discovered_target == getattr(
-            other_flow,
-            "_discovered_target",
-            None,
-        )
-
-    async def async_step_zeroconf(self, discovery_info: ZeroconfServiceInfo):
-        """Handle a discovered DHE Connect device."""
-        try:
-            host = normalize_host(discovery_info.host)
-            port = validate_port(discovery_info.port or DEFAULT_PORT)
-        except (TypeError, ValueError):
-            return self.async_abort(reason="cannot_connect")
-
-        if _is_target_used_by_other_entry(self.hass, host, port):
-            return self.async_abort(reason="already_configured")
-
-        self._discovered_target = (host, port)
-        if self.hass.config_entries.flow.async_has_matching_flow(self):
-            return self.async_abort(reason="already_in_progress")
-
-        name = _discovery_title(discovery_info)
-        if not await _can_connect(self.hass, host, port):
-            return self.async_abort(reason="cannot_connect")
-
-        self.context["title_placeholders"] = {"name": name}
-        self._pending_setup_data = {
-            CONF_HOST: host,
-            CONF_PORT: port,
-            CONF_NAME: name,
-            "token_file": token_file_for_target(host, port),
-        }
-        return await self.async_step_discovery_confirm()
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
         """Handle the initial step."""
@@ -419,36 +358,6 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
         return self.async_show_form(
             step_id="user",
             data_schema=_schema(self.hass),
-            errors=errors,
-        )
-
-    async def async_step_discovery_confirm(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ):
-        """Ask only for the physical jumper before pairing a discovered DHE."""
-        if self._pending_setup_data is None:
-            return await self.async_step_user()
-
-        errors: dict[str, str] = {}
-        if user_input is not None:
-            try:
-                internal_scald_protection = str(
-                    user_input.get(CONF_INTERNAL_SCALD_PROTECTION) or ""
-                ).strip()
-                if internal_scald_protection not in INTERNAL_SCALD_PROTECTION_OPTIONS:
-                    raise ValueError("invalid_internal_scald_protection")
-            except ValueError as err:
-                _apply_validation_error(errors, err)
-            else:
-                self._pending_setup_data[CONF_INTERNAL_SCALD_PROTECTION] = (
-                    internal_scald_protection
-                )
-                return await self.async_step_pairing_confirm()
-
-        return self.async_show_form(
-            step_id="discovery_confirm",
-            data_schema=_discovery_schema(self.hass, self._pending_setup_data),
             errors=errors,
         )
 

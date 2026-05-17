@@ -1,10 +1,8 @@
 # Changelog
 
-## v1.5.0 - Unreleased
+## Unreleased
 
-### Added
-
-- Added Zeroconf discovery for DHE devices advertising `_ste-dhe._tcp.local.`, so discovered setup only asks for the physical `Tmax` jumper before the normal pairing confirmation.
+No unreleased changes.
 
 ## v1.4.2 - 2026-05-17
 

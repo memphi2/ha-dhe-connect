@@ -14,13 +14,6 @@
       "pairing_confirm": {
         "title": "Confirm pairing",
         "description": "Click OK now. The pairing request appears on the DHE afterwards, and confirmation on the device must be completed there. The integration is only created after successful pairing and login."
-      },
-      "discovery_confirm": {
-        "title": "Set up discovered DHE",
-        "description": "Home Assistant discovered this DHE on the local network. Select the physical Tmax jumper position before pairing.",
-        "data": {
-          "internal_scald_protection": "Internal scald protection (Tmax jumper)"
-        }
       }
     },
     "error": {
@@ -39,8 +32,7 @@
       "invalid_internal_scald_protection": "Invalid Tmax jumper position."
     },
     "abort": {
-      "already_configured": "Stiebel DHE Connect is already configured.",
-      "already_in_progress": "Configuration for this DHE is already in progress."
+      "already_configured": "Stiebel DHE Connect is already configured."
     }
   },
   "options": {

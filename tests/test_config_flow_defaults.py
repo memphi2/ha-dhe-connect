@@ -16,56 +16,9 @@ CONFIG_FLOW_PATH = (
 )
 PACKAGE_ROOT = ROOT / "custom_components"
 MODULE_NAME = "custom_components.stiebel_dhe_connect.config_flow"
-_FAKE_MODULE_NAMES = (
-    "homeassistant",
-    "homeassistant.const",
-    "homeassistant.config_entries",
-    "homeassistant.core",
-    "homeassistant.helpers",
-    "homeassistant.helpers.aiohttp_client",
-    "homeassistant.helpers.service_info",
-    "homeassistant.helpers.service_info.zeroconf",
-    "custom_components",
-    "custom_components.stiebel_dhe_connect",
-    MODULE_NAME,
-    "custom_components.stiebel_dhe_connect.client",
-    "custom_components.stiebel_dhe_connect.client_types",
-    "custom_components.stiebel_dhe_connect.config_entry_helpers",
-    "custom_components.stiebel_dhe_connect.config_flow_mapping",
-    "custom_components.stiebel_dhe_connect.connection_helpers",
-    "custom_components.stiebel_dhe_connect.const",
-    "custom_components.stiebel_dhe_connect.entity_state_helpers",
-    "custom_components.stiebel_dhe_connect.pairing_helpers",
-    "custom_components.stiebel_dhe_connect.protocol",
-    "custom_components.stiebel_dhe_connect.service_helpers",
-    "custom_components.stiebel_dhe_connect.token_file_helpers",
-)
-_ORIGINAL_MODULES: dict[str, types.ModuleType | None] | None = None
-
-
-def _snapshot_import_modules() -> None:
-    global _ORIGINAL_MODULES
-    if _ORIGINAL_MODULES is None:
-        _ORIGINAL_MODULES = {name: sys.modules.get(name) for name in _FAKE_MODULE_NAMES}
-
-
-def _restore_import_modules() -> None:
-    if _ORIGINAL_MODULES is None:
-        return
-    for name, module in _ORIGINAL_MODULES.items():
-        if module is None:
-            sys.modules.pop(name, None)
-        else:
-            sys.modules[name] = module
-
-
-class _RestoresImportModules:
-    def tearDown(self) -> None:
-        _restore_import_modules()
 
 
 def _install_fake_homeassistant() -> None:
-    _snapshot_import_modules()
     fake_homeassistant = types.ModuleType("homeassistant")
     fake_homeassistant.const = types.ModuleType("homeassistant.const")
     fake_homeassistant.const.CONF_HOST = "host"
@@ -89,17 +42,12 @@ def _install_fake_homeassistant() -> None:
 
     fake_helpers = types.ModuleType("homeassistant.helpers")
     fake_aiohttp_client = types.ModuleType("homeassistant.helpers.aiohttp_client")
-    fake_service_info = types.ModuleType("homeassistant.helpers.service_info")
-    fake_zeroconf = types.ModuleType("homeassistant.helpers.service_info.zeroconf")
-    fake_zeroconf.ZeroconfServiceInfo = type("ZeroconfServiceInfo", (), {})
 
     async def async_get_clientsession(*args, **kwargs):  # noqa: ANN001
         return None
 
     fake_aiohttp_client.async_get_clientsession = async_get_clientsession
     fake_helpers.aiohttp_client = fake_aiohttp_client
-    fake_helpers.service_info = fake_service_info
-    fake_service_info.zeroconf = fake_zeroconf
 
     sys.modules["homeassistant"] = fake_homeassistant
     sys.modules["homeassistant.const"] = fake_homeassistant.const
@@ -107,8 +55,6 @@ def _install_fake_homeassistant() -> None:
     sys.modules["homeassistant.core"] = fake_core
     sys.modules["homeassistant.helpers"] = fake_helpers
     sys.modules["homeassistant.helpers.aiohttp_client"] = fake_aiohttp_client
-    sys.modules["homeassistant.helpers.service_info"] = fake_service_info
-    sys.modules["homeassistant.helpers.service_info.zeroconf"] = fake_zeroconf
 
 
 def _install_fake_voluptuous() -> None:
@@ -148,7 +94,6 @@ def _install_fake_voluptuous() -> None:
 
 
 def _install_fake_integration_modules() -> None:
-    _snapshot_import_modules()
     package_module = types.ModuleType("custom_components")
     package_module.__path__ = [str(PACKAGE_ROOT)]  # type: ignore[attr-defined]
     sys.modules["custom_components"] = package_module
@@ -278,7 +223,7 @@ def _load_config_flow():
     return module
 
 
-class TestDeviceSettingsDefaults(_RestoresImportModules, unittest.TestCase):
+class TestDeviceSettingsDefaults(unittest.TestCase):
     """Validate currency fallbacks for device settings defaults."""
 
     def setUp(self) -> None:
@@ -337,10 +282,7 @@ class TestDeviceSettingsDefaults(_RestoresImportModules, unittest.TestCase):
         self.assertNotIn("Ã", label)
 
 
-class TestDeviceSettingsOptionsFlow(
-    _RestoresImportModules,
-    unittest.IsolatedAsyncioTestCase,
-):
+class TestDeviceSettingsOptionsFlow(unittest.IsolatedAsyncioTestCase):
     """Validate device settings options flow does not write unchanged currency."""
 
     def setUp(self) -> None:
@@ -389,10 +331,7 @@ class TestDeviceSettingsOptionsFlow(
         self.client.set_co2_emission.assert_not_awaited()
 
 
-class TestConnectionOptionsConnectivity(
-    _RestoresImportModules,
-    unittest.IsolatedAsyncioTestCase,
-):
+class TestConnectionOptionsConnectivity(unittest.IsolatedAsyncioTestCase):
     """Check options flow connection step connectivity policy."""
 
     def setUp(self) -> None:
@@ -506,121 +445,7 @@ class TestConnectionOptionsConnectivity(
         self.assertEqual(result["step_id"], "connection_pairing_confirm")
 
 
-class TestZeroconfConfigFlow(
-    _RestoresImportModules,
-    unittest.IsolatedAsyncioTestCase,
-):
-    """Validate discovered setup only asks for DHE-specific local choices."""
-
-    def setUp(self) -> None:
-        self.config_flow = _load_config_flow()
-        self.flow = self.config_flow.StiebelDHEConnectConfigFlow()
-        self.flow.context = {}
-
-        class _FlowManager:
-            def async_has_matching_flow(self, _flow: object) -> bool:
-                return False
-
-        class _ConfigEntries:
-            flow = _FlowManager()
-
-            def async_entries(self, _domain: str):  # noqa: ANN001
-                return []
-
-        self.flow.hass = types.SimpleNamespace(
-            config=types.SimpleNamespace(language="en"),
-            config_entries=_ConfigEntries(),
-        )
-        self.flow.async_show_form = types.MethodType(
-            lambda _self, **kwargs: {
-                "type": "form",
-                "step_id": kwargs.get("step_id"),
-                "errors": kwargs.get("errors", {}),
-            },
-            self.flow,
-        )
-        self.flow.async_abort = types.MethodType(
-            lambda _self, **kwargs: {
-                "type": "abort",
-                "reason": kwargs.get("reason"),
-            },
-            self.flow,
-        )
-
-    async def test_zeroconf_flow_asks_for_jumper_then_pairing_confirm(self) -> None:
-        self.config_flow._can_connect = AsyncMock(return_value=True)
-        discovery_info = types.SimpleNamespace(
-            host="192.0.2.124",
-            port=8443,
-            hostname="DHE-JA06.local.",
-            name="DHE Connect DHE-JA06._ste-dhe._tcp.local.",
-        )
-
-        result = await self.flow.async_step_zeroconf(discovery_info)
-
-        self.config_flow._can_connect.assert_awaited_once_with(
-            self.flow.hass,
-            "192.0.2.124",
-            8443,
-        )
-        self.assertEqual(result["type"], "form")
-        self.assertEqual(result["step_id"], "discovery_confirm")
-        self.assertEqual(
-            self.flow.context["title_placeholders"]["name"],
-            "DHE Connect DHE-JA06",
-        )
-        self.assertEqual(
-            self.flow._pending_setup_data,
-            {
-                self.config_flow.CONF_HOST: "192.0.2.124",
-                self.config_flow.CONF_PORT: 8443,
-                self.config_flow.CONF_NAME: "DHE Connect DHE-JA06",
-                "token_file": "token_192.0.2.124_8443.json",
-            },
-        )
-
-        result = await self.flow.async_step_discovery_confirm(
-            {self.config_flow.CONF_INTERNAL_SCALD_PROTECTION: "55"}
-        )
-
-        self.assertEqual(result["type"], "form")
-        self.assertEqual(result["step_id"], "pairing_confirm")
-        self.assertEqual(
-            self.flow._pending_setup_data[
-                self.config_flow.CONF_INTERNAL_SCALD_PROTECTION
-            ],
-            "55",
-        )
-
-    async def test_zeroconf_flow_aborts_duplicate_target_before_connect(self) -> None:
-        self.config_flow._can_connect = AsyncMock(return_value=True)
-        existing_entry = types.SimpleNamespace(
-            data={
-                self.config_flow.CONF_HOST: "192.0.2.124",
-                self.config_flow.CONF_PORT: 8443,
-            },
-            options={},
-        )
-        self.flow.hass.config_entries.async_entries = lambda _domain: [existing_entry]
-
-        result = await self.flow.async_step_zeroconf(
-            types.SimpleNamespace(
-                host="192.0.2.124",
-                port=8443,
-                hostname="DHE-JA06.local.",
-                name="DHE Connect DHE-JA06._ste-dhe._tcp.local.",
-            )
-        )
-
-        self.assertEqual(result["type"], "abort")
-        self.assertEqual(result["reason"], "already_configured")
-        self.config_flow._can_connect.assert_not_awaited()
-
-
-class TestSetupPairingValidation(
-    _RestoresImportModules,
-    unittest.IsolatedAsyncioTestCase,
-):
+class TestSetupPairingValidation(unittest.IsolatedAsyncioTestCase):
     """Validate setup-pairing error mapping."""
 
     def setUp(self) -> None:

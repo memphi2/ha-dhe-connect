@@ -67,21 +67,6 @@ The integration reconnects automatically after socket closes and short DHE
 session drops. Repeated reconnects are visible through the `Reconnects` and
 `Last reconnect reason` sensors.
 
-## Zeroconf Discovery Does Not Appear
-
-The DHE advertises `_ste-dhe._tcp.local.` on the local network. If Home
-Assistant does not show a discovered DHE:
-
-1. Confirm that the Home Assistant `zeroconf` integration is enabled.
-2. Confirm that Home Assistant and the DHE are on a network where mDNS packets
-   can cross VLAN, firewall and Wi-Fi isolation boundaries.
-3. Open the DHE web interface manually from the Home Assistant network.
-4. If discovery still does not appear, use manual setup with host, port and
-   physical `Tmax` jumper position.
-
-Zeroconf setup only pre-fills host, port and device name. Pairing on the DHE
-display is still required before the config entry is created.
-
 ## Entities Stay Unavailable
 
 Entities are live-state based. During reconnects they can become unavailable
