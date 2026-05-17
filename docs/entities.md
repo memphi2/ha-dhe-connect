@@ -150,7 +150,7 @@ data:
 | WLAN MAC | text | diagnostic, disabled by default | none | `set:ste.common.version:gadgetData.wlan` |
 | Bluetooth MAC | text | diagnostic, disabled by default | none | `set:ste.common.version:gadgetData.bluetooth` |
 
-Consumption sensors expose the DHE chart array as a `chart` attribute and the reported cost as `cost_eur` where available. Saving monitor sensors expose the latest `possible`, `real`, `consumption` and `activation_rate` payloads as attributes.
+Consumption sensors expose the DHE chart array as a `chart` attribute and the reported cost as `cost_eur` where available. Saving monitor sensors expose the latest `possible`, `real`, `consumption` and `activation_rate` payloads as attributes. Large chart and catalog payloads are deduplicated before entity writes so repeated DHE messages do not continuously grow the recorder database.
 
 ## Numbers
 
@@ -163,7 +163,7 @@ Consumption sensors expose the DHE chart array as a `chart` attribute and the re
 | Shower timer duration | `s` | `60` to `1200`, step `1` | box | `assign:ste.app.showerTimer:durationMilliseconds`; shown in Home Assistant as seconds |
 | Temperature memory 1-12 temperature | `C` | `20` to `60` | box | `assign:ste.common.temperature:memory`, memory ID `0` to `11`; slots 3 to 12 disabled by default |
 
-Temperature memory writes keep the existing memory name and send `operation: add_change`. Slots 1 and 2 are enabled by default. Slots 3 to 12 are created in the entity registry but disabled by default, so they can be enabled explicitly without cluttering the device configuration card.
+Temperature memory writes keep the existing memory name and send `operation: add_change`. Slots 1 and 2 are enabled by default. Slots 3 to 12 are created in the entity registry but disabled by default, so they can be enabled explicitly without cluttering the device configuration card. If an optional slot is enabled before that memory exists on the DHE, its number/text entities can remain `unknown` until the slot is created or written.
 
 Internal scald protection is configured during initial setup and from the integration options under `Connection/device`. The option is local to Home Assistant and should match the physical `Tmax` jumper position.
 
@@ -181,7 +181,7 @@ Currency, electricity price, water price and CO2 emission are configured from th
 |---|---|---|
 | Temperature memory 1-12 name | `assign:ste.common.temperature:memory`, memory ID `0` to `11` | Renames a memory slot; slots 3 to 12 disabled by default |
 
-Temperature memory name writes use the current cached or freshly read memory temperature and send `operation: add_change`. Name fields for slots 3 to 12 are disabled by default and can be enabled when those optional memories are used.
+Temperature memory name writes use the current cached or freshly read memory temperature and send `operation: add_change`. Name fields for slots 3 to 12 are disabled by default and can be enabled when those optional memories are used. Leave unused optional slots disabled to avoid `unknown` entities for memory positions the DHE has not created.
 
 ## Switches
 
