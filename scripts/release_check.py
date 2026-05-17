@@ -148,6 +148,14 @@ def check_version_files(root: Path, version: str) -> list[CheckResult]:
             "README entity reference points to docs/entities.md",
         )
     )
+    troubleshooting = root / "docs" / "troubleshooting.md"
+    results.append(
+        CheckResult(
+            troubleshooting.exists()
+            and "[docs/troubleshooting.md](docs/troubleshooting.md)" in readme,
+            "README troubleshooting reference points to docs/troubleshooting.md",
+        )
+    )
     return results
 
 

@@ -46,14 +46,14 @@ class TestODBProtocolConstants(unittest.TestCase):
         self.assertIn(self.protocol.ID_DEVICE_STATUS, direct)
         self.assertIn(self.protocol.ID_SCALD_PROTECTION_TEMPERATURE_LIMIT, tenths_temperature)
         self.assertIn(self.protocol.ID_WELLNESS_TIME_NORMALIZED, nonnegative)
-        self.assertIn(self.protocol.ID_HOT_WATER_VOLUME_TOTAL, deciliters)
+        self.assertIn(self.protocol.ID_ODB_HOT_WATER_VOLUME, deciliters)
         self.assertEqual(
             set(self.protocol.ODB_ZERO_REQUEST_READBACK_IGNORE_IDS),
             {
-                self.protocol.ID_HEATING_ENERGY_TOTAL,
-                self.protocol.ID_HOT_WATER_VOLUME_TOTAL,
-                self.protocol.ID_POSSIBLE_ENERGY_SAVING,
-                self.protocol.ID_POSSIBLE_WATER_SAVING,
+                self.protocol.ID_ODB_HEATING_ENERGY,
+                self.protocol.ID_ODB_HOT_WATER_VOLUME,
+                self.protocol.ID_ODB_POSSIBLE_ENERGY_SAVING,
+                self.protocol.ID_ODB_ACTUAL_WATER_SAVING,
             },
         )
         self.assertEqual(

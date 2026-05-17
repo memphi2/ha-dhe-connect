@@ -408,20 +408,20 @@
       "water_consumption_total": {
         "name": "Total water consumption"
       },
-      "hot_water_volume_total": {
-        "name": "Total hot water volume"
+      "odb_hot_water_volume": {
+        "name": "Hot water volume"
       },
       "energy_consumption_week": {
         "name": "Energy consumption week"
       },
-      "heating_energy_total": {
-        "name": "Total heating energy"
+      "odb_heating_energy": {
+        "name": "Heating energy"
       },
-      "possible_energy_saving": {
+      "odb_possible_energy_saving": {
         "name": "Possible energy saving"
       },
-      "possible_water_saving": {
-        "name": "Possible water saving"
+      "odb_actual_water_saving": {
+        "name": "Actual water saving"
       },
       "energy_consumption_year": {
         "name": "Energy consumption year"

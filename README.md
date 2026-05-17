@@ -28,7 +28,7 @@ Development and protocol mapping for this release were assisted by OpenAI Codex.
 - Target temperature control through the DHE ODB command interface, including Climate limits that respect the physical `Tmax` jumper and the active child-safety limit.
 - Temperature memory controls for all 12 supported slots; slots 3 to 12 are disabled by default.
 - Eco mode, Eco flow limit, bath fill, child safety, wellness controls, brush timer and shower timer controls.
-- Current water flow, current power, total water and total energy consumption sensors are enabled by default; possible saving, last usage, timer and saving-monitor sensors start disabled to keep the device card tidy.
+- Current water flow, current power, total water and total energy consumption sensors are enabled by default; ODB saving, last usage, timer and saving-monitor sensors start disabled to keep the device card tidy.
 - Compact radio media player for station metadata, current title, short-description fallback, playback, volume and favorites.
 - Options-flow radio search by full text, DHE genre catalog, country catalog or city catalog.
 - Weather entity for the DHE forecast payload with favorite location selection.
@@ -225,6 +225,8 @@ It checks manifest, README, changelog and docs links for version consistency, co
 - Treat Home Assistant backups and mounted config directories as sensitive because they can contain integration tokens.
 
 ## Troubleshooting
+
+For detailed pairing, connectivity, recorder, favorites, memory-slot and debug-log guidance, see [docs/troubleshooting.md](docs/troubleshooting.md).
 
 | Symptom | Check |
 |---|---|

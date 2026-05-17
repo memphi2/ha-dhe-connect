@@ -20,6 +20,7 @@
 - Made HA smoke recorder checks tolerant of operational restart windows while still failing high-churn steady-state writes.
 - Made HA smoke recorder checks detect device-status water-running windows and completed last-usage windows before applying idle recorder-write limits.
 - Pinned external HACS and Hassfest validation actions to commit SHAs for reproducible release checks.
+- Added a dedicated troubleshooting guide for pairing, connectivity, recorder churn, favorites, memory slots and debug logs.
 
 ### Fixed
 
@@ -28,6 +29,8 @@
 - Refreshed disabled-by-default sensor values on demand when those entities are enabled while the DHE session is already running.
 - Ignored startup/request-read zero placeholders for the diagnostic ODB total and saving values while still accepting runtime zero updates emitted by the DHE.
 - Kept diagnostic ODB total and saving sensors available with `unknown` state while waiting for their first real runtime value.
+- Clarified ODB heating, hot-water-volume and saving sensor names after comparing them with the DHE web app's possible and actual saving payloads, including new ODB-specific entity keys instead of registry migrations.
+- Replaced the scald-protection temperature-limit icon with a visible Home Assistant MDI icon.
 - Documented DHE web-interface ODB IDs for total/saving diagnostic values and labelled device status code `2` as water running.
 - Tightened command retry handling so unsupported broad RuntimeError cases are no longer treated as command retries.
 - Preserved recoverable handling for known aiohttp/WebSocket close races during runtime transport operations.
@@ -38,7 +41,7 @@
 
 ### Validation
 
-- Local test suite: `327 passed`, `18 subtests passed`.
+- Local test suite: `331 passed`, `18 subtests passed`.
 - Integration repository check: `scripts/check_integration.py`.
 - Type gate: `scripts/check_typing.py`.
 - Ruff: `ruff check .`.

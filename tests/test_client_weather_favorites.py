@@ -1296,7 +1296,7 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
 
         await DHEClient.request_measurement_refresh(
             client,
-            odb_id=protocol_module.ID_HOT_WATER_VOLUME_TOTAL,
+            odb_id=protocol_module.ID_ODB_HOT_WATER_VOLUME,
         )
         await DHEClient.request_measurement_refresh(
             client,
@@ -1305,7 +1305,7 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
 
         client._request_odb_value.assert_awaited_once_with(
             ctx,
-            protocol_module.ID_HOT_WATER_VOLUME_TOTAL,
+            protocol_module.ID_ODB_HOT_WATER_VOLUME,
         )
         client._request_app_value.assert_awaited_once_with(
             ctx,
@@ -1322,10 +1322,10 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         client._handle_measurement = Mock()
 
         for odb_id, raw_value in (
-            (protocol_module.ID_HEATING_ENERGY_TOTAL, "12,5"),
-            (protocol_module.ID_HOT_WATER_VOLUME_TOTAL, "42"),
-            (protocol_module.ID_POSSIBLE_ENERGY_SAVING, "7"),
-            (protocol_module.ID_POSSIBLE_WATER_SAVING, "15"),
+            (protocol_module.ID_ODB_HEATING_ENERGY, "12,5"),
+            (protocol_module.ID_ODB_HOT_WATER_VOLUME, "42"),
+            (protocol_module.ID_ODB_POSSIBLE_ENERGY_SAVING, "7"),
+            (protocol_module.ID_ODB_ACTUAL_WATER_SAVING, "15"),
         ):
             DHEClient._handle_odb_value(
                 client,
@@ -1390,13 +1390,13 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
 
         DHEClient._handle_odb_value(
             client,
-            protocol_module.ID_HOT_WATER_VOLUME_TOTAL,
+            protocol_module.ID_ODB_HOT_WATER_VOLUME,
             "10",
             source=client_types.ODB_READ_SOURCE_REQUESTED,
         )
 
         client._handle_measurement.assert_called_once_with(
-            protocol_module.ID_HOT_WATER_VOLUME_TOTAL,
+            protocol_module.ID_ODB_HOT_WATER_VOLUME,
             1.0,
         )
 
@@ -1416,29 +1416,29 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
 
         DHEClient._mark_odb_read_requested(
             client,
-            protocol_module.ID_HOT_WATER_VOLUME_TOTAL,
+            protocol_module.ID_ODB_HOT_WATER_VOLUME,
         )
 
         self.assertTrue(
             DHEClient._consume_odb_read_request(
                 client,
-                protocol_module.ID_HOT_WATER_VOLUME_TOTAL,
+                protocol_module.ID_ODB_HOT_WATER_VOLUME,
             )
         )
         self.assertFalse(
             DHEClient._consume_odb_read_request(
                 client,
-                protocol_module.ID_HOT_WATER_VOLUME_TOTAL,
+                protocol_module.ID_ODB_HOT_WATER_VOLUME,
             )
         )
 
         client._pending_odb_read_deadlines[
-            protocol_module.ID_HOT_WATER_VOLUME_TOTAL
+            protocol_module.ID_ODB_HOT_WATER_VOLUME
         ] = 0.0
         self.assertFalse(
             DHEClient._consume_odb_read_request(
                 client,
-                protocol_module.ID_HOT_WATER_VOLUME_TOTAL,
+                protocol_module.ID_ODB_HOT_WATER_VOLUME,
             )
         )
 

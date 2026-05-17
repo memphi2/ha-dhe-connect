@@ -11,7 +11,11 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from scripts import release_check
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts import release_check  # noqa: E402
 
 
 def _write_release_files(root: Path, version: str) -> None:
@@ -26,6 +30,7 @@ def _write_release_files(root: Path, version: str) -> None:
             f"Current version: `{version}`\n"
             "[docs/protocol.md](docs/protocol.md)\n"
             "[docs/entities.md](docs/entities.md)\n"
+            "[docs/troubleshooting.md](docs/troubleshooting.md)\n"
         ),
         encoding="utf-8",
     )
@@ -36,6 +41,10 @@ def _write_release_files(root: Path, version: str) -> None:
     (root / "docs").mkdir()
     (root / "docs" / "protocol.md").write_text("protocol\n", encoding="utf-8")
     (root / "docs" / "entities.md").write_text("entities\n", encoding="utf-8")
+    (root / "docs" / "troubleshooting.md").write_text(
+        "troubleshooting\n",
+        encoding="utf-8",
+    )
 
 
 class TestReleaseCheck(unittest.TestCase):
@@ -77,6 +86,7 @@ class TestReleaseCheck(unittest.TestCase):
                     "Current version: `1.3.2`\n"
                     "[docs/protocol.md](docs/protocol.md)\n"
                     "[docs/entities.md](docs/entities.md)\n"
+                    "[docs/troubleshooting.md](docs/troubleshooting.md)\n"
                 ),
                 encoding="utf-8",
             )
