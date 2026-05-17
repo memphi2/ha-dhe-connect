@@ -99,8 +99,11 @@ def normalize_radio_string_catalog(raw_value: Any) -> list[str] | None:
 
 def radio_station_id(station: dict[str, Any]) -> int | None:
     """Return the normalized station id from a DHE radio station payload."""
+    current_station_id = station.get("Id", station.get("id"))
+    if current_station_id is None:
+        return None
     try:
-        return int(station.get("Id", station.get("id")))
+        return int(current_station_id)
     except (TypeError, ValueError):
         return None
 

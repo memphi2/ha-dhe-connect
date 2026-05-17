@@ -407,8 +407,9 @@ def precipitation_probability(
         if period in WEATHER_DAY_PERIODS
         else ("preci_morning", "preci_midday", "preci_evening")
     )
-    values = [number(day.get(key)) for key in keys]
-    values = [value for value in values if value is not None]
+    values: list[float] = [
+        value for key in keys if (value := number(day.get(key))) is not None
+    ]
     if not values:
         return None
     return round(max(values))
