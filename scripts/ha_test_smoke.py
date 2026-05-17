@@ -13,6 +13,11 @@ import sys
 import time
 from typing import Any
 
+try:
+    from scripts.ha_test_redaction import redact_sensitive_text
+except ModuleNotFoundError:
+    from ha_test_redaction import redact_sensitive_text
+
 
 DOMAIN = "stiebel_dhe_connect"
 DEFAULT_CONFIG = Path("/mnt/ha-test-config")
@@ -428,7 +433,7 @@ def scan_logs(
             mentions_dhe = _line_mentions_dhe(line)
             has_marker = _line_has_log_marker(line, markers)
             if mentions_dhe and has_marker:
-                hits.append(f"{path.name}: {line[:240]}")
+                hits.append(f"{path.name}: {redact_sensitive_text(line[:240])}")
             elif (
                 mentions_dhe
                 and recent_error_line is not None
@@ -438,7 +443,9 @@ def scan_logs(
                 )
             ):
                 hits.append(
-                    f"{path.name}: {recent_error_line[:160]} ... {line[:160]}"
+                    f"{path.name}: "
+                    f"{redact_sensitive_text(recent_error_line[:160])} ... "
+                    f"{redact_sensitive_text(line[:160])}"
                 )
 
             if has_marker:
@@ -509,7 +516,7 @@ def evaluate_recorder_writes(
 
 def _print_result(result: CheckResult) -> None:
     prefix = "PASS" if result.ok else "FAIL"
-    print(f"{prefix}: {result.message}")
+    print(f"{prefix}: {redact_sensitive_text(result.message)}")
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:

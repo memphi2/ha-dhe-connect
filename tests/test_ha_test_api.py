@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import io
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from unittest.mock import patch
 import urllib.error
 
@@ -274,6 +277,57 @@ class TestHATestApi(unittest.TestCase):
             result = ha_test_api.main()
 
         self.assertEqual(result, 1)
+
+    def test_main_redacts_login_error_context(self) -> None:
+        class _Api:
+            def __init__(self, _url: str) -> None:
+                pass
+
+            def wait_online(self, **_kwargs) -> bool:
+                return True
+
+            def login(self, *_args):
+                private_host = ".".join(("172", "16", "1", "147"))
+                raise RuntimeError(
+                    "auth failed access_token=abc123 refresh_token='def456' "
+                    f"password=secret http://user:secret@{private_host}:8123"
+                )
+
+        output = io.StringIO()
+        with (
+            patch.object(ha_test_api, "HomeAssistantApi", _Api),
+            patch.dict(os.environ, {"HA_TEST_PASSWORD": "secret"}),
+            patch.object(
+                sys,
+                "argv",
+                ["ha_test_api.py", "--username", "test-user"],
+            ),
+            redirect_stdout(output),
+        ):
+            result = ha_test_api.main()
+
+        text = output.getvalue()
+        self.assertEqual(result, 1)
+        self.assertIn("FAIL: HA auth login failed", text)
+        self.assertIn("<redacted>", text)
+        self.assertIn("<private-host>", text)
+        self.assertNotIn("abc123", text)
+        self.assertNotIn("def456", text)
+        self.assertNotIn("secret", text)
+        self.assertNotIn(".".join(("172", "16", "1", "147")), text)
+
+    def test_ha_scripts_can_run_directly(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        for script in ("ha_test_api.py", "ha_test_smoke.py"):
+            with self.subTest(script=script):
+                result = subprocess.run(
+                    [sys.executable, str(root / "scripts" / script), "--help"],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+                self.assertEqual(result.returncode, 0, result.stderr)
 
 
 class _FakeServiceApi:

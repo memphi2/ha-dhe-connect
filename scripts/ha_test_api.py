@@ -15,6 +15,17 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+try:
+    from scripts.ha_test_redaction import (
+        format_redacted_exception,
+        redact_sensitive_text,
+    )
+except ModuleNotFoundError:
+    from ha_test_redaction import (
+        format_redacted_exception,
+        redact_sensitive_text,
+    )
+
 
 DEFAULT_URL = "http://127.0.0.1:8123"
 DEFAULT_USERNAME = ""
@@ -130,7 +141,7 @@ class HomeAssistantApi:
         except TimeoutError as err:
             return f"restart assumed after timeout: {err}"
         except urllib.error.HTTPError as err:
-            detail = err.read().decode(errors="replace")[:120]
+            detail = redact_sensitive_text(err.read().decode(errors="replace")[:120])
             if err.code in {500, 502, 503, 504}:
                 return f"restart assumed after HTTP {err.code}: {detail!r}"
             raise
@@ -522,7 +533,11 @@ def main() -> int:
     refresh_token = ""
     exit_code = 0
     try:
-        token = api.login(args.username, password)
+        try:
+            token = api.login(args.username, password)
+        except Exception as err:  # noqa: BLE001
+            print(f"FAIL: HA auth login failed: {format_redacted_exception(err)}")
+            return 1
         refresh_token = token.refresh_token
         print("PASS: HA auth login")
         if args.restart:
@@ -557,7 +572,7 @@ def main() -> int:
                 except Exception as err:  # noqa: BLE001
                     print(
                         "FAIL: HA service smoke aborted: "
-                        f"{type(err).__name__}: {err}"
+                        f"{format_redacted_exception(err)}"
                     )
                     exit_code = 3
                 else:
@@ -571,14 +586,17 @@ def main() -> int:
                 api.revoke_refresh_token(refresh_token)
                 print("PASS: HA refresh token revoked")
             except Exception as err:  # noqa: BLE001
-                print(f"WARN: HA refresh token revoke failed: {type(err).__name__}: {err}")
+                print(
+                    "WARN: HA refresh token revoke failed: "
+                    f"{format_redacted_exception(err)}"
+                )
                 if args.cleanup_localhost_tokens:
                     try:
                         cleanup = cleanup_localhost_refresh_tokens(args.config)
                     except Exception as cleanup_err:  # noqa: BLE001
                         print(
                             "WARN: localhost token cleanup failed: "
-                            f"{type(cleanup_err).__name__}: {cleanup_err}"
+                            f"{format_redacted_exception(cleanup_err)}"
                         )
                     else:
                         print(
