@@ -55,6 +55,7 @@ web interface or other third-party assets.
 | Topic | Document |
 |---|---|
 | Installation and normal use | This README |
+| German quick guide | [docs/de.md](docs/de.md) |
 | Entity list, attributes and service examples | [docs/entities.md](docs/entities.md) |
 | Pairing, connectivity and recorder troubleshooting | [docs/troubleshooting.md](docs/troubleshooting.md) |
 | Protocol and ODB mapping notes for maintainers | [docs/protocol.md](docs/protocol.md) |
