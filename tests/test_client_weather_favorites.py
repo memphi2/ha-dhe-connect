@@ -144,7 +144,12 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
     async def test_command_retry_recovers_from_runtime_transport_errors(self) -> None:
         client_module = _load_client()
         DHEClient = client_module.DHEClient
-        for message in ("socket closing", "Session is closed"):
+        for message in (
+            "socket closing",
+            "socket write failed",
+            "Session is closed",
+            "transport lost",
+        ):
             with self.subTest(message=message):
                 client = DHEClient.__new__(DHEClient)
 
@@ -182,18 +187,23 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         client._ensure_ready = AsyncMock()
         client._force_reconnect = AsyncMock()
 
-        async def _operation(_ctx):
-            raise RuntimeError("unexpected invalid state")
+        for message in ("unexpected invalid state", "socket handler invalid state"):
+            with self.subTest(message=message):
+                client._ensure_ready.reset_mock()
+                client._force_reconnect.reset_mock()
 
-        with self.assertRaisesRegex(RuntimeError, "unexpected invalid state"):
-            await DHEClient._run_command_with_reconnect_retry(
-                client,
-                "Could not run command",
-                _operation,
-            )
+                async def _operation(_ctx):
+                    raise RuntimeError(message)
 
-        client._ensure_ready.assert_awaited_once()
-        client._force_reconnect.assert_not_awaited()
+                with self.assertRaisesRegex(RuntimeError, message):
+                    await DHEClient._run_command_with_reconnect_retry(
+                        client,
+                        "Could not run command",
+                        _operation,
+                    )
+
+                client._ensure_ready.assert_awaited_once()
+                client._force_reconnect.assert_not_awaited()
 
     async def test_add_weather_favorite_existing_and_refresh_timeout_no_toggle(self) -> None:
         client_module = _load_client()

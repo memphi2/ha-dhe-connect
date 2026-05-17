@@ -61,16 +61,34 @@ class TestClientErrors(unittest.TestCase):
     def test_transport_exception_tuple_excludes_runtime_error(self) -> None:
         self.assertNotIn(RuntimeError, self.errors.DHE_TRANSPORT_EXCEPTIONS)
 
-    def test_runtime_transport_error_or_raise_accepts_socket_shutdown(self) -> None:
-        error = RuntimeError("Session is closed")
+    def test_runtime_transport_error_or_raise_accepts_shutdown_races(self) -> None:
+        messages = (
+            "Cannot write to closing transport",
+            "Connection reset by peer",
+            "Session is closed",
+            "socket closing",
+            "socket write failed",
+            "transport lost",
+            "websocket connection is closed",
+        )
 
-        self.assertIs(self.errors.runtime_transport_error_or_raise(error), error)
+        for message in messages:
+            with self.subTest(message=message):
+                error = RuntimeError(message)
+
+                self.assertIs(self.errors.runtime_transport_error_or_raise(error), error)
 
     def test_runtime_transport_error_or_raise_rejects_programming_errors(self) -> None:
-        with self.assertRaisesRegex(RuntimeError, "unexpected invalid state"):
-            self.errors.runtime_transport_error_or_raise(
-                RuntimeError("unexpected invalid state")
-            )
+        messages = (
+            "unexpected invalid state",
+            "socket handler entered invalid state",
+            "transport parser invariant failed",
+        )
+
+        for message in messages:
+            with self.subTest(message=message):
+                with self.assertRaisesRegex(RuntimeError, message):
+                    self.errors.runtime_transport_error_or_raise(RuntimeError(message))
 
     def test_suppress_transport_errors_preserves_programming_runtime_errors(self) -> None:
         with self.errors.suppress_transport_errors():
