@@ -1483,6 +1483,44 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
 
         client._handle_measurement.assert_not_called()
 
+    async def test_pending_diagnostic_zero_set_updates_remain_runtime_updates(
+        self,
+    ) -> None:
+        client_module = _load_client()
+        protocol_module = _load_protocol()
+        client_types = _load_component_module("client_types")
+        DHEClient = client_module.DHEClient
+        DHEEvent = client_types.DHEEvent
+
+        client = DHEClient.__new__(DHEClient)
+        client._diagnostic_callbacks = set()
+        client._diagnostic_state = {}
+        client._handle_measurement = Mock()
+        client._last_message_monotonic = None
+        client._message_count = 0
+        client._pending_odb_read_deadlines = {}
+        client._odb_value_handlers = {}
+
+        odb_id = protocol_module.ID_ODB_HOT_WATER_VOLUME
+        DHEClient._mark_odb_read_requested(client, odb_id)
+        await DHEClient._handle_runtime_event(
+            client,
+            DHEEvent(
+                "message",
+                {
+                    "command": protocol_module.ODB_SET_COMMAND,
+                    "value": {"id": odb_id, "value": 0, "isValid": True},
+                },
+            ),
+        )
+
+        client._handle_measurement.assert_called_once_with(
+            odb_id,
+            0.0,
+            force_update=False,
+        )
+        self.assertTrue(DHEClient._consume_odb_read_request(client, odb_id))
+
     def test_odb_read_request_tracking_expires_after_one_response(self) -> None:
         client_module = _load_client()
         protocol_module = _load_protocol()

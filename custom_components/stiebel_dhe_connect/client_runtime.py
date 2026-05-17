@@ -101,6 +101,7 @@ from .protocol import (
     ODB_NONNEGATIVE_VALUE_IDS,
     ODB_SET_COMMAND,
     ODB_TENTHS_TEMPERATURE_IDS,
+    ODB_ZERO_REQUEST_READBACK_IGNORE_IDS,
     PRICE_CENTS_COMPONENT_MAX,
     PRICE_COMPONENT_IDS,
     PRICE_EUROS_COMPONENT_MAX_BY_ID,
@@ -686,11 +687,13 @@ class DHEClientRuntimeMixin(DHEClientRuntimeAppMixin):
 
     def _odb_read_source(self, command: Any, odb_id: int) -> ODBReadSource:
         """Classify an incoming ODB value as requested readback or runtime update."""
-        if command in {
-            ODB_GET_COMMAND,
-            ODB_SET_COMMAND,
-            ODB_ASSIGN_COMMAND,
-        } and self._consume_odb_read_request(odb_id):
+        if command == ODB_GET_COMMAND and self._consume_odb_read_request(odb_id):
+            return ODB_READ_SOURCE_REQUESTED
+        if (
+            command in {ODB_SET_COMMAND, ODB_ASSIGN_COMMAND}
+            and odb_id not in ODB_ZERO_REQUEST_READBACK_IGNORE_IDS
+            and self._consume_odb_read_request(odb_id)
+        ):
             return ODB_READ_SOURCE_REQUESTED
         return ODB_READ_SOURCE_RUNTIME
 

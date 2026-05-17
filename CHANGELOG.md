@@ -14,9 +14,9 @@
 
 ### Fixed
 
-- Made all numerically filtered sensor entities publish transitions between zero and non-zero immediately, so current flow, current power and other high-churn values cannot remain stale after start or stop events.
+- Fixed stale live sensor states found during live user testing by making all numerically filtered sensor entities publish transitions between zero and non-zero immediately, so current flow, current power and other high-churn values cannot remain stale after start or stop events.
 - Reduced the live-state write threshold for current water flow and current power to `0.2`, while keeping timer remaining values and bath-fill volumes unfiltered so they continue to update live.
-- Accepted `get:ste.common.odb:value` startup readbacks and forced requested non-placeholder ODB readbacks through the measurement callbacks, so startup refreshes can clear stale current power or flow states even when the value equals the client cache.
+- Fixed startup readback refresh behavior found during live user testing by accepting `get:ste.common.odb:value` startup readbacks and forcing requested non-placeholder ODB readbacks through the measurement callbacks, so startup refreshes can clear stale current power or flow states even when the value equals the client cache.
 
 ## v1.4.1 - 2026-05-17
 
