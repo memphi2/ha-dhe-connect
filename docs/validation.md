@@ -37,7 +37,9 @@ physical heater:
 - Socket.IO namespace open.
 - WebSocket probe and upgrade.
 - Runtime message parsing.
-- Command readback confirmation for water-heating writes.
+- Command readback confirmation for setpoint and water-heating writes.
+- Command-level temperature-memory generation/readback.
+- Radio favorite add and station selection readback.
 
 The Home Assistant fixture tests exercise the integration through real HA config
 entry setup paths instead of only isolated stubs:

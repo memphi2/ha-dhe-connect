@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 import json
 from typing import Any
 import unittest
@@ -123,6 +125,37 @@ class FakeDHEEngineIOServer:
                 ) from err
             self.packet_posted.clear()
 
+    async def wait_for_posted_packet_count(
+        self,
+        needle: str,
+        count: int,
+        *,
+        timeout: float = 1.0,
+    ) -> list[str]:
+        """Wait until at least count posted Socket.IO packets contain the text."""
+        deadline = asyncio.get_running_loop().time() + timeout
+        while True:
+            matches = [packet for packet in self.posted_packets if needle in packet]
+            if len(matches) >= count:
+                return matches
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                raise AssertionError(
+                    f"Timed out waiting for {count} posted packets containing "
+                    f"{needle!r}; packets={self.posted_packets!r}"
+                )
+            if self.packet_posted is None:
+                await asyncio.sleep(min(0.01, remaining))
+                continue
+            try:
+                await asyncio.wait_for(self.packet_posted.wait(), timeout=remaining)
+            except TimeoutError as err:
+                raise AssertionError(
+                    f"Timed out waiting for {count} posted packets containing "
+                    f"{needle!r}; packets={self.posted_packets!r}"
+                ) from err
+            self.packet_posted.clear()
+
     async def _handle_get(self, request: web.Request) -> web.StreamResponse:
         if request.query.get("transport") == "websocket":
             return await self._handle_websocket(request)
@@ -169,6 +202,44 @@ class FakeDHEEngineIOServer:
             elif packet == "2":
                 await websocket.send_str("3")
         return websocket
+
+
+@asynccontextmanager
+async def _connected_fake_client(
+    client_module: Any,
+    server: FakeDHEEngineIOServer,
+) -> AsyncIterator[tuple[Any, Any, Any]]:
+    """Create a ready DHEClient connected to the fake Engine.IO server."""
+    DHEClient = client_module.DHEClient
+    async with aiohttp.ClientSession() as session:
+        client_module.async_get_clientsession = Mock(return_value=session)
+        client = DHEClient(
+            _FakeHass(asyncio.get_running_loop()),
+            server.host,
+            server.port,
+            ".storage/test-token",
+            "DHE",
+        )
+        ctx = await DHEClient._open_session(client, "stored-token")
+        client._ctx = ctx
+        client._ready.set()
+        client._available = True
+        try:
+            yield DHEClient, client, ctx
+        finally:
+            await DHEClient._close_session(client, ctx)
+
+
+async def _queue_message_and_handle(
+    server: FakeDHEEngineIOServer,
+    client: Any,
+    ctx: Any,
+    command: str,
+    value: Any,
+) -> None:
+    """Queue one fake DHE message and let the client consume it."""
+    server.queue_event("message", {"command": command, "value": value})
+    await _handle_next_polling_event(client, ctx)
 
 
 class TestFakeDHEEngineIOServer(unittest.IsolatedAsyncioTestCase):
@@ -301,6 +372,152 @@ class TestFakeDHEEngineIOServer(unittest.IsolatedAsyncioTestCase):
             ),
             server.posted_packets,
         )
+
+    async def test_set_temperature_confirms_via_fake_dhe_setpoint_readback(self) -> None:
+        client_module = _load_client()
+        protocol_module = _load_protocol()
+
+        async with FakeDHEEngineIOServer(protocol_module.NS) as server:
+            async with _connected_fake_client(client_module, server) as (
+                DHEClient,
+                client,
+                ctx,
+            ):
+                command_task = asyncio.create_task(
+                    DHEClient.set_temperature(client, 41.0)
+                )
+
+                assign_packet = await server.wait_for_posted_packet(
+                    protocol_module.ODB_ASSIGN_COMMAND,
+                )
+                self.assertIn(f'"id":{protocol_module.ID_SETPOINT_REQUEST}', assign_packet)
+
+                await _queue_message_and_handle(
+                    server,
+                    client,
+                    ctx,
+                    protocol_module.ODB_ASSIGN_COMMAND,
+                    {
+                        "id": protocol_module.ID_SETPOINT,
+                        "value": 410,
+                    },
+                )
+                result = await asyncio.wait_for(command_task, timeout=1)
+
+        self.assertEqual(result, 41.0)
+        self.assertEqual(client.last_setpoint, 41.0)
+
+    async def test_set_temperature_memory_confirms_generation_readback(self) -> None:
+        client_module = _load_client()
+        protocol_module = _load_protocol()
+
+        async with FakeDHEEngineIOServer(protocol_module.NS) as server:
+            async with _connected_fake_client(client_module, server) as (
+                DHEClient,
+                client,
+                ctx,
+            ):
+                command_task = asyncio.create_task(
+                    DHEClient.set_temperature_memory(client, 1, 39.5)
+                )
+
+                await server.wait_for_posted_packet_count(
+                    protocol_module.TEMP_MEMORY_GET_COMMAND,
+                    1,
+                )
+                await _queue_message_and_handle(
+                    server,
+                    client,
+                    ctx,
+                    protocol_module.TEMP_MEMORY_SET_COMMAND,
+                    [{"id": 0, "name": "Eco", "temperature": 38.0}],
+                )
+
+                assign_packet = await server.wait_for_posted_packet(
+                    protocol_module.TEMP_MEMORY_ASSIGN_COMMAND,
+                )
+                self.assertIn('"operation":"add_change"', assign_packet)
+                self.assertIn('"temperature":39.5', assign_packet)
+
+                await server.wait_for_posted_packet_count(
+                    protocol_module.TEMP_MEMORY_GET_COMMAND,
+                    2,
+                )
+                await _queue_message_and_handle(
+                    server,
+                    client,
+                    ctx,
+                    protocol_module.TEMP_MEMORY_SET_COMMAND,
+                    [{"id": 0, "name": "Eco", "temperature": 39.5}],
+                )
+                result = await asyncio.wait_for(command_task, timeout=1)
+
+        self.assertEqual(result, 39.5)
+        self.assertEqual(
+            client._last_measurements[protocol_module.ID_TEMPERATURE_MEMORY_1],
+            39.5,
+        )
+
+    async def test_add_radio_favorite_selects_station_with_fake_dhe_readbacks(
+        self,
+    ) -> None:
+        client_module = _load_client()
+        protocol_module = _load_protocol()
+        station = {
+            "Id": 4301,
+            "Name": "Code Blue FM",
+            "City": "Local",
+        }
+
+        async with FakeDHEEngineIOServer(protocol_module.NS) as server:
+            async with _connected_fake_client(client_module, server) as (
+                DHEClient,
+                client,
+                ctx,
+            ):
+                command_task = asyncio.create_task(
+                    DHEClient.add_radio_favorite(client, station, select=True)
+                )
+
+                await server.wait_for_posted_packet(
+                    protocol_module.RADIO_FAVORITES_GET_COMMAND,
+                )
+                await _queue_message_and_handle(
+                    server,
+                    client,
+                    ctx,
+                    protocol_module.RADIO_FAVORITES_SET_COMMAND,
+                    [],
+                )
+
+                favorite_packet = await server.wait_for_posted_packet(
+                    protocol_module.RADIO_FAVORITE_ASSIGN_COMMAND,
+                )
+                self.assertIn('"value":4301', favorite_packet)
+                await _queue_message_and_handle(
+                    server,
+                    client,
+                    ctx,
+                    protocol_module.RADIO_FAVORITES_SET_COMMAND,
+                    [station],
+                )
+
+                station_packet = await server.wait_for_posted_packet(
+                    protocol_module.RADIO_STATION_ASSIGN_COMMAND,
+                )
+                self.assertIn('"value":4301', station_packet)
+                await _queue_message_and_handle(
+                    server,
+                    client,
+                    ctx,
+                    f"set:{protocol_module.RADIO_PATH}:station",
+                    station,
+                )
+                result = await asyncio.wait_for(command_task, timeout=1)
+
+        self.assertTrue(result)
+        self.assertEqual(client.last_radio_state["station"]["Id"], 4301)
+        self.assertEqual(client.last_radio_state["favorites"][0]["Id"], 4301)
 
 
 class _FakeConfig:
