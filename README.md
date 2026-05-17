@@ -103,6 +103,14 @@ To use different local artwork, replace those files with PNGs using the same fil
 
 ## Configuration
 
+When the integration is added, Home Assistant first asks whether it should scan
+a subnet or continue with manual setup. The scan is optional and only checks for
+DHE-like web interfaces on port `8443`. Leave the subnet field empty to scan the
+current local subnet, or enter an IPv4 network with a normal netmask, for
+example `192.168.1.0 255.255.255.0`. If a candidate is found, the normal setup
+form opens with host and port pre-filled. If no candidate is found, the same
+form opens for manual entry.
+
 The config flow asks for:
 
 | Field | Example | Notes |

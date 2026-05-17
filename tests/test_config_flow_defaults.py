@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import importlib.util
+from ipaddress import ip_network
 import sys
 import types
 from pathlib import Path
@@ -16,6 +18,43 @@ CONFIG_FLOW_PATH = (
 )
 PACKAGE_ROOT = ROOT / "custom_components"
 MODULE_NAME = "custom_components.stiebel_dhe_connect.config_flow"
+_MISSING = object()
+_RESTORED_MODULE_PREFIXES = (
+    "homeassistant",
+    "custom_components",
+)
+
+
+def _snapshot_modules() -> dict[str, object]:
+    return {
+        name: module
+        for name, module in sys.modules.items()
+        if name in _RESTORED_MODULE_PREFIXES
+        or any(name.startswith(f"{prefix}.") for prefix in _RESTORED_MODULE_PREFIXES)
+    }
+
+
+def _restore_modules(snapshot: dict[str, object]) -> None:
+    for name in list(sys.modules):
+        if name in _RESTORED_MODULE_PREFIXES or any(
+            name.startswith(f"{prefix}.") for prefix in _RESTORED_MODULE_PREFIXES
+        ):
+            sys.modules.pop(name, None)
+    for name, module in snapshot.items():
+        if module is not _MISSING:
+            sys.modules[name] = module
+
+
+class _RestoresImportModules:
+    """Restore fake modules installed by lightweight config-flow tests."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self._module_snapshot = _snapshot_modules()
+
+    def tearDown(self) -> None:
+        _restore_modules(self._module_snapshot)
+        super().tearDown()
 
 
 def _install_fake_homeassistant() -> None:
@@ -223,10 +262,11 @@ def _load_config_flow():
     return module
 
 
-class TestDeviceSettingsDefaults(unittest.TestCase):
+class TestDeviceSettingsDefaults(_RestoresImportModules, unittest.TestCase):
     """Validate currency fallbacks for device settings defaults."""
 
     def setUp(self) -> None:
+        super().setUp()
         self.config_flow = _load_config_flow()
 
     def test_device_settings_defaults_uses_device_currency_when_available(self) -> None:
@@ -282,10 +322,14 @@ class TestDeviceSettingsDefaults(unittest.TestCase):
         self.assertNotIn("Ã", label)
 
 
-class TestDeviceSettingsOptionsFlow(unittest.IsolatedAsyncioTestCase):
+class TestDeviceSettingsOptionsFlow(
+    _RestoresImportModules,
+    unittest.IsolatedAsyncioTestCase,
+):
     """Validate device settings options flow does not write unchanged currency."""
 
     def setUp(self) -> None:
+        super().setUp()
         self.config_flow = _load_config_flow()
         self.flow = self.config_flow.StiebelDHEConnectOptionsFlow()
         self.entry_id = "entry-device-settings"
@@ -331,10 +375,14 @@ class TestDeviceSettingsOptionsFlow(unittest.IsolatedAsyncioTestCase):
         self.client.set_co2_emission.assert_not_awaited()
 
 
-class TestConnectionOptionsConnectivity(unittest.IsolatedAsyncioTestCase):
+class TestConnectionOptionsConnectivity(
+    _RestoresImportModules,
+    unittest.IsolatedAsyncioTestCase,
+):
     """Check options flow connection step connectivity policy."""
 
     def setUp(self) -> None:
+        super().setUp()
         self.config_flow = _load_config_flow()
         self.flow = self.config_flow.StiebelDHEConnectOptionsFlow()
         self.entry_id = "entry-connection-options"
@@ -445,10 +493,203 @@ class TestConnectionOptionsConnectivity(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["step_id"], "connection_pairing_confirm")
 
 
-class TestSetupPairingValidation(unittest.IsolatedAsyncioTestCase):
+class TestSetupScanConfigFlow(
+    _RestoresImportModules,
+    unittest.IsolatedAsyncioTestCase,
+):
+    """Check optional setup scan flow behavior."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.config_flow = _load_config_flow()
+        self.flow = self.config_flow.StiebelDHEConnectConfigFlow()
+
+        class _ConfigEntries:
+            def async_entries(self, _domain: str):  # noqa: ANN001
+                return []
+
+        self._tasks: list[asyncio.Task] = []
+
+        def _create_task(coro):  # noqa: ANN001
+            task = asyncio.create_task(coro)
+            self._tasks.append(task)
+            return task
+
+        self.flow.hass = types.SimpleNamespace(
+            async_create_task=_create_task,
+            config=types.SimpleNamespace(language="en"),
+            config_entries=_ConfigEntries(),
+        )
+        self.flow.async_show_progress = types.MethodType(
+            lambda _self, **kwargs: {
+                "type": "progress",
+                "step_id": kwargs.get("step_id"),
+                "progress_action": kwargs.get("progress_action"),
+            },
+            self.flow,
+        )
+        self.flow.async_show_progress_done = types.MethodType(
+            lambda _self, **kwargs: {
+                "type": "progress_done",
+                "step_id": kwargs.get("next_step_id"),
+            },
+            self.flow,
+        )
+        self.flow.async_show_form = types.MethodType(
+            lambda _self, **kwargs: {
+                "type": "form",
+                "step_id": kwargs.get("step_id"),
+                "data_schema": kwargs.get("data_schema"),
+                "description_placeholders": kwargs.get("description_placeholders", {}),
+                "errors": kwargs.get("errors", {}),
+            },
+            self.flow,
+        )
+
+    async def test_user_step_shows_setup_choice_before_scan(self) -> None:
+        self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
+
+        result = await self.flow.async_step_user()
+
+        self.assertEqual(result["type"], "form")
+        self.assertEqual(result["step_id"], "user")
+        self.config_flow.async_scan_dhe_hosts.assert_not_called()
+        defaults = {}
+        for marker in result["data_schema"].schema:
+            key = getattr(marker, "key", getattr(marker, "schema", None))
+            default = getattr(marker, "default", None)
+            if callable(default):
+                default = default()
+            defaults[key] = default
+        self.assertFalse(defaults[self.config_flow.CONF_SCAN_AUTOMATICALLY])
+        self.assertEqual(defaults[self.config_flow.CONF_SCAN_SUBNET], "")
+
+    async def test_user_step_manual_choice_shows_manual_form_without_scan(self) -> None:
+        self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
+
+        result = await self.flow.async_step_user(
+            {self.config_flow.CONF_SCAN_AUTOMATICALLY: False}
+        )
+
+        self.assertEqual(result["type"], "form")
+        self.assertEqual(result["step_id"], "manual")
+        self.assertIn(
+            "Enter host/IP",
+            result["description_placeholders"]["scan_status"],
+        )
+        self.config_flow.async_scan_dhe_hosts.assert_not_called()
+
+    async def test_user_step_scan_uses_custom_subnet(self) -> None:
+        self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
+
+        result = await self.flow.async_step_user(
+            {
+                self.config_flow.CONF_SCAN_AUTOMATICALLY: True,
+                self.config_flow.CONF_SCAN_SUBNET: "192.168.2.0 255.255.255.0",
+            }
+        )
+
+        self.assertEqual(result["type"], "progress")
+        await self._tasks[0]
+        self.config_flow.async_scan_dhe_hosts.assert_awaited_once_with(
+            self.flow.hass,
+            networks=[ip_network("192.168.2.0/24")],
+        )
+
+    async def test_user_step_scan_rejects_invalid_subnet(self) -> None:
+        self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
+
+        result = await self.flow.async_step_user(
+            {
+                self.config_flow.CONF_SCAN_AUTOMATICALLY: True,
+                self.config_flow.CONF_SCAN_SUBNET: "192.168.0.0 255.255.0.0",
+            }
+        )
+
+        self.assertEqual(result["type"], "form")
+        self.assertEqual(result["step_id"], "user")
+        self.assertEqual(result["errors"]["scan_subnet"], "scan_subnet_too_large")
+        self.config_flow.async_scan_dhe_hosts.assert_not_called()
+
+    async def test_user_step_runs_scan_then_prefills_manual_form(self) -> None:
+        self.config_flow.async_scan_dhe_hosts = AsyncMock(
+            return_value=[
+                self.config_flow.DHEHostCandidate(
+                    "192.0.2.124",
+                    8443,
+                    ("STE DHE App",),
+                )
+            ]
+        )
+
+        result = await self.flow.async_step_user(
+            {self.config_flow.CONF_SCAN_AUTOMATICALLY: True}
+        )
+
+        self.assertEqual(result["type"], "progress")
+        self.assertEqual(result["step_id"], "network_scan")
+        self.assertEqual(result["progress_action"], "scan_dhe")
+        await self._tasks[0]
+
+        result = await self.flow.async_step_network_scan({})
+
+        self.assertEqual(result["type"], "progress_done")
+
+        result = await self.flow.async_step_manual()
+
+        defaults = {}
+        for marker in result["data_schema"].schema:
+            key = getattr(marker, "key", getattr(marker, "schema", None))
+            default = getattr(marker, "default", None)
+            if callable(default):
+                default = default()
+            defaults[key] = default
+        self.assertEqual(defaults[self.config_flow.CONF_HOST], "192.0.2.124")
+        self.assertEqual(defaults[self.config_flow.CONF_PORT], 8443)
+        self.assertIn("Found one DHE", result["description_placeholders"]["scan_status"])
+
+    async def test_user_step_falls_back_to_manual_form_when_scan_finds_nothing(
+        self,
+    ) -> None:
+        self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
+
+        result = await self.flow.async_step_user(
+            {self.config_flow.CONF_SCAN_AUTOMATICALLY: True}
+        )
+
+        self.assertEqual(result["type"], "progress")
+        await self._tasks[0]
+        result = await self.flow.async_step_network_scan()
+        self.assertEqual(result["type"], "progress_done")
+        result = await self.flow.async_step_manual()
+
+        self.assertEqual(result["type"], "form")
+        self.assertEqual(result["step_id"], "manual")
+        self.assertIn("No DHE", result["description_placeholders"]["scan_status"])
+
+    async def test_network_scan_treats_empty_progress_poll_as_scan_poll(self) -> None:
+        self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
+
+        result = await self.flow.async_step_network_scan()
+
+        self.assertEqual(result["type"], "progress")
+        await self._tasks[0]
+        result = await self.flow.async_step_network_scan({})
+        self.assertEqual(result["type"], "progress_done")
+        result = await self.flow.async_step_manual({})
+
+        self.assertEqual(result["type"], "form")
+        self.assertEqual(result["errors"], {})
+
+
+class TestSetupPairingValidation(
+    _RestoresImportModules,
+    unittest.IsolatedAsyncioTestCase,
+):
     """Validate setup-pairing error mapping."""
 
     def setUp(self) -> None:
+        super().setUp()
         self.config_flow = _load_config_flow()
 
     async def test_validate_setup_pairing_maps_runtime_transport_errors(self) -> None:

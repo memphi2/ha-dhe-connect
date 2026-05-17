@@ -2,7 +2,12 @@
 
 ## Unreleased
 
-No unreleased changes.
+### Added
+
+- Added an optional setup-time DHE scan in the UI config flow. The first setup
+  screen lets the user choose between manual setup and a subnet scan for
+  DHE-like web interfaces on port `8443`; the scan can use the current local
+  subnet or an entered IPv4 network with a normal netmask.
 
 ## v1.4.2 - 2026-05-17
 

@@ -34,6 +34,18 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 
+def _schema_defaults(schema: Any) -> dict[str, Any]:
+    """Return voluptuous marker defaults from a flow schema."""
+    defaults: dict[str, Any] = {}
+    for marker in getattr(schema, "schema", {}):
+        key = getattr(marker, "schema", None)
+        default = getattr(marker, "default", None)
+        if callable(default):
+            default = default()
+        defaults[key] = default
+    return defaults
+
+
 class _FixtureDHEClient:
     """Minimal DHE client test double for real Home Assistant runtime setup."""
 
@@ -525,6 +537,51 @@ async def test_config_flow_creates_entry_after_pairing_with_real_hass_fixture() 
             DEFAULT_PORT,
         )
         assert pairing_args[3].endswith("_dhe-fixture.local_8443.txt")
+
+
+async def test_config_flow_scan_choice_prefills_manual_form_with_real_hass_fixture() -> None:
+    """Run optional setup scan progress before the manual setup form."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+
+        scan = AsyncMock(
+            return_value=[
+                config_flow.DHEHostCandidate(
+                    "192.0.2.124",
+                    DEFAULT_PORT,
+                    ("STE DHE App",),
+                )
+            ]
+        )
+        with patch.object(config_flow, "async_scan_dhe_hosts", scan):
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_USER},
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "user"
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                {config_flow.CONF_SCAN_AUTOMATICALLY: True},
+            )
+            assert result["type"] is FlowResultType.SHOW_PROGRESS
+            assert result["progress_action"] == "scan_dhe"
+
+            await hass.async_block_till_done()
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+            )
+
+        assert result["type"] is FlowResultType.FORM
+        assert result["step_id"] == "manual"
+        defaults = _schema_defaults(result["data_schema"])
+        assert defaults[CONF_HOST] == "192.0.2.124"
+        assert defaults[CONF_PORT] == DEFAULT_PORT
+        scan.assert_awaited_once_with(hass, networks=None)
 
 
 async def test_config_flow_aborts_duplicate_target_with_real_hass_fixture() -> None:

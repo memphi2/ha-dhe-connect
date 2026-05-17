@@ -2,8 +2,16 @@
   "config": {
     "step": {
       "user": {
-        "title": "Stiebel DHE Connect einrichten",
-        "description": "Lokale Verbindung zum DHE Connect und physische Tmax-Jumperposition konfigurieren. Die Pairing-Anfrage wird im nächsten Schritt gestartet.",
+        "title": "Einrichtung starten",
+        "description": "Standard ist die manuelle Einrichtung. Aktiviere die Suche nur, wenn Home Assistant vorab ein Subnetz nach dem DHE Connect durchsuchen soll. Ohne Subnetzangabe wird das aktuelle lokale Subnetz verwendet.",
+        "data": {
+          "scan_automatically": "Subnetz nach DHE Connect durchsuchen",
+          "scan_subnet": "Zu scannendes Subnetz (z. B. 192.168.1.0 255.255.255.0)"
+        }
+      },
+      "manual": {
+        "title": "DHE-Verbindung konfigurieren",
+        "description": "{scan_status}\n\nDie Pairing-Anfrage wird erst im nächsten Schritt gestartet.",
         "data": {
           "host": "IP-Adresse oder Hostname",
           "port": "Port",
@@ -11,10 +19,16 @@
           "internal_scald_protection": "Interner Verbrühschutz (Tmax-Jumper)"
         }
       },
+      "network_scan": {
+        "title": "DHE Connect suchen"
+      },
       "pairing_confirm": {
         "title": "Pairing bestätigen",
         "description": "Jetzt OK klicken. Danach erscheint die Pairing-Anfrage am DHE und die Bestätigung muss dort vollständig abgeschlossen werden. Die Integration wird erst nach erfolgreichem Pairing und Login angelegt."
       }
+    },
+    "progress": {
+      "scan_dhe": "Suche im gewählten Subnetz nach DHE Connect auf Port 8443"
     },
     "error": {
       "pairing_timeout": "Pairing am DHE wurde nicht rechtzeitig bestätigt. Bitte erneut versuchen.",
@@ -27,6 +41,8 @@
       "auth_timeout": "Anmeldung am DHE hat zu lange gedauert. Bitte erneut versuchen.",
       "cannot_connect": "Verbindung zum DHE nicht möglich. IP-Adresse und Port prüfen.",
       "invalid_host": "Ungültiger Host. Bitte nur IP-Adresse oder Hostname ohne Pfad, Benutzername oder Port eingeben.",
+      "invalid_scan_subnet": "Ungültiges Subnetz. Beispiel: 192.168.1.0 255.255.255.0",
+      "scan_subnet_too_large": "Das Subnetz ist zu groß. Bitte ein kleineres privates IPv4-Subnetz verwenden, z. B. 192.168.1.0 255.255.255.0.",
       "embedded_port_not_supported": "Bitte Port nicht im Hostfeld angeben (z. B. \"192.168.1.10\"). Den Port nur im Port-Feld eintragen.",
       "invalid_port": "Ungültiger Port. Der Port muss zwischen 1 und 65535 liegen.",
       "invalid_internal_scald_protection": "Ungültige Tmax-Jumperposition."
