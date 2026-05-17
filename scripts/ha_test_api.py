@@ -34,6 +34,8 @@ DEFAULT_CLIENT_ID = "http://localhost/"
 DEFAULT_CLIMATE_ENTITY = "climate.dhe_connect_durchlauferhitzer"
 DEFAULT_RADIO_ENTITY = "media_player.dhe_connect_radio"
 DEFAULT_BACKUP_DIR = Path("/tmp")
+RADIO_SOURCE_SETTLE_SECONDS = 5.0
+DEFAULT_RADIO_AUTO_OFF_SECONDS = 30.0
 
 
 @dataclass(frozen=True)
@@ -348,6 +350,7 @@ def run_service_smoke(
     *,
     climate_entity: str,
     radio_entity: str,
+    radio_auto_off_seconds: float = DEFAULT_RADIO_AUTO_OFF_SECONDS,
 ) -> list[ServiceSmokeResult]:
     """Exercise the DHE climate and radio services."""
     results: list[ServiceSmokeResult] = []
@@ -432,7 +435,7 @@ def run_service_smoke(
             f"SERVICE media_player.select_source changed={len(changed)}",
         )
     )
-    time.sleep(5)
+    time.sleep(RADIO_SOURCE_SETTLE_SECONDS)
     radio_after = api.get_state(access_token, radio_entity)
     radio_after_attrs = radio_after.get("attributes", {})
     radio_after_state = radio_after.get("state")
@@ -444,6 +447,25 @@ def run_service_smoke(
             "RADIO after "
             f"state={radio_after_state} "
             f"source={radio_after_source!r} selected={selected_source!r}",
+        )
+    )
+    remaining_radio_on_seconds = max(
+        0.0,
+        float(radio_auto_off_seconds) - RADIO_SOURCE_SETTLE_SECONDS,
+    )
+    if remaining_radio_on_seconds > 0:
+        time.sleep(remaining_radio_on_seconds)
+    changed = api.call_service(
+        access_token,
+        "media_player",
+        "turn_off",
+        {"entity_id": radio_entity},
+    )
+    results.append(
+        ServiceSmokeResult(
+            True,
+            "SERVICE media_player.turn_off_after_smoke "
+            f"changed={len(changed)} delay={radio_auto_off_seconds:g}s",
         )
     )
     return results
@@ -504,6 +526,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--service-smoke", action="store_true")
     parser.add_argument("--climate-entity", default=DEFAULT_CLIMATE_ENTITY)
     parser.add_argument("--radio-entity", default=DEFAULT_RADIO_ENTITY)
+    parser.add_argument(
+        "--radio-auto-off-seconds",
+        type=float,
+        default=DEFAULT_RADIO_AUTO_OFF_SECONDS,
+        help="Turn the radio off this many seconds after service-smoke selects a source.",
+    )
     parser.add_argument(
         "--cleanup-localhost-tokens",
         action="store_true",
@@ -568,6 +596,7 @@ def main() -> int:
                         token.access_token,
                         climate_entity=args.climate_entity,
                         radio_entity=args.radio_entity,
+                        radio_auto_off_seconds=args.radio_auto_off_seconds,
                     )
                 except Exception as err:  # noqa: BLE001
                     print(

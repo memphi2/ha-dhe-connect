@@ -109,7 +109,7 @@ class TestHATestApi(unittest.TestCase):
             ]
         )
 
-        with patch.object(ha_test_api.time, "sleep"):
+        with patch.object(ha_test_api.time, "sleep") as sleep:
             results = ha_test_api.run_service_smoke(
                 api,
                 "access",
@@ -118,6 +118,8 @@ class TestHATestApi(unittest.TestCase):
             )
 
         self.assertTrue(all(result.ok for result in results))
+        self.assertIn("turn_off_after_smoke", results[-1].message)
+        sleep.assert_any_call(25.0)
         self.assertEqual(
             api.calls,
             [
@@ -129,6 +131,7 @@ class TestHATestApi(unittest.TestCase):
                     "select_source",
                     {"entity_id": "media_player.radio", "source": "B"},
                 ),
+                ("media_player", "turn_off", {"entity_id": "media_player.radio"}),
             ],
         )
 
@@ -152,10 +155,16 @@ class TestHATestApi(unittest.TestCase):
                 "access",
                 climate_entity="climate.dhe",
                 radio_entity="media_player.radio",
+                radio_auto_off_seconds=5.0,
             )
 
-        self.assertFalse(results[-1].ok)
-        self.assertIn("selected='B'", results[-1].message)
+        self.assertFalse(results[-2].ok)
+        self.assertIn("selected='B'", results[-2].message)
+        self.assertIn("turn_off_after_smoke", results[-1].message)
+        self.assertEqual(
+            api.calls[-1],
+            ("media_player", "turn_off", {"entity_id": "media_player.radio"}),
+        )
 
     def test_wait_online_returns_immediately_without_restart_stability(self) -> None:
         api = ha_test_api.HomeAssistantApi("http://ha.test")
