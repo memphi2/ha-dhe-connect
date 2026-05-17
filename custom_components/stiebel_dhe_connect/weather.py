@@ -68,10 +68,10 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
             client=client,
         )
         self._attr_available = False
-        self._attr_condition = None
-        self._attr_name = None
+        self._attr_condition: str | None = None
+        self._attr_name: str | None = None
         self._attr_extra_state_attributes = {"weather_path": "ste.app.weather"}
-        self._attr_native_temperature = None
+        self._attr_native_temperature: float | None = None
         self._client_available = client.available
         self._forecast: list[dict[str, Any]] = []
         self._have_weather_state = False

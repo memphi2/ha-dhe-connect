@@ -60,6 +60,7 @@ class FakeDHEEngineIOServer:
         self._runner: web.AppRunner | None = None
         self._site: web.TCPSite | None = None
         self.websocket_upgraded: asyncio.Event | None = None
+        self.packet_posted: asyncio.Event | None = None
 
     @property
     def base_url(self) -> str:
@@ -67,6 +68,7 @@ class FakeDHEEngineIOServer:
 
     async def __aenter__(self) -> FakeDHEEngineIOServer:
         self.websocket_upgraded = asyncio.Event()
+        self.packet_posted = asyncio.Event()
         app = web.Application()
         app.router.add_get("/socket.io/", self._handle_get)
         app.router.add_post("/socket.io/", self._handle_post)
@@ -90,6 +92,36 @@ class FakeDHEEngineIOServer:
     def queue_event(self, event: str, data: Any) -> None:
         payload = json.dumps([event, data], separators=(",", ":"))
         self._poll_packets.put_nowait(f"42/{self.namespace},{payload}")
+
+    async def wait_for_posted_packet(
+        self,
+        needle: str,
+        *,
+        timeout: float = 1.0,
+    ) -> str:
+        """Wait until a posted Socket.IO packet contains the expected text."""
+        deadline = asyncio.get_running_loop().time() + timeout
+        while True:
+            for packet in self.posted_packets:
+                if needle in packet:
+                    return packet
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                raise AssertionError(
+                    f"Timed out waiting for posted packet containing {needle!r}; "
+                    f"packets={self.posted_packets!r}"
+                )
+            if self.packet_posted is None:
+                await asyncio.sleep(min(0.01, remaining))
+                continue
+            try:
+                await asyncio.wait_for(self.packet_posted.wait(), timeout=remaining)
+            except TimeoutError as err:
+                raise AssertionError(
+                    f"Timed out waiting for posted packet containing {needle!r}; "
+                    f"packets={self.posted_packets!r}"
+                ) from err
+            self.packet_posted.clear()
 
     async def _handle_get(self, request: web.Request) -> web.StreamResponse:
         if request.query.get("transport") == "websocket":
@@ -118,6 +150,8 @@ class FakeDHEEngineIOServer:
     async def _handle_post(self, request: web.Request) -> web.Response:
         body = await request.text()
         self.posted_packets.extend(_decode_length_prefixed_packets(body))
+        if self.packet_posted is not None:
+            self.packet_posted.set()
         return web.Response(text="ok", content_type="text/plain")
 
     async def _handle_websocket(self, request: web.Request) -> web.WebSocketResponse:
@@ -213,6 +247,80 @@ class TestFakeDHEEngineIOServer(unittest.IsolatedAsyncioTestCase):
         self.assertIn("2probe", server.websocket_packets)
         self.assertIn("5", server.websocket_packets)
         self.assertIn(f"41/{protocol_module.NS}", server.websocket_packets)
+
+    async def test_set_water_heating_enabled_confirms_via_fake_dhe_readback(self) -> None:
+        client_module = _load_client()
+        protocol_module = _load_protocol()
+        DHEClient = client_module.DHEClient
+
+        async with FakeDHEEngineIOServer(protocol_module.NS) as server:
+            async with aiohttp.ClientSession() as session:
+                client_module.async_get_clientsession = Mock(return_value=session)
+                client = DHEClient(
+                    _FakeHass(asyncio.get_running_loop()),
+                    server.host,
+                    server.port,
+                    ".storage/test-token",
+                    "DHE",
+                )
+
+                ctx = await DHEClient._open_session(client, "stored-token")
+                client._ctx = ctx
+                client._ready.set()
+                client._available = True
+
+                command_task = asyncio.create_task(
+                    DHEClient.set_water_heating_enabled(client, False)
+                )
+
+                assign_packet = await server.wait_for_posted_packet(
+                    protocol_module.ODB_ASSIGN_COMMAND,
+                )
+                self.assertIn(f'"id":{protocol_module.ID_WATER_HEATING_ENABLED}', assign_packet)
+
+                server.queue_event(
+                    "message",
+                    {
+                        "command": protocol_module.ODB_ASSIGN_COMMAND,
+                        "value": {
+                            "id": protocol_module.ID_WATER_HEATING_ENABLED,
+                            "value": protocol_module.WATER_HEATING_OFF_RAW,
+                        },
+                    },
+                )
+                await _handle_next_polling_event(client, ctx)
+                result = await asyncio.wait_for(command_task, timeout=1)
+                await DHEClient._close_session(client, ctx)
+
+        self.assertFalse(result)
+        self.assertTrue(
+            any(
+                f'"id":{protocol_module.ID_SETPOINT_REQUEST}' in packet
+                and f'"value":{protocol_module.SET_REQ_OFF_VALUE}' in packet
+                for packet in server.posted_packets
+            ),
+            server.posted_packets,
+        )
+
+
+class _FakeConfig:
+    def path(self, value: str) -> str:
+        return f"/tmp/{value}"
+
+
+class _FakeHass:
+    config = _FakeConfig()
+
+    def __init__(self, loop: asyncio.AbstractEventLoop) -> None:
+        self.loop = loop
+
+    def async_create_task(self, coro: Any, *, name: str | None = None) -> asyncio.Task[Any]:
+        return asyncio.create_task(coro, name=name)
+
+
+async def _handle_next_polling_event(client: Any, ctx: Any) -> None:
+    for event in await client._read_polling_events_once(ctx):
+        await client._handle_runtime_event(event)
 
 
 if __name__ == "__main__":

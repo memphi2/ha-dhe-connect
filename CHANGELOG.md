@@ -1,5 +1,30 @@
 # Changelog
 
+## v1.4.1 - 2026-05-17
+
+### Added
+
+- Expanded the fake DHE Engine.IO test server coverage with a command-level water-heating flow that posts the ODB write, accepts the DHE readback confirmation and verifies the follow-up set-request sync.
+- Expanded the real Home Assistant fixture runtime suite to cover setup, reload, unload, multi-entry service lifetime and climate entity unique-ID separation.
+
+### Changed
+
+- Broadened the scoped type-checking gate from helper and mapping modules to the integration setup module, the composed client facade, Home Assistant platform entities and additional runtime helpers.
+- Added explicit platform-entity type annotations where Home Assistant attributes were previously inferred too narrowly for the wider type gate.
+
+### Fixed
+
+- Made the Home Assistant fixture runtime test self-contained when run directly by ensuring the repository root is importable before loading the custom integration package.
+
+### Validation
+
+- Local test suite: `334 passed`, `22 subtests passed`.
+- Integration repository check: `scripts/check_integration.py`.
+- Type gate: `scripts/check_typing.py` over 36 modules.
+- Ruff: `ruff check custom_components/stiebel_dhe_connect tests scripts`.
+- HA-Test smoke: copied to the mounted Home Assistant test config, restarted Home Assistant, verified DHE connection health and ran mounted smoke checks with localhost-token cleanup.
+- Release-readiness check prepared with `v1.4.1` tag and GitHub release expected absent.
+
 ## v1.4.0 - 2026-05-17
 
 ### Added
