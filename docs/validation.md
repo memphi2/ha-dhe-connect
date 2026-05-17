@@ -56,6 +56,8 @@ entry setup paths instead of only isolated stubs:
 - Entity-registry unique-ID separation.
 - Entity-registry stability across reload.
 - Runtime availability callbacks and recovery.
+- Cached weather service candidate resolution.
+- Runtime measurement, reconnect and diagnostic sensor callbacks.
 
 These tests are not a replacement for live hardware checks, but they catch
 regressions that pure helper tests cannot see.

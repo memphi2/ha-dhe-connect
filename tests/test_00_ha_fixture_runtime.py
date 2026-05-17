@@ -137,6 +137,31 @@ class _FixtureDHEClient:
         for callback_fn in list(self.callbacks["weather"]):
             callback_fn(self.last_weather_state)
 
+    def emit_measurement(
+        self,
+        odb_id: int,
+        value: Any,
+        attributes: dict[str, Any] | None = None,
+    ) -> None:
+        """Emit one measurement to registered entities."""
+        self.last_measurements[odb_id] = value
+        if attributes is not None:
+            self.last_measurement_attributes[odb_id] = dict(attributes)
+        for callback_fn in list(self.callbacks["measurement"]):
+            callback_fn(odb_id, value)
+
+    def emit_reconnect(self, reconnect_count: int) -> None:
+        """Emit a reconnect-count update to registered entities."""
+        self.reconnect_count = reconnect_count
+        for callback_fn in list(self.callbacks["reconnect"]):
+            callback_fn(reconnect_count)
+
+    def emit_diagnostic(self, state: dict[str, Any]) -> None:
+        """Emit a diagnostic-state update to registered entities."""
+        self.diagnostic_state = dict(state)
+        for callback_fn in list(self.callbacks["diagnostic"]):
+            callback_fn(self.diagnostic_state)
+
     @callback
     def add_availability_callback(self, callback_fn: Callable[[bool], None]):
         self.callbacks["availability"].append(callback_fn)
@@ -369,6 +394,76 @@ async def test_services_route_to_requested_entry_with_real_hass_fixture() -> Non
         await hass.async_block_till_done()
 
 
+async def test_weather_services_use_cached_candidates_with_real_hass_fixture() -> None:
+    """Verify weather services resolve cached results, favorites and raw IDs."""
+    _clear_loaded_integration_modules()
+    integration = importlib.import_module(f"custom_components.{DOMAIN}")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        client = _FixtureDHEClient()
+        client.last_weather_state = {
+            "forecast_results": [
+                {"LocationId": "result-one", "Name": "Result One"},
+                {"LocationId": "result-two", "Name": "Result Two"},
+            ],
+            "favorites": [
+                {"LocationId": "favorite-one", "Name": "Favorite One"},
+            ],
+            "location": {"LocationId": "current-one", "Name": "Current One"},
+        }
+        entry = _build_mock_entry(
+            host=client.host,
+            port=client.port,
+            name="Weather Service Fixture DHE",
+            unique_id="weather-service-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+
+        with patch.object(integration, "DHEClient", return_value=client):
+            assert await hass.config_entries.async_setup(entry.entry_id)
+            await hass.async_block_till_done()
+
+        await hass.services.async_call(
+            DOMAIN,
+            "add_weather_favorite",
+            {"result_number": 2},
+            blocking=True,
+        )
+        await hass.services.async_call(
+            DOMAIN,
+            "toggle_weather_favorite",
+            {"location_id": "favorite-one"},
+            blocking=True,
+        )
+        await hass.services.async_call(
+            DOMAIN,
+            "select_weather_location",
+            {"location_id": "current-one"},
+            blocking=True,
+        )
+        await hass.services.async_call(
+            DOMAIN,
+            "remove_weather_favorite",
+            {"location_id": "raw-location-id"},
+            blocking=True,
+        )
+
+        assert client.weather_search_calls == []
+        assert client.weather_add_calls == [
+            {"LocationId": "result-two", "Name": "Result Two"}
+        ]
+        assert client.weather_toggle_calls == [
+            {"LocationId": "favorite-one", "Name": "Favorite One"}
+        ]
+        assert client.weather_select_calls == [
+            {"LocationId": "current-one", "Name": "Current One"}
+        ]
+        assert client.weather_remove_calls == [{"LocationId": "raw-location-id"}]
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
+
 async def test_entity_registry_ids_survive_reload_with_real_hass_fixture() -> None:
     """Reload an entry and verify HA keeps the same entity registry IDs."""
     _clear_loaded_integration_modules()
@@ -415,6 +510,63 @@ async def test_entity_registry_ids_survive_reload_with_real_hass_fixture() -> No
         assert before == after
         assert first_client.stop_called
         assert second_client.start_called
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
+
+async def test_runtime_callbacks_update_sensor_states_with_real_hass_fixture() -> None:
+    """Verify runtime callbacks update real HA sensor entities."""
+    _clear_loaded_integration_modules()
+    integration = importlib.import_module(f"custom_components.{DOMAIN}")
+    protocol = importlib.import_module(f"custom_components.{DOMAIN}.protocol")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        client = _FixtureDHEClient()
+        entry = _build_mock_entry(
+            host=client.host,
+            port=client.port,
+            name="Runtime Fixture DHE",
+            unique_id="runtime-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+
+        with patch.object(integration, "DHEClient", return_value=client):
+            assert await hass.config_entries.async_setup(entry.entry_id)
+            await hass.async_block_till_done()
+
+        water_flow_entity = _entity_id_for_key(hass, entry.entry_id, "sensor", "water_flow")
+        reconnect_entity = _entity_id_for_key(
+            hass,
+            entry.entry_id,
+            "sensor",
+            "reconnect_count",
+        )
+        connection_state_entity = _entity_id_for_key(
+            hass,
+            entry.entry_id,
+            "sensor",
+            "connection_state",
+        )
+
+        client.emit_measurement(protocol.ID_WATER_FLOW, 7.5)
+        client.emit_reconnect(3)
+        client.emit_diagnostic({
+            "connection_state": "reconnecting",
+            "last_reconnect_reason": "fixture reconnect",
+        })
+        await hass.async_block_till_done()
+
+        water_flow_state = hass.states.get(water_flow_entity)
+        reconnect_state = hass.states.get(reconnect_entity)
+        connection_state = hass.states.get(connection_state_entity)
+
+        assert water_flow_state is not None
+        assert water_flow_state.state == "7.5"
+        assert reconnect_state is not None
+        assert reconnect_state.state == "3"
+        assert connection_state is not None
+        assert connection_state.state == "reconnecting"
 
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
@@ -521,3 +673,18 @@ def _build_mock_entry(
         title=name,
         unique_id=unique_id,
     )
+
+
+def _entity_id_for_key(
+    hass: HomeAssistant,
+    entry_id: str,
+    domain: str,
+    key: str,
+) -> str:
+    """Return one entity ID from its stable integration unique-ID key."""
+    registry = er.async_get(hass)
+    unique_id = f"{DOMAIN}_{entry_id}_{key}"
+    for entity in er.async_entries_for_config_entry(registry, entry_id):
+        if entity.domain == domain and entity.unique_id == unique_id:
+            return entity.entity_id
+    raise AssertionError(f"Entity {domain}.{key} not found for entry {entry_id}")
