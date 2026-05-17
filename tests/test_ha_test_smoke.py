@@ -439,6 +439,28 @@ class TestHaTestSmoke(unittest.TestCase):
             self.assertFalse(results[0].ok)
             self.assertIn("stiebel_dhe_connect", results[0].message)
 
+    def test_log_scan_redacts_auth_context(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = Path(temp_dir)
+            private_host = ".".join(("172", "16", "1", "147"))
+            (config / "home-assistant.log").write_text(
+                "2026-05-16 ERROR custom_components.stiebel_dhe_connect "
+                "access_token=abc123 refresh_token='def456' "
+                f"Authorization: Bearer ghijk http://user:secret@{private_host}:8123\n",
+                encoding="utf-8",
+            )
+
+            results = ha_test_smoke.scan_logs(config)
+
+            self.assertFalse(results[0].ok)
+            self.assertIn("<redacted>", results[0].message)
+            self.assertIn("<private-host>", results[0].message)
+            self.assertNotIn("abc123", results[0].message)
+            self.assertNotIn("def456", results[0].message)
+            self.assertNotIn("ghijk", results[0].message)
+            self.assertNotIn("secret", results[0].message)
+            self.assertNotIn(private_host, results[0].message)
+
     def test_log_scan_fails_when_no_log_sources_exist(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             results = ha_test_smoke.scan_logs(Path(temp_dir))
