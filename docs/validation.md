@@ -25,9 +25,8 @@ What those checks cover:
 - Static type checks for the scoped integration, platform and helper modules.
 - Ruff linting for integration code, tests and repository scripts.
 
-The GitHub `Validate` workflow runs the repository check, pytest, HACS,
-Hassfest and type checks. Keep local results and CI results aligned before
-merging.
+The GitHub `Validate` workflow runs HACS, Hassfest, pytest, repository checks,
+type checks and Ruff. Keep local results and CI results aligned before merging.
 
 ## Fake DHE And HA Fixture Coverage
 
