@@ -146,6 +146,40 @@ class TestWeatherEntityWrites(unittest.TestCase):
         self.assertEqual(listener_updates, [("daily",)])
         self.assertFalse(entity._attr_available)
 
+    def test_weather_write_signature_ignores_unrecorded_list_payloads(self) -> None:
+        weather_module = _load_weather_module()
+        entity = weather_module.StiebelDHEWeather.__new__(
+            weather_module.StiebelDHEWeather
+        )
+        entity._attr_available = True
+        entity._attr_condition = "sunny"
+        entity._attr_native_temperature = 32.0
+        entity._attr_name = "Las Vegas, USA"
+        entity._forecast = [{"datetime": "2026-05-16T00:00:00+00:00"}]
+        entity._attr_extra_state_attributes = {
+            "weather_path": "ste.app.weather",
+            "favorite_count": 1,
+            "favorite_locations": [{"name": "Las Vegas", "location_id": "ID=1"}],
+            "forecast_results": [{"name": "Las Vegas", "location_id": "ID=1"}],
+            "int_names": [{"Name": "Las Vegas", "Language": "en"}],
+        }
+
+        first_signature = entity._weather_write_signature()
+        entity._attr_extra_state_attributes["favorite_locations"] = [
+            {"name": "Las Vegas", "location_id": "ID=1", "search_type": 1}
+        ]
+        entity._attr_extra_state_attributes["forecast_results"] = [
+            {"name": "Las Vegas", "location_id": "ID=1", "search_type": 1}
+        ]
+        entity._attr_extra_state_attributes["int_names"] = [
+            {"Name": "Las Vegas", "Language": "de"}
+        ]
+
+        self.assertIn("favorite_locations", entity._unrecorded_attributes)
+        self.assertIn("forecast_results", entity._unrecorded_attributes)
+        self.assertIn("int_names", entity._unrecorded_attributes)
+        self.assertEqual(first_signature, entity._weather_write_signature())
+
 
 if __name__ == "__main__":
     unittest.main()

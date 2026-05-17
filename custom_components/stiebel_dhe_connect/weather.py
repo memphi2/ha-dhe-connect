@@ -53,6 +53,11 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
     _attr_should_poll = False
     _attr_supported_features = SUPPORT_FORECAST_DAILY
     _attr_translation_key = "weather"
+    _unrecorded_attributes = frozenset({
+        "favorite_locations",
+        "forecast_results",
+        "int_names",
+    })
 
     def __init__(self, entry_id: str, name: str, client: DHEClient) -> None:
         """Initialize the DHE weather entity."""
@@ -120,8 +125,16 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
             self._attr_native_temperature,
             self._attr_name,
             list(self._forecast),
-            dict(self._attr_extra_state_attributes or {}),
+            self._recorded_weather_attributes(),
         )
+
+    def _recorded_weather_attributes(self) -> dict[str, Any]:
+        """Return weather attributes that should participate in recorder writes."""
+        return {
+            key: value
+            for key, value in (self._attr_extra_state_attributes or {}).items()
+            if key not in self._unrecorded_attributes
+        }
 
     def _schedule_forecast_listener_update(self) -> None:
         update_listeners = getattr(self, "async_update_listeners", None)
