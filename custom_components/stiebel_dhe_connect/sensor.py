@@ -85,6 +85,7 @@ from .protocol import (
     ID_WATER_CONSUMPTION_YEAR,
     ID_WATER_CONSUMPTION_YEARS,
     ID_WATER_FLOW,
+    ODB_ZERO_REQUEST_READBACK_IGNORE_IDS,
     SHOWER_TIMER_PATH,
 )
 from .runtime_helpers import get_runtime_data
@@ -108,6 +109,7 @@ class StiebelDHESensorEntityDescription(SensorEntityDescription):
     timer_property: str | None = None
     source_command: str | None = None
     period: str | None = None
+    available_without_value: bool = False
 
 
 DEFAULT_ENABLED_SENSOR_KEYS = {
@@ -271,6 +273,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         odb_id=ID_HOT_WATER_VOLUME_TOTAL,
+        available_without_value=True,
     ),
     StiebelDHESensorEntityDescription(
         key="energy_consumption_week",
@@ -292,6 +295,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         odb_id=ID_HEATING_ENERGY_TOTAL,
+        available_without_value=True,
     ),
     StiebelDHESensorEntityDescription(
         key="possible_energy_saving",
@@ -303,6 +307,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         odb_id=ID_POSSIBLE_ENERGY_SAVING,
+        available_without_value=True,
     ),
     StiebelDHESensorEntityDescription(
         key="possible_water_saving",
@@ -314,6 +319,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         odb_id=ID_POSSIBLE_WATER_SAVING,
+        available_without_value=True,
     ),
     StiebelDHESensorEntityDescription(
         key="energy_consumption_year",
@@ -661,6 +667,14 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
         self._attr_extra_state_attributes = dict(self._base_extra_state_attributes)
         self._attr_available = False
         self._attr_native_value: float | str | None = None
+        if (
+            description.available_without_value
+            and description.odb_id not in ODB_ZERO_REQUEST_READBACK_IGNORE_IDS
+        ):
+            raise ValueError(
+                f"{description.key} is available without a value but is not "
+                "guarded against zero request readbacks"
+            )
         filter_values = SENSOR_WRITE_FILTERS.get(description.key)
         if filter_values is None:
             self._min_write_delta = None
@@ -684,7 +698,10 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
         if last_value is not None:
             self._update_extra_state_attributes()
             self._attr_native_value = self._convert_value(last_value)
-            self._attr_available = self._attr_native_value is not None
+            self._attr_available = self._available_from_value(
+                self._client_online(),
+                self._attr_native_value,
+            )
             self._last_written_native_value = self._attr_native_value
             self._last_written_monotonic = time.monotonic()
             self._last_written_recorded_attributes = self._recorded_state_attributes()
@@ -736,6 +753,16 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
 
         return format_minutes_duration(value)
 
+    def _available_from_value(self, connected: bool, value: MeasurementValue) -> bool:
+        """Return whether the sensor should be available for this value."""
+        if self.entity_description.available_without_value:
+            return bool(connected)
+        return value_available(connected, value)
+
+    def _client_online(self) -> bool:
+        """Return current client connectivity for availability decisions."""
+        return bool(getattr(self._client, "online", True))
+
     def _update_extra_state_attributes(self) -> None:
         """Update static and dynamic sensor attributes."""
         self._attr_extra_state_attributes = merge_state_attributes(
@@ -766,7 +793,10 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
             recorded_attributes != self._last_written_recorded_attributes
         )
         self._attr_native_value = self._convert_value(value)
-        self._attr_available = self._attr_native_value is not None
+        self._attr_available = self._available_from_value(
+            self._client_online(),
+            self._attr_native_value,
+        )
         if not self._should_write_measurement_state(
             self._attr_native_value,
             recorded_attributes_changed=recorded_attributes_changed,
@@ -780,7 +810,7 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
     @callback
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
-        next_available = value_available(available, self._attr_native_value)
+        next_available = self._available_from_value(available, self._attr_native_value)
         if self._attr_available == next_available:
             return
         self._attr_available = next_available

@@ -26,6 +26,8 @@ LOCALHOST_CLIENT_ID = "http://localhost/"
 BAD_STATES = {"unavailable", "unknown"}
 LOG_ERROR_MARKERS = ("ERROR", "CRITICAL", "Traceback", "Exception")
 LOG_WARNING_MARKERS = ("WARNING",)
+WATER_RUNNING_DEVICE_STATES = {"status_2", "status_4"}
+LAST_USAGE_DURATION_TRANSLATION_KEY = "last_usage_time"
 
 
 @dataclass(frozen=True)
@@ -277,6 +279,37 @@ def count_recorder_writes(
     return {str(row["entity_id"]): int(row["writes"]) for row in rows}
 
 
+def load_recorder_state_values(
+    db_path: Path,
+    entity_ids: Iterable[str],
+    *,
+    after_state_id: int,
+) -> dict[str, list[str]]:
+    """Load recorder state values for requested entities after a state_id marker."""
+    entity_id_list = sorted(set(entity_ids))
+    if not entity_id_list:
+        return {}
+
+    with closing(_connect_db(db_path)) as conn:
+        placeholders = ",".join("?" for _ in entity_id_list)
+        rows = conn.execute(
+            f"""
+            SELECT sm.entity_id, s.state
+            FROM states s
+            JOIN states_meta sm ON sm.metadata_id = s.metadata_id
+            WHERE s.state_id > ?
+              AND sm.entity_id IN ({placeholders})
+            ORDER BY s.state_id
+            """,
+            [after_state_id, *entity_id_list],
+        ).fetchall()
+
+    values: dict[str, list[str]] = {}
+    for row in rows:
+        values.setdefault(str(row["entity_id"]), []).append(str(row["state"]))
+    return values
+
+
 def max_state_id(db_path: Path) -> int:
     """Return the newest recorder state_id."""
     with closing(_connect_db(db_path)) as conn:
@@ -296,6 +329,103 @@ def _is_reconnect_count_entity_id(entity_id: str) -> bool:
         or "reconnects" in entity_id
         or "wiederverbindungen" in entity_id
     )
+
+
+def _is_device_status_entity_id(entity_id: str) -> bool:
+    return entity_id.startswith("sensor.") and (
+        "device_status" in entity_id or "geratestatus" in entity_id
+    )
+
+
+def _is_last_usage_duration_entity_id(entity_id: str) -> bool:
+    return entity_id.startswith("sensor.") and (
+        "last_usage_time" in entity_id
+        or "last_usage_duration" in entity_id
+        or "letzte_nutzungsdauer" in entity_id
+    )
+
+
+def device_status_entity_ids(
+    entries: Iterable[EntityRegistryEntry],
+    states: dict[str, LatestState],
+) -> list[str]:
+    """Return known device-status entity IDs from registry metadata and recorder state."""
+    entity_ids = {
+        entry.entity_id
+        for entry in entries
+        if entry.disabled_by is None
+        and (
+            entry.translation_key == "device_status"
+            or _is_device_status_entity_id(entry.entity_id)
+        )
+    }
+    entity_ids.update(
+        state.entity_id
+        for state in states.values()
+        if _is_device_status_entity_id(state.entity_id)
+    )
+    return sorted(entity_ids)
+
+
+def last_usage_duration_entity_ids(
+    entries: Iterable[EntityRegistryEntry],
+    states: dict[str, LatestState],
+) -> list[str]:
+    """Return known last-usage-duration entity IDs from registry and recorder state."""
+    entity_ids = {
+        entry.entity_id
+        for entry in entries
+        if entry.disabled_by is None
+        and (
+            entry.translation_key == LAST_USAGE_DURATION_TRANSLATION_KEY
+            or _is_last_usage_duration_entity_id(entry.entity_id)
+        )
+    }
+    entity_ids.update(
+        state.entity_id
+        for state in states.values()
+        if _is_last_usage_duration_entity_id(state.entity_id)
+    )
+    return sorted(entity_ids)
+
+
+def recorder_window_has_water_running(
+    baseline_states: dict[str, LatestState],
+    state_history: dict[str, list[str]],
+) -> bool:
+    """Return true when device status shows water flow during a recorder window."""
+    baseline_values = {
+        state.state
+        for state in baseline_states.values()
+        if _is_device_status_entity_id(state.entity_id)
+    }
+    history_values = {
+        state
+        for states in state_history.values()
+        for state in states
+    }
+    return bool((baseline_values | history_values) & WATER_RUNNING_DEVICE_STATES)
+
+
+def recorder_window_has_completed_usage(
+    state_history: dict[str, list[str]],
+) -> bool:
+    """Return true when last-usage duration changes during a recorder window."""
+    return any(states for states in state_history.values())
+
+
+def recorder_operational_reason(
+    *,
+    baseline_status_states: dict[str, LatestState],
+    status_history: dict[str, list[str]],
+    last_usage_duration_history: dict[str, list[str]],
+) -> str | None:
+    """Return why the recorder window should be treated as operational."""
+    if recorder_window_has_water_running(baseline_status_states, status_history):
+        return "water running detected via device status"
+    if recorder_window_has_completed_usage(last_usage_duration_history):
+        return "completed usage detected via last usage duration"
+    return None
 
 
 def _parse_reconnect_count(state: LatestState) -> float | None:
@@ -593,9 +723,25 @@ def evaluate_recorder_writes(
     *,
     max_total_writes: int,
     max_entity_writes: int,
+    operational_reason: str | None = None,
 ) -> list[CheckResult]:
     """Evaluate recorder write volume during a monitor interval."""
     total = sum(writes.values())
+    if operational_reason is not None:
+        message = (
+            f"recorder writes total={total}; {operational_reason}, idle limits skipped"
+        )
+        if writes:
+            top_writers = ", ".join(
+                f"{entity_id}={count}"
+                for entity_id, count in sorted(
+                    writes.items(),
+                    key=lambda item: (-item[1], item[0]),
+                )[:3]
+            )
+            message = f"{message}; top writers: {top_writers}"
+        return [CheckResult(True, message)]
+
     results = [
         CheckResult(
             total <= max_total_writes,
@@ -729,6 +875,13 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.monitor_seconds > 0 and latest_states:
         start_state_id = max_state_id(db_path)
+        status_entity_ids = device_status_entity_ids(entries, latest_states)
+        last_usage_duration_ids = last_usage_duration_entity_ids(entries, latest_states)
+        baseline_status_states = {
+            entity_id: latest_states[entity_id]
+            for entity_id in status_entity_ids
+            if entity_id in latest_states
+        }
         print(
             f"INFO: monitoring recorder writes for {args.monitor_seconds}s "
             f"from state_id {start_state_id}"
@@ -743,11 +896,39 @@ def main(argv: list[str] | None = None) -> int:
         except sqlite3.Error as err:
             results.append(CheckResult(False, f"recorder write query failed: {err}"))
         else:
+            status_history: dict[str, list[str]] = {}
+            last_usage_duration_history: dict[str, list[str]] = {}
+            try:
+                status_history = load_recorder_state_values(
+                    db_path,
+                    status_entity_ids,
+                    after_state_id=start_state_id,
+                )
+            except sqlite3.Error as err:
+                status_history = {}
+                results.append(
+                    CheckResult(False, f"device-status query failed: {err}")
+                )
+            try:
+                last_usage_duration_history = load_recorder_state_values(
+                    db_path,
+                    last_usage_duration_ids,
+                    after_state_id=start_state_id,
+                )
+            except sqlite3.Error as err:
+                results.append(
+                    CheckResult(False, f"last-usage-duration query failed: {err}")
+                )
             results.extend(
                 evaluate_recorder_writes(
                     writes,
                     max_total_writes=args.max_total_writes,
                     max_entity_writes=args.max_entity_writes,
+                    operational_reason=recorder_operational_reason(
+                        baseline_status_states=baseline_status_states,
+                        status_history=status_history,
+                        last_usage_duration_history=last_usage_duration_history,
+                    ),
                 )
             )
 

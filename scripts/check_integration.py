@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -12,6 +13,11 @@ ROOT = Path(__file__).resolve().parents[1]
 INTEGRATION = ROOT / "custom_components" / "stiebel_dhe_connect"
 TRANSLATIONS = INTEGRATION / "translations"
 CLIENT_MODULE_MAX_BYTES = 50 * 1024
+PINNED_VALIDATION_ACTIONS = {
+    "hacs/action",
+    "home-assistant/actions/hassfest",
+}
+_ACTION_REF_RE = re.compile(r"^\s*(?:-\s*)?uses:\s*([^@\s]+)@([^\s#]+)", re.MULTILINE)
 
 
 def _load_json(path: Path) -> dict:
@@ -98,6 +104,30 @@ def check_repository_files(version: str) -> None:
         _fail("legacy info.md release notes must not be restored; use CHANGELOG.md")
 
 
+def check_github_actions() -> None:
+    workflow = ROOT / ".github" / "workflows" / "validate.yml"
+    if not workflow.exists():
+        _fail("validation workflow is missing")
+    text = workflow.read_text(encoding="utf-8")
+    refs_by_action: dict[str, list[str]] = {
+        action: []
+        for action in PINNED_VALIDATION_ACTIONS
+    }
+    for action, ref in _ACTION_REF_RE.findall(text):
+        if action in refs_by_action:
+            refs_by_action[action].append(ref)
+
+    missing = sorted(
+        action for action, refs in refs_by_action.items() if not refs
+    )
+    if missing:
+        _fail(f"validation workflow is missing actions: {', '.join(missing)}")
+    for action, refs in sorted(refs_by_action.items()):
+        for ref in refs:
+            if not re.fullmatch(r"[0-9a-f]{40}", ref):
+                _fail(f"{action} must be pinned to a 40-character commit SHA")
+
+
 def check_client_module_size() -> None:
     client = INTEGRATION / "client.py"
     size = client.stat().st_size
@@ -144,6 +174,7 @@ def main() -> None:
     version = check_manifest()
     check_hacs()
     check_repository_files(version)
+    check_github_actions()
     check_client_module_size()
     check_translations()
     check_compile()

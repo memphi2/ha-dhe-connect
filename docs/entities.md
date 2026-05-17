@@ -152,7 +152,7 @@ data:
 
 Consumption sensors expose the DHE chart array as a `chart` attribute and the reported cost as `cost_eur` where available. Saving monitor sensors expose the latest `possible`, `real`, `consumption` and `activation_rate` payloads as attributes. Large chart and catalog payloads are deduplicated before entity writes so repeated DHE messages do not continuously grow the recorder database.
 
-The browser UI exposes ODB IDs `29` (`ODB_Heizen_Energie`), `30` (`ODB_WW_Volumen`), `63` (`ODB_Gsprt_Energie`) and `64` (`ODB_Gsprt_KW_Volumen`) separately from the `ste.app.consumption:*` and `ste.app.savingMonitor:*` app payloads. They stay disabled by default because they are diagnostic protocol values. A `0` returned only as the direct answer to a startup or entity-enable read request is ignored for these IDs; a later DHE runtime update with value `0` is still accepted.
+The browser UI exposes ODB IDs `29` (`ODB_Heizen_Energie`), `30` (`ODB_WW_Volumen`), `63` (`ODB_Gsprt_Energie`) and `64` (`ODB_Gsprt_KW_Volumen`) separately from the `ste.app.consumption:*` and `ste.app.savingMonitor:*` app payloads. They stay disabled by default because they are diagnostic protocol values. A `0` returned only as the direct answer to a startup or entity-enable read request is ignored for these IDs; while the DHE connection is active they remain available with an `unknown` state until a real runtime value arrives. A later DHE runtime update with value `0` is still accepted.
 
 ## Numbers
 

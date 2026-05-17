@@ -190,7 +190,7 @@ python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log
 
 The monitor fails when DHE entities write too many recorder rows during the selected interval. Use this after copying the integration to the HA test instance and restarting Home Assistant.
 
-Run this recorder monitor while the DHE is idle when you want to validate database churn. If water is running, live flow, temperature, power, consumption and saving-monitor entities are expected to write more often. In that case use the smoke output to check connection health, reconnect count and log errors instead of treating the idle recorder limit as meaningful.
+Run this recorder monitor while the DHE is idle when you want to validate database churn. If the device-status sensor reports water running (`status_2`, or the observed transition state `status_4`), or the last usage duration changes during the monitor window, the smoke check treats the window as operational and skips the idle recorder-write limits while still checking connection health, reconnect count and log errors.
 
 For live Home Assistant API checks against a test instance, set the connection
 details through environment variables and run:
