@@ -46,7 +46,7 @@ jobs:
           python-version: "3.14"
 
       - name: Install repository check dependencies
-        run: python -m pip install "aiohttp>=3.9,<4" "mypy>=1.13,<2" "pytest-homeassistant-custom-component>=0.13.230,<0.14"
+        run: python -m pip install "aiohttp>=3.9,<4" "mypy>=1.13,<2" "pytest-homeassistant-custom-component>=0.13.230,<0.14" "ruff>=0.13,<1"
 
       - name: Run unit tests
         run: python -m pytest -q
@@ -56,3 +56,6 @@ jobs:
 
       - name: Run type checks
         run: python scripts/check_typing.py
+
+      - name: Run Ruff
+        run: python -m ruff check custom_components/stiebel_dhe_connect tests scripts
