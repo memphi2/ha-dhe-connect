@@ -22,7 +22,8 @@ What those checks cover:
   behavior.
 - Repository consistency, required files, translations, pinned validation
   actions, Python syntax and `client.py` size.
-- Static type checks for the scoped integration, platform, command and helper modules.
+- Static type checks for the scoped integration, config/options flow, platform,
+  command and helper modules.
 - Ruff linting for integration code, tests and repository scripts.
 
 The GitHub `Validate` workflow runs HACS, Hassfest, pytest, repository checks,
