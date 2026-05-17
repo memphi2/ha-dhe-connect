@@ -5,7 +5,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Any
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, cast
 
 from .client_constants import (
     APP_COMMAND_CONFIRMATION_TIMEOUT,
@@ -39,11 +40,16 @@ from .client_types import (
     DHEEvent,
     DHESession,
     DHESessionClosed,
+    DiagnosticCallback,
     MeasurementValue,
     ODB_READ_SOURCE_REQUESTED,
     ODB_READ_SOURCE_RUNTIME,
     ODBReadSource,
     ODBValue,
+    MeasurementCallback,
+    RadioCallback,
+    SetpointCallback,
+    WeatherCallback,
 )
 from .client_value_helpers import (
     clamp as _clamp,
@@ -126,6 +132,54 @@ _MISSING_MEASUREMENT = object()
 class DHEClientRuntimeMixin(DHEClientRuntimeAppMixin):
     """Runtime event dispatch, state updates and readback waiters."""
 
+    if TYPE_CHECKING:
+        _diagnostic_callbacks: set[DiagnosticCallback]
+        _diagnostic_state: dict[str, Any]
+        _last_app_values: dict[str, Any]
+        _last_measurement_attributes: dict[int, dict[str, Any]]
+        _last_measurements: dict[int, MeasurementValue]
+        _last_message_monotonic: float | None
+        _last_power_fraction: float | None
+        _last_radio_catalogs: dict[str, list[str]]
+        _last_radio_favorites: list[dict[str, Any]]
+        _last_radio_genres: list[str]
+        _last_radio_state: dict[str, Any]
+        _last_radio_stations: list[dict[str, Any]]
+        _last_setpoint: float | None
+        _last_weather_countries: list[dict[str, Any]]
+        _last_weather_state: dict[str, Any]
+        _measurement_callbacks: set[MeasurementCallback]
+        _message_count: int
+        _nominal_power_kw: float
+        _odb_value_handlers: dict[int, Callable[[Any], None]]
+        _pending_expected_setpoint: float | None
+        _pending_odb_read_deadlines: dict[int, float]
+        _pending_setpoint_future: asyncio.Future[float] | None
+        _pending_write_expected: ODBValue | None
+        _pending_write_future: asyncio.Future[ODBValue] | None
+        _pending_write_id: int | None
+        _radio_callbacks: set[RadioCallback]
+        _radio_catalog_generations: dict[str, int]
+        _radio_favorites_generation: int
+        _radio_genres_generation: int
+        _radio_stations_generation: int
+        _setpoint_callbacks: set[SetpointCallback]
+        _weather_callbacks: set[WeatherCallback]
+        _weather_countries_generation: int
+        _weather_favorites_generation: int
+        _weather_search_generation: int
+
+        async def _request_setpoint(self, ctx: DHESession) -> None: ...
+
+        async def _request_odb_value(self, ctx: DHESession, odb_id: int) -> None: ...
+
+        def _notify_callbacks(
+            self,
+            callback_name: str,
+            callbacks: set[Callable[..., None]],
+            *args: Any,
+        ) -> None: ...
+
     async def _handle_runtime_event(self, event: DHEEvent) -> None:
         if event.name == "__closed":
             self._update_diagnostics(
@@ -139,7 +193,10 @@ class DHEClientRuntimeMixin(DHEClientRuntimeAppMixin):
         command = data.get("command")
         value = data.get("value")
         self._record_runtime_message(command, value)
-        is_radio_command = isinstance(command, str) and RADIO_PATH in command
+        if not isinstance(command, str):
+            self._log_unhandled_ste_command(command, value)
+            return
+        is_radio_command = RADIO_PATH in command
         if command in APP_TIMER_RESET_COMMANDS:
             self._handle_app_timer_reset(command)
             return
@@ -216,6 +273,7 @@ class DHEClientRuntimeMixin(DHEClientRuntimeAppMixin):
 
     def _handle_radio_value(self, command: str, raw_value: Any) -> None:
         field = command.rsplit(":", 1)[-1]
+        value: Any
         if field == "volume":
             try:
                 value = int(_clamp(round(_raw_to_float(raw_value)), 0, 100))
@@ -528,17 +586,13 @@ class DHEClientRuntimeMixin(DHEClientRuntimeAppMixin):
         odb_id = int(odb_id)
         if odb_id not in ODB_ZERO_REQUEST_READBACK_IGNORE_IDS:
             return
-        pending = getattr(self, "_pending_odb_read_deadlines", None)
-        if pending is None:
-            pending = self._pending_odb_read_deadlines = {}
-        pending[odb_id] = time.monotonic() + ODB_READBACK_REQUEST_WINDOW_SECONDS
+        self._pending_odb_read_deadlines[odb_id] = (
+            time.monotonic() + ODB_READBACK_REQUEST_WINDOW_SECONDS
+        )
 
     def _consume_odb_read_request(self, odb_id: int) -> bool:
         """Return whether an ODB value is the readback for a recent request."""
-        pending = getattr(self, "_pending_odb_read_deadlines", None)
-        if pending is None:
-            return False
-        deadline = pending.pop(int(odb_id), None)
+        deadline = self._pending_odb_read_deadlines.pop(int(odb_id), None)
         return deadline is not None and deadline >= time.monotonic()
 
     def _log_unhandled_ste_command(self, command: Any, value: Any) -> None:
@@ -684,10 +738,11 @@ class DHEClientRuntimeMixin(DHEClientRuntimeAppMixin):
         if value is not None and not isinstance(value, str):
             self._maybe_complete_write_future(odb_id, value)
         if not force_update and previous is not _MISSING_MEASUREMENT:
-            if isinstance(previous, str) or isinstance(value, str):
-                if previous == value:
+            previous_value = cast(MeasurementValue, previous)
+            if isinstance(previous_value, str) or isinstance(value, str):
+                if previous_value == value:
                     return
-            elif _values_equal(previous, value):
+            elif _values_equal(previous_value, value):
                 return
         self._notify_callbacks(
             "measurement",

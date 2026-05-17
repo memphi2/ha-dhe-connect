@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from collections.abc import Callable, Iterable
+from typing import TYPE_CHECKING, Any
+
+from .client_types import MeasurementCallback, MeasurementValue
 
 from .client_value_helpers import (
     raw_to_bool as _raw_to_bool,
@@ -36,6 +39,32 @@ from .protocol import (
 
 class DHEClientRuntimeAppMixin:
     """Handle app, saving monitor and device-info runtime values."""
+
+    if TYPE_CHECKING:
+        _last_app_values: dict[str, Any]
+        _last_device_info: dict[str, Any]
+        _last_measurement_attributes: dict[int, dict[str, Any]]
+        _last_measurements: dict[int, MeasurementValue]
+        _last_saving_monitor_values: dict[str, Any]
+        _measurement_callbacks: set[MeasurementCallback]
+        _temperature_memory_full_list_seen: bool
+        _temperature_memory_generation: int
+        _temperature_memory_ids_seen: set[int]
+
+        def _handle_measurement(
+            self,
+            odb_id: int,
+            value: MeasurementValue,
+            *,
+            force_update: bool = False,
+        ) -> None: ...
+
+        def _notify_callbacks(
+            self,
+            callback_name: str,
+            callbacks: set[Callable[..., None]],
+            *args: Any,
+        ) -> None: ...
 
     def _handle_app_timer_value(self, command: str, raw_value: Any) -> None:
         try:
@@ -109,7 +138,7 @@ class DHEClientRuntimeAppMixin:
             if field in {"water", "energy"}:
                 value = round(value, 2)
 
-            attributes = {
+            attributes: dict[str, Any] = {
                 "source_command": LAST_USAGE_SET_COMMAND,
                 "last_usage_field": field,
             }
@@ -163,6 +192,7 @@ class DHEClientRuntimeAppMixin:
         self._refresh_saving_monitor_sensors(category=category)
 
     def _refresh_saving_monitor_sensors(self, *, category: str | None = None) -> None:
+        field_groups: Iterable[tuple[str, dict[str, int]]]
         if category is None:
             field_groups = SAVING_MONITOR_SENSOR_FIELDS.items()
         else:
@@ -336,8 +366,11 @@ class DHEClientRuntimeAppMixin:
         self._temperature_memory_generation += 1
 
     def _handle_temperature_memory_delete_item(self, item: dict[str, Any], *, source_command: str) -> None:
+        raw_id = item.get("id")
+        if raw_id is None:
+            return
         try:
-            memory_id = int(item.get("id"))
+            memory_id = int(raw_id)
         except (TypeError, ValueError):
             return
         self._temperature_memory_ids_seen.discard(memory_id)
@@ -346,8 +379,11 @@ class DHEClientRuntimeAppMixin:
     def _handle_temperature_memory_item(self, item: Any, *, source_command: str) -> int | None:
         if not isinstance(item, dict):
             return None
+        raw_id = item.get("id")
+        if raw_id is None:
+            return None
         try:
-            memory_id = int(item.get("id"))
+            memory_id = int(raw_id)
             temperature = _raw_to_float(item.get("temperature"))
         except (TypeError, ValueError):
             return None
