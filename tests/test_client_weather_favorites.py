@@ -65,12 +65,16 @@ def _load_client():
     _load_component_module("client_mapping")
     _load_component_module("client_diagnostics")
     _load_component_module("client_errors")
+    _load_component_module("client_constants")
     _load_component_module("connection_helpers")
     _load_component_module("engineio_helpers")
     _load_component_module("flow_helpers")
     _load_component_module("pairing_helpers")
     _load_component_module("protocol")
     _load_component_module("client_value_helpers")
+    _load_component_module("client_pairing")
+    _load_component_module("client_commands")
+    _load_component_module("client_runtime")
     _load_component_module("client_transport")
     return _load_component_module("client")
 
@@ -403,6 +407,7 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
 
     async def test_notify_pairing_progress_cleans_up_legacy_pairing_notifications(self) -> None:
         client_module = _load_client()
+        pairing_module = sys.modules[f"{PACKAGE_NAME}.client_pairing"]
         DHEClient = client_module.DHEClient
 
         class _FakeHass:
@@ -421,8 +426,8 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         async_create = Mock()
         async_dismiss = Mock()
 
-        client_module.persistent_notification.async_create = async_create
-        client_module.persistent_notification.async_dismiss = async_dismiss
+        pairing_module.persistent_notification.async_create = async_create
+        pairing_module.persistent_notification.async_dismiss = async_dismiss
 
         client._notify_pairing_progress("connecting")
 
