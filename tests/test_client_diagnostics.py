@@ -77,6 +77,77 @@ class TestClientDiagnostics(unittest.TestCase):
 
         self.assertEqual(message, "ValueError: bad value")
 
+    def test_diagnostic_error_redacts_auth_context(self) -> None:
+        private_host = ".".join(("172", "16", "1", "147"))
+        private_ten_host = ".".join(("10", "0", "0", "1"))
+        message = self.diagnostics.diagnostic_error(
+            RuntimeError(
+                "GET failed for "
+                f"http://user:secret@{private_host}:8123/socket.io/?token=abc123 "
+                f"fallback=http://{private_ten_host}:8123 "
+                "access_token=def456 Authorization: Bearer ghijk password=secret"
+            )
+        )
+
+        self.assertIn("<redacted>", message)
+        self.assertIn("<private-host>", message)
+        self.assertNotIn("abc123", message)
+        self.assertNotIn("def456", message)
+        self.assertNotIn("ghijk", message)
+        self.assertNotIn("secret", message)
+        self.assertNotIn(private_host, message)
+        self.assertNotIn(private_ten_host, message)
+        self.assertNotIn(".1", message)
+
+    def test_redaction_preserves_ordinary_text(self) -> None:
+        message = self.diagnostics.diagnostic_error(
+            RuntimeError("code blue station and password reset forecast")
+        )
+        radio = self.diagnostics.summarize_radio_value([
+            {"Id": 1, "Name": "Code Blue FM", "City": "Password Reset"},
+        ])
+        weather = self.diagnostics.summarize_weather_value({
+            "Location": {"Name": "Code Blue", "Country": "Password Reset"},
+        })
+
+        self.assertEqual(
+            message,
+            "RuntimeError: code blue station and password reset forecast",
+        )
+        self.assertEqual(radio["stations"][0]["Name"], "Code Blue FM")
+        self.assertEqual(radio["stations"][0]["City"], "Password Reset")
+        self.assertEqual(weather["location"]["Name"], "Code Blue")
+        self.assertEqual(weather["location"]["Country"], "Password Reset")
+
+    def test_diagnostic_summary_redacts_sensitive_strings_and_keys(self) -> None:
+        private_host = ".".join(("172", "16", "1", "147"))
+        summary = self.diagnostics.summarize_diagnostic_value({
+            "token=abc123": "Authorization: Bearer ghijk",
+            "url": f"http://user:secret@{private_host}:8123/?token=abc123",
+        })
+
+        self.assertIn("token=<redacted>", summary)
+        self.assertEqual(summary["token=<redacted>"], "Authorization: Bearer <redacted>")
+        self.assertIn("<private-host>", summary["url"])
+        self.assertNotIn("abc123", str(summary))
+        self.assertNotIn("ghijk", str(summary))
+        self.assertNotIn("secret", str(summary))
+        self.assertNotIn(private_host, str(summary))
+
+    def test_diagnostic_summary_preserves_colliding_redacted_keys(self) -> None:
+        summary = self.diagnostics.summarize_diagnostic_value({
+            "token=abc123": "first",
+            "token=def456": "second",
+        })
+
+        self.assertEqual(
+            summary,
+            {
+                "token=<redacted>": "first",
+                "token=<redacted>#2": "second",
+            },
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
