@@ -55,7 +55,11 @@ Danach Home Assistant neu starten und die Integration ueber die UI hinzufuegen.
 
 ## Einrichtung und Pairing
 
-Beim Hinzufuegen fragt die UI nach:
+Wenn Home Assistant den DHE per Zeroconf/mDNS findet, werden Host, Port und
+Geraetename automatisch uebernommen. Dann fragt die UI nur nach der physischen
+`Tmax`-Jumperposition, bevor das normale Pairing startet.
+
+Bei manueller Einrichtung fragt die UI nach:
 
 | Feld | Beispiel | Hinweis |
 |---|---|---|

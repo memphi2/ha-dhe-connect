@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 import importlib
+from ipaddress import ip_address
 from pathlib import Path
 import sys
 from typing import Any
@@ -23,6 +24,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 
 pytestmark = pytest.mark.asyncio
@@ -554,6 +556,65 @@ async def test_config_flow_aborts_duplicate_target_with_real_hass_fixture() -> N
 
         assert result["type"] is FlowResultType.ABORT
         assert result["reason"] == "already_configured"
+
+
+async def test_zeroconf_flow_creates_entry_after_jumper_and_pairing_with_real_hass_fixture() -> None:
+    """Run discovered setup through HA's config-flow manager."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+
+        can_connect = AsyncMock(return_value=True)
+        validate_pairing = AsyncMock(return_value=None)
+        with (
+            patch.object(config_flow, "_can_connect", can_connect),
+            patch.object(config_flow, "_validate_setup_pairing", validate_pairing),
+        ):
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_ZEROCONF},
+                data=ZeroconfServiceInfo(
+                    ip_address=ip_address("192.0.2.124"),
+                    ip_addresses=[ip_address("192.0.2.124")],
+                    port=DEFAULT_PORT,
+                    hostname="DHE-JA06.local.",
+                    type="_ste-dhe._tcp.local.",
+                    name="DHE Connect DHE-JA06._ste-dhe._tcp.local.",
+                    properties={"DHE Connect": None},
+                ),
+            )
+
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "discovery_confirm"
+            can_connect.assert_awaited_once_with(
+                hass,
+                "192.0.2.124",
+                DEFAULT_PORT,
+            )
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                user_input={config_flow.CONF_INTERNAL_SCALD_PROTECTION: "55"},
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "pairing_confirm"
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                user_input={},
+            )
+
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert result["title"] == "DHE Connect DHE-JA06"
+        assert result["data"] == {
+            CONF_HOST: "192.0.2.124",
+            CONF_PORT: DEFAULT_PORT,
+            CONF_NAME: "DHE Connect DHE-JA06",
+            config_flow.CONF_INTERNAL_SCALD_PROTECTION: "55",
+        }
+        validate_pairing.assert_awaited_once()
 
 
 async def test_options_connection_flow_requires_pairing_for_changed_target_with_real_hass_fixture() -> None:
