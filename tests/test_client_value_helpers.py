@@ -102,21 +102,21 @@ class TestClientValueHelpers(unittest.TestCase):
     ) -> None:
         self.assertFalse(
             self.helpers.should_publish_odb_readback(
-                self.protocol.ID_HOT_WATER_VOLUME_TOTAL,
+                self.protocol.ID_ODB_HOT_WATER_VOLUME,
                 "0",
                 source=self.client_types.ODB_READ_SOURCE_REQUESTED,
             )
         )
         self.assertTrue(
             self.helpers.should_publish_odb_readback(
-                self.protocol.ID_HOT_WATER_VOLUME_TOTAL,
+                self.protocol.ID_ODB_HOT_WATER_VOLUME,
                 "1",
                 source=self.client_types.ODB_READ_SOURCE_REQUESTED,
             )
         )
         self.assertTrue(
             self.helpers.should_publish_odb_readback(
-                self.protocol.ID_HOT_WATER_VOLUME_TOTAL,
+                self.protocol.ID_ODB_HOT_WATER_VOLUME,
                 "0",
                 source=self.client_types.ODB_READ_SOURCE_RUNTIME,
             )

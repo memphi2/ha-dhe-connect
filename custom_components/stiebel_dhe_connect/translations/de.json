@@ -408,20 +408,20 @@
       "water_consumption_total": {
         "name": "Gesamtwasserverbrauch"
       },
-      "hot_water_volume_total": {
-        "name": "Warmwasservolumen gesamt"
+      "odb_hot_water_volume": {
+        "name": "Warmwasservolumen"
       },
       "energy_consumption_week": {
         "name": "Energieverbrauch Woche"
       },
-      "heating_energy_total": {
-        "name": "Heizenergie gesamt"
+      "odb_heating_energy": {
+        "name": "Heizenergie"
       },
-      "possible_energy_saving": {
-        "name": "mögliche Energieeinsparung"
+      "odb_possible_energy_saving": {
+        "name": "Mögliche Energieeinsparung"
       },
-      "possible_water_saving": {
-        "name": "mögliche Wassereinsparung"
+      "odb_actual_water_saving": {
+        "name": "Tatsächliche Wassereinsparung"
       },
       "energy_consumption_year": {
         "name": "Energieverbrauch Jahr"

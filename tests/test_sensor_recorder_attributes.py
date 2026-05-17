@@ -91,6 +91,16 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         self.assertIn("consumption", attributes)
         self.assertIn("activation_rate", attributes)
 
+    def test_scald_protection_limit_uses_visible_icon(self) -> None:
+        sensor_module = _load_sensor_module()
+        description = next(
+            item
+            for item in sensor_module.SENSOR_DESCRIPTIONS
+            if item.key == "scald_protection_temperature_limit"
+        )
+
+        self.assertEqual(description.icon, "mdi:thermometer-alert")
+
     def test_error_status_sensor_excludes_dynamic_inlet_attributes(self) -> None:
         sensor_module = _load_sensor_module()
         attributes = sensor_module.StiebelDHEErrorStatusSensor._unrecorded_attributes
@@ -305,10 +315,10 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         self.assertEqual(
             {item.key for item in descriptions},
             {
-                "heating_energy_total",
-                "hot_water_volume_total",
-                "possible_energy_saving",
-                "possible_water_saving",
+                "odb_heating_energy",
+                "odb_hot_water_volume",
+                "odb_possible_energy_saving",
+                "odb_actual_water_saving",
             },
         )
         self.assertTrue(all(item.available_without_value for item in descriptions))
@@ -329,6 +339,79 @@ class TestSensorRecorderAttributes(unittest.TestCase):
 
             self.assertTrue(sensor._available_from_value(True, None))
             self.assertFalse(sensor._available_from_value(False, None))
+
+    def test_zero_guarded_diagnostic_sensor_writes_unknown_when_online(self) -> None:
+        sensor_module = _load_sensor_module()
+        descriptions = tuple(
+            item
+            for item in sensor_module.SENSOR_DESCRIPTIONS
+            if item.key
+            in {
+                "odb_heating_energy",
+                "odb_hot_water_volume",
+                "odb_possible_energy_saving",
+                "odb_actual_water_saving",
+            }
+        )
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+            online = True
+            last_measurements: dict[int, object] = {}
+            last_measurement_attributes: dict[int, dict[str, object]] = {}
+
+            def __init__(self) -> None:
+                self.request_measurement_refresh = AsyncMock()
+
+            def add_measurement_callback(self, _callback):
+                return lambda: None
+
+            def add_availability_callback(self, _callback):
+                return lambda: None
+
+        class _FakeHass:
+            def __init__(self) -> None:
+                self.tasks = []
+
+            def async_create_task(self, coro, *, name: str | None = None):
+                task = asyncio.create_task(coro, name=name)
+                self.tasks.append(task)
+                return task
+
+        async def _run(description) -> tuple[object, list[bool], _FakeClient, _FakeHass]:
+            client = _FakeClient()
+            hass = _FakeHass()
+            sensor = sensor_module.StiebelDHESensor(
+                entry_id="test-entry",
+                name="Test DHE",
+                client=client,
+                description=description,
+            )
+            writes: list[bool] = []
+            sensor.hass = hass
+            sensor.async_on_remove = lambda _remove: None
+            sensor.async_write_ha_state = lambda: writes.append(sensor._attr_available)
+
+            await sensor.async_added_to_hass()
+            if hass.tasks:
+                await asyncio.gather(*hass.tasks)
+            return sensor, writes, client, hass
+
+        self.assertEqual(len(descriptions), 4)
+        for description in descriptions:
+            with self.subTest(key=description.key):
+                sensor, writes, client, hass = asyncio.run(_run(description))
+
+                self.assertTrue(sensor._attr_available)
+                self.assertIsNone(sensor._attr_native_value)
+                self.assertEqual(writes, [True])
+                self.assertEqual(len(hass.tasks), 1)
+                client.request_measurement_refresh.assert_awaited_once_with(
+                    odb_id=description.odb_id,
+                    app_command=None,
+                )
 
     def test_availability_update_writes_only_on_effective_sensor_change(self) -> None:
         sensor_module = _load_sensor_module()

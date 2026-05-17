@@ -463,10 +463,10 @@ def _allows_pending_runtime_value(entry: EntityRegistryEntry | None) -> bool:
     if entry is None or entry.translation_key is None:
         return False
     if entry.translation_key in {
-        "heating_energy_total",
-        "hot_water_volume_total",
-        "possible_energy_saving",
-        "possible_water_saving",
+        "odb_heating_energy",
+        "odb_hot_water_volume",
+        "odb_possible_energy_saving",
+        "odb_actual_water_saving",
     }:
         return True
     return _is_optional_temperature_memory_translation_key(entry.translation_key)

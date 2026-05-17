@@ -53,8 +53,8 @@ from .protocol import (
     ID_ENERGY_CONSUMPTION_WEEK,
     ID_ENERGY_CONSUMPTION_YEAR,
     ID_ENERGY_CONSUMPTION_YEARS,
-    ID_HEATING_ENERGY_TOTAL,
-    ID_HOT_WATER_VOLUME_TOTAL,
+    ID_ODB_HEATING_ENERGY,
+    ID_ODB_HOT_WATER_VOLUME,
     ID_INLET_TEMPERATURE,
     ID_LAST_USAGE_COST,
     ID_LAST_USAGE_ENERGY,
@@ -63,8 +63,8 @@ from .protocol import (
     ID_NOMINAL_POWER,
     ID_OPERATING_DURATION,
     ID_OUTLET_TEMPERATURE,
-    ID_POSSIBLE_ENERGY_SAVING,
-    ID_POSSIBLE_WATER_SAVING,
+    ID_ODB_POSSIBLE_ENERGY_SAVING,
+    ID_ODB_ACTUAL_WATER_SAVING,
     ID_POWER_PERCENT,
     ID_PROTOCOL_VERSION,
     ID_SAVING_MONITOR_ACTIVATION_RATE,
@@ -207,7 +207,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         translation_key="scald_protection_temperature_limit",
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         device_class=SensorDeviceClass.TEMPERATURE,
-        icon="mdi:shield-thermometer",
+        icon="mdi:thermometer-alert",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         odb_id=ID_SCALD_PROTECTION_TEMPERATURE_LIMIT,
@@ -264,15 +264,15 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         period="years",
     ),
     StiebelDHESensorEntityDescription(
-        key="hot_water_volume_total",
-        translation_key="hot_water_volume_total",
+        key="odb_hot_water_volume",
+        translation_key="odb_hot_water_volume",
         native_unit_of_measurement=UnitOfVolume.CUBIC_METERS,
         device_class=SensorDeviceClass.WATER,
         state_class=SensorStateClass.TOTAL_INCREASING,
         icon="mdi:water",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
-        odb_id=ID_HOT_WATER_VOLUME_TOTAL,
+        odb_id=ID_ODB_HOT_WATER_VOLUME,
         available_without_value=True,
     ),
     StiebelDHESensorEntityDescription(
@@ -286,39 +286,39 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         period="week",
     ),
     StiebelDHESensorEntityDescription(
-        key="heating_energy_total",
-        translation_key="heating_energy_total",
+        key="odb_heating_energy",
+        translation_key="odb_heating_energy",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
         icon="mdi:lightning-bolt",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
-        odb_id=ID_HEATING_ENERGY_TOTAL,
+        odb_id=ID_ODB_HEATING_ENERGY,
         available_without_value=True,
     ),
     StiebelDHESensorEntityDescription(
-        key="possible_energy_saving",
-        translation_key="possible_energy_saving",
+        key="odb_possible_energy_saving",
+        translation_key="odb_possible_energy_saving",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:lightning-bolt-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
-        odb_id=ID_POSSIBLE_ENERGY_SAVING,
+        odb_id=ID_ODB_POSSIBLE_ENERGY_SAVING,
         available_without_value=True,
     ),
     StiebelDHESensorEntityDescription(
-        key="possible_water_saving",
-        translation_key="possible_water_saving",
+        key="odb_actual_water_saving",
+        translation_key="odb_actual_water_saving",
         native_unit_of_measurement=UnitOfVolume.CUBIC_METERS,
         device_class=SensorDeviceClass.WATER,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:water-percent",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
-        odb_id=ID_POSSIBLE_WATER_SAVING,
+        odb_id=ID_ODB_ACTUAL_WATER_SAVING,
         available_without_value=True,
     ),
     StiebelDHESensorEntityDescription(
@@ -706,6 +706,13 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
             self._last_written_monotonic = time.monotonic()
             self._last_written_recorded_attributes = self._recorded_state_attributes()
         elif self._client.online:
+            if self.entity_description.available_without_value:
+                self._update_extra_state_attributes()
+                self._attr_available = True
+                self._last_written_recorded_attributes = (
+                    self._recorded_state_attributes()
+                )
+                self.async_write_ha_state()
             self.hass.async_create_task(
                 self._async_refresh_missing_measurement(),
                 name=f"stiebel_dhe_connect_refresh_{self.entity_description.key}",

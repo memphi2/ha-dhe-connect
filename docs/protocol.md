@@ -130,15 +130,15 @@ Required startup reads seed the interactive entities:
 | `20` | Nominal power |
 | `22` | Scald protection active |
 | `24` | Scald protection temperature limit |
-| `29` | Total heating energy |
-| `30` | Total hot water volume |
+| `29` | ODB heating energy |
+| `30` | ODB hot water volume |
 | `31` | Current bath fill volume |
 | `33` | Water heating enabled state, used by the climate entity |
 | `34` | Device status; raw `2` indicates water is running, raw `3` is exposed through the error status sensor |
 | `61` | Electricity price euros |
 | `62` | Water price euros |
 | `63` | Possible energy saving |
-| `64` | Possible water saving |
+| `64` | Actual water saving |
 | `67` | Protocol version |
 | `69` | CO2 emission |
 | `70` | Electricity price cents |
@@ -230,16 +230,16 @@ Mapped ODB values are converted before publishing to Home Assistant:
 | `16` | Raw percent divided by `100`, multiplied by nominal power |
 | `18` | Raw hours as operating duration |
 | `20` | Accepts `12` to `36`, `120` to `360`, or `1200` to `3600` formats |
-| `29` | Raw `kWh` total heating energy |
-| `30` | Raw value divided by `10` as `m3` total hot water volume |
+| `29` | Raw `kWh` ODB heating energy |
+| `30` | Raw value divided by `10` as `m3` ODB hot water volume |
 | `31` | Raw whole liters as current bath fill volume |
 | `32` | Known wellness normalized time value; cached when valid but not exposed as an entity |
 | `33` | Inverted heating-disabled flag: raw `0` means water heating enabled, raw `1` means off |
 | `34` | Device status enum; raw `1` = normal, raw `2` = water running, raw `3` = service required, raw `4` observed as a water-running transition |
 | `61` and `70` | Combined to the electricity price options value as euros plus cents; euros `0` to `32767`, cents `0` to `99` |
 | `62` and `71` | Combined to the water price options value as euros plus cents; euros `0` to `32767`, cents `0` to `99` |
-| `63` | Raw `kWh` possible energy saving |
-| `64` | Raw value divided by `10` as `m3` possible water saving |
+| `63` | Raw `kWh` ODB possible energy saving |
+| `64` | Raw value divided by `10` as `m3` ODB actual water saving |
 | `67` | Raw protocol version integer |
 | `68` | Known currency mode enum; ignored because currency is handled through `ste.common.currency:value` |
 | `69` | CO2 emission decoded as `raw / 1000` kg/kWh, raw range `0` to `32767` |
@@ -250,7 +250,7 @@ For ODB IDs `29`, `30`, `63` and `64`, a numeric `0` returned as the immediate r
 
 ODB ID `66` is command-only and is not read at startup.
 
-The DHE web interface names the relevant diagnostic ODB entries as `ODB_Heizen_Energie` (WebSocket ID `29`), `ODB_WW_Volumen` (ID `30`), `ODB_St_Geraet_Ba` (ID `34`), `ODB_Gsprt_Energie` (ID `63`) and `ODB_Gsprt_KW_Volumen` (ID `64`). These are distinct from the app-level consumption and saving-monitor commands even when the display names look similar.
+The DHE web interface names the relevant diagnostic ODB entries as `ODB_Heizen_Energie` (WebSocket ID `29`), `ODB_WW_Volumen` (ID `30`), `ODB_St_Geraet_Ba` (ID `34`), `ODB_Gsprt_Energie` (ID `63`) and `ODB_Gsprt_KW_Volumen` (ID `64`). The same web app labels `ste.app.savingMonitor:possible` as potential saving and `ste.app.savingMonitor:real` as actual saving. Live values show ODB ID `63` tracking saving-monitor possible energy and ODB ID `64` tracking saving-monitor real water saving. ODB ID `30` stays labelled as hot-water volume because its web-interface source is `ODB_WW_Volumen`; it can be close to saving-monitor water values but is not the same payload. These ODB values are distinct from the app-level consumption and saving-monitor commands even when current values look similar.
 
 ## Recorder Write Throttling
 

@@ -310,7 +310,7 @@ class TestHaTestSmoke(unittest.TestCase):
                 db_path,
                 state_id=2,
                 metadata_id=2,
-                entity_id="sensor.dhe_connect_heating_energy_total",
+                entity_id="sensor.dhe_connect_odb_heating_energy",
                 state="unavailable",
             )
             _insert_state(
@@ -327,10 +327,10 @@ class TestHaTestSmoke(unittest.TestCase):
                     "stiebel_dhe_connect",
                 ),
                 ha_test_smoke.EntityRegistryEntry(
-                    "sensor.dhe_connect_heating_energy_total",
+                    "sensor.dhe_connect_odb_heating_energy",
                     "sensor",
                     "stiebel_dhe_connect",
-                    translation_key="heating_energy_total",
+                    translation_key="odb_heating_energy",
                 ),
                 ha_test_smoke.EntityRegistryEntry(
                     "text.dhe_connect_memory_4_name",
