@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "description": "Synthetic DHE protocol replay for parser and runtime tests. Values are artificial and contain no live host, credential or device identifiers.",
+  "engineio_open": "0{\"sid\":\"fixture-polling-sid\",\"websocketSid\":\"fixture-websocket-sid\",\"pingInterval\":25000}",
+  "socketio_packets": [
+    {
+      "name": "setpoint",
+      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.common.odb:value\",\"value\":{\"id\":0,\"value\":415,\"isValid\":true}}]"
+    },
+    {
+      "name": "device_status_water_running",
+      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.common.odb:value\",\"value\":{\"id\":34,\"value\":2,\"isValid\":true}}]"
+    },
+    {
+      "name": "radio_station",
+      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.app.radio:station\",\"value\":{\"Id\":4301,\"Name\":\"Example FM\",\"City\":\"Fixture City\"}}]"
+    },
+    {
+      "name": "radio_play",
+      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.app.radio:play\",\"value\":true}]"
+    },
+    {
+      "name": "radio_favorites",
+      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.app.radio:favorites\",\"value\":[{\"Id\":4301,\"Name\":\"Example FM\",\"City\":\"Fixture City\"}]}]"
+    },
+    {
+      "name": "weather_location",
+      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.app.weather:location\",\"value\":{\"Location\":{\"LocationId\":\"fixture-location\",\"Name\":\"Fixture City\",\"Country\":\"Exampleland\",\"CountryId\":999},\"SimpleDays\":[{\"date\":\"2026-05-17\",\"tmax\":21,\"tmin\":12,\"icon_id_day\":2}]}}]"
+    },
+    {
+      "name": "saving_monitor_possible",
+      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.app.savingMonitor:possible\",\"value\":{\"water_l\":42.5,\"energy_Wh\":1200,\"emission_Co2Kg\":0.3,\"value_E\":0.52}}]"
+    }
+  ]
+}

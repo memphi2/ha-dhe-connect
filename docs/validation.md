@@ -41,6 +41,10 @@ physical heater:
 - Command-level temperature-memory generation/readback.
 - Radio favorite add and station selection readback.
 
+Sanitized protocol replay fixtures in `tests/fixtures/` are synthetic JSON
+frames that exercise parser and runtime handling without storing live DHE
+captures, hosts, credentials or device identifiers.
+
 The Home Assistant fixture tests exercise the integration through real HA config
 entry setup paths instead of only isolated stubs:
 
