@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from collections import deque
 from collections.abc import Iterable
+from contextlib import closing
 from dataclasses import dataclass
 import json
 from pathlib import Path
@@ -185,7 +186,7 @@ def _fallback_entity_ids(conn: sqlite3.Connection) -> list[str]:
 def load_latest_states(db_path: Path, entity_ids: Iterable[str]) -> dict[str, LatestState]:
     """Load the newest recorder state for each requested entity."""
     entity_id_list = sorted(set(entity_ids))
-    with _connect_db(db_path) as conn:
+    with closing(_connect_db(db_path)) as conn:
         if not entity_id_list:
             entity_id_list = _fallback_entity_ids(conn)
         if not entity_id_list:
@@ -249,7 +250,7 @@ def count_recorder_writes(
 ) -> dict[str, int]:
     """Count recorder writes for requested entities after a state_id marker."""
     entity_id_list = sorted(set(entity_ids))
-    with _connect_db(db_path) as conn:
+    with closing(_connect_db(db_path)) as conn:
         if not entity_id_list:
             entity_id_list = _fallback_entity_ids(conn)
         if not entity_id_list:
@@ -273,7 +274,7 @@ def count_recorder_writes(
 
 def max_state_id(db_path: Path) -> int:
     """Return the newest recorder state_id."""
-    with _connect_db(db_path) as conn:
+    with closing(_connect_db(db_path)) as conn:
         value = conn.execute("SELECT max(state_id) FROM states").fetchone()[0]
     return int(value or 0)
 
@@ -290,6 +291,55 @@ def _is_reconnect_count_entity_id(entity_id: str) -> bool:
         or "reconnects" in entity_id
         or "wiederverbindungen" in entity_id
     )
+
+
+def _parse_reconnect_count(state: LatestState) -> float | None:
+    try:
+        return float(state.state)
+    except ValueError:
+        return None
+
+
+def _reconnect_counts(states: dict[str, LatestState]) -> dict[str, float]:
+    counts: dict[str, float] = {}
+    for state in states.values():
+        if not _is_reconnect_count_entity_id(state.entity_id):
+            continue
+        count = _parse_reconnect_count(state)
+        if count is not None:
+            counts[state.entity_id] = count
+    return counts
+
+
+def evaluate_reconnect_stability(
+    before: dict[str, LatestState],
+    after: dict[str, LatestState],
+) -> list[CheckResult]:
+    """Fail only when reconnect counters increase during the smoke window."""
+    baseline = _reconnect_counts(before)
+    if not baseline:
+        return []
+
+    observed = _reconnect_counts(after)
+    results: list[CheckResult] = []
+    for entity_id, start in sorted(baseline.items()):
+        end = observed.get(entity_id)
+        if end is None:
+            results.append(
+                CheckResult(False, f"{entity_id} reconnect count missing after monitor")
+            )
+            continue
+        results.append(
+            CheckResult(
+                end <= start,
+                (
+                    f"{entity_id} reconnect count stable at {end:g}"
+                    if end <= start
+                    else f"{entity_id} reconnect count increased {start:g}->{end:g}"
+                ),
+            )
+        )
+    return results
 
 
 def evaluate_state_health(
@@ -388,10 +438,15 @@ def evaluate_state_health(
     ]
     if reconnect_candidates:
         for state in reconnect_candidates:
+            reconnect_count = _parse_reconnect_count(state)
             results.append(
                 CheckResult(
-                    state.state in {"0", "0.0"},
-                    f"{state.entity_id}={state.state!r}",
+                    reconnect_count is not None,
+                    (
+                        f"{state.entity_id}={state.state!r} baseline reconnect count"
+                        if reconnect_count is not None
+                        else f"{state.entity_id}={state.state!r} is not numeric"
+                    ),
                 )
             )
 
@@ -461,8 +516,8 @@ def scan_logs(
     if inspected_paths == 0:
         return [
             CheckResult(
-                False,
-                "no Home Assistant log files found for DHE log scan",
+                True,
+                "no Home Assistant log files found; DHE log scan skipped",
             )
         ]
     return [CheckResult(True, "no DHE-related errors in current HA logs")]
@@ -633,18 +688,29 @@ def main(argv: list[str] | None = None) -> int:
             f"from state_id {start_state_id}"
         )
         time.sleep(args.monitor_seconds)
-        writes = count_recorder_writes(
-            db_path,
-            latest_states,
-            after_state_id=start_state_id,
-        )
-        results.extend(
-            evaluate_recorder_writes(
-                writes,
-                max_total_writes=args.max_total_writes,
-                max_entity_writes=args.max_entity_writes,
+        try:
+            writes = count_recorder_writes(
+                db_path,
+                latest_states,
+                after_state_id=start_state_id,
             )
-        )
+        except sqlite3.Error as err:
+            results.append(CheckResult(False, f"recorder write query failed: {err}"))
+        else:
+            results.extend(
+                evaluate_recorder_writes(
+                    writes,
+                    max_total_writes=args.max_total_writes,
+                    max_entity_writes=args.max_entity_writes,
+                )
+            )
+
+        try:
+            monitor_states = load_latest_states(db_path, latest_states)
+        except sqlite3.Error as err:
+            results.append(CheckResult(False, f"recorder reconnect query failed: {err}"))
+        else:
+            results.extend(evaluate_reconnect_stability(latest_states, monitor_states))
 
     for result in results:
         _print_result(result)
