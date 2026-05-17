@@ -41,6 +41,7 @@ physical heater:
 - Command readback confirmation for setpoint and water-heating writes.
 - Command-level temperature-memory generation/readback.
 - Radio favorite add and station selection readback.
+- Weather favorite add/remove and selected-location readback.
 
 Sanitized protocol replay fixtures in `tests/fixtures/` are synthetic JSON
 frames that exercise parser and runtime handling without storing live DHE
