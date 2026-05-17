@@ -20,6 +20,7 @@ from homeassistant import loader
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 
 
@@ -57,9 +58,15 @@ class _FixtureDHEClient:
         self.last_measurement_attributes: dict[int, dict[str, Any]] = {}
         self.last_radio_state: dict[str, Any] = {}
         self.last_weather_state: dict[str, Any] = {}
+        self.weather_search_results: list[dict[str, Any]] = []
         self.diagnostic_state: dict[str, Any] = {}
         self.start_called = False
         self.stop_called = False
+        self.weather_search_calls: list[tuple[str, int]] = []
+        self.weather_add_calls: list[dict[str, Any]] = []
+        self.weather_toggle_calls: list[dict[str, Any]] = []
+        self.weather_remove_calls: list[dict[str, Any]] = []
+        self.weather_select_calls: list[dict[str, Any] | str] = []
         self._stopped = asyncio.Event()
         self.callbacks: dict[str, list[Callable[..., None]]] = {
             "availability": [],
@@ -83,6 +90,52 @@ class _FixtureDHEClient:
         """Stop the fake background session."""
         self.stop_called = True
         self._stopped.set()
+
+    async def search_weather_locations(
+        self,
+        name: str,
+        country_id: int,
+    ) -> list[dict[str, Any]]:
+        """Record a weather search and return configured fake results."""
+        self.weather_search_calls.append((name, int(country_id)))
+        self.last_weather_state["forecast_results"] = list(self.weather_search_results)
+        self.emit_weather(self.last_weather_state)
+        return list(self.weather_search_results)
+
+    async def add_weather_favorite(self, location: dict[str, Any]) -> bool:
+        """Record a weather favorite add call."""
+        self.weather_add_calls.append(dict(location))
+        return True
+
+    async def toggle_weather_favorite(self, location: dict[str, Any]) -> bool:
+        """Record a weather favorite toggle call."""
+        self.weather_toggle_calls.append(dict(location))
+        return True
+
+    async def remove_weather_favorite(self, location: dict[str, Any]) -> bool:
+        """Record a weather favorite remove call."""
+        self.weather_remove_calls.append(dict(location))
+        return True
+
+    async def select_weather_location(self, location: dict[str, Any] | str) -> bool:
+        """Record a weather location selection call."""
+        if isinstance(location, dict):
+            self.weather_select_calls.append(dict(location))
+        else:
+            self.weather_select_calls.append(str(location))
+        return True
+
+    def emit_availability(self, available: bool) -> None:
+        """Emit availability to registered entities."""
+        self.available = available
+        for callback_fn in list(self.callbacks["availability"]):
+            callback_fn(available)
+
+    def emit_weather(self, state: dict[str, Any]) -> None:
+        """Emit weather state to registered entities."""
+        self.last_weather_state = dict(state)
+        for callback_fn in list(self.callbacks["weather"]):
+            callback_fn(self.last_weather_state)
 
     @callback
     def add_availability_callback(self, callback_fn: Callable[[bool], None]):
@@ -232,6 +285,180 @@ async def test_multiple_entries_keep_services_and_unique_ids_separate() -> None:
         await hass.async_block_till_done()
         assert client_two.stop_called
         assert not hass.services.has_service(DOMAIN, "search_weather_location")
+
+
+async def test_services_route_to_requested_entry_with_real_hass_fixture() -> None:
+    """Call registered services through HA and verify entry_id routing."""
+    _clear_loaded_integration_modules()
+    integration = importlib.import_module(f"custom_components.{DOMAIN}")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        client_one = _FixtureDHEClient(host="127.0.0.1", port=8443)
+        client_two = _FixtureDHEClient(host="127.0.0.2", port=8444)
+        client_one.weather_search_results = [
+            {"LocationId": "one", "Name": "One", "Country": "Test"}
+        ]
+        client_two.weather_search_results = [
+            {"LocationId": "two", "Name": "Two", "Country": "Test"}
+        ]
+        entry_one = _build_mock_entry(
+            host=client_one.host,
+            port=client_one.port,
+            name="Fixture DHE One",
+            unique_id="fixture-service-one",
+        )
+        entry_two = _build_mock_entry(
+            host=client_two.host,
+            port=client_two.port,
+            name="Fixture DHE Two",
+            unique_id="fixture-service-two",
+        )
+        entry_one.add_to_hass(hass)
+        entry_two.add_to_hass(hass)
+
+        with patch.object(
+            integration,
+            "DHEClient",
+            side_effect=[client_one, client_two],
+        ):
+            assert await hass.config_entries.async_setup(entry_one.entry_id)
+            if entry_two.state is ConfigEntryState.NOT_LOADED:
+                assert await hass.config_entries.async_setup(entry_two.entry_id)
+            await hass.async_block_till_done()
+
+        await hass.services.async_call(
+            DOMAIN,
+            "search_weather_location",
+            {
+                "entry_id": entry_two.entry_id,
+                "name": "Berlin",
+                "country_id": 34,
+            },
+            blocking=True,
+        )
+        await hass.services.async_call(
+            DOMAIN,
+            "add_weather_favorite",
+            {
+                "entry_id": entry_two.entry_id,
+                "location_id": "two",
+            },
+            blocking=True,
+        )
+
+        assert client_one.weather_search_calls == []
+        assert client_one.weather_add_calls == []
+        assert client_two.weather_search_calls == [("Berlin", 34)]
+        assert client_two.weather_add_calls == [
+            {"LocationId": "two", "Name": "Two", "Country": "Test"}
+        ]
+
+        with pytest.raises(HomeAssistantError, match="Multiple .* entry_id"):
+            await hass.services.async_call(
+                DOMAIN,
+                "search_weather_location",
+                {
+                    "name": "Hamburg",
+                    "country_id": 34,
+                },
+                blocking=True,
+            )
+
+        assert await hass.config_entries.async_unload(entry_one.entry_id)
+        assert await hass.config_entries.async_unload(entry_two.entry_id)
+        await hass.async_block_till_done()
+
+
+async def test_entity_registry_ids_survive_reload_with_real_hass_fixture() -> None:
+    """Reload an entry and verify HA keeps the same entity registry IDs."""
+    _clear_loaded_integration_modules()
+    integration = importlib.import_module(f"custom_components.{DOMAIN}")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        first_client = _FixtureDHEClient()
+        second_client = _FixtureDHEClient(last_setpoint=41.0)
+        entry = _build_mock_entry(
+            host=first_client.host,
+            port=first_client.port,
+            name="Stable Fixture DHE",
+            unique_id="stable-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+
+        with patch.object(
+            integration,
+            "DHEClient",
+            side_effect=[first_client, second_client],
+        ):
+            assert await hass.config_entries.async_setup(entry.entry_id)
+            await hass.async_block_till_done()
+            registry = er.async_get(hass)
+            before = {
+                entity.unique_id: entity.entity_id
+                for entity in er.async_entries_for_config_entry(
+                    registry,
+                    entry.entry_id,
+                )
+            }
+
+            assert await hass.config_entries.async_reload(entry.entry_id)
+            await hass.async_block_till_done()
+            after = {
+                entity.unique_id: entity.entity_id
+                for entity in er.async_entries_for_config_entry(
+                    registry,
+                    entry.entry_id,
+                )
+            }
+
+        assert before
+        assert before == after
+        assert first_client.stop_called
+        assert second_client.start_called
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
+
+async def test_availability_updates_climate_state_with_real_hass_fixture() -> None:
+    """Verify runtime availability callbacks update HA entity state."""
+    _clear_loaded_integration_modules()
+    integration = importlib.import_module(f"custom_components.{DOMAIN}")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        client = _FixtureDHEClient()
+        entry = _build_mock_entry(
+            host=client.host,
+            port=client.port,
+            name="Availability Fixture DHE",
+            unique_id="availability-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+
+        with patch.object(integration, "DHEClient", return_value=client):
+            assert await hass.config_entries.async_setup(entry.entry_id)
+            await hass.async_block_till_done()
+
+        entity_id = "climate.availability_fixture_dhe_water_heating"
+        state = hass.states.get(entity_id)
+        assert state is not None
+        assert state.state != "unavailable"
+
+        client.emit_availability(False)
+        await hass.async_block_till_done()
+        state = hass.states.get(entity_id)
+        assert state is not None
+        assert state.state == "unavailable"
+
+        client.emit_availability(True)
+        await hass.async_block_till_done()
+        state = hass.states.get(entity_id)
+        assert state is not None
+        assert state.state != "unavailable"
+        assert state.attributes["connection_state"] == "connected"
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
 
 
 def _clear_loaded_integration_modules() -> None:
