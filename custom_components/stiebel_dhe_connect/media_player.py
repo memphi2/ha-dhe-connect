@@ -77,6 +77,7 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
         | MediaPlayerEntityFeature.PREVIOUS_TRACK
     )
     _attr_translation_key = "radio"
+    _unrecorded_attributes = frozenset({"favorites"})
 
     def __init__(self, entry_id: str, name: str, client: DHEClient) -> None:
         """Initialize the radio media player."""
@@ -246,8 +247,18 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
             getattr(self, "_attr_media_title", None),
             getattr(self, "_attr_media_artist", None),
             getattr(self, "_radio_off_requested", False),
-            dict(getattr(self, "_attr_extra_state_attributes", None) or {}),
+            self._recorded_radio_attributes(),
         )
+
+    def _recorded_radio_attributes(self) -> dict[str, Any]:
+        """Return radio attributes that should participate in recorder writes."""
+        return {
+            key: value
+            for key, value in (
+                getattr(self, "_attr_extra_state_attributes", None) or {}
+            ).items()
+            if key not in self._unrecorded_attributes
+        }
 
     def _apply_radio_state(self, state: dict[str, Any]) -> None:
         if state:

@@ -256,6 +256,36 @@ class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(writes, [media_player.STATE_PAUSED, media_player.STATE_PAUSED])
         self.assertFalse(player._attr_available)
 
+    def test_radio_write_signature_ignores_unrecorded_favorite_payload(self) -> None:
+        media_player = _load_media_player_module()
+        player = media_player.StiebelDHERadioMediaPlayer.__new__(
+            media_player.StiebelDHERadioMediaPlayer
+        )
+        player._attr_available = True
+        player._attr_state = media_player.STATE_PLAYING
+        player._attr_volume_level = 0.5
+        player._attr_source = "Radio Test"
+        player._attr_source_list = ["Radio Test"]
+        player._attr_media_content_id = "1"
+        player._attr_media_content_type = "music"
+        player._attr_media_image_url = None
+        player._attr_media_title = "Title"
+        player._attr_media_artist = "Artist"
+        player._radio_off_requested = False
+        player._attr_extra_state_attributes = {
+            "radio_path": "ste.app.radio",
+            "favorite_count": 1,
+            "favorites": [{"id": 1, "name": "Radio Test"}],
+        }
+
+        first_signature = player._radio_write_signature()
+        player._attr_extra_state_attributes["favorites"] = [
+            {"id": 1, "name": "Radio Test", "logo": "changed"}
+        ]
+
+        self.assertIn("favorites", player._unrecorded_attributes)
+        self.assertEqual(first_signature, player._radio_write_signature())
+
 
 if __name__ == "__main__":
     unittest.main()
