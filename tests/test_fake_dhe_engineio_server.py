@@ -5,7 +5,11 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+import functools
 import json
+from pathlib import Path
+import sys
+import tempfile
 from typing import Any
 import unittest
 from unittest.mock import Mock
@@ -25,6 +29,11 @@ except ModuleNotFoundError:
         _load_component_module,
         _load_protocol,
     )
+
+
+STORED_TOKEN = "stored-token-fixture-000001"
+PAIRING_TOKEN = "pairing-token-fixture-0001"
+PACKAGE_NAME = "custom_components.stiebel_dhe_connect"
 
 
 def _decode_length_prefixed_packets(body: str) -> list[str]:
@@ -50,8 +59,9 @@ def _decode_length_prefixed_packets(body: str) -> list[str]:
 class FakeDHEEngineIOServer:
     """Minimal Engine.IO v3 server for transport-level client tests."""
 
-    def __init__(self, namespace: str) -> None:
+    def __init__(self, namespace: str, *, websocket_enabled: bool = True) -> None:
         self.namespace = namespace
+        self.websocket_enabled = websocket_enabled
         self.host = "127.0.0.1"
         self.port = 0
         self.polling_sid = "polling-sid"
@@ -93,7 +103,28 @@ class FakeDHEEngineIOServer:
 
     def queue_event(self, event: str, data: Any) -> None:
         payload = json.dumps([event, data], separators=(",", ":"))
-        self._poll_packets.put_nowait(f"42/{self.namespace},{payload}")
+        self.queue_packet(f"42/{self.namespace},{payload}")
+
+    def queue_packet(self, packet: str) -> None:
+        self._poll_packets.put_nowait(packet)
+
+    def queue_authentication(self) -> None:
+        self.queue_event("authenticated", {"ok": True})
+
+    def queue_pairing_request(self) -> None:
+        self.queue_event("pairing_request", {"requested": True})
+
+    def queue_pairing_result(self, accepted: bool) -> None:
+        self.queue_event(
+            "pairing_result",
+            {"result": "accepted" if accepted else "rejected"},
+        )
+
+    def queue_token_response(self, token: str) -> None:
+        self.queue_event("token_response", token)
+
+    def queue_socket_close(self) -> None:
+        self.queue_packet(f"41/{self.namespace}")
 
     async def wait_for_posted_packet(
         self,
@@ -188,6 +219,8 @@ class FakeDHEEngineIOServer:
         return web.Response(text="ok", content_type="text/plain")
 
     async def _handle_websocket(self, request: web.Request) -> web.WebSocketResponse:
+        if not self.websocket_enabled:
+            raise web.HTTPServiceUnavailable(text="websocket disabled")
         websocket = web.WebSocketResponse(autoping=True)
         await websocket.prepare(request)
         async for message in websocket:
@@ -240,6 +273,12 @@ async def _queue_message_and_handle(
     """Queue one fake DHE message and let the client consume it."""
     server.queue_event("message", {"command": command, "value": value})
     await _handle_next_polling_event(client, ctx)
+
+
+def _mock_pairing_notifications() -> None:
+    pairing_module = sys.modules[f"{PACKAGE_NAME}.client_pairing"]
+    pairing_module.persistent_notification.async_create = Mock()
+    pairing_module.persistent_notification.async_dismiss = Mock()
 
 
 class TestFakeDHEEngineIOServer(unittest.IsolatedAsyncioTestCase):
@@ -318,6 +357,232 @@ class TestFakeDHEEngineIOServer(unittest.IsolatedAsyncioTestCase):
         self.assertIn("2probe", server.websocket_packets)
         self.assertIn("5", server.websocket_packets)
         self.assertIn(f"41/{protocol_module.NS}", server.websocket_packets)
+
+    async def test_open_authenticated_session_uses_stored_token_without_pairing(
+        self,
+    ) -> None:
+        client_module = _load_client()
+        protocol_module = _load_protocol()
+        DHEClient = client_module.DHEClient
+
+        with tempfile.TemporaryDirectory() as config_root:
+            token_file = Path(config_root) / ".storage/test-token.txt"
+            token_file.parent.mkdir(parents=True)
+            token_file.write_text(STORED_TOKEN, encoding="utf-8")
+
+            async with FakeDHEEngineIOServer(protocol_module.NS) as server:
+                async with aiohttp.ClientSession() as session:
+                    client_module.async_get_clientsession = Mock(return_value=session)
+                    client = DHEClient(
+                        _FakeHass(asyncio.get_running_loop(), config_root=config_root),
+                        server.host,
+                        server.port,
+                        ".storage/test-token.txt",
+                        "DHE",
+                    )
+                    server.queue_authentication()
+
+                    ctx = await DHEClient._open_authenticated_session(
+                        client,
+                        token_request_timeout_seconds=1.0,
+                    )
+                    await DHEClient._close_session(client, ctx)
+
+        self.assertFalse(client._pairing_active)
+        self.assertFalse(client._require_pairing_confirmation)
+        self.assertTrue(
+            any(
+                '"token":"stored-token-fixture-000001"' in packet
+                for packet in server.posted_packets
+            ),
+            server.posted_packets,
+        )
+        self.assertFalse(
+            any(
+                '"token":""' in packet and '["token_request"' in packet
+                for packet in server.posted_packets
+            ),
+            server.posted_packets,
+        )
+
+    async def test_validate_setup_authentication_accepts_pairing_result_flow(
+        self,
+    ) -> None:
+        client_module = _load_client()
+        protocol_module = _load_protocol()
+        _mock_pairing_notifications()
+        DHEClient = client_module.DHEClient
+
+        with tempfile.TemporaryDirectory() as config_root:
+            async with FakeDHEEngineIOServer(protocol_module.NS) as server:
+                async with aiohttp.ClientSession() as session:
+                    client_module.async_get_clientsession = Mock(return_value=session)
+                    client = DHEClient(
+                        _FakeHass(asyncio.get_running_loop(), config_root=config_root),
+                        server.host,
+                        server.port,
+                        ".storage/test-token.txt",
+                        "DHE",
+                    )
+                    server.queue_pairing_request()
+                    server.queue_pairing_result(True)
+                    server.queue_token_response(PAIRING_TOKEN)
+                    server.queue_authentication()
+
+                    await DHEClient.validate_setup_authentication(
+                        client,
+                        timeout_seconds=2.0,
+                    )
+
+            token_file = Path(config_root) / ".storage/test-token.txt"
+            saved_token = token_file.read_text(encoding="utf-8")
+
+        self.assertEqual(saved_token, PAIRING_TOKEN)
+        self.assertFalse(client._pairing_active)
+        self.assertFalse(client._require_pairing_confirmation)
+        self.assertFalse(client._manual_pairing_requested)
+        self.assertTrue(
+            any(
+                '"token":""' in packet and '["token_request"' in packet
+                for packet in server.posted_packets
+            ),
+            server.posted_packets,
+        )
+        self.assertTrue(
+            any(
+                '"token":"pairing-token-fixture-0001"' in packet
+                and '["token_request"' in packet
+                for packet in server.posted_packets
+            ),
+            server.posted_packets,
+        )
+
+    async def test_manual_pairing_waits_for_result_when_token_arrives_first(
+        self,
+    ) -> None:
+        client_module = _load_client()
+        protocol_module = _load_protocol()
+        _mock_pairing_notifications()
+        DHEClient = client_module.DHEClient
+
+        with tempfile.TemporaryDirectory() as config_root:
+            async with FakeDHEEngineIOServer(
+                protocol_module.NS,
+                websocket_enabled=False,
+            ) as server:
+                async with aiohttp.ClientSession() as session:
+                    client_module.async_get_clientsession = Mock(return_value=session)
+                    client = DHEClient(
+                        _FakeHass(asyncio.get_running_loop(), config_root=config_root),
+                        server.host,
+                        server.port,
+                        ".storage/test-token.txt",
+                        "DHE",
+                    )
+                    client._begin_manual_pairing(
+                        "setup_requested",
+                        "waiting for confirmation",
+                        notify=False,
+                    )
+                    server.queue_token_response(PAIRING_TOKEN)
+                    server.queue_pairing_result(True)
+
+                    token = await DHEClient._request_initial_token(
+                        client,
+                        timeout_seconds=2.0,
+                    )
+
+            token_file = Path(config_root) / ".storage/test-token.txt"
+            saved_token = token_file.read_text(encoding="utf-8")
+
+        self.assertEqual(token, PAIRING_TOKEN)
+        self.assertEqual(saved_token, PAIRING_TOKEN)
+        self.assertTrue(client._pairing_confirmed_success)
+        self.assertTrue(
+            any(
+                '"token":"pairing-token-fixture-0001"' in packet
+                and '["authenticate"' in packet
+                for packet in server.posted_packets
+            ),
+            server.posted_packets,
+        )
+
+    async def test_pairing_rejection_from_fake_dhe_fails_before_saving_token(
+        self,
+    ) -> None:
+        client_module = _load_client()
+        protocol_module = _load_protocol()
+        _mock_pairing_notifications()
+        DHEClient = client_module.DHEClient
+        DHEError = client_module.DHEError
+
+        with tempfile.TemporaryDirectory() as config_root:
+            async with FakeDHEEngineIOServer(protocol_module.NS) as server:
+                async with aiohttp.ClientSession() as session:
+                    client_module.async_get_clientsession = Mock(return_value=session)
+                    client = DHEClient(
+                        _FakeHass(asyncio.get_running_loop(), config_root=config_root),
+                        server.host,
+                        server.port,
+                        ".storage/test-token.txt",
+                        "DHE",
+                    )
+                    client._begin_manual_pairing(
+                        "setup_requested",
+                        "waiting for confirmation",
+                        notify=False,
+                    )
+                    server.queue_pairing_request()
+                    server.queue_pairing_result(False)
+                    server.queue_token_response(PAIRING_TOKEN)
+
+                    with self.assertLogs(
+                        f"{PACKAGE_NAME}.client_pairing",
+                        level="WARNING",
+                    ):
+                        with self.assertRaisesRegex(
+                            DHEError,
+                            "Pairing confirmation rejected on DHE",
+                        ):
+                            await DHEClient._request_initial_token(
+                                client,
+                                timeout_seconds=1.0,
+                            )
+
+            token_file = Path(config_root) / ".storage/test-token.txt"
+
+        self.assertTrue(client._pairing_failed_explicit)
+        self.assertFalse(token_file.exists())
+
+    async def test_runtime_closed_packet_marks_session_reconnecting(self) -> None:
+        client_module = _load_client()
+        protocol_module = _load_protocol()
+        DHEClient = client_module.DHEClient
+        client_types_module = sys.modules[f"{PACKAGE_NAME}.client_types"]
+        DHESessionClosed = client_types_module.DHESessionClosed
+
+        async with FakeDHEEngineIOServer(protocol_module.NS) as server:
+            async with _connected_fake_client(client_module, server) as (
+                DHEClient,
+                client,
+                ctx,
+            ):
+                server.queue_socket_close()
+                events = await DHEClient._read_polling_events_once(client, ctx)
+
+                self.assertEqual(len(events), 1)
+                self.assertEqual(events[0].name, "__closed")
+                with self.assertRaises(DHESessionClosed):
+                    await DHEClient._handle_runtime_event(client, events[0])
+
+        self.assertEqual(
+            client.diagnostic_state["connection_state"],
+            "reconnecting",
+        )
+        self.assertEqual(
+            client.diagnostic_state["last_reconnect_reason"],
+            "DHE closed Socket.IO session",
+        )
 
     async def test_set_water_heating_enabled_confirms_via_fake_dhe_readback(self) -> None:
         client_module = _load_client()
@@ -636,18 +901,34 @@ class TestFakeDHEEngineIOServer(unittest.IsolatedAsyncioTestCase):
 
 
 class _FakeConfig:
+    language = "en"
+
+    def __init__(self, root: str = "/tmp") -> None:
+        self._root = Path(root)
+
     def path(self, value: str) -> str:
-        return f"/tmp/{value}"
+        path = Path(value)
+        if path.is_absolute():
+            return str(path)
+        return str(self._root / path)
 
 
 class _FakeHass:
-    config = _FakeConfig()
-
-    def __init__(self, loop: asyncio.AbstractEventLoop) -> None:
+    def __init__(
+        self,
+        loop: asyncio.AbstractEventLoop,
+        *,
+        config_root: str = "/tmp",
+    ) -> None:
         self.loop = loop
+        self.config = _FakeConfig(config_root)
 
     def async_create_task(self, coro: Any, *, name: str | None = None) -> asyncio.Task[Any]:
         return asyncio.create_task(coro, name=name)
+
+    async def async_add_executor_job(self, target: Any, *args: Any) -> Any:
+        call = functools.partial(target, *args)
+        return await self.loop.run_in_executor(None, call)
 
 
 async def _handle_next_polling_event(client: Any, ctx: Any) -> None:
