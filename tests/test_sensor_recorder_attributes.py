@@ -171,8 +171,8 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         sensor_module = _load_sensor_module()
         self.assertIn("water_flow", sensor_module.DEFAULT_ENABLED_SENSOR_KEYS)
         self.assertIn("power", sensor_module.DEFAULT_ENABLED_SENSOR_KEYS)
-        self.assertEqual(sensor_module.SENSOR_WRITE_FILTERS["water_flow"], (1.0, 45.0))
-        self.assertEqual(sensor_module.SENSOR_WRITE_FILTERS["power"], (1.5, 45.0))
+        self.assertEqual(sensor_module.SENSOR_WRITE_FILTERS["water_flow"], (0.2, 45.0))
+        self.assertEqual(sensor_module.SENSOR_WRITE_FILTERS["power"], (0.2, 45.0))
         self.assertEqual(
             sensor_module.SENSOR_WRITE_FILTERS["water_consumption_total"],
             (0.001, 60.0),
@@ -192,7 +192,15 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         self.assertIn("chart", sensor_module.StiebelDHESensor._unrecorded_attributes)
         self.assertIn("possible", sensor_module.StiebelDHESensor._unrecorded_attributes)
 
-    def test_flow_filter_blocks_small_jitter_but_allows_large_delta_or_interval(self) -> None:
+    def test_live_timer_and_fill_sensors_are_not_write_filtered(self) -> None:
+        sensor_module = _load_sensor_module()
+
+        self.assertNotIn("bath_fill_remaining_volume", sensor_module.SENSOR_WRITE_FILTERS)
+        self.assertNotIn("bath_fill_current_volume", sensor_module.SENSOR_WRITE_FILTERS)
+        self.assertNotIn("brush_timer_remaining", sensor_module.SENSOR_WRITE_FILTERS)
+        self.assertNotIn("shower_timer_remaining", sensor_module.SENSOR_WRITE_FILTERS)
+
+    def test_flow_filter_blocks_tiny_jitter_but_allows_visible_delta_or_interval(self) -> None:
         sensor_module = _load_sensor_module()
         description = next(
             item for item in sensor_module.SENSOR_DESCRIPTIONS if item.key == "water_flow"
@@ -212,12 +220,122 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         sensor._last_written_native_value = 5.0
         sensor._last_written_monotonic = time.monotonic()
 
-        self.assertFalse(sensor._should_write_measurement_state(5.4))
-        self.assertTrue(sensor._should_write_measurement_state(6.1))
+        self.assertFalse(sensor._should_write_measurement_state(5.19))
+        self.assertTrue(sensor._should_write_measurement_state(5.21))
 
         sensor._last_written_native_value = 5.0
         sensor._last_written_monotonic = -1_000_000_000.0
-        self.assertTrue(sensor._should_write_measurement_state(5.4))
+        self.assertTrue(sensor._should_write_measurement_state(5.19))
+
+    def test_numeric_write_filters_always_publish_zero_boundary_crossings(self) -> None:
+        sensor_module = _load_sensor_module()
+        descriptions = {item.key: item for item in sensor_module.SENSOR_DESCRIPTIONS}
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+
+        for key, (min_write_delta, _max_interval) in sensor_module.SENSOR_WRITE_FILTERS.items():
+            with self.subTest(key=key):
+                description = descriptions[key]
+                sensor = sensor_module.StiebelDHESensor(
+                    entry_id="test-entry",
+                    name="Test DHE",
+                    client=_FakeClient(),
+                    description=description,
+                )
+                small_value = min_write_delta / 2
+                sensor._last_written_monotonic = time.monotonic()
+
+                sensor._last_written_native_value = 0.0
+                self.assertTrue(sensor._should_write_measurement_state(small_value))
+
+                sensor._last_written_native_value = small_value
+                self.assertTrue(sensor._should_write_measurement_state(0.0))
+
+                sensor._last_written_native_value = small_value
+                self.assertFalse(
+                    sensor._should_write_measurement_state(
+                        small_value + min_write_delta / 4,
+                    )
+                )
+
+    def test_power_and_flow_write_runtime_zero_transitions_immediately(self) -> None:
+        sensor_module = _load_sensor_module()
+        protocol_module = _load_component_module("protocol")
+        descriptions = {item.key: item for item in sensor_module.SENSOR_DESCRIPTIONS}
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+            available = True
+            online = True
+
+            def __init__(self) -> None:
+                self.last_measurement_attributes: dict[int, dict[str, object]] = {}
+
+        client = _FakeClient()
+        power_sensor = sensor_module.StiebelDHESensor(
+            entry_id="test-entry",
+            name="Test DHE",
+            client=client,
+            description=descriptions["power"],
+        )
+        flow_sensor = sensor_module.StiebelDHESensor(
+            entry_id="test-entry",
+            name="Test DHE",
+            client=client,
+            description=descriptions["water_flow"],
+        )
+        power_writes: list[float | str | None] = []
+        flow_writes: list[float | str | None] = []
+        power_sensor.async_write_ha_state = lambda: power_writes.append(
+            power_sensor._attr_native_value
+        )
+        flow_sensor.async_write_ha_state = lambda: flow_writes.append(
+            flow_sensor._attr_native_value
+        )
+        power_sensor._last_written_native_value = 1.2
+        power_sensor._last_written_monotonic = time.monotonic()
+        power_sensor._last_written_recorded_attributes = (
+            power_sensor._recorded_state_attributes()
+        )
+        flow_sensor._last_written_native_value = 0.0
+        flow_sensor._last_written_monotonic = time.monotonic()
+        flow_sensor._last_written_recorded_attributes = (
+            flow_sensor._recorded_state_attributes()
+        )
+
+        power_sensor._handle_measurement_update(protocol_module.ID_POWER_PERCENT, 0.0)
+        flow_sensor._handle_measurement_update(protocol_module.ID_WATER_FLOW, 0.8)
+
+        self.assertEqual(power_writes, [0.0])
+        self.assertEqual(flow_writes, [0.8])
+
+    def test_power_and_flow_write_visible_nonzero_delta(self) -> None:
+        sensor_module = _load_sensor_module()
+        descriptions = {item.key: item for item in sensor_module.SENSOR_DESCRIPTIONS}
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+
+        for key in ("power", "water_flow"):
+            with self.subTest(key=key):
+                sensor = sensor_module.StiebelDHESensor(
+                    entry_id="test-entry",
+                    name="Test DHE",
+                    client=_FakeClient(),
+                    description=descriptions[key],
+                )
+                sensor._last_written_native_value = 1.2
+                sensor._last_written_monotonic = time.monotonic()
+
+                self.assertFalse(sensor._should_write_measurement_state(1.39))
+                self.assertTrue(sensor._should_write_measurement_state(1.41))
 
     def test_sensor_refresh_command_uses_timer_or_source_command(self) -> None:
         sensor_module = _load_sensor_module()

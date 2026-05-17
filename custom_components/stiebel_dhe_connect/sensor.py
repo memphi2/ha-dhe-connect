@@ -119,13 +119,16 @@ DEFAULT_ENABLED_SENSOR_KEYS = {
     "energy_consumption_total",
 }
 
-# Reduce write frequency for high-churn live telemetry values. The tuple is
-# (minimum absolute numeric delta, maximum seconds between writes).
+# Reduce write frequency for high-churn telemetry values. The tuple is
+# (minimum absolute numeric delta, maximum seconds between writes). Live
+# flow/power values intentionally keep a small threshold; timer remaining values
+# and bath-fill volumes are not listed here because every runtime change should
+# be visible in Home Assistant.
 SENSOR_WRITE_FILTERS: dict[str, tuple[float, float]] = {
     "inlet_temperature": (0.5, 120.0),
     "outlet_temperature": (0.5, 120.0),
-    "water_flow": (1.0, 45.0),
-    "power": (1.5, 45.0),
+    "water_flow": (0.2, 45.0),
+    "power": (0.2, 45.0),
     "water_consumption_week": (1.0, 60.0),
     "water_consumption_year": (0.001, 60.0),
     "water_consumption_total": (0.001, 60.0),
@@ -846,6 +849,8 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
         new_number = coerce_float(new_value)
         if previous_number is None or new_number is None:
             return True
+        if _crosses_zero_boundary(previous_number, new_number):
+            return True
         if abs(new_number - previous_number) >= min_write_delta:
             return True
 
@@ -853,3 +858,8 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
         if last_written is None:
             return True
         return (time.monotonic() - last_written) >= max_write_interval_seconds
+
+
+def _crosses_zero_boundary(previous_number: float, new_number: float) -> bool:
+    """Return true when a filtered sensor changes between idle zero and active."""
+    return (previous_number == 0.0) != (new_number == 0.0)

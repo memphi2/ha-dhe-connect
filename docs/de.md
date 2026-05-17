@@ -121,10 +121,34 @@ Home-Assistant-Datenbank nicht unnoetig waechst. Besonders wichtig:
 
 - Grosse Radio-, Wetter- und Suchlisten werden nicht dauerhaft als
   recorder-relevante Attribute geschrieben.
-- Schnelle Runtime-Werte werden nur geschrieben, wenn sich relevante Werte
-  wirklich aendern oder ein echter Runtime-Update notwendig ist.
+- Aktueller Wasserfluss und aktuelle Leistung bleiben live sichtbar: Aenderungen
+  ab `0.2` sowie Wechsel zwischen `0` und einem aktiven Wert werden geschrieben.
+- Timer-Restzeiten und Wannenfuellmengen werden nicht gedrosselt, damit sie in
+  der UI live bleiben.
 - Bei Wasserlauf, Duschtimer- oder letzter-Nutzung-Fenstern kann es erwartbar
   mehr Recorder-Aktivitaet geben.
+
+Home Assistant schreibt normale State-Aenderungen in den Recorder, solange die
+betroffenen Entitaeten dort nicht ausgeschlossen sind. Live-Anzeige ohne
+Recorder-Historie muss deshalb ueber die Home-Assistant-Recorder-Konfiguration
+mit konkreten Entity-IDs geloest werden. Das gilt auch fuer optionale
+Timer-Restzeiten und Wannenfuellmengen, wenn sie zwar live sichtbar sein, aber
+nicht dauerhaft in der Datenbank landen sollen.
+
+Beispiel, angepasst auf die tatsaechlichen Entity-IDs in der eigenen
+Home-Assistant-Installation:
+
+```yaml
+recorder:
+  exclude:
+    entities:
+      - sensor.dhe_connect_water_flow
+      - sensor.dhe_connect_power
+      - sensor.dhe_connect_shower_timer_remaining
+      - sensor.dhe_connect_brush_timer_remaining
+      - sensor.dhe_connect_bath_fill_remaining_volume
+      - sensor.dhe_connect_bath_fill_current_volume
+```
 
 Wenn die Datenbank trotzdem stark waechst, zuerst die Diagnose-Entitaeten,
 Reconnect-Zaehler und Home-Assistant-Logs pruefen. Details stehen in
