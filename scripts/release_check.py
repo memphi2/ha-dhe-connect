@@ -341,7 +341,7 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser.add_argument(
         "--run-local-checks",
         action="store_true",
-        help="Run pytest, integration checks and Ruff in addition to static checks.",
+        help="Run pytest, integration, type and Ruff checks in addition to static checks.",
     )
     parser.add_argument(
         "--ha-config",
@@ -386,6 +386,7 @@ def collect_results(args: argparse.Namespace, runner: Runner) -> list[CheckResul
             (
                 check_command([sys.executable, "-m", "pytest", "-q"], runner),
                 check_command([sys.executable, "scripts/check_integration.py"], runner),
+                check_command([sys.executable, "scripts/check_typing.py"], runner),
                 check_command(
                     [
                         sys.executable,

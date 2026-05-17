@@ -50,3 +50,9 @@ jobs:
 
       - name: Run integration checks
         run: python scripts/check_integration.py
+
+      - name: Install type checker
+        run: python -m pip install "mypy>=1.13,<2"
+
+      - name: Run type checks
+        run: python scripts/check_typing.py

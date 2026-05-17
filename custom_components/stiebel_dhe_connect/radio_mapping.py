@@ -180,6 +180,8 @@ def station_id(station: Any) -> int | None:
     if not isinstance(station, dict):
         return None
     current_station_id = station.get("Id", station.get("id"))
+    if current_station_id is None:
+        return None
     try:
         return int(current_station_id)
     except (TypeError, ValueError):

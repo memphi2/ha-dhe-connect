@@ -1,0 +1,16 @@
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+follow_imports = "silent"
+files = [
+    "custom_components/stiebel_dhe_connect/client_diagnostics.py",
+    "custom_components/stiebel_dhe_connect/client_errors.py",
+    "custom_components/stiebel_dhe_connect/client_mapping.py",
+    "custom_components/stiebel_dhe_connect/client_value_helpers.py",
+    "custom_components/stiebel_dhe_connect/connection_helpers.py",
+    "custom_components/stiebel_dhe_connect/engineio_helpers.py",
+    "custom_components/stiebel_dhe_connect/entity_state_helpers.py",
+    "custom_components/stiebel_dhe_connect/pairing_helpers.py",
+    "custom_components/stiebel_dhe_connect/radio_mapping.py",
+    "custom_components/stiebel_dhe_connect/weather_mapping.py",
+]

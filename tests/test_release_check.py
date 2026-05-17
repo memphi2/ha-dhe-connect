@@ -6,6 +6,7 @@ from contextlib import redirect_stdout
 from io import StringIO
 import json
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -370,6 +371,37 @@ class TestReleaseCheck(unittest.TestCase):
 
         failures = [result.message for result in results if not result.ok]
         self.assertIn("--ha-username is required for service smoke", failures)
+
+    def test_local_checks_include_type_gate(self) -> None:
+        args = release_check._parse_args(
+            [
+                "--allow-dirty",
+                "--expect-tag",
+                "skip",
+                "--expect-github-release",
+                "skip",
+                "--run-local-checks",
+            ]
+        )
+        commands: list[tuple[str, ...]] = []
+
+        def _runner(command):
+            commands.append(tuple(command))
+            return release_check.CommandResult(
+                args=tuple(command),
+                returncode=0,
+                stdout="",
+                stderr="",
+            )
+
+        with (
+            patch("scripts.release_check.load_manifest_version", return_value="1.3.2"),
+            patch("scripts.release_check.check_version_files", return_value=[]),
+        ):
+            results = release_check.collect_results(args, _runner)
+
+        self.assertTrue(all(result.ok for result in results), results)
+        self.assertIn((sys.executable, "scripts/check_typing.py"), commands)
 
     def test_service_smoke_defaults_to_portable_local_ha_url(self) -> None:
         args = release_check._parse_args([])
