@@ -46,7 +46,7 @@ _LOGGER = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
-    from .client_reconnect_manager import DHEReconnectManager
+    from .client_connection_supervisor import DHEConnectionSupervisor
 
 WEBSOCKET_UPGRADE_TIMEOUT = 8.0
 AUTH_POLL_TIMEOUT_SECONDS = 10.0
@@ -80,7 +80,7 @@ class DHEClientTransportMixin:
         _pause_auto_reconnect_for_pairing: bool
         _ready: asyncio.Event
         _reconnect_grace_task: asyncio.Task[None] | None
-        _reconnect_manager: DHEReconnectManager
+        _connection_supervisor: DHEConnectionSupervisor
         _reconnect_callbacks: set[ReconnectCallback]
         _reconnect_count: int
         _require_pairing_confirmation: bool
@@ -510,7 +510,7 @@ class DHEClientTransportMixin:
         await asyncio.wait_for(self._ready.wait(), timeout=timeout)
 
     def _record_session_connected(self) -> None:
-        self._reconnect_manager.mark_connected()
+        self._connection_supervisor.mark_connected()
         self._pairing_retry_attempts = 0
         self._pause_auto_reconnect_for_pairing = False
         if not self._has_connected:

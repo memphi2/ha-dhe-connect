@@ -1,4 +1,4 @@
-"""Reconnect grace and backoff manager for the DHE client."""
+"""Connection supervision policy for the DHE client."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ import time
 from collections.abc import Callable
 
 
-class DHEReconnectManager:
-    """Track reconnect attempts without driving Home Assistant entity polling."""
+class DHEConnectionSupervisor:
+    """Track reconnect state without driving Home Assistant entity polling."""
 
     def __init__(
         self,

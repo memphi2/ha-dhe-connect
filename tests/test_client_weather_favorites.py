@@ -72,7 +72,7 @@ def _load_client():
     _load_component_module("pairing_helpers")
     _load_component_module("protocol")
     _load_component_module("client_value_helpers")
-    _load_component_module("client_reconnect_manager")
+    _load_component_module("client_connection_supervisor")
     _load_component_module("client_pairing")
     _load_component_module("client_command_runner")
     _load_component_module("client_radio_commands")
@@ -1360,7 +1360,7 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
             return types.SimpleNamespace(done=lambda: False, cancel=Mock())
 
         client._create_background_task = Mock(side_effect=_capture_background_task)
-        client._reconnect_manager = client_module.DHEReconnectManager(
+        client._connection_supervisor = client_module.DHEConnectionSupervisor(
             base_delay=2.0,
             max_delay=10.0,
             grace_period=15.0,
@@ -1406,7 +1406,7 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
             return scheduled_task
 
         client._create_background_task = Mock(side_effect=_capture_background_task)
-        client._reconnect_manager = client_module.DHEReconnectManager(
+        client._connection_supervisor = client_module.DHEConnectionSupervisor(
             base_delay=2.0,
             max_delay=10.0,
             grace_period=15.0,
@@ -1440,11 +1440,11 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         client._availability_callbacks = set()
         client._notify_callbacks = Mock()
         client._reconnect_grace_task = object()
-        client._reconnect_manager = client_module.DHEReconnectManager(
+        client._connection_supervisor = client_module.DHEConnectionSupervisor(
             grace_period=15.0,
             monotonic=lambda: now,
         )
-        client._reconnect_manager.mark_disconnected()
+        client._connection_supervisor.mark_disconnected()
 
         now = 15.1
         client._reconnect_grace_task = client_module.asyncio.current_task()
@@ -1467,11 +1467,11 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         client._availability_callbacks = set()
         client._notify_callbacks = Mock()
         client._reconnect_grace_task = new_task
-        client._reconnect_manager = client_module.DHEReconnectManager(
+        client._connection_supervisor = client_module.DHEConnectionSupervisor(
             grace_period=15.0,
             monotonic=lambda: now,
         )
-        client._reconnect_manager.mark_disconnected()
+        client._connection_supervisor.mark_disconnected()
 
         await DHEClient._expire_reconnect_grace_after(client, 0)
 
