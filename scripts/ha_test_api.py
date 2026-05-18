@@ -334,7 +334,7 @@ def cleanup_localhost_refresh_tokens(
     backup_dir.mkdir(parents=True, exist_ok=True)
     backup_path = backup_dir / (
         "ha-test-auth-before-localhost-cleanup-"
-        f"{datetime.now().strftime('%Y%m%d%H%M%S')}.json"
+        f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}.json"
     )
     backup_path.write_text(
         json.dumps(original_data, ensure_ascii=False, indent=2),

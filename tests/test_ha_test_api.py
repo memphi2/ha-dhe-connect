@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 import io
 import json
 import os
@@ -94,6 +95,47 @@ class TestHATestApi(unittest.TestCase):
             self.assertEqual(result.removed, 0)
             self.assertIsNone(result.backup_path)
             self.assertFalse(backup_dir.exists())
+
+    def test_cleanup_backups_use_microsecond_precision(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = Path(temp_dir) / "config"
+            backup_dir = Path(temp_dir) / "backup"
+            _write_auth(config, [{"id": "drop", "client_id": "http://localhost/"}])
+
+            with patch.object(ha_test_api, "datetime") as datetime_mock:
+                datetime_mock.now.side_effect = [
+                    datetime(2026, 5, 18, 7, 0, 0, 111111),
+                    datetime(2026, 5, 18, 7, 0, 0, 222222),
+                ]
+                first = ha_test_api.cleanup_localhost_refresh_tokens(
+                    config,
+                    backup_dir=backup_dir,
+                )
+                (config / ".storage" / "auth").write_text(
+                    json.dumps(
+                        {
+                            "data": {
+                                "refresh_tokens": [
+                                    {
+                                        "id": "drop",
+                                        "client_id": "http://localhost/",
+                                    }
+                                ]
+                            }
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                second = ha_test_api.cleanup_localhost_refresh_tokens(
+                    config,
+                    backup_dir=backup_dir,
+                )
+
+            self.assertIsNotNone(first.backup_path)
+            self.assertIsNotNone(second.backup_path)
+            self.assertNotEqual(first.backup_path, second.backup_path)
+            self.assertTrue(first.backup_path.exists())
+            self.assertTrue(second.backup_path.exists())
 
     def test_cleanup_retry_repeats_until_auth_file_stays_clean(self) -> None:
         backup_path = Path("/tmp/auth-backup.json")
