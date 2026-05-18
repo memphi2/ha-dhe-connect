@@ -119,6 +119,57 @@ class TestSetupScan(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "invalid_scan_subnet"):
             setup_scan.parse_scan_subnet("203.0.113.0 255.255.255.0")
 
+    def test_setup_scan_subnet_input_accepts_split_network_netmask(self) -> None:
+        scan_input = setup_scan.SetupScanSubnetInput(
+            network_address="192.168.2.0",
+            netmask="255.255.255.0",
+        )
+
+        self.assertEqual(str(scan_input.parse()), "192.168.2.0/24")
+
+    def test_setup_scan_subnet_input_accepts_cidr(self) -> None:
+        scan_input = setup_scan.SetupScanSubnetInput(cidr="192.168.2.0/25")
+
+        self.assertEqual(str(scan_input.parse()), "192.168.2.0/25")
+
+    def test_setup_scan_subnet_input_rejects_mixed_input_on_cidr_field(self) -> None:
+        scan_input = setup_scan.SetupScanSubnetInput(
+            network_address="192.168.2.0",
+            netmask="255.255.255.0",
+            cidr="192.168.2.0/24",
+        )
+
+        with self.assertRaisesRegex(ValueError, "invalid_scan_subnet"):
+            scan_input.parse()
+        self.assertEqual(
+            scan_input.error_part(),
+            setup_scan.SCAN_SUBNET_PART_CIDR,
+        )
+
+    def test_setup_scan_subnet_input_points_missing_network_to_address(self) -> None:
+        scan_input = setup_scan.SetupScanSubnetInput(netmask="255.255.255.0")
+
+        with self.assertRaisesRegex(ValueError, "invalid_scan_subnet"):
+            scan_input.parse()
+        self.assertEqual(
+            scan_input.error_part(),
+            setup_scan.SCAN_SUBNET_PART_NETWORK_ADDRESS,
+        )
+
+    def test_split_scan_subnet_suggestions(self) -> None:
+        suggestions = setup_scan.split_scan_subnet_suggestions(
+            ip_network("192.168.2.0/24"),
+        )
+
+        self.assertEqual(
+            suggestions,
+            {
+                setup_scan.SCAN_SUBNET_PART_NETWORK_ADDRESS: "192.168.2.0",
+                setup_scan.SCAN_SUBNET_PART_NETMASK: "255.255.255.0",
+                setup_scan.SCAN_SUBNET_PART_CIDR: "",
+            },
+        )
+
     def test_candidate_defaults(self) -> None:
         defaults = setup_scan.candidate_defaults(
             setup_scan.DHEHostCandidate("192.0.2.124", 8443),
