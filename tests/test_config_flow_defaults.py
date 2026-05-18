@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import json
 from ipaddress import ip_network
 import sys
 import types
@@ -460,6 +461,7 @@ class TestConnectionOptionsConnectivity(
             lambda _self, **kwargs: {
                 "type": "form",
                 "step_id": kwargs.get("step_id"),
+                "data_schema": kwargs.get("data_schema"),
                 "errors": kwargs.get("errors", {}),
             },
             self.flow,
@@ -515,6 +517,14 @@ class TestConnectionOptionsConnectivity(
         self.assertEqual(result["type"], "form")
         self.assertEqual(result["step_id"], "connection")
         self.assertEqual(result["errors"]["base"], "cannot_connect")
+        defaults = _schema_defaults(result["data_schema"])
+        self.assertEqual(defaults[self.config_flow.CONF_HOST], "other.local")
+        self.assertEqual(defaults[self.config_flow.CONF_PORT], 80)
+        self.assertEqual(defaults[self.config_flow.CONF_NAME], "DHE 2")
+        self.assertEqual(
+            defaults[self.config_flow.CONF_INTERNAL_SCALD_PROTECTION],
+            "50",
+        )
 
     async def test_connection_step_enters_pairing_when_target_changed_and_connects(
         self,
@@ -1020,4 +1030,52 @@ class TestSetupPairingValidation(
             "token.json",
         )
 
-        self.assertEqual(result, "requesting_token: websocket closed")
+        self.assertEqual(result.error_key, "requesting_token: websocket closed")
+        self.assertIsNone(result.unique_id)
+
+    async def test_validate_setup_pairing_returns_mac_unique_id(self) -> None:
+        module = self.config_flow
+        module._async_clear_setup_token_files = AsyncMock()
+
+        class _FakeClient:
+            diagnostic_state: dict[str, object] = {}
+            last_device_info = {"wlan_mac": "AA-BB-CC-DD-EE-FF"}
+
+            def __init__(self, **_kwargs: object) -> None:
+                pass
+
+            async def validate_setup_authentication(
+                self,
+                *,
+                timeout_seconds: float,
+            ) -> None:
+                return None
+
+        module.DHEClient = _FakeClient
+
+        result = await module._validate_setup_pairing(
+            object(),
+            "192.0.2.124",
+            80,
+            "token.json",
+        )
+
+        self.assertIsNone(result.error_key)
+        self.assertEqual(result.unique_id, "aa:bb:cc:dd:ee:ff")
+
+
+class TestManifestZeroconf(unittest.TestCase):
+    """Validate manifest discovery metadata."""
+
+    def test_manifest_declares_zeroconf_config_flow_handler(self) -> None:
+        manifest = json.loads(
+            (
+                ROOT
+                / "custom_components"
+                / "stiebel_dhe_connect"
+                / "manifest.json"
+            ).read_text(encoding="utf-8")
+        )
+
+        self.assertTrue(manifest["config_flow"])
+        self.assertIn("_ste-dhe._tcp.local.", manifest["zeroconf"])

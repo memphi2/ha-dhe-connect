@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 import importlib
-from ipaddress import ip_network
+from ipaddress import ip_address, ip_network
 from pathlib import Path
 import sys
 from typing import Any
@@ -24,6 +24,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 
 pytestmark = pytest.mark.asyncio
@@ -504,7 +505,7 @@ async def test_config_flow_creates_entry_after_pairing_with_real_hass_fixture() 
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
 
         can_connect = AsyncMock(return_value=True)
-        validate_pairing = AsyncMock(return_value=None)
+        validate_pairing = AsyncMock(return_value=config_flow.SetupPairingResult())
         with (
             patch.object(config_flow, "_can_connect", can_connect),
             patch.object(config_flow, "_validate_setup_pairing", validate_pairing),
@@ -659,6 +660,112 @@ async def test_config_flow_aborts_duplicate_target_with_real_hass_fixture() -> N
         assert result["reason"] == "already_configured"
 
 
+async def test_zeroconf_flow_collects_tmax_then_creates_entry_after_pairing() -> None:
+    """Run Zeroconf setup without creating an entry before pairing succeeds."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+
+        can_connect = AsyncMock(return_value=True)
+        validate_pairing = AsyncMock(
+            return_value=config_flow.SetupPairingResult(
+                unique_id="aa:bb:cc:dd:ee:ff",
+            )
+        )
+        with (
+            patch.object(config_flow, "_can_connect", can_connect),
+            patch.object(config_flow, "_validate_setup_pairing", validate_pairing),
+        ):
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_ZEROCONF},
+                data=_zeroconf_info("DHE-JA06.local.", DEFAULT_PORT),
+            )
+
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "zeroconf_confirm"
+            defaults = _schema_defaults(result["data_schema"])
+            assert defaults == {config_flow.CONF_INTERNAL_SCALD_PROTECTION: "60"}
+            assert hass.config_entries.async_entries(DOMAIN) == []
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                user_input={config_flow.CONF_INTERNAL_SCALD_PROTECTION: "55"},
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "pairing_confirm"
+            assert hass.config_entries.async_entries(DOMAIN) == []
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                user_input={},
+            )
+
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert result["title"] == "DHE-JA06"
+        assert result["data"] == {
+            CONF_HOST: "192.0.2.124",
+            CONF_PORT: DEFAULT_PORT,
+            CONF_NAME: "DHE-JA06",
+            config_flow.CONF_INTERNAL_SCALD_PROTECTION: "55",
+        }
+        assert result["result"].unique_id == "aa:bb:cc:dd:ee:ff"
+        can_connect.assert_awaited_once_with(hass, "192.0.2.124", DEFAULT_PORT)
+        validate_pairing.assert_awaited_once()
+
+
+async def test_zeroconf_flow_aborts_duplicate_host_port() -> None:
+    """Verify Zeroconf discovery does not start for an existing DHE target."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        entry = _build_mock_entry(
+            host="192.0.2.124",
+            port=DEFAULT_PORT,
+            name="Existing DHE",
+            unique_id="existing-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_ZEROCONF},
+            data=_zeroconf_info("DHE-JA06.local.", DEFAULT_PORT),
+        )
+
+        assert result["type"] is FlowResultType.ABORT
+        assert result["reason"] == "already_configured"
+
+
+async def test_zeroconf_flow_aborts_matching_flow_already_in_progress() -> None:
+    """Verify duplicate Zeroconf discoveries share one setup flow."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+
+        with patch.object(config_flow, "_can_connect", AsyncMock(return_value=True)):
+            first = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_ZEROCONF},
+                data=_zeroconf_info("DHE-JA06.local.", DEFAULT_PORT),
+            )
+            second = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_ZEROCONF},
+                data=_zeroconf_info("dhe-ja06.local", DEFAULT_PORT),
+            )
+
+        assert first["type"] is FlowResultType.FORM
+        assert first["step_id"] == "zeroconf_confirm"
+        assert second["type"] is FlowResultType.ABORT
+        assert second["reason"] == "already_in_progress"
+
+
 async def test_options_connection_flow_requires_pairing_for_changed_target_with_real_hass_fixture() -> None:
     """Run connection options through HA's options-flow manager."""
     _clear_loaded_integration_modules()
@@ -675,7 +782,7 @@ async def test_options_connection_flow_requires_pairing_for_changed_target_with_
         entry.add_to_hass(hass)
 
         can_connect = AsyncMock(return_value=True)
-        validate_pairing = AsyncMock(return_value=None)
+        validate_pairing = AsyncMock(return_value=config_flow.SetupPairingResult())
         with (
             patch.object(config_flow, "_can_connect", can_connect),
             patch.object(config_flow, "_validate_setup_pairing", validate_pairing),
@@ -987,6 +1094,19 @@ def _build_mock_entry(
         },
         title=name,
         unique_id=unique_id,
+    )
+
+
+def _zeroconf_info(hostname: str, port: int | None) -> ZeroconfServiceInfo:
+    """Build a DHE Zeroconf discovery payload for config-flow tests."""
+    return ZeroconfServiceInfo(
+        ip_address=ip_address("192.0.2.124"),
+        ip_addresses=[ip_address("192.0.2.124")],
+        port=port,
+        hostname=hostname,
+        type="_ste-dhe._tcp.local.",
+        name=f"{hostname.rstrip('.')}._ste-dhe._tcp.local.",
+        properties={},
     )
 
 

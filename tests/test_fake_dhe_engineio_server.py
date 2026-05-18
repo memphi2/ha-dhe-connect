@@ -123,6 +123,20 @@ class FakeDHEEngineIOServer:
     def queue_token_response(self, token: str) -> None:
         self.queue_event("token_response", token)
 
+    def queue_device_info(self) -> None:
+        self.queue_event(
+            "message",
+            {
+                "command": "set:ste.common.version:gadgetData",
+                "value": {
+                    "type": "DHE Connect 18/21/24",
+                    "id": "fixture-device",
+                    "wlan": "AA-BB-CC-DD-EE-FF",
+                    "bluetooth": "11-22-33-44-55-66",
+                },
+            },
+        )
+
     def queue_socket_close(self) -> None:
         self.queue_packet(f"41/{self.namespace}")
 
@@ -234,7 +248,20 @@ class FakeDHEEngineIOServer:
                 self.websocket_upgraded.set()
             elif packet == "2":
                 await websocket.send_str("3")
+            else:
+                await self._send_queued_websocket_packets(websocket)
         return websocket
+
+    async def _send_queued_websocket_packets(
+        self,
+        websocket: web.WebSocketResponse,
+    ) -> None:
+        while True:
+            try:
+                packet = self._poll_packets.get_nowait()
+            except asyncio.QueueEmpty:
+                return
+            await websocket.send_str(packet)
 
 
 @asynccontextmanager
@@ -428,6 +455,7 @@ class TestFakeDHEEngineIOServer(unittest.IsolatedAsyncioTestCase):
                     server.queue_pairing_result(True)
                     server.queue_token_response(PAIRING_TOKEN)
                     server.queue_authentication()
+                    server.queue_device_info()
 
                     await DHEClient.validate_setup_authentication(
                         client,
@@ -441,6 +469,7 @@ class TestFakeDHEEngineIOServer(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(client._pairing_active)
         self.assertFalse(client._require_pairing_confirmation)
         self.assertFalse(client._manual_pairing_requested)
+        self.assertEqual(client.last_device_info["wlan_mac"], "AA-BB-CC-DD-EE-FF")
         self.assertTrue(
             any(
                 '"token":""' in packet and '["token_request"' in packet

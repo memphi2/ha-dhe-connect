@@ -6,7 +6,7 @@ import asyncio
 from ipaddress import IPv4Network
 import logging
 import os
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any, Protocol, cast
 
 import aiohttp
@@ -47,6 +47,7 @@ from .config_flow_schemas import (
     currency_options as _schema_currency_options,
     device_settings_defaults as _device_settings_defaults,
     device_settings_schema as _device_settings_schema,
+    internal_scald_protection_options as _internal_scald_protection_options,
     optional_float as _optional_float,
     radio_catalog_schema as _radio_catalog_schema,
     radio_search_type_schema as _radio_search_type_schema,
@@ -54,6 +55,16 @@ from .config_flow_schemas import (
     weather_search_schema as _weather_search_schema,
 )
 from .config_entry_helpers import merged_entry_data
+from .config_flow_discovery import (
+    FLOW_CONTEXT_DISCOVERED_HOST,
+    FLOW_CONTEXT_DISCOVERED_PORT,
+    FLOW_CONTEXT_DISCOVERY_NAME,
+    SetupPairingResult,
+    coerce_setup_pairing_result as _coerce_setup_pairing_result,
+    device_unique_id_from_info as _device_unique_id_from_info,
+    discovery_info_name as _discovery_info_name,
+    is_matching_flow_in_progress as _is_matching_flow_in_progress,
+)
 from .connection_helpers import (
     host_for_url,
     normalize_host,
@@ -67,6 +78,7 @@ from .const import (
 )
 from .entity_state_helpers import (
     CONF_INTERNAL_SCALD_PROTECTION,
+    INTERNAL_SCALD_PROTECTION_DEFAULT,
     INTERNAL_SCALD_PROTECTION_OPTIONS,
 )
 from .pairing_helpers import map_pairing_error
@@ -357,7 +369,7 @@ async def _validate_setup_pairing(
     host: str,
     port: int,
     token_file: str,
-) -> str | None:
+) -> SetupPairingResult:
     """Run one-shot pairing/auth validation before creating the config entry."""
     await _async_clear_setup_token_files(hass, host, port, token_file)
     probe_client = DHEClient(
@@ -375,8 +387,13 @@ async def _validate_setup_pairing(
         raise
     except (DHEError, TimeoutError, OSError, RuntimeError, aiohttp.ClientError) as err:
         pairing_state = str(probe_client.diagnostic_state.get("pairing_state") or "")
-        return map_pairing_error(err, pairing_state)
-    return None
+        return SetupPairingResult(error_key=map_pairing_error(err, pairing_state))
+    device_info = getattr(probe_client, "last_device_info", {})
+    return SetupPairingResult(
+        unique_id=_device_unique_id_from_info(device_info)
+        if isinstance(device_info, Mapping)
+        else None
+    )
 
 
 class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
@@ -551,6 +568,45 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
             description_placeholders=self._setup_scan_placeholders(),
         )
 
+    def _show_zeroconf_confirm_form(
+        self,
+        errors: dict[str, str] | None = None,
+    ) -> config_entries.ConfigFlowResult:
+        """Show the only setup value not provided by Zeroconf."""
+        return self.async_show_form(
+            step_id="zeroconf_confirm",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        CONF_INTERNAL_SCALD_PROTECTION,
+                        default=INTERNAL_SCALD_PROTECTION_DEFAULT,
+                    ): vol.In(_internal_scald_protection_options(self.hass)),
+                }
+            ),
+            errors=errors or {},
+        )
+
+    def _set_pending_setup_data(
+        self,
+        *,
+        host: str,
+        port: int,
+        name: str,
+        token_file: str,
+        internal_scald_protection: str | None = None,
+    ) -> None:
+        """Store validated setup data until pairing succeeds."""
+        self._pending_setup_data = {
+            CONF_HOST: host,
+            CONF_PORT: port,
+            CONF_NAME: name,
+            "token_file": token_file,
+        }
+        if internal_scald_protection is not None:
+            self._pending_setup_data[CONF_INTERNAL_SCALD_PROTECTION] = (
+                internal_scald_protection
+            )
+
     async def _async_handle_setup_scan(self) -> config_entries.ConfigFlowResult | None:
         """Start or finish the optional setup scan."""
         if self._setup_scan_done:
@@ -592,6 +648,70 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
             return await self.async_step_subnet_scan()
 
         return await self.async_step_manual()
+
+    async def async_step_zeroconf(self, discovery_info: Any):
+        """Handle a DHE discovered by Zeroconf/mDNS."""
+        try:
+            host_value = (
+                getattr(discovery_info, "host", None)
+                or getattr(discovery_info, "hostname", None)
+                or getattr(discovery_info, "ip_address", None)
+            )
+            host = normalize_host(str(host_value or ""))
+            port = validate_port(getattr(discovery_info, "port", None) or DEFAULT_PORT)
+        except (TypeError, ValueError):
+            return self.async_abort(reason="invalid_discovery_parameters")
+
+        if _is_target_used_by_other_entry(self.hass, host, port):
+            return self.async_abort(reason="already_configured")
+        if _is_matching_flow_in_progress(
+            self.hass,
+            host,
+            port,
+            current_flow_id=getattr(self, "flow_id", None),
+        ):
+            return self.async_abort(reason="already_in_progress")
+
+        name = _discovery_info_name(discovery_info)
+        self.context[FLOW_CONTEXT_DISCOVERED_HOST] = host
+        self.context[FLOW_CONTEXT_DISCOVERED_PORT] = port
+        self.context[FLOW_CONTEXT_DISCOVERY_NAME] = name
+
+        if not await _can_connect(self.hass, host, port):
+            return self.async_abort(reason="cannot_connect")
+
+        self._set_pending_setup_data(
+            host=host,
+            port=port,
+            name=name,
+            token_file=token_file_for_target(host, port),
+        )
+        return await self.async_step_zeroconf_confirm()
+
+    async def async_step_zeroconf_confirm(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ):
+        """Collect physical Tmax jumper setting for a Zeroconf setup flow."""
+        if self._pending_setup_data is None:
+            return await self.async_step_user()
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            internal_scald_protection = str(
+                user_input.get(CONF_INTERNAL_SCALD_PROTECTION) or ""
+            ).strip()
+            if internal_scald_protection not in INTERNAL_SCALD_PROTECTION_OPTIONS:
+                errors[CONF_INTERNAL_SCALD_PROTECTION] = (
+                    "invalid_internal_scald_protection"
+                )
+            else:
+                self._pending_setup_data[CONF_INTERNAL_SCALD_PROTECTION] = (
+                    internal_scald_protection
+                )
+                return await self.async_step_pairing_confirm()
+
+        return self._show_zeroconf_confirm_form(errors)
 
     async def async_step_subnet_scan(
         self,
@@ -688,14 +808,13 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
                 if not await _can_connect(self.hass, host, port):
                     errors["base"] = "cannot_connect"
                 else:
-                    token_file = token_file_for_target(host, port)
-                    self._pending_setup_data = {
-                        CONF_HOST: host,
-                        CONF_PORT: port,
-                        CONF_NAME: name,
-                        CONF_INTERNAL_SCALD_PROTECTION: internal_scald_protection,
-                        "token_file": token_file,
-                    }
+                    self._set_pending_setup_data(
+                        host=host,
+                        port=port,
+                        name=name,
+                        token_file=token_file_for_target(host, port),
+                        internal_scald_protection=internal_scald_protection,
+                    )
                     return await self.async_step_pairing_confirm()
 
         return self._show_user_form(errors=errors, defaults=user_input)
@@ -717,20 +836,25 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
         errors: dict[str, str] = {}
         if user_input is not None:
             setup_data = dict(self._pending_setup_data)
-            error_key = await _validate_setup_pairing(
-                self.hass,
-                setup_data[CONF_HOST],
-                setup_data[CONF_PORT],
-                setup_data["token_file"],
+            pairing_result = _coerce_setup_pairing_result(
+                await _validate_setup_pairing(
+                    self.hass,
+                    setup_data[CONF_HOST],
+                    setup_data[CONF_PORT],
+                    setup_data["token_file"],
+                )
             )
-            if error_key is None:
+            if pairing_result.error_key is None:
+                if pairing_result.unique_id is not None:
+                    await self.async_set_unique_id(pairing_result.unique_id)
+                    self._abort_if_unique_id_configured()
                 self._pending_setup_data = None
                 setup_data.pop("token_file", None)
                 return self.async_create_entry(
                     title=setup_data[CONF_NAME],
                     data=setup_data,
                 )
-            errors["base"] = error_key
+            errors["base"] = pairing_result.error_key
 
         return self.async_show_form(
             step_id="pairing_confirm",
@@ -817,6 +941,12 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
                 ):
                     errors["base"] = "already_configured"
                 else:
+                    data = {
+                        CONF_HOST: host,
+                        CONF_PORT: port,
+                        CONF_NAME: name,
+                        CONF_INTERNAL_SCALD_PROTECTION: internal_scald_protection,
+                    }
                     changed = target_changed(
                         current,
                         host,
@@ -827,16 +957,10 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
                         errors["base"] = "cannot_connect"
                         return self.async_show_form(
                             step_id="connection",
-                            data_schema=_schema(self.hass, current),
+                            data_schema=_schema(self.hass, data),
                             errors=errors,
                         )
 
-                    data = {
-                        CONF_HOST: host,
-                        CONF_PORT: port,
-                        CONF_NAME: name,
-                        CONF_INTERNAL_SCALD_PROTECTION: internal_scald_protection,
-                    }
                     if changed:
                         self._pending_connection_data = data
                         return await self.async_step_connection_pairing_confirm()
@@ -862,16 +986,18 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
         errors: dict[str, str] = {}
         if user_input is not None:
             data = dict(self._pending_connection_data)
-            error_key = await _validate_setup_pairing(
-                self.hass,
-                data[CONF_HOST],
-                data[CONF_PORT],
-                token_file_for_target(data[CONF_HOST], data[CONF_PORT]),
+            pairing_result = _coerce_setup_pairing_result(
+                await _validate_setup_pairing(
+                    self.hass,
+                    data[CONF_HOST],
+                    data[CONF_PORT],
+                    token_file_for_target(data[CONF_HOST], data[CONF_PORT]),
+                )
             )
-            if error_key is None:
+            if pairing_result.error_key is None:
                 self._pending_connection_data = None
                 return self.async_create_entry(title="", data=data)
-            errors["base"] = error_key
+            errors["base"] = pairing_result.error_key
 
         return self.async_show_form(
             step_id="connection_pairing_confirm",

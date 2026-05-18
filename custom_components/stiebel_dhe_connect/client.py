@@ -6,6 +6,7 @@ import contextlib
 import logging
 import os
 import random
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -46,6 +47,7 @@ from .connection_helpers import host_for_url as _host_for_url
 from .protocol import (
     APP_TIMER_REQUEST_COMMANDS,
     CONSUMPTION_REQUEST_COMMANDS,
+    DEVICE_INFO_REQUEST_COMMANDS,
     ID_BATH_FILL_CURRENT_VOLUME,
     ID_BATH_FILL_TARGET_VOLUME,
     ID_CHILD_SAFETY_ACTIVE,
@@ -67,6 +69,7 @@ from .protocol import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+DEVICE_INFO_REQUEST_TIMEOUT_SECONDS = 5.0
 
 
 class DHEClient(
@@ -207,6 +210,10 @@ class DHEClient(
     @property
     def last_app_values(self) -> dict[str, Any]:
         return dict(self._last_app_values)
+
+    @property
+    def last_device_info(self) -> dict[str, Any]:
+        return dict(self._last_device_info)
 
     @property
     def last_radio_state(self) -> dict[str, Any]:
@@ -350,6 +357,13 @@ class DHEClient(
                 ),
                 timeout=timeout_seconds,
             )
+            await self._request_device_info(
+                ctx,
+                timeout_seconds=min(
+                    DEVICE_INFO_REQUEST_TIMEOUT_SECONDS,
+                    timeout_seconds,
+                ),
+            )
         finally:
             if ctx is not None:
                 with _suppress_transport_errors():
@@ -472,6 +486,39 @@ class DHEClient(
             await self._request_optional_odb_value(ctx, odb_id)
         for command in OPTIONAL_STARTUP_APP_REQUEST_COMMANDS:
             await self._request_optional_app_value(ctx, command)
+
+    async def _request_device_info(
+        self,
+        ctx: DHESession,
+        *,
+        timeout_seconds: float = DEVICE_INFO_REQUEST_TIMEOUT_SECONDS,
+    ) -> None:
+        for command in DEVICE_INFO_REQUEST_COMMANDS:
+            await self._request_app_value(ctx, command)
+        if self._has_device_identity():
+            return
+
+        deadline = time.monotonic() + max(0.0, timeout_seconds)
+        while time.monotonic() < deadline:
+            timeout = max(0.1, deadline - time.monotonic())
+            try:
+                events = await asyncio.wait_for(
+                    self._read_events_once(ctx),
+                    timeout=timeout,
+                )
+            except TimeoutError:
+                return
+            for event in events:
+                await self._handle_runtime_event(event)
+            if self._has_device_identity():
+                return
+
+    def _has_device_identity(self) -> bool:
+        return bool(
+            self._last_device_info.get("wlan_mac")
+            or self._last_device_info.get("bluetooth_mac")
+            or self._last_device_info.get("device_id")
+        )
 
     async def _request_odb_value(self, ctx: DHESession, odb_id: int) -> None:
         self._mark_odb_read_requested(odb_id)

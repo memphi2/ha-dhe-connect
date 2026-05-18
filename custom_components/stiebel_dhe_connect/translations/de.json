@@ -43,6 +43,13 @@
       "network_scan": {
         "title": "DHE Connect suchen"
       },
+      "zeroconf_confirm": {
+        "title": "Gefundenen DHE Connect bestätigen",
+        "description": "Home Assistant hat diesen DHE Connect über Zeroconf/mDNS gefunden. Stelle die physische Tmax-Jumperposition ein und fahre dann mit dem Pairing fort. Die Integration wird erst nach erfolgreichem Pairing und Login angelegt.",
+        "data": {
+          "internal_scald_protection": "Interner Verbrühschutz (Tmax-Jumper)"
+        }
+      },
       "pairing_confirm": {
         "title": "Pairing bestätigen",
         "description": "Jetzt OK klicken. Danach erscheint die Pairing-Anfrage am DHE und die Bestätigung muss dort vollständig abgeschlossen werden. Die Integration wird erst nach erfolgreichem Pairing und Login angelegt."
@@ -70,7 +77,10 @@
       "invalid_internal_scald_protection": "Ungültige Tmax-Jumperposition."
     },
     "abort": {
-      "already_configured": "Stiebel DHE Connect ist bereits konfiguriert."
+      "already_configured": "Stiebel DHE Connect ist bereits konfiguriert.",
+      "already_in_progress": "Die Einrichtung für diesen DHE Connect läuft bereits.",
+      "cannot_connect": "Verbindung zum gefundenen DHE Connect nicht möglich.",
+      "invalid_discovery_parameters": "Der gefundene DHE Connect hat keinen gültigen Host oder Port geliefert."
     }
   },
   "options": {

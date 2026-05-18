@@ -65,6 +65,12 @@ mask `255.255.255.0`, or enter CIDR `192.168.1.0/24`; do not fill both
 alternatives. If you skip it or it finds nothing, enter the DHE host/IP and port
 manually.
 
+Zeroconf/mDNS discovery is normally limited to the local subnet/VLAN. It only
+works across subnets when the router or firewall forwards mDNS through a proper
+reflector or repeater. If the DHE Connect is reachable by IP but not discovered
+automatically, enter the host/IP manually or run the explicit subnet scan for
+that network.
+
 If the DHE web interface opens from a browser but the scan does not find it:
 
 1. Confirm that Home Assistant can route to the same DHE subnet.

@@ -124,6 +124,12 @@ network address `192.168.1.0` plus subnet mask `255.255.255.0`, or enter CIDR
 normal setup form opens with host and port pre-filled. If no candidate is found,
 the same form opens for manual entry.
 
+Zeroconf/mDNS discovery only works inside the local subnet/VLAN by default.
+Discovery across subnets needs a router or firewall that is explicitly
+configured to reflect or relay mDNS traffic. If the DHE Connect is in another
+subnet and mDNS forwarding is not configured, use the manual host/IP setup or
+the explicit subnet scan instead.
+
 The config flow asks for:
 
 | Field | Example | Notes |
