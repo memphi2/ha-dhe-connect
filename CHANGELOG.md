@@ -17,7 +17,7 @@
   address plus subnet mask, or CIDR notation.
 - Added a setup-scan port field, defaulting to `8443`, for installations where
   the DHE web interface listens on a non-standard port.
-- Added a real Zeroconf/mDNS smoke helper and release-check gate for
+- Added a real Zeroconf/mDNS smoke helper and optional release-lab gate for
   `_ste-dhe._tcp.local.` multicast discovery.
 - Added a README pointer and screenshot for the companion
   `ha-dhe-connect-card` Lovelace dashboard card.

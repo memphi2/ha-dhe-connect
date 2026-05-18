@@ -83,12 +83,16 @@ nicht aus; Home Assistant muss die Multicast-Ankuendigung empfangen. Wenn das
 DHE per IP erreichbar ist, aber nicht automatisch auftaucht, manuell einrichten
 oder den expliziten Subnetz-Scan verwenden.
 
-Vor einem Release sollte der echte Zeroconf/mDNS-Smoke aus einem Netz laufen,
-in dem Home Assistant die DHE-Ankuendigung sehen kann:
+Vor einem Release sollte der optionale echte Zeroconf/mDNS-Smoke aus dem
+Release-Lab-Netz laufen, in dem Home Assistant die DHE-Ankuendigung sehen soll:
 
 ```bash
 python scripts/zeroconf_smoke.py --timeout 20
 ```
+
+Das ist kein universeller CI-Check. Der Test haengt von lokaler
+Multicast-Sichtbarkeit ab und kann in VLAN- oder Firewall-Setups scheitern,
+obwohl der Integrationscode korrekt ist.
 
 Die UI fragt nach:
 

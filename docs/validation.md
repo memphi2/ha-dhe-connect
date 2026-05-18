@@ -97,6 +97,11 @@ the expected DHE port, default `8443`. It intentionally does not print private
 hostnames, IP addresses or token context. This validates multicast discovery
 visibility; it is not a replacement for manual setup or the setup subnet scan.
 
+Treat this as a release-lab gate, not as a universal CI check. It depends on the
+current network carrying the DHE mDNS multicast advertisement; VLAN, firewall or
+router policies can make this smoke fail even when the integration code is
+correct. Keep it opt-in through `--run-zeroconf-smoke`.
+
 If the DHE is in another VLAN, run the smoke from the correct segment or ensure
 the router/firewall has an mDNS reflector configured. A direct `.local` lookup
 or unicast DNS-SD answer can still work while Home Assistant Zeroconf discovery
@@ -187,7 +192,8 @@ Before publication, the default expectation is:
 - The release tag is absent.
 - The GitHub release is absent.
 - Local checks pass.
-- The real Zeroconf/mDNS smoke gate passes when `--run-zeroconf-smoke` is used.
+- The opt-in real Zeroconf/mDNS release-lab smoke gate passes when
+  `--run-zeroconf-smoke` is used in a network where mDNS visibility is expected.
 - Optional mounted HA smoke passes when `--ha-config` is provided.
 
 After publication, rerun with:

@@ -415,7 +415,10 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser.add_argument(
         "--run-zeroconf-smoke",
         action="store_true",
-        help="Run the real Zeroconf/mDNS smoke gate for _ste-dhe._tcp.local.",
+        help=(
+            "Run the opt-in real-network Zeroconf/mDNS release-lab smoke gate "
+            "for _ste-dhe._tcp.local."
+        ),
     )
     parser.add_argument(
         "--zeroconf-timeout",

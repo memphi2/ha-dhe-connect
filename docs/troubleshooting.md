@@ -95,6 +95,9 @@ that can receive the multicast DNS-SD advertisement:
 python scripts/zeroconf_smoke.py --timeout 20
 ```
 
+This is an opt-in release-lab gate, not a universal CI check. It depends on the
+test network carrying mDNS multicast traffic.
+
 If that command does not see `_ste-dhe._tcp.local.` while the DHE is reachable
 by IP, treat it as a network multicast visibility issue, not as proof that
 manual setup or the setup subnet scan is broken.
