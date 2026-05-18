@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Einrichtung starten",
-        "description": "Standard ist die manuelle Einrichtung. Aktiviere die Suche nur, wenn Home Assistant vorab ein Subnetz nach dem DHE Connect durchsuchen soll.",
+        "description": "Der Subnetz-Scan ist standardmäßig aktiviert. Deaktiviere die Suche nur, wenn du den DHE Connect Host manuell eintragen möchtest.",
         "data": {
           "scan_automatically": "Subnetz nach DHE Connect durchsuchen"
         }

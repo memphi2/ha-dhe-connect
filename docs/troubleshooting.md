@@ -56,13 +56,14 @@ or embedded ports in the host field.
 ## Setup Scan Finds Nothing
 
 When adding the integration, Home Assistant asks whether it should scan a subnet
-for DHE-like web interfaces on port `8443`. Subnet fields are shown only after
-the scan option is selected. Home Assistant pre-fills network address and subnet
-mask from its current local subnet when possible. Leave all subnet fields empty
-to scan the current local subnet, adjust network address `192.168.1.0` plus
-subnet mask `255.255.255.0`, or enter CIDR `192.168.1.0/24`; do not fill both
-alternatives. The scan is only a setup convenience. If you skip it or it finds
-nothing, enter the DHE host/IP and port manually.
+for DHE-like web interfaces on port `8443`. The scan is enabled by default, but
+it is only a setup convenience. Subnet fields are shown only after the scan
+option is selected. Home Assistant pre-fills network address and subnet mask
+from its current local subnet when possible. Leave all subnet fields empty to
+scan the current local subnet, adjust network address `192.168.1.0` plus subnet
+mask `255.255.255.0`, or enter CIDR `192.168.1.0/24`; do not fill both
+alternatives. If you skip it or it finds nothing, enter the DHE host/IP and port
+manually.
 
 If the DHE web interface opens from a browser but the scan does not find it:
 

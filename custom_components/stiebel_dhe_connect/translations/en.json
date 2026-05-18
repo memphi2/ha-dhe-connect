@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Start setup",
-        "description": "Manual setup is the default. Enable the search only when Home Assistant should scan a subnet for DHE Connect first.",
+        "description": "Subnet scanning is enabled by default. Disable the search only when you want to enter the DHE Connect host manually.",
         "data": {
           "scan_automatically": "Scan a subnet for DHE Connect"
         }

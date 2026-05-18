@@ -605,7 +605,7 @@ class TestSetupScanConfigFlow(
         self.assertEqual(result["step_id"], "user")
         self.config_flow.async_scan_dhe_hosts.assert_not_called()
         defaults = _schema_defaults(result["data_schema"])
-        self.assertFalse(defaults[self.config_flow.CONF_SCAN_AUTOMATICALLY])
+        self.assertTrue(defaults[self.config_flow.CONF_SCAN_AUTOMATICALLY])
         self.assertNotIn(self.config_flow.CONF_SCAN_NETWORK_ADDRESS, defaults)
         self.assertNotIn(self.config_flow.CONF_SCAN_NETMASK, defaults)
         self.assertNotIn(self.config_flow.CONF_SCAN_CIDR, defaults)
