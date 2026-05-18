@@ -502,6 +502,13 @@ def _env_default(name: str, fallback: str) -> str:
     return os.environ.get(name, fallback)
 
 
+def _non_negative_float(value: str) -> float:
+    parsed = float(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("must be non-negative")
+    return parsed
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run HA API actions against the mounted DHE test installation.",
@@ -572,7 +579,7 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--cleanup-localhost-token-interval",
-        type=float,
+        type=_non_negative_float,
         default=1.0,
         help="Seconds to wait between mounted-auth cleanup attempts.",
     )
@@ -668,7 +675,7 @@ def main() -> int:
                 )
                 if args.cleanup_localhost_tokens:
                     try:
-                        if args.restart_before_localhost_cleanup and not args.restart:
+                        if args.restart_before_localhost_cleanup:
                             try:
                                 restart_result = api.restart(
                                     token.access_token,

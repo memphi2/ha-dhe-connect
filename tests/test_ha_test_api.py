@@ -442,6 +442,68 @@ class TestHATestApi(unittest.TestCase):
         self.assertIn("WARN: restart before localhost token cleanup failed", text)
         self.assertIn("PASS: localhost token cleanup removed=1", text)
 
+    def test_main_restarts_again_before_cleanup_when_restart_was_requested(self) -> None:
+        instances = []
+
+        class _Api:
+            def __init__(self, _url: str) -> None:
+                self.restart_count = 0
+                instances.append(self)
+
+            def wait_online(self, **_kwargs) -> bool:
+                return True
+
+            def login(self, *_args):
+                return ha_test_api.AuthToken("access", "refresh")
+
+            def restart(self, *_args, **_kwargs) -> str:
+                self.restart_count += 1
+                return "restart requested"
+
+            def revoke_refresh_token(self, _refresh_token: str) -> bool:
+                raise RuntimeError("revoke failed")
+
+        with (
+            patch.object(ha_test_api, "HomeAssistantApi", _Api),
+            patch.object(
+                ha_test_api,
+                "cleanup_localhost_refresh_tokens_with_retry",
+                return_value=ha_test_api.TokenCleanupResult(removed=1, backup_path=None),
+            ),
+            patch.dict(os.environ, {"HA_TEST_PASSWORD": "secret"}),
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "ha_test_api.py",
+                    "--username",
+                    "test-user",
+                    "--restart",
+                    "--cleanup-localhost-tokens",
+                    "--restart-before-localhost-cleanup",
+                ],
+            ),
+        ):
+            result = ha_test_api.main()
+
+        self.assertEqual(result, 0)
+        self.assertEqual(instances[0].restart_count, 2)
+
+    def test_parse_args_rejects_negative_cleanup_interval(self) -> None:
+        with (
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "ha_test_api.py",
+                    "--cleanup-localhost-token-interval",
+                    "-0.1",
+                ],
+            ),
+            self.assertRaises(SystemExit),
+        ):
+            ha_test_api._parse_args()
+
     def test_ha_scripts_can_run_directly(self) -> None:
         root = Path(__file__).resolve().parents[1]
         for script in ("ha_test_api.py", "ha_test_smoke.py"):
