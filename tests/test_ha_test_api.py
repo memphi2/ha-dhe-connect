@@ -95,6 +95,34 @@ class TestHATestApi(unittest.TestCase):
             self.assertIsNone(result.backup_path)
             self.assertFalse(backup_dir.exists())
 
+    def test_cleanup_retry_repeats_until_auth_file_stays_clean(self) -> None:
+        backup_path = Path("/tmp/auth-backup.json")
+        results = [
+            ha_test_api.TokenCleanupResult(removed=70, backup_path=backup_path),
+            ha_test_api.TokenCleanupResult(removed=1, backup_path=Path("/tmp/again.json")),
+            ha_test_api.TokenCleanupResult(removed=0, backup_path=None),
+        ]
+
+        with (
+            patch.object(
+                ha_test_api,
+                "cleanup_localhost_refresh_tokens",
+                side_effect=results,
+            ) as cleanup,
+            patch.object(ha_test_api.time, "sleep") as sleep,
+        ):
+            result = ha_test_api.cleanup_localhost_refresh_tokens_with_retry(
+                Path("/config"),
+                attempts=5,
+                interval=0.5,
+            )
+
+        self.assertEqual(result.removed, 71)
+        self.assertEqual(result.backup_path, backup_path)
+        self.assertEqual(cleanup.call_count, 3)
+        sleep.assert_any_call(0.5)
+        self.assertEqual(sleep.call_count, 2)
+
     def test_service_smoke_reports_successful_climate_and_radio_actions(self) -> None:
         api = _FakeServiceApi(
             [

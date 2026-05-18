@@ -344,6 +344,33 @@ def cleanup_localhost_refresh_tokens(
     return TokenCleanupResult(removed=removed, backup_path=backup_path)
 
 
+def cleanup_localhost_refresh_tokens_with_retry(
+    config: Path,
+    *,
+    client_id: str = DEFAULT_CLIENT_ID,
+    backup_dir: Path = DEFAULT_BACKUP_DIR,
+    attempts: int = 5,
+    interval: float = 1.0,
+) -> TokenCleanupResult:
+    """Remove localhost refresh tokens until the mounted auth file stays clean."""
+    remaining_attempts = max(1, attempts)
+    total_removed = 0
+    first_backup_path: Path | None = None
+    for attempt in range(remaining_attempts):
+        result = cleanup_localhost_refresh_tokens(
+            config,
+            client_id=client_id,
+            backup_dir=backup_dir,
+        )
+        total_removed += result.removed
+        first_backup_path = first_backup_path or result.backup_path
+        if result.removed == 0:
+            break
+        if attempt + 1 < remaining_attempts:
+            time.sleep(interval)
+    return TokenCleanupResult(removed=total_removed, backup_path=first_backup_path)
+
+
 def run_service_smoke(
     api: HomeAssistantApi,
     access_token: str,
@@ -537,6 +564,26 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Remove temporary localhost auth tokens from --config if revoke fails.",
     )
+    parser.add_argument(
+        "--cleanup-localhost-token-attempts",
+        type=int,
+        default=5,
+        help="Number of mounted-auth cleanup attempts after token revoke failure.",
+    )
+    parser.add_argument(
+        "--cleanup-localhost-token-interval",
+        type=float,
+        default=1.0,
+        help="Seconds to wait between mounted-auth cleanup attempts.",
+    )
+    parser.add_argument(
+        "--restart-before-localhost-cleanup",
+        action="store_true",
+        help=(
+            "Restart HA before mounted-auth cleanup after revoke failure so "
+            "running auth state cannot immediately re-persist stale test tokens."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -621,7 +668,22 @@ def main() -> int:
                 )
                 if args.cleanup_localhost_tokens:
                     try:
-                        cleanup = cleanup_localhost_refresh_tokens(args.config)
+                        if args.restart_before_localhost_cleanup and not args.restart:
+                            print(
+                                "INFO: restart before localhost token cleanup: "
+                                f"{api.restart(token.access_token, timeout=args.restart_request_timeout)}"
+                            )
+                            if not api.wait_online(
+                                timeout=args.wait_timeout,
+                                require_seen_down=True,
+                                settle_seconds=args.restart_settle_seconds,
+                            ):
+                                print("WARN: HA did not come back online before cleanup")
+                        cleanup = cleanup_localhost_refresh_tokens_with_retry(
+                            args.config,
+                            attempts=args.cleanup_localhost_token_attempts,
+                            interval=args.cleanup_localhost_token_interval,
+                        )
                     except Exception as cleanup_err:  # noqa: BLE001
                         print(
                             "WARN: localhost token cleanup failed: "
