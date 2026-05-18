@@ -16,6 +16,10 @@ DHE_ZEROCONF_SERVICE = "_ste-dhe._tcp.local."
 FLOW_CONTEXT_DISCOVERED_HOST = "dhe_discovered_host"
 FLOW_CONTEXT_DISCOVERED_PORT = "dhe_discovered_port"
 FLOW_CONTEXT_DISCOVERY_NAME = "dhe_discovery_name"
+FLOW_SOURCE_ZEROCONF = "zeroconf"
+SETUP_MODE_MANUAL = "manual"
+SETUP_MODE_SCAN = "scan"
+ZEROCONF_CHOICE_PREFIX = "zeroconf:"
 
 _MAC_RE = re.compile(r"^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$")
 _COMPACT_MAC_RE = re.compile(r"^[0-9a-f]{12}$")
@@ -27,6 +31,18 @@ class SetupPairingResult:
 
     error_key: str | None = None
     unique_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ZeroconfSetupChoice:
+    """One discovered DHE choice shown in the user-started setup flow."""
+
+    key: str
+    label: str
+    host: str
+    port: int
+    name: str
+    flow_id: str | None
 
 
 def normalize_mac(value: Any) -> str | None:
@@ -88,6 +104,52 @@ def discovery_context_target(flow: Mapping[str, Any]) -> tuple[str, int] | None:
         return normalize_host(str(host_value)), validate_port(port_value)
     except (TypeError, ValueError):
         return None
+
+
+def zeroconf_setup_choice_key(host: str, port: int) -> str:
+    """Return the setup choice key for one discovered host/port target."""
+    return f"{ZEROCONF_CHOICE_PREFIX}{host}:{port}"
+
+
+def zeroconf_setup_choices_from_progress(
+    hass: HomeAssistant,
+    *,
+    current_flow_id: str | None,
+) -> list[ZeroconfSetupChoice]:
+    """Return discovered DHE choices from in-progress Zeroconf flows."""
+    flow_manager = getattr(hass.config_entries, "flow", None)
+    if flow_manager is None:
+        return []
+
+    choices: list[ZeroconfSetupChoice] = []
+    for flow in flow_manager.async_progress_by_handler(DOMAIN):
+        flow_id = flow.get("flow_id")
+        if current_flow_id is not None and flow_id == current_flow_id:
+            continue
+        target = discovery_context_target(flow)
+        if target is None:
+            continue
+        host, port = target
+        context = flow.get("context")
+        if (
+            not isinstance(context, Mapping)
+            or context.get("source") != FLOW_SOURCE_ZEROCONF
+        ):
+            continue
+        name = DEFAULT_NAME
+        name = str(context.get(FLOW_CONTEXT_DISCOVERY_NAME) or DEFAULT_NAME)
+        label = f"{name} ({host}:{port})"
+        choices.append(
+            ZeroconfSetupChoice(
+                key=zeroconf_setup_choice_key(host, port),
+                label=label,
+                host=host,
+                port=port,
+                name=name,
+                flow_id=str(flow_id) if flow_id is not None else None,
+            )
+        )
+    return sorted(choices, key=lambda choice: (choice.name, choice.host, choice.port))
 
 
 def is_matching_flow_in_progress(

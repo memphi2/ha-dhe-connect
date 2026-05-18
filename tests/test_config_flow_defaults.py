@@ -168,6 +168,15 @@ def _schema_defaults(schema: object) -> dict[str, object]:
     return defaults
 
 
+def _schema_validators(schema: object) -> dict[str, object]:
+    """Return config-flow schema validators keyed by field name."""
+    validators: dict[str, object] = {}
+    for marker, validator in getattr(schema, "schema", {}).items():
+        key = getattr(marker, "key", getattr(marker, "schema", None))
+        validators[key] = validator
+    return validators
+
+
 def _schema_suggested_values(schema: object) -> dict[str, object]:
     """Return Home Assistant suggested values from a config-flow schema."""
     suggested_values: dict[str, object] = {}
@@ -560,10 +569,25 @@ class TestSetupScanConfigFlow(
         self.config_flow = _load_config_flow()
         self.flow = self.config_flow.StiebelDHEConnectConfigFlow()
 
+        class _FlowManager:
+            def __init__(self) -> None:
+                self.progress: list[dict[str, object]] = []
+                self.aborted: list[str] = []
+
+            def async_progress_by_handler(self, _domain: str):  # noqa: ANN001
+                return list(self.progress)
+
+            def async_abort(self, flow_id: str) -> None:
+                self.aborted.append(flow_id)
+
         class _ConfigEntries:
+            def __init__(self, flow_manager: _FlowManager) -> None:
+                self.flow = flow_manager
+
             def async_entries(self, _domain: str):  # noqa: ANN001
                 return []
 
+        self._flow_manager = _FlowManager()
         self._tasks: list[asyncio.Task] = []
 
         def _create_task(coro):  # noqa: ANN001
@@ -578,7 +602,7 @@ class TestSetupScanConfigFlow(
             async_add_executor_job=_add_executor_job,
             async_create_task=_create_task,
             config=types.SimpleNamespace(language="en"),
-            config_entries=_ConfigEntries(),
+            config_entries=_ConfigEntries(self._flow_manager),
         )
         self.flow.async_show_progress = types.MethodType(
             lambda _self, **kwargs: {
@@ -615,10 +639,77 @@ class TestSetupScanConfigFlow(
         self.assertEqual(result["step_id"], "user")
         self.config_flow.async_scan_dhe_hosts.assert_not_called()
         defaults = _schema_defaults(result["data_schema"])
-        self.assertTrue(defaults[self.config_flow.CONF_SCAN_AUTOMATICALLY])
+        self.assertEqual(
+            defaults[self.config_flow.CONF_SETUP_MODE],
+            self.config_flow.SETUP_MODE_SCAN,
+        )
         self.assertNotIn(self.config_flow.CONF_SCAN_NETWORK_ADDRESS, defaults)
         self.assertNotIn(self.config_flow.CONF_SCAN_NETMASK, defaults)
         self.assertNotIn(self.config_flow.CONF_SCAN_CIDR, defaults)
+
+    async def test_user_step_lists_zeroconf_choices_before_scan_and_manual(self) -> None:
+        self._flow_manager.progress = [
+            {
+                "flow_id": "zeroconf-flow",
+                "context": {
+                    "source": "zeroconf",
+                    self.config_flow.FLOW_CONTEXT_DISCOVERED_HOST: "192.0.2.124",
+                    self.config_flow.FLOW_CONTEXT_DISCOVERED_PORT: 8443,
+                    self.config_flow.FLOW_CONTEXT_DISCOVERY_NAME: "DHE-JA06",
+                },
+            }
+        ]
+
+        result = await self.flow.async_step_user()
+
+        defaults = _schema_defaults(result["data_schema"])
+        validators = _schema_validators(result["data_schema"])
+        setup_validator = validators[self.config_flow.CONF_SETUP_MODE]
+        setup_options = list(
+            getattr(setup_validator, "container", None)
+            or getattr(setup_validator, "key")
+        )
+        self.assertEqual(
+            defaults[self.config_flow.CONF_SETUP_MODE],
+            self.config_flow.SETUP_MODE_SCAN,
+        )
+        self.assertEqual(
+            setup_options[:3],
+            [
+                "zeroconf:192.0.2.124:8443",
+                self.config_flow.SETUP_MODE_SCAN,
+                self.config_flow.SETUP_MODE_MANUAL,
+            ],
+        )
+
+    async def test_user_step_ignores_non_zeroconf_progress_contexts(self) -> None:
+        self._flow_manager.progress = [
+            {
+                "flow_id": "user-flow",
+                "context": {
+                    "source": "user",
+                    self.config_flow.FLOW_CONTEXT_DISCOVERED_HOST: "192.0.2.124",
+                    self.config_flow.FLOW_CONTEXT_DISCOVERED_PORT: 8443,
+                    self.config_flow.FLOW_CONTEXT_DISCOVERY_NAME: "DHE-JA06",
+                },
+            }
+        ]
+
+        result = await self.flow.async_step_user()
+
+        validators = _schema_validators(result["data_schema"])
+        setup_validator = validators[self.config_flow.CONF_SETUP_MODE]
+        setup_options = list(
+            getattr(setup_validator, "container", None)
+            or getattr(setup_validator, "key")
+        )
+        self.assertEqual(
+            setup_options,
+            [
+                self.config_flow.SETUP_MODE_SCAN,
+                self.config_flow.SETUP_MODE_MANUAL,
+            ],
+        )
 
     async def test_subnet_scan_forms_keep_subnet_alternatives_separate(self) -> None:
         self.config_flow.local_ipv4_addresses_from_hass = lambda _hass: [
@@ -626,7 +717,7 @@ class TestSetupScanConfigFlow(
         ]
 
         result = await self.flow.async_step_user(
-            {self.config_flow.CONF_SCAN_AUTOMATICALLY: True}
+            {self.config_flow.CONF_SETUP_MODE: self.config_flow.SETUP_MODE_SCAN}
         )
 
         self.assertEqual(result["type"], "form")
@@ -688,7 +779,7 @@ class TestSetupScanConfigFlow(
         self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
 
         result = await self.flow.async_step_user(
-            {self.config_flow.CONF_SCAN_AUTOMATICALLY: False}
+            {self.config_flow.CONF_SETUP_MODE: self.config_flow.SETUP_MODE_MANUAL}
         )
 
         self.assertEqual(result["type"], "form")
@@ -703,7 +794,7 @@ class TestSetupScanConfigFlow(
         self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
 
         result = await self.flow.async_step_user(
-            {self.config_flow.CONF_SCAN_AUTOMATICALLY: True}
+            {self.config_flow.CONF_SETUP_MODE: self.config_flow.SETUP_MODE_SCAN}
         )
 
         self.assertEqual(result["type"], "form")
@@ -734,7 +825,7 @@ class TestSetupScanConfigFlow(
         self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
 
         result = await self.flow.async_step_user(
-            {self.config_flow.CONF_SCAN_AUTOMATICALLY: True}
+            {self.config_flow.CONF_SETUP_MODE: self.config_flow.SETUP_MODE_SCAN}
         )
 
         self.assertEqual(result["step_id"], "subnet_scan")
@@ -763,7 +854,7 @@ class TestSetupScanConfigFlow(
         self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
 
         result = await self.flow.async_step_user(
-            {self.config_flow.CONF_SCAN_AUTOMATICALLY: True}
+            {self.config_flow.CONF_SETUP_MODE: self.config_flow.SETUP_MODE_SCAN}
         )
         self.assertEqual(result["step_id"], "subnet_scan")
         result = await self.flow.async_step_subnet_scan(
@@ -785,7 +876,7 @@ class TestSetupScanConfigFlow(
         self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
 
         result = await self.flow.async_step_user(
-            {self.config_flow.CONF_SCAN_AUTOMATICALLY: True}
+            {self.config_flow.CONF_SETUP_MODE: self.config_flow.SETUP_MODE_SCAN}
         )
 
         self.assertEqual(result["step_id"], "subnet_scan")
@@ -818,7 +909,7 @@ class TestSetupScanConfigFlow(
         self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
 
         result = await self.flow.async_step_user(
-            {self.config_flow.CONF_SCAN_AUTOMATICALLY: True}
+            {self.config_flow.CONF_SETUP_MODE: self.config_flow.SETUP_MODE_SCAN}
         )
 
         self.assertEqual(result["step_id"], "subnet_scan")
@@ -849,7 +940,7 @@ class TestSetupScanConfigFlow(
         self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
 
         result = await self.flow.async_step_user(
-            {self.config_flow.CONF_SCAN_AUTOMATICALLY: True}
+            {self.config_flow.CONF_SETUP_MODE: self.config_flow.SETUP_MODE_SCAN}
         )
 
         self.assertEqual(result["step_id"], "subnet_scan")
@@ -880,7 +971,7 @@ class TestSetupScanConfigFlow(
         self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
 
         result = await self.flow.async_step_user(
-            {self.config_flow.CONF_SCAN_AUTOMATICALLY: True}
+            {self.config_flow.CONF_SETUP_MODE: self.config_flow.SETUP_MODE_SCAN}
         )
 
         self.assertEqual(result["step_id"], "subnet_scan")
@@ -918,7 +1009,7 @@ class TestSetupScanConfigFlow(
         )
 
         result = await self.flow.async_step_user(
-            {self.config_flow.CONF_SCAN_AUTOMATICALLY: True}
+            {self.config_flow.CONF_SETUP_MODE: self.config_flow.SETUP_MODE_SCAN}
         )
 
         self.assertEqual(result["type"], "form")
@@ -953,7 +1044,7 @@ class TestSetupScanConfigFlow(
         self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
 
         result = await self.flow.async_step_user(
-            {self.config_flow.CONF_SCAN_AUTOMATICALLY: True}
+            {self.config_flow.CONF_SETUP_MODE: self.config_flow.SETUP_MODE_SCAN}
         )
 
         self.assertEqual(result["type"], "form")

@@ -505,7 +505,11 @@ async def test_config_flow_creates_entry_after_pairing_with_real_hass_fixture() 
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
 
         can_connect = AsyncMock(return_value=True)
-        validate_pairing = AsyncMock(return_value=config_flow.SetupPairingResult())
+        validate_pairing = AsyncMock(
+            return_value=config_flow.SetupPairingResult(
+                unique_id="aa:bb:cc:dd:ee:ff",
+            )
+        )
         with (
             patch.object(config_flow, "_can_connect", can_connect),
             patch.object(config_flow, "_validate_setup_pairing", validate_pairing),
@@ -542,6 +546,7 @@ async def test_config_flow_creates_entry_after_pairing_with_real_hass_fixture() 
             CONF_NAME: "Flow Fixture DHE",
             config_flow.CONF_INTERNAL_SCALD_PROTECTION: "50",
         }
+        assert result["result"].unique_id == "aa:bb:cc:dd:ee:ff"
         validate_pairing.assert_awaited_once()
         pairing_args = validate_pairing.await_args.args
         assert pairing_args[:3] == (
@@ -586,7 +591,7 @@ async def test_config_flow_scan_choice_prefills_manual_form_with_real_hass_fixtu
 
             result = await hass.config_entries.flow.async_configure(
                 result["flow_id"],
-                {config_flow.CONF_SCAN_AUTOMATICALLY: True},
+                {config_flow.CONF_SETUP_MODE: config_flow.SETUP_MODE_SCAN},
             )
             assert result["type"] is FlowResultType.FORM
             assert result["step_id"] == "subnet_scan"
@@ -629,6 +634,84 @@ async def test_config_flow_scan_choice_prefills_manual_form_with_real_hass_fixtu
             hass,
             networks=[ip_network("192.168.50.0/24")],
         )
+
+
+async def test_scan_prefilled_flow_uses_pairing_unique_id_with_real_hass_fixture() -> None:
+    """Create a scanned entry with the same MAC unique-id path as Zeroconf."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+
+        scan = AsyncMock(
+            return_value=[
+                config_flow.DHEHostCandidate(
+                    "192.0.2.124",
+                    DEFAULT_PORT,
+                    ("STE DHE App",),
+                )
+            ]
+        )
+        can_connect = AsyncMock(return_value=True)
+        validate_pairing = AsyncMock(
+            return_value=config_flow.SetupPairingResult(
+                unique_id="aa:bb:cc:dd:ee:ff",
+            )
+        )
+        with (
+            patch.object(config_flow, "async_scan_dhe_hosts", scan),
+            patch.object(config_flow, "_can_connect", can_connect),
+            patch.object(config_flow, "_validate_setup_pairing", validate_pairing),
+        ):
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_USER},
+            )
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                {config_flow.CONF_SETUP_MODE: config_flow.SETUP_MODE_SCAN},
+            )
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                {
+                    config_flow.CONF_SCAN_SUBNET_MODE: (
+                        config_flow.SCAN_SUBNET_MODE_CURRENT
+                    )
+                },
+            )
+            assert result["type"] is FlowResultType.SHOW_PROGRESS
+
+            await hass.async_block_till_done()
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "manual"
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                {
+                    CONF_HOST: "192.0.2.124",
+                    CONF_PORT: DEFAULT_PORT,
+                    CONF_NAME: "Scanned DHE",
+                    config_flow.CONF_INTERNAL_SCALD_PROTECTION: "55",
+                },
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "pairing_confirm"
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                {},
+            )
+
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert result["result"].unique_id == "aa:bb:cc:dd:ee:ff"
+        assert result["data"][CONF_HOST] == "192.0.2.124"
+        scan.assert_awaited_once()
+        can_connect.assert_awaited_once_with(hass, "192.0.2.124", DEFAULT_PORT)
+        validate_pairing.assert_awaited_once()
 
 
 async def test_config_flow_aborts_duplicate_target_with_real_hass_fixture() -> None:
@@ -714,6 +797,117 @@ async def test_zeroconf_flow_collects_tmax_then_creates_entry_after_pairing() ->
         assert result["result"].unique_id == "aa:bb:cc:dd:ee:ff"
         can_connect.assert_awaited_once_with(hass, "192.0.2.124", DEFAULT_PORT)
         validate_pairing.assert_awaited_once()
+
+
+async def test_user_flow_can_select_in_progress_zeroconf_discovery() -> None:
+    """Run Add Device through the visible Zeroconf/scan/manual choice."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+
+        can_connect = AsyncMock(return_value=True)
+        validate_pairing = AsyncMock(
+            return_value=config_flow.SetupPairingResult(
+                unique_id="aa:bb:cc:dd:ee:ff",
+            )
+        )
+        with (
+            patch.object(config_flow, "_can_connect", can_connect),
+            patch.object(config_flow, "_validate_setup_pairing", validate_pairing),
+        ):
+            zeroconf = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_ZEROCONF},
+                data=_zeroconf_info("DHE-JA06.local.", DEFAULT_PORT),
+            )
+            assert zeroconf["type"] is FlowResultType.FORM
+            assert zeroconf["step_id"] == "zeroconf_confirm"
+
+            user = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_USER},
+            )
+            assert user["type"] is FlowResultType.FORM
+            assert user["step_id"] == "user"
+            defaults = _schema_defaults(user["data_schema"])
+            assert (
+                defaults[config_flow.CONF_SETUP_MODE]
+                == config_flow.SETUP_MODE_SCAN
+            )
+
+            result = await hass.config_entries.flow.async_configure(
+                user["flow_id"],
+                user_input={
+                    config_flow.CONF_SETUP_MODE: "zeroconf:192.0.2.124:8443",
+                },
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "zeroconf_confirm"
+
+            duplicate = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_ZEROCONF},
+                data=_zeroconf_info("DHE-JA06.local.", DEFAULT_PORT),
+            )
+            assert duplicate["type"] is FlowResultType.ABORT
+            assert duplicate["reason"] == "already_in_progress"
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                user_input={config_flow.CONF_INTERNAL_SCALD_PROTECTION: "55"},
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "pairing_confirm"
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                user_input={},
+            )
+
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert result["title"] == "DHE-JA06"
+        assert result["data"][CONF_HOST] == "192.0.2.124"
+        assert result["result"].unique_id == "aa:bb:cc:dd:ee:ff"
+        assert can_connect.await_count == 2
+        validate_pairing.assert_awaited_once()
+
+
+async def test_user_zeroconf_takeover_keeps_source_flow_on_connect_failure() -> None:
+    """Keep the original discovery setup path when takeover cannot connect."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+
+        can_connect = AsyncMock(side_effect=[True, False])
+        with patch.object(config_flow, "_can_connect", can_connect):
+            zeroconf = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_ZEROCONF},
+                data=_zeroconf_info("DHE-JA06.local.", DEFAULT_PORT),
+            )
+            assert zeroconf["type"] is FlowResultType.FORM
+            assert zeroconf["step_id"] == "zeroconf_confirm"
+
+            user = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_USER},
+            )
+            result = await hass.config_entries.flow.async_configure(
+                user["flow_id"],
+                user_input={
+                    config_flow.CONF_SETUP_MODE: "zeroconf:192.0.2.124:8443",
+                },
+            )
+
+        assert result["type"] is FlowResultType.ABORT
+        assert result["reason"] == "cannot_connect"
+        assert can_connect.await_count == 2
+        progress = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+        assert any(flow["flow_id"] == zeroconf["flow_id"] for flow in progress)
 
 
 async def test_zeroconf_flow_aborts_duplicate_host_port() -> None:

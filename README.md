@@ -113,22 +113,25 @@ To use different local artwork, replace those files with PNGs using the same fil
 
 ## Configuration
 
-When the integration is added, Home Assistant first asks whether it should scan
-a subnet or continue with manual setup. The scan is enabled by default, remains
-optional, and only checks for DHE-like web interfaces on port `8443`. Subnet
-fields are shown only after the scan option is selected. Home Assistant
-pre-fills network address and subnet mask from its current local subnet when
-possible. Leave all subnet fields empty to scan the current local subnet, adjust
-network address `192.168.1.0` plus subnet mask `255.255.255.0`, or enter CIDR
-`192.168.1.0/24`; do not fill both alternatives. If a candidate is found, the
-normal setup form opens with host and port pre-filled. If no candidate is found,
-the same form opens for manual entry.
+When the integration is added, Home Assistant first offers the available setup
+paths: a discovered Zeroconf/mDNS DHE Connect when one is visible, subnet scan,
+or manual host entry. The subnet scan remains optional and only checks for
+DHE-like web interfaces on port `8443`. Subnet fields are shown only after the
+scan option is selected. Choose the current local subnet, adjust network address
+`192.168.1.0` plus subnet mask `255.255.255.0`, or enter CIDR
+`192.168.1.0/24`. Home Assistant pre-fills custom subnet forms from its current
+local subnet when possible. If a candidate is found, the normal setup form opens
+with host and port pre-filled. If no candidate is found, the same form opens for
+manual entry.
 
 Zeroconf/mDNS discovery only works inside the local subnet/VLAN by default.
 Discovery across subnets needs a router or firewall that is explicitly
 configured to reflect or relay mDNS traffic. If the DHE Connect is in another
 subnet and mDNS forwarding is not configured, use the manual host/IP setup or
 the explicit subnet scan instead.
+A direct `.local` hostname lookup or direct unicast DNS-SD answer from the DHE
+is not enough for Home Assistant's Zeroconf flow; Home Assistant must receive
+the multicast DNS-SD advertisement for `_ste-dhe._tcp.local.`.
 
 The config flow asks for:
 

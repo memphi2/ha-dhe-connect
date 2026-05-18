@@ -2,10 +2,10 @@
   "config": {
     "step": {
       "user": {
-        "title": "Start setup",
-        "description": "Subnet scanning is enabled by default. Disable the search only when you want to enter the DHE Connect host manually.",
+        "title": "Add DHE Connect",
+        "description": "Choose a discovered DHE Connect, scan a subnet, or enter the host manually. Zeroconf/mDNS discoveries only appear when Home Assistant can see the device in the local network.",
         "data": {
-          "scan_automatically": "Scan a subnet for DHE Connect"
+          "setup_mode": "Setup method"
         }
       },
       "subnet_scan": {
@@ -70,6 +70,7 @@
       "cannot_connect": "Could not connect to the DHE. Check the IP address and port.",
       "invalid_host": "Invalid host. Enter only an IP address or hostname, without path, username or port.",
       "invalid_scan_subnet_mode": "Choose how the subnet should be selected.",
+      "invalid_setup_mode": "Choose a discovered DHE Connect, subnet scan or manual setup.",
       "invalid_scan_subnet": "Invalid subnet. Use either network address 192.168.1.0 with subnet mask 255.255.255.0, or CIDR 192.168.1.0/24.",
       "scan_subnet_too_large": "The subnet is too large. Use a smaller private IPv4 subnet, for example 192.168.1.0 with subnet mask 255.255.255.0, or CIDR 192.168.1.0/24.",
       "embedded_port_not_supported": "Do not include the port in the host field (for example \"192.168.1.10\"). Enter the port only in the port field.",
