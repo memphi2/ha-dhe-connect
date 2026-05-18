@@ -165,6 +165,32 @@ class TestHATestApi(unittest.TestCase):
         sleep.assert_any_call(0.5)
         self.assertEqual(sleep.call_count, 2)
 
+    def test_cleanup_retry_reports_unstable_when_attempts_are_exhausted(self) -> None:
+        backup_path = Path("/tmp/auth-backup.json")
+        results = [
+            ha_test_api.TokenCleanupResult(removed=1, backup_path=backup_path),
+            ha_test_api.TokenCleanupResult(removed=1, backup_path=Path("/tmp/again.json")),
+        ]
+
+        with (
+            patch.object(
+                ha_test_api,
+                "cleanup_localhost_refresh_tokens",
+                side_effect=results,
+            ),
+            patch.object(ha_test_api.time, "sleep") as sleep,
+        ):
+            result = ha_test_api.cleanup_localhost_refresh_tokens_with_retry(
+                Path("/config"),
+                attempts=2,
+                interval=0.5,
+            )
+
+        self.assertEqual(result.removed, 2)
+        self.assertEqual(result.backup_path, backup_path)
+        self.assertFalse(result.stable)
+        sleep.assert_called_once_with(0.5)
+
     def test_service_smoke_reports_successful_climate_and_radio_actions(self) -> None:
         api = _FakeServiceApi(
             [
@@ -488,6 +514,50 @@ class TestHATestApi(unittest.TestCase):
 
         self.assertEqual(result, 0)
         self.assertEqual(instances[0].restart_count, 2)
+
+    def test_main_returns_failure_when_cleanup_does_not_stabilize(self) -> None:
+        class _Api:
+            def __init__(self, _url: str) -> None:
+                pass
+
+            def wait_online(self, **_kwargs) -> bool:
+                return True
+
+            def login(self, *_args):
+                return ha_test_api.AuthToken("access", "refresh")
+
+            def revoke_refresh_token(self, _refresh_token: str) -> bool:
+                raise RuntimeError("revoke failed")
+
+        output = io.StringIO()
+        with (
+            patch.object(ha_test_api, "HomeAssistantApi", _Api),
+            patch.object(
+                ha_test_api,
+                "cleanup_localhost_refresh_tokens_with_retry",
+                return_value=ha_test_api.TokenCleanupResult(
+                    removed=2,
+                    backup_path=None,
+                    stable=False,
+                ),
+            ),
+            patch.dict(os.environ, {"HA_TEST_PASSWORD": "secret"}),
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "ha_test_api.py",
+                    "--username",
+                    "test-user",
+                    "--cleanup-localhost-tokens",
+                ],
+            ),
+            redirect_stdout(output),
+        ):
+            result = ha_test_api.main()
+
+        self.assertEqual(result, 3)
+        self.assertIn("WARN: localhost token cleanup", output.getvalue())
 
     def test_parse_args_rejects_negative_cleanup_interval(self) -> None:
         with (

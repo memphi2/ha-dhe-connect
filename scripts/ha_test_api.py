@@ -52,6 +52,7 @@ class TokenCleanupResult:
 
     removed: int
     backup_path: Path | None
+    stable: bool = True
 
 
 @dataclass(frozen=True)
@@ -356,6 +357,7 @@ def cleanup_localhost_refresh_tokens_with_retry(
     remaining_attempts = max(1, attempts)
     total_removed = 0
     first_backup_path: Path | None = None
+    stable = False
     for attempt in range(remaining_attempts):
         result = cleanup_localhost_refresh_tokens(
             config,
@@ -365,10 +367,15 @@ def cleanup_localhost_refresh_tokens_with_retry(
         total_removed += result.removed
         first_backup_path = first_backup_path or result.backup_path
         if result.removed == 0:
+            stable = True
             break
         if attempt + 1 < remaining_attempts:
             time.sleep(interval)
-    return TokenCleanupResult(removed=total_removed, backup_path=first_backup_path)
+    return TokenCleanupResult(
+        removed=total_removed,
+        backup_path=first_backup_path,
+        stable=stable,
+    )
 
 
 def run_service_smoke(
@@ -710,10 +717,15 @@ def main() -> int:
                             f"{format_redacted_exception(cleanup_err)}"
                         )
                     else:
+                        prefix = "PASS" if cleanup.stable else "WARN"
                         print(
-                            "PASS: localhost token cleanup "
-                            f"removed={cleanup.removed} backup={cleanup.backup_path}"
+                            f"{prefix}: localhost token cleanup "
+                            f"removed={cleanup.removed} "
+                            f"stable={cleanup.stable} "
+                            f"backup={cleanup.backup_path}"
                         )
+                        if not cleanup.stable:
+                            exit_code = 3
     return exit_code
 
 
