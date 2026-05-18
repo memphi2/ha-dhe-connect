@@ -69,6 +69,21 @@ def _install_fake_homeassistant() -> None:
         def __init_subclass__(cls, **kwargs):  # noqa: ANN204
             return super().__init_subclass__()
 
+        def add_suggested_values_to_schema(self, data_schema, suggested_values):  # noqa: ANN001, ANN201
+            import copy  # noqa: PLC0415
+
+            schema = {}
+            for key, val in data_schema.schema.items():
+                new_key = key
+                marker_key = getattr(key, "schema", key)
+                if suggested_values and marker_key in suggested_values:
+                    new_key = copy.copy(key)
+                    new_key.description = {
+                        "suggested_value": suggested_values[marker_key]
+                    }
+                schema[new_key] = val
+            return data_schema.__class__(schema)
+
     fake_config_entries = types.ModuleType("homeassistant.config_entries")
     fake_config_entries.ConfigFlow = _ConfigFlowBase
     fake_config_entries.OptionsFlow = _ConfigFlowBase
@@ -515,7 +530,11 @@ class TestSetupScanConfigFlow(
             self._tasks.append(task)
             return task
 
+        async def _add_executor_job(func, *args):  # noqa: ANN001
+            return func(*args)
+
         self.flow.hass = types.SimpleNamespace(
+            async_add_executor_job=_add_executor_job,
             async_create_task=_create_task,
             config=types.SimpleNamespace(language="en"),
             config_entries=_ConfigEntries(),
@@ -562,7 +581,56 @@ class TestSetupScanConfigFlow(
                 default = default()
             defaults[key] = default
         self.assertFalse(defaults[self.config_flow.CONF_SCAN_AUTOMATICALLY])
-        self.assertEqual(defaults[self.config_flow.CONF_SCAN_SUBNET], "")
+        self.assertNotIn(self.config_flow.CONF_SCAN_NETWORK_ADDRESS, defaults)
+        self.assertNotIn(self.config_flow.CONF_SCAN_NETMASK, defaults)
+        self.assertNotIn(self.config_flow.CONF_SCAN_CIDR, defaults)
+
+    async def test_subnet_scan_form_prefills_current_local_subnet(self) -> None:
+        self.config_flow.local_ipv4_addresses_from_hass = lambda _hass: [
+            "192.168.2.147"
+        ]
+
+        result = await self.flow.async_step_user(
+            {self.config_flow.CONF_SCAN_AUTOMATICALLY: True}
+        )
+
+        self.assertEqual(result["type"], "form")
+        self.assertEqual(result["step_id"], "subnet_scan")
+        defaults = {}
+        suggested_values = {}
+        for marker in result["data_schema"].schema:
+            key = getattr(marker, "key", getattr(marker, "schema", None))
+            default = getattr(marker, "default", None)
+            if callable(default):
+                default = default()
+            defaults[key] = default
+            description = getattr(marker, "description", None) or {}
+            if "suggested_value" in description:
+                suggested_values[key] = description["suggested_value"]
+        self.assertEqual(
+            suggested_values[self.config_flow.CONF_SCAN_NETWORK_ADDRESS],
+            "192.168.2.0",
+        )
+        self.assertEqual(
+            suggested_values[self.config_flow.CONF_SCAN_NETMASK],
+            "255.255.255.0",
+        )
+        self.assertEqual(suggested_values[self.config_flow.CONF_SCAN_CIDR], "")
+        self.assertEqual(result["data_schema"]({}), {})
+        self.assertEqual(
+            result["data_schema"](
+                {
+                    self.config_flow.CONF_SCAN_NETWORK_ADDRESS: "",
+                    self.config_flow.CONF_SCAN_NETMASK: "",
+                    self.config_flow.CONF_SCAN_CIDR: "192.168.2.0/25",
+                }
+            ),
+            {
+                self.config_flow.CONF_SCAN_NETWORK_ADDRESS: "",
+                self.config_flow.CONF_SCAN_NETMASK: "",
+                self.config_flow.CONF_SCAN_CIDR: "192.168.2.0/25",
+            },
+        )
 
     async def test_user_step_manual_choice_shows_manual_form_without_scan(self) -> None:
         self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
@@ -583,9 +651,16 @@ class TestSetupScanConfigFlow(
         self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
 
         result = await self.flow.async_step_user(
+            {self.config_flow.CONF_SCAN_AUTOMATICALLY: True}
+        )
+
+        self.assertEqual(result["type"], "form")
+        self.assertEqual(result["step_id"], "subnet_scan")
+        result = await self.flow.async_step_subnet_scan(
             {
-                self.config_flow.CONF_SCAN_AUTOMATICALLY: True,
-                self.config_flow.CONF_SCAN_SUBNET: "192.168.2.0 255.255.255.0",
+                self.config_flow.CONF_SCAN_NETWORK_ADDRESS: "192.168.2.0",
+                self.config_flow.CONF_SCAN_NETMASK: "255.255.255.0",
+                self.config_flow.CONF_SCAN_CIDR: "",
             }
         )
 
@@ -596,49 +671,121 @@ class TestSetupScanConfigFlow(
             networks=[ip_network("192.168.2.0/24")],
         )
 
-    async def test_user_step_scan_rejects_invalid_subnet(self) -> None:
+    async def test_user_step_scan_uses_cidr_subnet(self) -> None:
         self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
 
         result = await self.flow.async_step_user(
+            {self.config_flow.CONF_SCAN_AUTOMATICALLY: True}
+        )
+
+        self.assertEqual(result["step_id"], "subnet_scan")
+        result = await self.flow.async_step_subnet_scan(
             {
-                self.config_flow.CONF_SCAN_AUTOMATICALLY: True,
-                self.config_flow.CONF_SCAN_SUBNET: "192.168.0.0 255.255.0.0",
+                self.config_flow.CONF_SCAN_NETWORK_ADDRESS: "",
+                self.config_flow.CONF_SCAN_NETMASK: "",
+                self.config_flow.CONF_SCAN_CIDR: "192.168.2.0/25",
+            }
+        )
+
+        self.assertEqual(result["type"], "progress")
+        await self._tasks[0]
+        self.config_flow.async_scan_dhe_hosts.assert_awaited_once_with(
+            self.flow.hass,
+            networks=[ip_network("192.168.2.0/25")],
+        )
+
+    async def test_user_step_scan_rejects_mixed_subnet_alternatives(self) -> None:
+        self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
+
+        await self.flow.async_step_user(
+            {self.config_flow.CONF_SCAN_AUTOMATICALLY: True}
+        )
+        result = await self.flow.async_step_subnet_scan(
+            {
+                self.config_flow.CONF_SCAN_NETWORK_ADDRESS: "192.168.2.0",
+                self.config_flow.CONF_SCAN_NETMASK: "255.255.255.0",
+                self.config_flow.CONF_SCAN_CIDR: "192.168.2.0/24",
             }
         )
 
         self.assertEqual(result["type"], "form")
-        self.assertEqual(result["step_id"], "user")
-        self.assertEqual(result["errors"]["scan_subnet"], "scan_subnet_too_large")
+        self.assertEqual(result["step_id"], "subnet_scan")
+        self.assertEqual(
+            result["errors"][self.config_flow.CONF_SCAN_CIDR],
+            "invalid_scan_subnet",
+        )
+        self.config_flow.async_scan_dhe_hosts.assert_not_called()
+
+    async def test_user_step_scan_rejects_invalid_subnet(self) -> None:
+        self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
+
+        result = await self.flow.async_step_user(
+            {self.config_flow.CONF_SCAN_AUTOMATICALLY: True}
+        )
+
+        self.assertEqual(result["step_id"], "subnet_scan")
+        result = await self.flow.async_step_subnet_scan(
+            {
+                self.config_flow.CONF_SCAN_NETWORK_ADDRESS: "192.168.0.0",
+                self.config_flow.CONF_SCAN_NETMASK: "255.255.0.0",
+                self.config_flow.CONF_SCAN_CIDR: "",
+            }
+        )
+
+        self.assertEqual(result["type"], "form")
+        self.assertEqual(result["step_id"], "subnet_scan")
+        self.assertEqual(
+            result["errors"][self.config_flow.CONF_SCAN_NETMASK],
+            "scan_subnet_too_large",
+        )
         self.config_flow.async_scan_dhe_hosts.assert_not_called()
 
     async def test_user_step_scan_rejects_wildcard_netmask(self) -> None:
         self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
 
         result = await self.flow.async_step_user(
+            {self.config_flow.CONF_SCAN_AUTOMATICALLY: True}
+        )
+
+        self.assertEqual(result["step_id"], "subnet_scan")
+        result = await self.flow.async_step_subnet_scan(
             {
-                self.config_flow.CONF_SCAN_AUTOMATICALLY: True,
-                self.config_flow.CONF_SCAN_SUBNET: "192.168.2.0 0.0.0.255",
+                self.config_flow.CONF_SCAN_NETWORK_ADDRESS: "192.168.2.0",
+                self.config_flow.CONF_SCAN_NETMASK: "0.0.0.255",
+                self.config_flow.CONF_SCAN_CIDR: "",
             }
         )
 
         self.assertEqual(result["type"], "form")
-        self.assertEqual(result["step_id"], "user")
-        self.assertEqual(result["errors"]["scan_subnet"], "invalid_scan_subnet")
+        self.assertEqual(result["step_id"], "subnet_scan")
+        self.assertEqual(
+            result["errors"][self.config_flow.CONF_SCAN_NETMASK],
+            "invalid_scan_subnet",
+        )
         self.config_flow.async_scan_dhe_hosts.assert_not_called()
 
     async def test_user_step_scan_rejects_slash_wildcard_netmask(self) -> None:
         self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
 
         result = await self.flow.async_step_user(
+            {self.config_flow.CONF_SCAN_AUTOMATICALLY: True}
+        )
+
+        self.assertEqual(result["step_id"], "subnet_scan")
+        result = await self.flow.async_step_subnet_scan(
             {
-                self.config_flow.CONF_SCAN_AUTOMATICALLY: True,
-                self.config_flow.CONF_SCAN_SUBNET: "192.168.2.0/0.0.0.255",
+                self.config_flow.CONF_SCAN_NETWORK_ADDRESS: "",
+                self.config_flow.CONF_SCAN_NETMASK: "",
+                self.config_flow.CONF_SCAN_CIDR: "192.168.2.0/0.0.0.255",
             }
         )
 
         self.assertEqual(result["type"], "form")
-        self.assertEqual(result["step_id"], "user")
-        self.assertEqual(result["errors"]["scan_subnet"], "invalid_scan_subnet")
+        self.assertEqual(result["step_id"], "subnet_scan")
+        self.assertEqual(
+            result["errors"][self.config_flow.CONF_SCAN_CIDR],
+            "invalid_scan_subnet",
+        )
         self.config_flow.async_scan_dhe_hosts.assert_not_called()
 
     async def test_user_step_runs_scan_then_prefills_manual_form(self) -> None:
@@ -655,6 +802,10 @@ class TestSetupScanConfigFlow(
         result = await self.flow.async_step_user(
             {self.config_flow.CONF_SCAN_AUTOMATICALLY: True}
         )
+
+        self.assertEqual(result["type"], "form")
+        self.assertEqual(result["step_id"], "subnet_scan")
+        result = await self.flow.async_step_subnet_scan({})
 
         self.assertEqual(result["type"], "progress")
         self.assertEqual(result["step_id"], "network_scan")
@@ -686,6 +837,10 @@ class TestSetupScanConfigFlow(
         result = await self.flow.async_step_user(
             {self.config_flow.CONF_SCAN_AUTOMATICALLY: True}
         )
+
+        self.assertEqual(result["type"], "form")
+        self.assertEqual(result["step_id"], "subnet_scan")
+        result = await self.flow.async_step_subnet_scan({})
 
         self.assertEqual(result["type"], "progress")
         await self._tasks[0]

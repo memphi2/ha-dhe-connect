@@ -3,10 +3,18 @@
     "step": {
       "user": {
         "title": "Start setup",
-        "description": "Manual setup is the default. Enable the search only when Home Assistant should scan a subnet for DHE Connect first. If no subnet is entered, the current local subnet is used.",
+        "description": "Manual setup is the default. Enable the search only when Home Assistant should scan a subnet for DHE Connect first.",
         "data": {
-          "scan_automatically": "Scan a subnet for DHE Connect",
-          "scan_subnet": "Subnet to scan (for example 192.168.1.0 255.255.255.0)"
+          "scan_automatically": "Scan a subnet for DHE Connect"
+        }
+      },
+      "subnet_scan": {
+        "title": "Subnet scan",
+        "description": "Network address and subnet mask are prefilled from Home Assistant's current local subnet when possible. Leave all fields empty to scan the current local subnet, or adjust either network address plus subnet mask, or the CIDR subnet. Do not fill both alternatives.",
+        "data": {
+          "scan_network_address": "Network address (for example 192.168.1.0)",
+          "scan_netmask": "Subnet mask (for example 255.255.255.0)",
+          "scan_cidr": "or CIDR subnet (for example 192.168.1.0/24)"
         }
       },
       "manual": {
@@ -41,8 +49,8 @@
       "auth_timeout": "Authentication on the DHE timed out. Please try again.",
       "cannot_connect": "Could not connect to the DHE. Check the IP address and port.",
       "invalid_host": "Invalid host. Enter only an IP address or hostname, without path, username or port.",
-      "invalid_scan_subnet": "Invalid subnet. Example: 192.168.1.0 255.255.255.0",
-      "scan_subnet_too_large": "The subnet is too large. Use a smaller private IPv4 subnet, for example 192.168.1.0 255.255.255.0.",
+      "invalid_scan_subnet": "Invalid subnet. Use either network address 192.168.1.0 with subnet mask 255.255.255.0, or CIDR 192.168.1.0/24.",
+      "scan_subnet_too_large": "The subnet is too large. Use a smaller private IPv4 subnet, for example 192.168.1.0 with subnet mask 255.255.255.0, or CIDR 192.168.1.0/24.",
       "embedded_port_not_supported": "Do not include the port in the host field (for example \"192.168.1.10\"). Enter the port only in the port field.",
       "invalid_port": "Invalid port. The port must be between 1 and 65535.",
       "invalid_internal_scald_protection": "Invalid Tmax jumper position."

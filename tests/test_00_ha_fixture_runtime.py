@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 import importlib
+from ipaddress import ip_network
 from pathlib import Path
 import sys
 from typing import Any
@@ -44,6 +45,17 @@ def _schema_defaults(schema: Any) -> dict[str, Any]:
             default = default()
         defaults[key] = default
     return defaults
+
+
+def _schema_suggested_values(schema: Any) -> dict[str, Any]:
+    """Return Home Assistant suggested values from a flow schema."""
+    suggested_values: dict[str, Any] = {}
+    for marker in getattr(schema, "schema", {}):
+        key = getattr(marker, "schema", None)
+        description = getattr(marker, "description", None) or {}
+        if "suggested_value" in description:
+            suggested_values[key] = description["suggested_value"]
+    return suggested_values
 
 
 class _FixtureDHEClient:
@@ -556,7 +568,14 @@ async def test_config_flow_scan_choice_prefills_manual_form_with_real_hass_fixtu
                 )
             ]
         )
-        with patch.object(config_flow, "async_scan_dhe_hosts", scan):
+        with (
+            patch.object(config_flow, "async_scan_dhe_hosts", scan),
+            patch.object(
+                config_flow,
+                "local_ipv4_addresses_from_hass",
+                return_value=["192.168.50.10"],
+            ),
+        ):
             result = await hass.config_entries.flow.async_init(
                 DOMAIN,
                 context={"source": config_entries.SOURCE_USER},
@@ -567,6 +586,22 @@ async def test_config_flow_scan_choice_prefills_manual_form_with_real_hass_fixtu
             result = await hass.config_entries.flow.async_configure(
                 result["flow_id"],
                 {config_flow.CONF_SCAN_AUTOMATICALLY: True},
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "subnet_scan"
+            suggested = _schema_suggested_values(result["data_schema"])
+            assert suggested[config_flow.CONF_SCAN_NETWORK_ADDRESS] == "192.168.50.0"
+            assert suggested[config_flow.CONF_SCAN_NETMASK] == "255.255.255.0"
+            assert suggested[config_flow.CONF_SCAN_CIDR] == ""
+            assert result["data_schema"]({}) == {}
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                {
+                    config_flow.CONF_SCAN_NETWORK_ADDRESS: "192.168.50.0",
+                    config_flow.CONF_SCAN_NETMASK: "255.255.255.0",
+                    config_flow.CONF_SCAN_CIDR: "",
+                },
             )
             assert result["type"] is FlowResultType.SHOW_PROGRESS
             assert result["progress_action"] == "scan_dhe"
@@ -581,7 +616,10 @@ async def test_config_flow_scan_choice_prefills_manual_form_with_real_hass_fixtu
         defaults = _schema_defaults(result["data_schema"])
         assert defaults[CONF_HOST] == "192.0.2.124"
         assert defaults[CONF_PORT] == DEFAULT_PORT
-        scan.assert_awaited_once_with(hass, networks=None)
+        scan.assert_awaited_once_with(
+            hass,
+            networks=[ip_network("192.168.50.0/24")],
+        )
 
 
 async def test_config_flow_aborts_duplicate_target_with_real_hass_fixture() -> None:
