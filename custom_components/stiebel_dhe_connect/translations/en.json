@@ -10,11 +10,24 @@
       },
       "subnet_scan": {
         "title": "Subnet scan",
-        "description": "Network address and subnet mask are prefilled from Home Assistant's current local subnet when possible. Leave all fields empty to scan the current local subnet, or adjust either network address plus subnet mask, or the CIDR subnet. Do not fill both alternatives.",
+        "description": "Choose how Home Assistant should select the subnet before scanning for DHE Connect.",
+        "data": {
+          "scan_subnet_mode": "Subnet selection"
+        }
+      },
+      "subnet_scan_network_mask": {
+        "title": "Subnet scan",
+        "description": "Enter a network address and subnet mask, for example 192.168.1.0 and 255.255.255.0. Use this form instead of CIDR.",
         "data": {
           "scan_network_address": "Network address (for example 192.168.1.0)",
-          "scan_netmask": "Subnet mask (for example 255.255.255.0)",
-          "scan_cidr": "or CIDR subnet (for example 192.168.1.0/24)"
+          "scan_netmask": "Subnet mask (for example 255.255.255.0)"
+        }
+      },
+      "subnet_scan_cidr": {
+        "title": "Subnet scan",
+        "description": "Enter a CIDR subnet, for example 192.168.1.0/24. Use this form instead of network address plus subnet mask.",
+        "data": {
+          "scan_cidr": "CIDR subnet (for example 192.168.1.0/24)"
         }
       },
       "manual": {
@@ -49,6 +62,7 @@
       "auth_timeout": "Authentication on the DHE timed out. Please try again.",
       "cannot_connect": "Could not connect to the DHE. Check the IP address and port.",
       "invalid_host": "Invalid host. Enter only an IP address or hostname, without path, username or port.",
+      "invalid_scan_subnet_mode": "Choose how the subnet should be selected.",
       "invalid_scan_subnet": "Invalid subnet. Use either network address 192.168.1.0 with subnet mask 255.255.255.0, or CIDR 192.168.1.0/24.",
       "scan_subnet_too_large": "The subnet is too large. Use a smaller private IPv4 subnet, for example 192.168.1.0 with subnet mask 255.255.255.0, or CIDR 192.168.1.0/24.",
       "embedded_port_not_supported": "Do not include the port in the host field (for example \"192.168.1.10\"). Enter the port only in the port field.",

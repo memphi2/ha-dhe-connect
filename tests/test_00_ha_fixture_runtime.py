@@ -589,18 +589,26 @@ async def test_config_flow_scan_choice_prefills_manual_form_with_real_hass_fixtu
             )
             assert result["type"] is FlowResultType.FORM
             assert result["step_id"] == "subnet_scan"
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                {
+                    config_flow.CONF_SCAN_SUBNET_MODE: (
+                        config_flow.SCAN_SUBNET_MODE_NETWORK_MASK
+                    )
+                },
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "subnet_scan_network_mask"
             suggested = _schema_suggested_values(result["data_schema"])
             assert suggested[config_flow.CONF_SCAN_NETWORK_ADDRESS] == "192.168.50.0"
             assert suggested[config_flow.CONF_SCAN_NETMASK] == "255.255.255.0"
-            assert suggested[config_flow.CONF_SCAN_CIDR] == ""
-            assert result["data_schema"]({}) == {}
 
             result = await hass.config_entries.flow.async_configure(
                 result["flow_id"],
                 {
                     config_flow.CONF_SCAN_NETWORK_ADDRESS: "192.168.50.0",
                     config_flow.CONF_SCAN_NETMASK: "255.255.255.0",
-                    config_flow.CONF_SCAN_CIDR: "",
                 },
             )
             assert result["type"] is FlowResultType.SHOW_PROGRESS
