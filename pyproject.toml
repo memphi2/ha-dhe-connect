@@ -25,6 +25,7 @@ files = [
     "custom_components/stiebel_dhe_connect/client_runtime_media.py",
     "custom_components/stiebel_dhe_connect/client_temperature_memory_commands.py",
     "custom_components/stiebel_dhe_connect/client_transport.py",
+    "custom_components/stiebel_dhe_connect/client_transport_helpers.py",
     "custom_components/stiebel_dhe_connect/client_types.py",
     "custom_components/stiebel_dhe_connect/client_value_helpers.py",
     "custom_components/stiebel_dhe_connect/client_weather_commands.py",

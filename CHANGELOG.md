@@ -8,6 +8,8 @@
   focused mixins to keep the main client class smaller.
 - Split radio/weather runtime state handling and readback waiters into a
   dedicated client runtime mixin.
+- Split transport URL, packet and token-file helpers into a focused transport
+  helper mixin.
 
 ## v1.5.1 - 2026-05-18
 
