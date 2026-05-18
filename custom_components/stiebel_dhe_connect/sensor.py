@@ -966,8 +966,11 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
     def _cancel_timer_countdown(self) -> None:
         """Cancel the local timer countdown task."""
         task = self._timer_countdown_task
-        if task is not None and not task.done():
+        if task is None:
+            return
+        if not task.done():
             task.cancel()
+        self._timer_countdown_task = None
 
     async def _async_timer_countdown(self) -> None:
         """Write locally adjusted timer remaining state while a timer runs."""

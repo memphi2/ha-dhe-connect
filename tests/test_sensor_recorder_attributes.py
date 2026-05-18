@@ -356,6 +356,82 @@ class TestSensorRecorderAttributes(unittest.TestCase):
             app_command="get:ste.app.showerTimer:remainingMilliseconds",
         )
 
+    def test_timer_reactivation_restarts_cancelled_countdown_task(self) -> None:
+        sensor_module = _load_sensor_module()
+        protocol_module = _load_component_module("protocol")
+        description = next(
+            item
+            for item in sensor_module.SENSOR_DESCRIPTIONS
+            if item.key == "brush_timer_remaining"
+        )
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+            online = True
+            last_measurements: dict[int, object] = {}
+            last_measurement_attributes: dict[int, dict[str, object]] = {}
+
+            def __init__(self) -> None:
+                self.request_measurement_refresh = AsyncMock()
+
+        class _FakeHass:
+            def __init__(self) -> None:
+                self.tasks: list[asyncio.Task[object]] = []
+
+            def async_create_task(self, coro, *, name: str | None = None):
+                task = asyncio.create_task(coro, name=name)
+                self.tasks.append(task)
+                return task
+
+        async def _run() -> list[asyncio.Task[object]]:
+            client = _FakeClient()
+            hass = _FakeHass()
+            sensor = sensor_module.StiebelDHESensor(
+                entry_id="test-entry",
+                name="Test DHE",
+                client=client,
+                description=description,
+            )
+            sensor.hass = hass
+            sensor.async_on_remove = lambda _callback: None
+            sensor.async_write_ha_state = lambda: None
+
+            with patch.object(sensor_module.time, "monotonic", return_value=10.0):
+                sensor._handle_measurement_update(
+                    protocol_module.ID_BRUSH_TIMER_REMAINING,
+                    1.0,
+                )
+                sensor._handle_measurement_update(
+                    protocol_module.ID_BRUSH_TIMER_ACTIVATION,
+                    True,
+                )
+            first_task = sensor._timer_countdown_task
+            with patch.object(sensor_module.time, "monotonic", return_value=11.0):
+                sensor._handle_measurement_update(
+                    protocol_module.ID_BRUSH_TIMER_ACTIVATION,
+                    False,
+                )
+                sensor._handle_measurement_update(
+                    protocol_module.ID_BRUSH_TIMER_ACTIVATION,
+                    True,
+                )
+            second_task = sensor._timer_countdown_task
+            self.assertIsNotNone(first_task)
+            self.assertIsNotNone(second_task)
+            self.assertIsNot(first_task, second_task)
+            self.assertGreater(first_task.cancelling(), 0)
+            self.assertIn(second_task, hass.tasks)
+            sensor._timer_active = False
+            sensor._cancel_timer_countdown()
+            await asyncio.gather(*hass.tasks, return_exceptions=True)
+            return hass.tasks
+
+        tasks = asyncio.run(_run())
+
+        self.assertGreaterEqual(len(tasks), 2)
+
     def test_timer_remaining_resets_to_duration_when_expired(self) -> None:
         sensor_module = _load_sensor_module()
         protocol_module = _load_component_module("protocol")

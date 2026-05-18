@@ -11,6 +11,12 @@
 
 ### Changed
 
+- Treat startup radio metadata without an explicit playing flag as `off` so HA
+  no longer shows an idle radio after integration start when the DHE radio is not
+  running.
+- Expanded the authenticated HA-Test API smoke checks with read-only core
+  entity validation and a rapid timer restart case so timer task regressions,
+  missing key entities and bad entity state shapes are caught before release.
 - Added an explicit release-check guard for final post-publish validation so
   the current commit can be required to match the published release tag.
 - Made HA-Test localhost-token cleanup retry the mounted auth-file cleanup so
