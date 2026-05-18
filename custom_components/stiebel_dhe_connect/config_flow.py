@@ -59,11 +59,15 @@ from .config_flow_discovery import (
     FLOW_CONTEXT_DISCOVERED_HOST,
     FLOW_CONTEXT_DISCOVERED_PORT,
     FLOW_CONTEXT_DISCOVERY_NAME,
+    SETUP_MODE_MANUAL,
+    SETUP_MODE_SCAN,
     SetupPairingResult,
+    ZeroconfSetupChoice,
     coerce_setup_pairing_result as _coerce_setup_pairing_result,
     device_unique_id_from_info as _device_unique_id_from_info,
     discovery_info_name as _discovery_info_name,
     is_matching_flow_in_progress as _is_matching_flow_in_progress,
+    zeroconf_setup_choices_from_progress as _zeroconf_setup_choices_from_progress,
 )
 from .connection_helpers import (
     host_for_url,
@@ -121,6 +125,7 @@ CONF_SCAN_SUBNET_MODE = "scan_subnet_mode"
 CONF_SCAN_NETWORK_ADDRESS = "scan_network_address"
 CONF_SCAN_NETMASK = "scan_netmask"
 CONF_SCAN_CIDR = "scan_cidr"
+CONF_SETUP_MODE = "setup_mode"
 SETUP_SCAN_PROGRESS_ACTION = "scan_dhe"
 
 _LOGGER = logging.getLogger(__name__)
@@ -230,6 +235,19 @@ def _scan_subnet_suggested_values(network: IPv4Network) -> dict[str, str]:
 def _language_from_hass(hass: HomeAssistant) -> str:
     """Return the configured Home Assistant language."""
     return str(getattr(hass.config, "language", "") or "")
+
+
+def _setup_mode_labels(language: str) -> dict[str, str]:
+    """Return static setup method labels for the initial setup form."""
+    if language.lower().startswith("de"):
+        return {
+            SETUP_MODE_SCAN: "Subnetz-Scan",
+            SETUP_MODE_MANUAL: "Manuell eingeben",
+        }
+    return {
+        SETUP_MODE_SCAN: "Subnet scan",
+        SETUP_MODE_MANUAL: "Enter manually",
+    }
 
 
 def _entry_target(entry: config_entries.ConfigEntry) -> tuple[str, int] | None:
@@ -450,16 +468,36 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
             )
         }
 
+    def _available_zeroconf_choices(self) -> list[ZeroconfSetupChoice]:
+        """Return discovered Zeroconf choices not already configured."""
+        return [
+            choice
+            for choice in _zeroconf_setup_choices_from_progress(
+                self.hass,
+                current_flow_id=getattr(self, "flow_id", None),
+            )
+            if not _is_target_used_by_other_entry(self.hass, choice.host, choice.port)
+        ]
+
+    def _setup_choice_options(self) -> dict[str, str]:
+        """Return initial setup choices: Zeroconf discoveries, scan, manual."""
+        options = {choice.key: choice.label for choice in self._available_zeroconf_choices()}
+        options.update(_setup_mode_labels(_language_from_hass(self.hass)))
+        return options
+
     def _show_setup_choice_form(
         self,
         errors: dict[str, str] | None = None,
     ) -> config_entries.ConfigFlowResult:
-        """Show automatic subnet scan vs manual setup choice."""
+        """Show Zeroconf discoveries, subnet scan and manual setup choices."""
+        options = self._setup_choice_options()
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_SCAN_AUTOMATICALLY, default=True): bool,
+                    vol.Required(CONF_SETUP_MODE, default=SETUP_MODE_SCAN): vol.In(
+                        options
+                    ),
                 }
             ),
             errors=errors or {},
@@ -607,6 +645,33 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
                 internal_scald_protection
             )
 
+    async def _async_start_discovered_setup(
+        self,
+        host: str,
+        port: int,
+        name: str,
+        *,
+        source_flow_id: str | None = None,
+    ) -> config_entries.ConfigFlowResult:
+        """Start the setup path for a discovered DHE target."""
+        if _is_target_used_by_other_entry(self.hass, host, port):
+            return self.async_abort(reason="already_configured")
+        self.context[FLOW_CONTEXT_DISCOVERED_HOST] = host
+        self.context[FLOW_CONTEXT_DISCOVERED_PORT] = port
+        self.context[FLOW_CONTEXT_DISCOVERY_NAME] = name
+        if not await _can_connect(self.hass, host, port):
+            return self.async_abort(reason="cannot_connect")
+        if source_flow_id is not None:
+            self.hass.config_entries.flow.async_abort(source_flow_id)
+
+        self._set_pending_setup_data(
+            host=host,
+            port=port,
+            name=name,
+            token_file=token_file_for_target(host, port),
+        )
+        return await self.async_step_zeroconf_confirm()
+
     async def _async_handle_setup_scan(self) -> config_entries.ConfigFlowResult | None:
         """Start or finish the optional setup scan."""
         if self._setup_scan_done:
@@ -644,10 +709,27 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
         if CONF_HOST in user_input:
             return await self.async_step_manual(user_input)
 
-        if user_input.get(CONF_SCAN_AUTOMATICALLY):
-            return await self.async_step_subnet_scan()
+        if CONF_SCAN_AUTOMATICALLY in user_input:
+            if user_input.get(CONF_SCAN_AUTOMATICALLY):
+                return await self.async_step_subnet_scan()
+            return await self.async_step_manual()
 
-        return await self.async_step_manual()
+        setup_mode = str(user_input.get(CONF_SETUP_MODE) or "").strip()
+        if setup_mode == SETUP_MODE_SCAN:
+            return await self.async_step_subnet_scan()
+        if setup_mode == SETUP_MODE_MANUAL:
+            return await self.async_step_manual()
+
+        for choice in self._available_zeroconf_choices():
+            if setup_mode == choice.key:
+                return await self._async_start_discovered_setup(
+                    choice.host,
+                    choice.port,
+                    choice.name,
+                    source_flow_id=choice.flow_id,
+                )
+
+        return self._show_setup_choice_form({CONF_SETUP_MODE: "invalid_setup_mode"})
 
     async def async_step_zeroconf(self, discovery_info: Any):
         """Handle a DHE discovered by Zeroconf/mDNS."""
@@ -673,20 +755,7 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
             return self.async_abort(reason="already_in_progress")
 
         name = _discovery_info_name(discovery_info)
-        self.context[FLOW_CONTEXT_DISCOVERED_HOST] = host
-        self.context[FLOW_CONTEXT_DISCOVERED_PORT] = port
-        self.context[FLOW_CONTEXT_DISCOVERY_NAME] = name
-
-        if not await _can_connect(self.hass, host, port):
-            return self.async_abort(reason="cannot_connect")
-
-        self._set_pending_setup_data(
-            host=host,
-            port=port,
-            name=name,
-            token_file=token_file_for_target(host, port),
-        )
-        return await self.async_step_zeroconf_confirm()
+        return await self._async_start_discovered_setup(host, port, name)
 
     async def async_step_zeroconf_confirm(
         self,
