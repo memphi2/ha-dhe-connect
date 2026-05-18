@@ -230,7 +230,40 @@ def _install_fake_integration_modules() -> None:
     fake_entry_helpers = types.ModuleType(
         "custom_components.stiebel_dhe_connect.config_entry_helpers",
     )
-    fake_entry_helpers.merged_entry_data = lambda entry: getattr(entry, "data", {})
+    def _fake_merged_entry_data(entry):  # noqa: ANN001, ANN202
+        data = dict(getattr(entry, "data", {}))
+        data.update(getattr(entry, "options", {}))
+        return data
+
+    def _fake_entry_target(entry):  # noqa: ANN001, ANN202
+        data = _fake_merged_entry_data(entry)
+        host = data.get("host")
+        if host is None:
+            return None
+        return str(host), int(data.get("port", 80))
+
+    def _fake_is_target_used_by_other_entry(  # noqa: ANN001, ANN202
+        hass,
+        host,
+        port,
+        *,
+        exclude_entry_id=None,
+    ):
+        config_entries = getattr(hass, "config_entries", None)
+        if config_entries is None:
+            return False
+        for entry in config_entries.async_entries("stiebel_dhe_connect"):
+            if exclude_entry_id is not None and entry.entry_id == exclude_entry_id:
+                continue
+            if _fake_entry_target(entry) == (host, port):
+                return True
+        return False
+
+    fake_entry_helpers.merged_entry_data = _fake_merged_entry_data
+    fake_entry_helpers.entry_target = _fake_entry_target
+    fake_entry_helpers.is_target_used_by_other_entry = (
+        _fake_is_target_used_by_other_entry
+    )
     sys.modules["custom_components.stiebel_dhe_connect.config_entry_helpers"] = (
         fake_entry_helpers
     )

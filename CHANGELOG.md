@@ -8,10 +8,13 @@
 
 ### Added
 
+- Restored Zeroconf/mDNS setup discovery for DHE Connect devices advertising
+  `_ste-dhe._tcp.local.` and added those discoveries to the first setup-method
+  selector when Home Assistant can see them.
 - Added an optional setup-time DHE scan in the UI config flow. The first setup
-  screen lets the user choose between manual setup and a subnet scan for
-  DHE-like web interfaces on port `8443`; the scan can use the current local
-  subnet, entered network address plus subnet mask, or CIDR notation.
+  screen lets the user choose between discovered DHE devices, subnet scan and
+  manual setup; the scan can use the current local subnet, entered network
+  address plus subnet mask, or CIDR notation.
 - Added a README pointer and screenshot for the companion
   `ha-dhe-connect-card` Lovelace dashboard card.
 
@@ -37,6 +40,10 @@
   current local subnet when available.
 - Made the setup-time network scan opt-out instead of opt-in so new setups
   offer discovery by default.
+- Made Zeroconf, subnet-scan and manual setup share the same pairing-confirm
+  path and MAC-based config-entry unique ID behavior after successful pairing.
+- Documented the difference between direct `.local`/unicast DNS-SD answers and
+  Home Assistant Zeroconf discovery, which requires multicast visibility.
 
 ### Fixed
 
@@ -59,6 +66,25 @@
   setup scan subnet forms use the same private-network validation rules.
 - Fixed the setup-scan config-flow path so the scan-choice step transitions
   through a valid subnet form before the progress step.
+- Fixed the add-device start flow so it presents stable setup choices instead
+  of immediately repeating a search page.
+- Preserved in-progress Zeroconf discovery context during user takeover and
+  kept the source discovery flow alive until the takeover connection check
+  succeeds.
+
+### Refactored
+
+- Moved setup-form validation, subnet-input and setup-choice helpers out of the
+  main config-flow module and into a typed helper module.
+
+### Validation
+
+- Local test suite: `443 passed`, `46 subtests passed`.
+- Integration repository check: `scripts/check_integration.py`.
+- Type gate: `scripts/check_typing.py` over 51 source files.
+- Ruff: `ruff check custom_components tests scripts`.
+- GitHub Validate workflow: HACS, Hassfest and repository checks passed on the
+  setup-flow PRs.
 
 ## v1.4.2 - 2026-05-17
 

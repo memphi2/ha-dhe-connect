@@ -57,12 +57,15 @@ or embedded ports in the host field.
 
 When adding the integration, Home Assistant offers discovered Zeroconf/mDNS
 entries first, then subnet scan and manual host entry. The scan is only a setup
-convenience and checks for DHE-like web interfaces on port `8443`. Subnet fields
-are shown only after the scan option is selected. Home Assistant pre-fills
-custom subnet forms from its current local subnet when possible. Choose the
-current local subnet, adjust network address `192.168.1.0` plus subnet mask
-`255.255.255.0`, or enter CIDR `192.168.1.0/24`. If you skip it or it finds
-nothing, enter the DHE host/IP and port manually.
+convenience and checks for DHE-like web interfaces on port `8443`. It does not
+create the integration by itself; pairing and login are still validated before
+the config entry is saved.
+
+Subnet fields are shown only after the scan option is selected. Home Assistant
+pre-fills custom subnet forms from its current local subnet when possible. Use
+the current local subnet, enter network address `192.168.1.0` plus subnet mask
+`255.255.255.0`, or enter CIDR `192.168.1.0/24`. If you skip the scan or it
+finds nothing, enter the DHE host/IP and port manually.
 
 Zeroconf/mDNS discovery is normally limited to the local subnet/VLAN. It only
 works across subnets when the router or firewall forwards mDNS through a proper
@@ -79,6 +82,18 @@ If the DHE web interface opens from a browser but the scan does not find it:
 2. Confirm that port `8443` is reachable from the Home Assistant host.
 3. Enter the DHE address manually in the setup form.
 4. Continue with the normal pairing confirmation.
+
+## Duplicate Or Recreated Devices
+
+Home Assistant blocks duplicate DHE config entries by normalized host and port
+before pairing. After successful pairing, the integration also stores the
+paired device MAC address as the config-entry unique ID when the DHE reports
+one. Zeroconf, subnet scan and manual setup use the same pairing-confirm path,
+so all setup methods get the same unique-ID behavior.
+
+Before successful pairing, the integration does not create a device. If setup is
+cancelled or pairing times out, start the flow again and confirm pairing on the
+DHE display.
 
 ## Cannot Connect
 

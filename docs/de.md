@@ -55,14 +55,29 @@ Danach Home Assistant neu starten und die Integration ueber die UI hinzufuegen.
 
 ## Einrichtung und Pairing
 
-Beim Hinzufuegen fragt Home Assistant zuerst, ob ein Subnetz durchsucht oder
-direkt manuell eingerichtet werden soll. Die Suche ist standardmaessig
-aktiviert, bleibt optional und prueft nur DHE-aehnliche Webinterfaces auf Port
-`8443`. Bleibt das Subnetzfeld leer, wird das aktuelle lokale Subnetz
-verwendet. Alternativ kann ein IPv4-Netz mit normaler Netzmaske eingetragen
-werden, zum Beispiel `192.168.1.0 255.255.255.0`. Wenn ein Kandidat gefunden
-wird, oeffnet die normale Maske mit vorbelegtem Host und Port. Wenn nichts
-gefunden wird, oeffnet dieselbe Maske fuer manuelle Eingabe.
+Beim Hinzufuegen zeigt Home Assistant zuerst einen Einrichtungsweg:
+
+- gefundene DHE-Connect-Geraete aus Zeroconf/mDNS, wenn Home Assistant die
+  `_ste-dhe._tcp.local.`-Ankuendigung sieht,
+- `Subnetz-Scan` fuer die Suche nach DHE-aehnlichen Webinterfaces auf Port
+  `8443`,
+- `Manuell eingeben` fuer direkte Host/IP-Eingabe.
+
+Die Subnetzfelder erscheinen nur nach Auswahl von `Subnetz-Scan`. Der Scan kann
+das aktuelle lokale Subnetz verwenden, Netzwerkadresse plus Subnetzmaske
+abfragen, zum Beispiel `192.168.1.0` und `255.255.255.0`, oder CIDR-Schreibweise
+wie `192.168.1.0/24` akzeptieren. Home Assistant belegt die benutzerdefinierten
+Subnetzfelder nach Moeglichkeit mit dem aktuellen lokalen Subnetz vor. Wenn ein
+Kandidat gefunden wird, oeffnet die normale Maske mit vorbelegtem Host und Port.
+Wenn nichts gefunden wird, oeffnet dieselbe Maske fuer manuelle Eingabe.
+
+Zeroconf/mDNS funktioniert normalerweise nur im lokalen Subnetz/VLAN.
+Subnetzuebergreifende Erkennung braucht einen Router oder eine Firewall mit
+mDNS-Reflector oder Repeater. Eine direkte `.local`-Namensaufloesung oder eine
+Unicast-DNS-SD-Antwort des DHE reicht fuer den Home-Assistant-Zeroconf-Flow
+nicht aus; Home Assistant muss die Multicast-Ankuendigung empfangen. Wenn das
+DHE per IP erreichbar ist, aber nicht automatisch auftaucht, manuell einrichten
+oder den expliziten Subnetz-Scan verwenden.
 
 Die UI fragt nach:
 
@@ -83,6 +98,9 @@ erfolgreichen Pairing:
 
 Der Token wird danach lokal in der Home-Assistant-Konfiguration gespeichert.
 Bei mehreren DHE-Geraeten bekommt jedes Host/Port-Ziel einen eigenen Token.
+Zeroconf, Subnetz-Scan und manuelle Einrichtung nutzen denselben
+Pairing-Bestaetigungsweg. Wenn das DHE beim Pairing eine MAC-Adresse liefert,
+wird sie als stabile Unique-ID des Config-Eintrags verwendet.
 
 ## Mehrere DHE-Geraete
 
