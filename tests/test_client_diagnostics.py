@@ -144,6 +144,16 @@ class TestClientDiagnostics(unittest.TestCase):
         self.assertNotIn("secret", str(summary))
         self.assertNotIn(private_host, str(summary))
 
+    def test_redaction_removes_username_only_url_hosts(self) -> None:
+        message = self.diagnostics.redact_diagnostic_text(
+            "GET https://alice@example.internal.local/status?token=abc123"
+        )
+
+        self.assertEqual(message, "GET https://<host>/status?token=<redacted>")
+        self.assertNotIn("alice", message)
+        self.assertNotIn("example", message)
+        self.assertNotIn("abc123", message)
+
     def test_diagnostic_summary_preserves_colliding_redacted_keys(self) -> None:
         summary = self.diagnostics.summarize_diagnostic_value({
             "token=abc123": "first",

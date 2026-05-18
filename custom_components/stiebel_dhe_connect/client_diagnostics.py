@@ -27,6 +27,7 @@ TOKEN_QUERY_RE = re.compile(
     r"(?i)([?&](?:access_token|refresh_token|token|code)=)[^&\s]+"
 )
 URL_CREDENTIAL_RE = re.compile(r"(?i)(https?://)[^/\s:@]+:[^/\s@]+@")
+URL_USERINFO_RE = re.compile(r"(?i)(https?://)[^/\s@]+@")
 URL_HOST_RE = re.compile(
     r"(?i)\b(https?://)"
     r"(?:<redacted>@)?"
@@ -59,6 +60,7 @@ def redact_diagnostic_text(value: object) -> str:
     text = str(value)
     text = BEARER_TOKEN_RE.sub("Bearer <redacted>", text)
     text = URL_CREDENTIAL_RE.sub(r"\1<redacted>@", text)
+    text = URL_USERINFO_RE.sub(r"\1<redacted>@", text)
     text = TOKEN_QUERY_RE.sub(r"\1<redacted>", text)
     text = URL_HOST_RE.sub(r"\1<host>", text)
     text = SECRET_FIELD_RE.sub(r"\1\2<redacted>", text)
