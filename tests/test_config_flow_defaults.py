@@ -761,6 +761,10 @@ class TestSetupScanConfigFlow(
             defaults[self.config_flow.CONF_SCAN_SUBNET_MODE],
             self.config_flow.SCAN_SUBNET_MODE_CURRENT,
         )
+        self.assertEqual(
+            defaults[self.config_flow.CONF_SCAN_PORT],
+            self.config_flow.DEFAULT_PORT,
+        )
         self.assertNotIn(self.config_flow.CONF_SCAN_NETWORK_ADDRESS, keys)
         self.assertNotIn(self.config_flow.CONF_SCAN_NETMASK, keys)
         self.assertNotIn(self.config_flow.CONF_SCAN_CIDR, keys)
@@ -852,7 +856,58 @@ class TestSetupScanConfigFlow(
         self.config_flow.async_scan_dhe_hosts.assert_awaited_once_with(
             self.flow.hass,
             networks=[ip_network("192.168.2.0/24")],
+            port=self.config_flow.DEFAULT_PORT,
         )
+
+    async def test_user_step_scan_uses_custom_scan_port(self) -> None:
+        self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
+
+        result = await self.flow.async_step_user(
+            {self.config_flow.CONF_SETUP_MODE: self.config_flow.SETUP_MODE_SCAN}
+        )
+        self.assertEqual(result["step_id"], "subnet_scan")
+
+        result = await self.flow.async_step_subnet_scan(
+            {
+                self.config_flow.CONF_SCAN_SUBNET_MODE: (
+                    self.config_flow.SCAN_SUBNET_MODE_CURRENT
+                ),
+                self.config_flow.CONF_SCAN_PORT: 9443,
+            }
+        )
+
+        self.assertEqual(result["type"], "progress")
+        await self._tasks[0]
+        self.config_flow.async_scan_dhe_hosts.assert_awaited_once_with(
+            self.flow.hass,
+            networks=None,
+            port=9443,
+        )
+
+    async def test_user_step_scan_rejects_invalid_scan_port(self) -> None:
+        self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
+
+        result = await self.flow.async_step_user(
+            {self.config_flow.CONF_SETUP_MODE: self.config_flow.SETUP_MODE_SCAN}
+        )
+        self.assertEqual(result["step_id"], "subnet_scan")
+
+        result = await self.flow.async_step_subnet_scan(
+            {
+                self.config_flow.CONF_SCAN_SUBNET_MODE: (
+                    self.config_flow.SCAN_SUBNET_MODE_CURRENT
+                ),
+                self.config_flow.CONF_SCAN_PORT: "not-a-port",
+            }
+        )
+
+        self.assertEqual(result["type"], "form")
+        self.assertEqual(result["step_id"], "subnet_scan")
+        self.assertEqual(
+            result["errors"][self.config_flow.CONF_SCAN_PORT],
+            "invalid_port",
+        )
+        self.config_flow.async_scan_dhe_hosts.assert_not_called()
 
     async def test_user_step_scan_uses_cidr_subnet(self) -> None:
         self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
@@ -881,6 +936,7 @@ class TestSetupScanConfigFlow(
         self.config_flow.async_scan_dhe_hosts.assert_awaited_once_with(
             self.flow.hass,
             networks=[ip_network("192.168.2.0/25")],
+            port=self.config_flow.DEFAULT_PORT,
         )
 
     async def test_user_step_scan_uses_current_local_subnet_mode(self) -> None:
@@ -903,6 +959,7 @@ class TestSetupScanConfigFlow(
         self.config_flow.async_scan_dhe_hosts.assert_awaited_once_with(
             self.flow.hass,
             networks=None,
+            port=self.config_flow.DEFAULT_PORT,
         )
 
     async def test_user_step_scan_rejects_invalid_subnet(self) -> None:
@@ -1188,10 +1245,11 @@ class TestSetupPairingValidation(
         self.assertEqual(result.unique_id, "aa:bb:cc:dd:ee:ff")
 
 
-class TestManifestZeroconf(unittest.TestCase):
+class TestManifestZeroconf(_RestoresImportModules, unittest.TestCase):
     """Validate manifest discovery metadata."""
 
     def test_manifest_declares_zeroconf_config_flow_handler(self) -> None:
+        config_flow = _load_config_flow()
         manifest = json.loads(
             (
                 ROOT
@@ -1203,3 +1261,6 @@ class TestManifestZeroconf(unittest.TestCase):
 
         self.assertTrue(manifest["config_flow"])
         self.assertIn("_ste-dhe._tcp.local.", manifest["zeroconf"])
+        self.assertTrue(
+            hasattr(config_flow.StiebelDHEConnectConfigFlow, "async_step_zeroconf")
+        )

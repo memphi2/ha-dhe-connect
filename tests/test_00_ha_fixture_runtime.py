@@ -8,6 +8,7 @@ import importlib
 from ipaddress import ip_address, ip_network
 from pathlib import Path
 import sys
+import types
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
@@ -24,13 +25,13 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 
 pytestmark = pytest.mark.asyncio
 DOMAIN = "stiebel_dhe_connect"
 DEFAULT_PORT = 8443
 ROOT = Path(__file__).resolve().parents[1]
+_DEFAULT_ZEROCONF_HOST = object()
 
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -633,7 +634,59 @@ async def test_config_flow_scan_choice_prefills_manual_form_with_real_hass_fixtu
         scan.assert_awaited_once_with(
             hass,
             networks=[ip_network("192.168.50.0/24")],
+            port=DEFAULT_PORT,
         )
+
+
+async def test_config_flow_current_subnet_scan_progress_with_real_hass_fixture() -> None:
+    """Exercise HA config-flow progress handling for the current-subnet scan."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+
+        scan = AsyncMock(return_value=[])
+        with patch.object(config_flow, "async_scan_dhe_hosts", scan):
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_USER},
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "user"
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                {config_flow.CONF_SETUP_MODE: config_flow.SETUP_MODE_SCAN},
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "subnet_scan"
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                {
+                    config_flow.CONF_SCAN_SUBNET_MODE: (
+                        config_flow.SCAN_SUBNET_MODE_CURRENT
+                    ),
+                    config_flow.CONF_SCAN_PORT: DEFAULT_PORT,
+                },
+            )
+            assert result["type"] is FlowResultType.SHOW_PROGRESS
+            assert result["step_id"] == "network_scan"
+            assert result["progress_action"] == "scan_dhe"
+
+            await hass.async_block_till_done()
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "manual"
+
+        defaults = _schema_defaults(result["data_schema"])
+        assert defaults[CONF_PORT] == DEFAULT_PORT
+        assert "host" not in defaults or defaults[CONF_HOST] in (None, "")
+        assert "No DHE" in result["description_placeholders"]["scan_status"]
+        scan.assert_awaited_once_with(hass, networks=None, port=DEFAULT_PORT)
 
 
 async def test_scan_prefilled_flow_uses_pairing_unique_id_with_real_hass_fixture() -> None:
@@ -799,6 +852,147 @@ async def test_zeroconf_flow_collects_tmax_then_creates_entry_after_pairing() ->
         validate_pairing.assert_awaited_once()
 
 
+@pytest.mark.parametrize(
+    ("discovery_kwargs", "expected_host", "expected_port", "expected_title"),
+    [
+        (
+            {
+                "hostname": "dhe-ja06.local.",
+                "port": DEFAULT_PORT,
+                "host": "dhe-ja06.local.",
+                "name": "DHE Connect DHE-JA06._ste-dhe._tcp.local.",
+            },
+            "dhe-ja06.local",
+            DEFAULT_PORT,
+            "DHE Connect DHE-JA06",
+        ),
+        (
+            {"hostname": "dhe-ja06.local.", "port": DEFAULT_PORT, "host": None},
+            "dhe-ja06.local",
+            DEFAULT_PORT,
+            "dhe-ja06",
+        ),
+        (
+            {
+                "hostname": "dhe-ja06.local.",
+                "port": DEFAULT_PORT,
+                "host": "192.0.2.125",
+                "name": "DHE-JA06.local.",
+                "ip": "192.0.2.125",
+            },
+            "192.0.2.125",
+            DEFAULT_PORT,
+            "DHE-JA06",
+        ),
+        (
+            {
+                "hostname": "dhe-ja06.local.",
+                "port": DEFAULT_PORT,
+                "host": "192.0.2.126",
+                "name": "DHE-JA06._ste-dhe._tcp.local.",
+                "ip": "192.0.2.126",
+            },
+            "192.0.2.126",
+            DEFAULT_PORT,
+            "DHE-JA06",
+        ),
+        (
+            {
+                "hostname": None,
+                "port": DEFAULT_PORT,
+                "host": "192.0.2.127",
+                "name": "DHE-JA06.local.",
+                "ip": "192.0.2.127",
+            },
+            "192.0.2.127",
+            DEFAULT_PORT,
+            "DHE-JA06",
+        ),
+        (
+            {
+                "hostname": "dhe-ja06.local.",
+                "port": None,
+                "host": "192.0.2.128",
+                "ip": "192.0.2.128",
+            },
+            "192.0.2.128",
+            DEFAULT_PORT,
+            "dhe-ja06",
+        ),
+    ],
+)
+async def test_zeroconf_flow_accepts_realistic_discovery_payload_variants(
+    discovery_kwargs: dict[str, Any],
+    expected_host: str,
+    expected_port: int,
+    expected_title: str,
+) -> None:
+    """Verify real-world mDNS payload shapes normalize to one setup path."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+
+        can_connect = AsyncMock(return_value=True)
+        validate_pairing = AsyncMock(
+            return_value=config_flow.SetupPairingResult(
+                unique_id=f"unique-{expected_host}",
+            )
+        )
+        with (
+            patch.object(config_flow, "_can_connect", can_connect),
+            patch.object(config_flow, "_validate_setup_pairing", validate_pairing),
+        ):
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_ZEROCONF},
+                data=_zeroconf_info(**discovery_kwargs),
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "zeroconf_confirm"
+            can_connect.assert_awaited_once_with(hass, expected_host, expected_port)
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                user_input={config_flow.CONF_INTERNAL_SCALD_PROTECTION: "55"},
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "pairing_confirm"
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                user_input={},
+            )
+
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert result["title"] == expected_title
+        assert result["data"][CONF_HOST] == expected_host
+        assert result["data"][CONF_PORT] == expected_port
+        validate_pairing.assert_awaited_once()
+
+
+async def test_zeroconf_flow_aborts_invalid_port_payload() -> None:
+    """Reject discovery payloads that do not contain a usable TCP port."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+
+        can_connect = AsyncMock(return_value=True)
+        with patch.object(config_flow, "_can_connect", can_connect):
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_ZEROCONF},
+                data=_zeroconf_info("dhe-ja06.local.", "not-a-port"),
+            )
+
+        assert result["type"] is FlowResultType.ABORT
+        assert result["reason"] == "invalid_discovery_parameters"
+        can_connect.assert_not_awaited()
+
+
 async def test_user_flow_can_select_in_progress_zeroconf_discovery() -> None:
     """Run Add Device through the visible Zeroconf/scan/manual choice."""
     _clear_loaded_integration_modules()
@@ -845,6 +1039,9 @@ async def test_user_flow_can_select_in_progress_zeroconf_discovery() -> None:
             )
             assert result["type"] is FlowResultType.FORM
             assert result["step_id"] == "zeroconf_confirm"
+            progress = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+            assert all(flow["flow_id"] != zeroconf["flow_id"] for flow in progress)
+            assert any(flow["flow_id"] == result["flow_id"] for flow in progress)
 
             duplicate = await hass.config_entries.flow.async_init(
                 DOMAIN,
@@ -932,6 +1129,62 @@ async def test_zeroconf_flow_aborts_duplicate_host_port() -> None:
 
         assert result["type"] is FlowResultType.ABORT
         assert result["reason"] == "already_configured"
+
+
+async def test_zeroconf_pairing_aborts_duplicate_mac_after_host_ip_mismatch() -> None:
+    """Abort when Zeroconf finds an existing manual entry through another host."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        entry = _build_mock_entry(
+            host="dhe-ja06.local",
+            port=DEFAULT_PORT,
+            name="Existing DHE",
+            unique_id="aa:bb:cc:dd:ee:ff",
+        )
+        entry.add_to_hass(hass)
+
+        can_connect = AsyncMock(return_value=True)
+        validate_pairing = AsyncMock(
+            return_value=config_flow.SetupPairingResult(
+                unique_id="aa:bb:cc:dd:ee:ff",
+            )
+        )
+        with (
+            patch.object(config_flow, "_can_connect", can_connect),
+            patch.object(config_flow, "_validate_setup_pairing", validate_pairing),
+        ):
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_ZEROCONF},
+                data=_zeroconf_info(
+                    "dhe-ja06.local.",
+                    DEFAULT_PORT,
+                    host="192.0.2.124",
+                ),
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "zeroconf_confirm"
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                user_input={config_flow.CONF_INTERNAL_SCALD_PROTECTION: "55"},
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "pairing_confirm"
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                user_input={},
+            )
+
+        assert result["type"] is FlowResultType.ABORT
+        assert result["reason"] == "already_configured"
+        assert len(hass.config_entries.async_entries(DOMAIN)) == 1
+        can_connect.assert_awaited_once_with(hass, "192.0.2.124", DEFAULT_PORT)
+        validate_pairing.assert_awaited_once()
 
 
 async def test_zeroconf_flow_aborts_matching_flow_already_in_progress() -> None:
@@ -1291,15 +1544,25 @@ def _build_mock_entry(
     )
 
 
-def _zeroconf_info(hostname: str, port: int | None) -> ZeroconfServiceInfo:
+def _zeroconf_info(
+    hostname: str | None,
+    port: Any,
+    *,
+    host: str | None | object = _DEFAULT_ZEROCONF_HOST,
+    name: str | None = None,
+    ip: str = "192.0.2.124",
+) -> types.SimpleNamespace:
     """Build a DHE Zeroconf discovery payload for config-flow tests."""
-    return ZeroconfServiceInfo(
-        ip_address=ip_address("192.0.2.124"),
-        ip_addresses=[ip_address("192.0.2.124")],
+    service_hostname = hostname or f"{ip}.local."
+    host_value = ip if host is _DEFAULT_ZEROCONF_HOST else host
+    return types.SimpleNamespace(
+        host=host_value,
+        ip_address=ip_address(ip),
+        ip_addresses=[ip_address(ip)],
         port=port,
         hostname=hostname,
         type="_ste-dhe._tcp.local.",
-        name=f"{hostname.rstrip('.')}._ste-dhe._tcp.local.",
+        name=name or f"{service_hostname.rstrip('.')}._ste-dhe._tcp.local.",
         properties={},
     )
 

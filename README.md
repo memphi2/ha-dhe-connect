@@ -119,7 +119,7 @@ selector:
 - Discovered DHE Connect devices from Zeroconf/mDNS, when Home Assistant has
   received `_ste-dhe._tcp.local.` advertisements.
 - `Subnet scan`, which checks the selected private IPv4 subnet for DHE-like web
-  interfaces on port `8443`.
+  interfaces. The scan-port field defaults to `8443`.
 - `Enter manually`, for direct host/IP setup.
 
 The subnet fields are shown only after `Subnet scan` is selected. The scan can
@@ -129,6 +129,11 @@ use the current local subnet, network address plus subnet mask such as
 local subnet when possible. If a candidate is found, the normal setup form opens
 with host and port pre-filled. If no candidate is found, the same form opens for
 manual entry.
+
+Keep the scan port at `8443` unless the DHE web interface has been configured
+to listen on another port. The scan port only affects setup-time subnet scans;
+Zeroconf discoveries and manual setup use the port reported or entered for that
+target.
 
 Zeroconf/mDNS discovery only works inside the local subnet/VLAN by default.
 Discovery across subnets needs a router or firewall that is explicitly
@@ -240,6 +245,13 @@ python scripts/check_integration.py
 It checks the manifest, HACS metadata, required repository files, release-note source of truth, translation key parity and Python syntax without writing bytecode artifacts. The same check runs in the `Validate` GitHub Actions workflow.
 
 The full validation and release-readiness flow, including type checks, fake-DHE tests, Home Assistant fixture tests, mounted HA smoke checks and release checks, lives in [docs/validation.md](docs/validation.md).
+
+Release candidates should also pass the real Zeroconf/mDNS smoke gate from a
+network where the DHE advertisement is visible:
+
+```bash
+python scripts/zeroconf_smoke.py --timeout 20
+```
 
 ## Security notes
 

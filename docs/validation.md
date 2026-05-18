@@ -58,6 +58,14 @@ entry setup paths instead of only isolated stubs:
 - Config-flow duplicate-target rejection.
 - Config-flow setup-method selection for Zeroconf discoveries, subnet scan and
   manual entry.
+- Config-flow progress-step handling for setup subnet scan with synthetic scan
+  results.
+- Zeroconf payload variants from realistic mDNS data, including host/hostname
+  fallback, `.local.` names, missing-port defaults and invalid-port aborts.
+- Zeroconf user-takeover flow from an in-progress discovery through Tmax
+  selection and pairing confirmation.
+- MAC-based duplicate detection after pairing when the same DHE is discovered
+  through a different hostname/IP target.
 - MAC-based config-entry unique IDs across Zeroconf, scan-prefilled and manual
   setup.
 - Options-flow connection target changes with pairing confirmation.
@@ -74,6 +82,26 @@ entry setup paths instead of only isolated stubs:
 
 These tests are not a replacement for live hardware checks, but they catch
 regressions that pure helper tests cannot see.
+
+## Real Zeroconf Smoke
+
+Run the real Zeroconf/mDNS smoke from a host and network segment where Home
+Assistant should see the DHE multicast DNS-SD advertisement:
+
+```bash
+python scripts/zeroconf_smoke.py --timeout 20
+```
+
+The smoke listens for `_ste-dhe._tcp.local.` and verifies the service appears on
+the expected DHE port, default `8443`. It intentionally does not print private
+hostnames, IP addresses or token context. This validates multicast discovery
+visibility; it is not a replacement for manual setup or the setup subnet scan.
+
+If the DHE is in another VLAN, run the smoke from the correct segment or ensure
+the router/firewall has an mDNS reflector configured. A direct `.local` lookup
+or unicast DNS-SD answer can still work while Home Assistant Zeroconf discovery
+does not, because the config flow depends on receiving the multicast
+advertisement.
 
 ## Mounted Home Assistant Smoke
 
@@ -148,7 +176,7 @@ manual listening window is needed.
 Before publishing a release, run:
 
 ```bash
-python scripts/release_check.py --run-local-checks --ha-config /mnt/ha-test-config --ha-monitor-seconds 90
+python scripts/release_check.py --run-local-checks --run-zeroconf-smoke --ha-config /mnt/ha-test-config --ha-monitor-seconds 90
 ```
 
 Before publication, the default expectation is:
@@ -159,6 +187,7 @@ Before publication, the default expectation is:
 - The release tag is absent.
 - The GitHub release is absent.
 - Local checks pass.
+- The real Zeroconf/mDNS smoke gate passes when `--run-zeroconf-smoke` is used.
 - Optional mounted HA smoke passes when `--ha-config` is provided.
 
 After publication, rerun with:

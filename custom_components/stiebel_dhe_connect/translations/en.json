@@ -10,9 +10,10 @@
       },
       "subnet_scan": {
         "title": "Subnet scan",
-        "description": "Choose how Home Assistant should select the subnet before scanning for DHE Connect.",
+        "description": "Choose how Home Assistant should select the subnet before scanning for DHE Connect. Keep the scan port at 8443 unless the DHE web interface uses a different port.",
         "data": {
-          "scan_subnet_mode": "Subnet selection"
+          "scan_subnet_mode": "Subnet selection",
+          "scan_port": "Scan port"
         }
       },
       "subnet_scan_network_mask": {
@@ -56,7 +57,7 @@
       }
     },
     "progress": {
-      "scan_dhe": "Searching the selected subnet for DHE Connect on port 8443"
+      "scan_dhe": "Searching the selected subnet for DHE Connect"
     },
     "error": {
       "pairing_timeout": "Pairing was not confirmed on the DHE in time. Please try again.",
