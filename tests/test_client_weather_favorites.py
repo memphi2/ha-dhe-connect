@@ -1447,10 +1447,35 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         client._reconnect_manager.mark_disconnected()
 
         now = 15.1
+        client._reconnect_grace_task = client_module.asyncio.current_task()
         await DHEClient._expire_reconnect_grace_after(client, 0)
 
         self.assertFalse(client._available)
         self.assertIsNone(client._reconnect_grace_task)
+
+    async def test_stale_reconnect_grace_timer_does_not_clear_new_timer(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        now = 15.1
+        new_task = object()
+
+        client = DHEClient.__new__(DHEClient)
+        client._ctx = None
+        client._ready = client_module.asyncio.Event()
+        client._stopped = client_module.asyncio.Event()
+        client._available = True
+        client._availability_callbacks = set()
+        client._notify_callbacks = Mock()
+        client._reconnect_grace_task = new_task
+        client._reconnect_manager = client_module.DHEReconnectManager(
+            grace_period=15.0,
+            monotonic=lambda: now,
+        )
+        client._reconnect_manager.mark_disconnected()
+
+        await DHEClient._expire_reconnect_grace_after(client, 0)
+
+        self.assertIs(client._reconnect_grace_task, new_task)
 
     async def test_websocket_heartbeat_does_not_hide_programming_runtime_errors(
         self,

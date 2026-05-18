@@ -658,4 +658,5 @@ class DHEClient(
         except asyncio.CancelledError:
             return
         finally:
-            self._reconnect_grace_task = None
+            if self._reconnect_grace_task is asyncio.current_task():
+                self._reconnect_grace_task = None
