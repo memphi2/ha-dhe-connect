@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-- No changes yet.
+- Added Home Assistant config-entry diagnostics with a deliberately anonymized
+  payload for support and troubleshooting.
 
 ## v1.5.1 - 2026-05-18
 

@@ -80,23 +80,33 @@ class TestClientDiagnostics(unittest.TestCase):
     def test_diagnostic_error_redacts_auth_context(self) -> None:
         private_host = ".".join(("172", "16", "1", "147"))
         private_ten_host = ".".join(("10", "0", "0", "1"))
+        local_host = "dhe-ja06.local"
+        mac_address = "aa:bb:cc:dd:ee:ff"
         message = self.diagnostics.diagnostic_error(
             RuntimeError(
                 "GET failed for "
                 f"http://user:secret@{private_host}:8123/socket.io/?token=abc123 "
                 f"fallback=http://{private_ten_host}:8123 "
+                f"raw_host={private_ten_host}:8123 "
+                f"mdns={local_host}:8443 "
+                f"wlan_mac={mac_address} "
                 "access_token=def456 Authorization: Bearer ghijk password=secret"
             )
         )
 
         self.assertIn("<redacted>", message)
+        self.assertIn("<host>", message)
         self.assertIn("<private-host>", message)
+        self.assertIn("<local-host>", message)
+        self.assertIn("<mac-address>", message)
         self.assertNotIn("abc123", message)
         self.assertNotIn("def456", message)
         self.assertNotIn("ghijk", message)
         self.assertNotIn("secret", message)
         self.assertNotIn(private_host, message)
         self.assertNotIn(private_ten_host, message)
+        self.assertNotIn(local_host, message)
+        self.assertNotIn(mac_address, message)
         self.assertNotIn(".1", message)
 
     def test_redaction_preserves_ordinary_text(self) -> None:
@@ -128,7 +138,7 @@ class TestClientDiagnostics(unittest.TestCase):
 
         self.assertIn("token=<redacted>", summary)
         self.assertEqual(summary["token=<redacted>"], "Authorization: Bearer <redacted>")
-        self.assertIn("<private-host>", summary["url"])
+        self.assertIn("<host>", summary["url"])
         self.assertNotIn("abc123", str(summary))
         self.assertNotIn("ghijk", str(summary))
         self.assertNotIn("secret", str(summary))
