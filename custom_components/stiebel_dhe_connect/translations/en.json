@@ -216,9 +216,6 @@
     "binary_sensor": {
       "scald_protection_active": {
         "name": "Scald protection active"
-      },
-      "bluetooth_paired": {
-        "name": "Bluetooth paired"
       }
     },
     "button": {
@@ -231,11 +228,8 @@
       "repair_pairing": {
         "name": "Repair pairing"
       },
-      "start_bluetooth_pairing": {
-        "name": "Start Bluetooth pairing"
-      },
-      "disconnect_bluetooth_pairing": {
-        "name": "Disconnect Bluetooth pairing"
+      "disconnect_radio_pairing": {
+        "name": "Disconnect radio pairing"
       },
       "temperature_memory_1": {
         "name": "Memory 1"
@@ -570,6 +564,9 @@
       },
       "last_reconnect_reason": {
         "name": "Last reconnect reason"
+      },
+      "next_reconnect_delay": {
+        "name": "Next reconnect delay"
       },
       "device_info": {
         "name": "Device info"

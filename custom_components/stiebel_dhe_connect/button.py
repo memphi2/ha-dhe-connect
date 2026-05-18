@@ -77,29 +77,15 @@ STATIC_BUTTON_DESCRIPTIONS: tuple[StiebelDHEButtonEntityDescription, ...] = (
         },
     ),
     StiebelDHEButtonEntityDescription(
-        key="start_bluetooth_pairing",
-        translation_key="start_bluetooth_pairing",
-        method="start_bluetooth_pairing",
-        icon="mdi:bluetooth-connect",
-        entity_registry_enabled_default=False,
-        extra_state_attributes={
-            "radio_path": "ste.app.radio",
-            "radio_property": "paired",
-            "radio_value": True,
-            "bluetooth_pairing_action": "start",
-        },
-    ),
-    StiebelDHEButtonEntityDescription(
-        key="disconnect_bluetooth_pairing",
-        translation_key="disconnect_bluetooth_pairing",
-        method="disconnect_bluetooth_pairing",
-        icon="mdi:bluetooth-off",
+        key="disconnect_radio_pairing",
+        translation_key="disconnect_radio_pairing",
+        method="disconnect_radio_pairing",
+        icon="mdi:speaker-bluetooth",
         entity_registry_enabled_default=False,
         extra_state_attributes={
             "radio_path": "ste.app.radio",
             "radio_property": "paired",
             "radio_value": False,
-            "bluetooth_pairing_action": "disconnect",
         },
     ),
 )

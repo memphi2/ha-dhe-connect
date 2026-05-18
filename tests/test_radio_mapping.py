@@ -193,7 +193,7 @@ class TestRadioDisplayMapping(unittest.TestCase):
         self.assertEqual(attributes["station_genres"], ["Pop", "80"])
         self.assertEqual(attributes["favorite_count"], 1)
         self.assertEqual(attributes["title"], "Queen - A Kind Of Magic")
-        self.assertFalse(attributes["bluetooth_paired"])
+        self.assertFalse(attributes["paired"])
 
 
 if __name__ == "__main__":

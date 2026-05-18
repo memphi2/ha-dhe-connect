@@ -24,9 +24,9 @@ Typische Funktionen:
 - Verbrauchs- und Sparmonitor-Werte, zum Teil bewusst deaktiviert.
 - Temperatur-Speicherplaetze, Eco, Badewannenfuellung, Timer und Wellness.
 - Radio-Player mit Favoriten und Quellenauswahl.
-- Bluetooth-Kopplungsstatus sowie Start-/Trennen-Buttons fuer das DHE-Radiomodul.
 - Wetter-Favoriten aus dem DHE-Webinterface.
-- Diagnosewerte fuer Verbindung, Reconnects, Fehlerstatus und Protokoll.
+- Diagnosewerte fuer Verbindung, Reconnects, naechste Retry-Verzoegerung,
+  Fehlerstatus und Protokoll.
 
 ## Installation ueber HACS
 
@@ -137,8 +137,7 @@ Standardmaessig sichtbar sind die wichtigsten Betriebswerte, unter anderem:
 - Gesamt-Wasserverbrauch.
 - Gesamt-Heizenergie.
 - Wetter- und Radio-Basisentitaeten.
-- Bluetooth-Kopplungsstatus.
-- Diagnosewerte fuer Verbindung und Reconnects.
+- Diagnosewerte fuer Verbindung, Reconnects und naechsten Reconnect-Versuch.
 
 Weitere Entitaeten sind absichtlich deaktiviert, damit Home Assistant und der
 Recorder nicht unnoetig viele Werte schreiben. Dazu gehoeren viele Diagnose-,
@@ -197,6 +196,12 @@ recorder:
 Wenn die Datenbank trotzdem stark waechst, zuerst die Diagnose-Entitaeten,
 Reconnect-Zaehler und Home-Assistant-Logs pruefen. Details stehen in
 [docs/troubleshooting.md](troubleshooting.md).
+
+Kurze Verbindungsabbrueche bleiben in einer Reconnect-Schonfrist: gecachte
+Entitaeten koennen verfuegbar bleiben, waehrend der Diagnosewert
+`Verbindungsstatus` bereits `Verbindet neu` zeigt. Erst nach Ablauf dieser
+Schonfrist werden Live-Entitaeten unavailable, bis wieder frische DHE-Daten
+ankommen.
 
 ## Pairing reparieren
 

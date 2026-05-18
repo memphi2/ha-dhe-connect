@@ -40,13 +40,12 @@ web interface or other third-party assets.
 
 ## Highlights
 
-- Fully local Socket.IO / Engine.IO v3 session with browser-style heartbeat handling and automatic reconnect diagnostics.
+- Fully local Socket.IO / Engine.IO v3 session with browser-style heartbeat handling, reconnect grace handling and automatic reconnect diagnostics.
 - Target temperature control through the DHE ODB command interface, including Climate limits that respect the physical `Tmax` jumper and the active child-safety limit.
 - Temperature memory controls for all 12 supported slots; slots 3 to 12 are disabled by default.
 - Eco mode, Eco flow limit, bath fill, child safety, wellness controls, brush timer and shower timer controls.
 - Current water flow, current power, total water and total energy consumption sensors are enabled by default; ODB saving, last usage, timer and saving-monitor sensors start disabled to keep the device card tidy.
 - Compact radio media player for station metadata, current title, short-description fallback, playback, volume and favorites.
-- Bluetooth pairing status plus disabled-by-default start/disconnect buttons for the DHE radio module.
 - Options-flow radio search by full text, DHE genre catalog, country catalog or city catalog.
 - Weather entity for the DHE forecast payload with favorite location selection.
 - General diagnostic status, reconnect count, connection details, scald-protection diagnostics, ODB protocol diagnostics and device information.
@@ -231,9 +230,9 @@ That reference also documents the high-churn recorder throttling rules used for 
 
 The client runs a single persistent session loop. Home Assistant entities subscribe to cached setpoint, measurement, online, availability and reconnect callbacks. When an entity is added after a value was already received, the current cached value is delivered immediately.
 
-Availability is strict live. If the runtime connection drops, entities become unavailable until fresh runtime data is received again.
+Short runtime drops stay inside a small reconnect grace window. During that window cached entities remain available while the `Connection state` diagnostic sensor reports `reconnecting`. If the grace window expires, live entities become unavailable until fresh runtime data is received again.
 
-Diagnostic sensors expose the current client connection state and the last reconnect reason. These are intended for troubleshooting connection stalls, WebSocket churn and device-side session closes.
+Diagnostic sensors expose the current client connection state, reconnect count, next reconnect delay (`0 s` while connected) and the last reconnect reason. These are intended for troubleshooting connection stalls, WebSocket churn and device-side session closes without adding volatile reconnect details to normal entity attributes.
 
 ## Validation
 

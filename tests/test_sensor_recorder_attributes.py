@@ -139,6 +139,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
                 "last_message_received_at": "2026-05-16T12:00:00Z",
                 "last_message_summary": {"id": 13, "value": 21.0},
                 "message_count": 1,
+                "next_reconnect_delay_seconds": 2.0,
             }
         )
         sensor._handle_diagnostic_update(
@@ -150,6 +151,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
                 "last_message_received_at": "2026-05-16T12:00:01Z",
                 "last_message_summary": {"id": 14, "value": 38.0},
                 "message_count": 2,
+                "next_reconnect_delay_seconds": 4.0,
             }
         )
 
@@ -166,6 +168,67 @@ class TestSensorRecorderAttributes(unittest.TestCase):
 
         self.assertEqual(writes, ["connected", "connected"])
         self.assertEqual(sensor._attr_extra_state_attributes, {"session_id": "sid-2"})
+
+    def test_next_reconnect_delay_diagnostic_accepts_float_state(self) -> None:
+        sensor_module = _load_sensor_module()
+        description = next(
+            item
+            for item in sensor_module.DIAGNOSTIC_SENSOR_DESCRIPTIONS
+            if item.key == "next_reconnect_delay"
+        )
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+
+        sensor = sensor_module.StiebelDHEDiagnosticSensor(
+            entry_id="test-entry",
+            name="Test DHE",
+            client=_FakeClient(),
+            description=description,
+        )
+        sensor.async_write_ha_state = lambda: None
+
+        sensor._handle_diagnostic_update(
+            {
+                "connection_state": "reconnecting",
+                "next_reconnect_delay_seconds": 2.5,
+            }
+        )
+
+        self.assertEqual(sensor._attr_native_value, 2.5)
+        self.assertTrue(sensor._attr_available)
+        self.assertEqual(
+            sensor._attr_extra_state_attributes,
+            {"connection_state": "reconnecting"},
+        )
+
+    def test_next_reconnect_delay_diagnostic_defaults_to_zero(self) -> None:
+        sensor_module = _load_sensor_module()
+        description = next(
+            item
+            for item in sensor_module.DIAGNOSTIC_SENSOR_DESCRIPTIONS
+            if item.key == "next_reconnect_delay"
+        )
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+            reconnect_count = 0
+
+        sensor = sensor_module.StiebelDHEDiagnosticSensor(
+            entry_id="test-entry",
+            name="Test DHE",
+            client=_FakeClient(),
+            description=description,
+        )
+
+        sensor._apply_diagnostic_state({"connection_state": "connected"})
+
+        self.assertEqual(sensor._attr_native_value, 0)
+        self.assertTrue(sensor._attr_available)
 
     def test_flow_and_power_write_filters_use_stricter_thresholds(self) -> None:
         sensor_module = _load_sensor_module()

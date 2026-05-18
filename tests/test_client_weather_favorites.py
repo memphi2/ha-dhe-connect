@@ -72,6 +72,7 @@ def _load_client():
     _load_component_module("pairing_helpers")
     _load_component_module("protocol")
     _load_component_module("client_value_helpers")
+    _load_component_module("client_reconnect_manager")
     _load_component_module("client_pairing")
     _load_component_module("client_command_runner")
     _load_component_module("client_radio_commands")
@@ -302,40 +303,6 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         client._request_radio_favorites.assert_awaited_once()
         client._assign_radio_favorite_and_wait.assert_not_awaited()
         client._send_ste_command.assert_not_awaited()
-
-    async def test_bluetooth_pairing_buttons_send_observed_radio_paired_values(self) -> None:
-        client_module = _load_client()
-        DHEClient = client_module.DHEClient
-        client = DHEClient.__new__(DHEClient)
-        ctx = object()
-
-        client._send_ste_command = AsyncMock()
-        client._last_app_values = {}
-        client._last_radio_state = {}
-        client._last_radio_favorites = []
-        client._radio_favorites_generation = 0
-        client._radio_callbacks = set()
-
-        async def _run_with_retry(_message, operation):
-            return await operation(ctx)
-
-        client._run_command_with_reconnect_retry = _run_with_retry
-
-        self.assertTrue(await DHEClient.start_bluetooth_pairing(client))
-        client._send_ste_command.assert_awaited_with(
-            ctx,
-            "assign:ste.app.radio:paired",
-            True,
-        )
-        self.assertTrue(client._last_radio_state["paired"])
-
-        self.assertTrue(await DHEClient.disconnect_bluetooth_pairing(client))
-        client._send_ste_command.assert_awaited_with(
-            ctx,
-            "assign:ste.app.radio:paired",
-            False,
-        )
-        self.assertFalse(client._last_radio_state["paired"])
 
     async def test_add_radio_favorite_missing_in_stale_cache_fails_safely(self) -> None:
         client_module = _load_client()
@@ -1361,11 +1328,154 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         client._force_reconnect.assert_awaited_once()
         args, kwargs = client._force_reconnect.await_args
         self.assertEqual(args, (ctx,))
-        self.assertTrue(kwargs["immediate_availability"])
+        self.assertNotIn("immediate_availability", kwargs)
         self.assertEqual(
             kwargs["reason"],
             "Heartbeat failed: RuntimeError: socket write failed",
         )
+
+    async def test_force_reconnect_keeps_available_inside_reconnect_grace(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+
+        client = DHEClient.__new__(DHEClient)
+        client._ctx = None
+        client._ready = client_module.asyncio.Event()
+        client._ready.set()
+        client._stopped = client_module.asyncio.Event()
+        client._online = True
+        client._available = True
+        client._online_callbacks = set()
+        client._availability_callbacks = set()
+        client._diagnostic_callbacks = set()
+        client._diagnostic_state = {}
+        client._last_message_monotonic = None
+        client._notify_callbacks = Mock()
+        client._reconnect_grace_task = None
+        scheduled_tasks: list[tuple[object, str]] = []
+
+        def _capture_background_task(coro, name):
+            scheduled_tasks.append((coro, name))
+            coro.close()
+            return types.SimpleNamespace(done=lambda: False, cancel=Mock())
+
+        client._create_background_task = Mock(side_effect=_capture_background_task)
+        client._reconnect_manager = client_module.DHEReconnectManager(
+            base_delay=2.0,
+            max_delay=10.0,
+            grace_period=15.0,
+            monotonic=lambda: 0.0,
+        )
+
+        await DHEClient._force_reconnect(client, reason="test reconnect")
+
+        self.assertFalse(client._ready.is_set())
+        self.assertFalse(client._online)
+        self.assertTrue(client._available)
+        self.assertEqual(client._diagnostic_state["connection_state"], "reconnecting")
+        self.assertEqual(client._diagnostic_state["last_reconnect_reason"], "test reconnect")
+        self.assertEqual(client._diagnostic_state["next_reconnect_delay_seconds"], 2.0)
+        self.assertEqual(
+            scheduled_tasks[0][1],
+            "stiebel_dhe_connect_reconnect_grace_expiry",
+        )
+
+    async def test_force_reconnect_marks_unavailable_after_reconnect_grace(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        now = 0.0
+
+        client = DHEClient.__new__(DHEClient)
+        client._ctx = None
+        client._ready = client_module.asyncio.Event()
+        client._ready.set()
+        client._stopped = client_module.asyncio.Event()
+        client._online = True
+        client._available = True
+        client._online_callbacks = set()
+        client._availability_callbacks = set()
+        client._diagnostic_callbacks = set()
+        client._diagnostic_state = {}
+        client._last_message_monotonic = None
+        client._notify_callbacks = Mock()
+        client._reconnect_grace_task = None
+        scheduled_task = types.SimpleNamespace(done=lambda: False, cancel=Mock())
+
+        def _capture_background_task(coro, _name):
+            coro.close()
+            return scheduled_task
+
+        client._create_background_task = Mock(side_effect=_capture_background_task)
+        client._reconnect_manager = client_module.DHEReconnectManager(
+            base_delay=2.0,
+            max_delay=10.0,
+            grace_period=15.0,
+            monotonic=lambda: now,
+        )
+
+        await DHEClient._force_reconnect(client, reason="first reconnect")
+        self.assertTrue(client._available)
+
+        now = 16.0
+        client._online = True
+        client._ready.set()
+        await DHEClient._force_reconnect(client, reason="second reconnect")
+
+        self.assertFalse(client._available)
+        scheduled_task.cancel.assert_called_once()
+        self.assertEqual(client._diagnostic_state["connection_state"], "reconnecting")
+        self.assertEqual(client._diagnostic_state["last_reconnect_reason"], "second reconnect")
+        self.assertEqual(client._diagnostic_state["next_reconnect_delay_seconds"], 4.0)
+
+    async def test_reconnect_grace_timer_marks_unavailable_when_expired(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        now = 0.0
+
+        client = DHEClient.__new__(DHEClient)
+        client._ctx = None
+        client._ready = client_module.asyncio.Event()
+        client._stopped = client_module.asyncio.Event()
+        client._available = True
+        client._availability_callbacks = set()
+        client._notify_callbacks = Mock()
+        client._reconnect_grace_task = object()
+        client._reconnect_manager = client_module.DHEReconnectManager(
+            grace_period=15.0,
+            monotonic=lambda: now,
+        )
+        client._reconnect_manager.mark_disconnected()
+
+        now = 15.1
+        client._reconnect_grace_task = client_module.asyncio.current_task()
+        await DHEClient._expire_reconnect_grace_after(client, 0)
+
+        self.assertFalse(client._available)
+        self.assertIsNone(client._reconnect_grace_task)
+
+    async def test_stale_reconnect_grace_timer_does_not_clear_new_timer(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        now = 15.1
+        new_task = object()
+
+        client = DHEClient.__new__(DHEClient)
+        client._ctx = None
+        client._ready = client_module.asyncio.Event()
+        client._stopped = client_module.asyncio.Event()
+        client._available = True
+        client._availability_callbacks = set()
+        client._notify_callbacks = Mock()
+        client._reconnect_grace_task = new_task
+        client._reconnect_manager = client_module.DHEReconnectManager(
+            grace_period=15.0,
+            monotonic=lambda: now,
+        )
+        client._reconnect_manager.mark_disconnected()
+
+        await DHEClient._expire_reconnect_grace_after(client, 0)
+
+        self.assertIs(client._reconnect_grace_task, new_task)
 
     async def test_websocket_heartbeat_does_not_hide_programming_runtime_errors(
         self,

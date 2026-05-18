@@ -159,7 +159,7 @@ Best-effort startup reads collect additional values:
 | `get:ste.app.radio:station` | Current radio station metadata |
 | `get:ste.app.radio:volume` | Radio volume in percent |
 | `get:ste.app.radio:play` | Radio playback state |
-| `get:ste.app.radio:paired` | Bluetooth pairing state for the DHE radio module |
+| `get:ste.app.radio:paired` | Radio pairing state |
 | `get:ste.app.radio:title` | Current radio title |
 | `get:ste.app.radio:favorites` | Radio favorite stations |
 | `get:ste.app.weather:location` | Weather location and daily forecast payload; with a `LocationId` value it selects that favorite/location |
@@ -191,7 +191,7 @@ Option flows and services use additional commands only when requested:
 | `get:ste.app.radio:stations` | Search stations by `{attribute: "text"|"genre"|"country"|"city", value: "..."}`; country and city searches additionally include `text: "<query>"` |
 | `assign:ste.app.radio:favorite` | Toggle a station ID in radio favorites |
 | `assign:ste.app.radio:station` | Select/play a station by station ID |
-| `assign:ste.app.radio:paired` | Observed DHE Bluetooth pairing button action; `true` starts pairing, `false` disconnects/unpairs according to the DHE UI traffic |
+| `assign:ste.app.radio:paired` | Observed pairing button action; `false` disconnects/unpairs according to the DHE UI traffic |
 | `get:ste.app.weather:countries` | Load the DHE weather country catalog before weather favorite search |
 | `get:ste.app.weather:forecast` | Search weather locations by `{name, countryId}` |
 | `assign:ste.app.weather:favorite` | Toggle a location in weather favorites |

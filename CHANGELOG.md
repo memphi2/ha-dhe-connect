@@ -6,18 +6,17 @@
 
 ## v1.5.1 - 2026-05-18
 
-### Added
-
-- Added disabled-by-default buttons to start and disconnect the DHE Bluetooth
-  pairing flow through the DHE web UI command `assign:ste.app.radio:paired`.
-- Added a `Bluetooth paired` diagnostic binary sensor backed by
-  `get:ste.app.radio:paired`.
-
 ### Changed
 
-- Renamed the exposed `ste.app.radio:paired` UI action and media-player
-  attribute to Bluetooth pairing in entity names, translations and
-  documentation.
+- Kept the released v1.5.0 device/entity surface as the stable baseline after
+  dropping the experimental Bluetooth pairing entities from the development
+  branch.
+- Replaced the delayed unavailable task with an internal reconnect manager. Short
+  transport drops now stay in a reconnect grace window while the diagnostic
+  connection state reports `reconnecting`; repeated failures then mark entities
+  unavailable and use capped exponential retry delays.
+- Added a diagnostic `Next reconnect delay` sensor so retry timing is visible
+  without writing volatile reconnect details into normal entity attributes.
 
 ## v1.5.0 - 2026-05-18
 
