@@ -31,6 +31,7 @@ files = [
     "custom_components/stiebel_dhe_connect/config_flow_discovery.py",
     "custom_components/stiebel_dhe_connect/config_flow_mapping.py",
     "custom_components/stiebel_dhe_connect/config_flow_schemas.py",
+    "custom_components/stiebel_dhe_connect/config_flow_setup.py",
     "custom_components/stiebel_dhe_connect/connection_helpers.py",
     "custom_components/stiebel_dhe_connect/const.py",
     "custom_components/stiebel_dhe_connect/engineio_helpers.py",

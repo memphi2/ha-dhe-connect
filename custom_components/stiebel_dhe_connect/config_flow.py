@@ -54,7 +54,28 @@ from .config_flow_schemas import (
     schema as _schema,
     weather_search_schema as _weather_search_schema,
 )
+from .config_flow_setup import (
+    CONF_SCAN_AUTOMATICALLY,
+    CONF_SCAN_CIDR,
+    CONF_SCAN_NETMASK,
+    CONF_SCAN_NETWORK_ADDRESS,
+    CONF_SCAN_SUBNET_MODE,
+    CONF_SETUP_MODE,
+    SETUP_SCAN_PROGRESS_ACTION,
+    apply_validation_error as _apply_validation_error,
+    language_from_hass as _language_from_hass,
+    required_scan_subnet as _required_scan_subnet,
+    scan_subnet_cidr_input as _scan_subnet_cidr_input,
+    scan_subnet_network_mask_error_field as _scan_subnet_network_mask_error_field,
+    scan_subnet_network_mask_input as _scan_subnet_network_mask_input,
+    scan_subnet_suggested_values as _scan_subnet_suggested_values,
+    setup_mode_labels as _setup_mode_labels,
+)
 from .config_entry_helpers import merged_entry_data
+from .config_entry_helpers import entry_target as _entry_target
+from .config_entry_helpers import (
+    is_target_used_by_other_entry as _is_target_used_by_other_entry,
+)
 from .config_flow_discovery import (
     FLOW_CONTEXT_DISCOVERED_HOST,
     FLOW_CONTEXT_DISCOVERED_PORT,
@@ -97,17 +118,12 @@ from .setup_scan import (
     SCAN_SUBNET_MODE_CIDR,
     SCAN_SUBNET_MODE_CURRENT,
     SCAN_SUBNET_MODE_NETWORK_MASK,
-    SCAN_SUBNET_PART_CIDR,
-    SCAN_SUBNET_PART_NETMASK,
-    SCAN_SUBNET_PART_NETWORK_ADDRESS,
-    SetupScanSubnetInput,
     async_scan_dhe_hosts,
     candidate_defaults,
     ipv4_scan_networks,
     local_ipv4_addresses_from_hass,
     setup_scan_mode_options,
     setup_scan_status_text,
-    split_scan_subnet_suggestions,
 )
 from .token_file_helpers import (
     LEGACY_TOKEN_FILE,
@@ -120,13 +136,6 @@ from .token_file_helpers import (
 SETUP_PAIRING_TIMEOUT_SECONDS = 180.0
 ID_APP_CURRENCY = _ID_APP_CURRENCY
 _currency_options = _schema_currency_options
-CONF_SCAN_AUTOMATICALLY = "scan_automatically"
-CONF_SCAN_SUBNET_MODE = "scan_subnet_mode"
-CONF_SCAN_NETWORK_ADDRESS = "scan_network_address"
-CONF_SCAN_NETMASK = "scan_netmask"
-CONF_SCAN_CIDR = "scan_cidr"
-CONF_SETUP_MODE = "setup_mode"
-SETUP_SCAN_PROGRESS_ACTION = "scan_dhe"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -177,108 +186,6 @@ class _OptionsFlowClient(Protocol):
 
     async def remove_radio_favorite(self, station: dict[str, Any] | int | str) -> bool:
         ...
-
-
-def _apply_validation_error(errors: dict[str, str], err: ValueError) -> None:
-    """Map validation exceptions to form fields."""
-    code = str(err) or "invalid_host"
-    if code == "invalid_port":
-        errors[CONF_PORT] = code
-    elif code == "invalid_internal_scald_protection":
-        errors[CONF_INTERNAL_SCALD_PROTECTION] = code
-    elif code == "embedded_port_not_supported":
-        errors[CONF_HOST] = code
-    else:
-        errors[CONF_HOST] = "invalid_host"
-
-
-def _scan_subnet_network_mask_input(
-    user_input: dict[str, Any],
-) -> SetupScanSubnetInput:
-    """Return normalized network-address and subnet-mask input."""
-    return SetupScanSubnetInput(
-        network_address=str(user_input.get(CONF_SCAN_NETWORK_ADDRESS) or "").strip(),
-        netmask=str(user_input.get(CONF_SCAN_NETMASK) or "").strip(),
-    )
-
-
-def _scan_subnet_cidr_input(user_input: dict[str, Any]) -> SetupScanSubnetInput:
-    """Return normalized CIDR-only subnet input."""
-    return SetupScanSubnetInput(cidr=str(user_input.get(CONF_SCAN_CIDR) or "").strip())
-
-
-def _scan_subnet_network_mask_error_field(scan_input: SetupScanSubnetInput) -> str:
-    """Return a visible network-mask form field for subnet validation errors."""
-    if not scan_input.network_address:
-        return CONF_SCAN_NETWORK_ADDRESS
-    return CONF_SCAN_NETMASK
-
-
-def _required_scan_subnet(scan_input: SetupScanSubnetInput) -> IPv4Network:
-    """Return the selected subnet from a mode-specific required subnet form."""
-    scan_subnet = scan_input.parse()
-    if scan_subnet is None:
-        raise ValueError("invalid_scan_subnet")
-    return scan_subnet
-
-
-def _scan_subnet_suggested_values(network: IPv4Network) -> dict[str, str]:
-    """Return split setup-scan form suggestions for one IPv4 network."""
-    suggestions = split_scan_subnet_suggestions(network)
-    return {
-        CONF_SCAN_NETWORK_ADDRESS: suggestions[SCAN_SUBNET_PART_NETWORK_ADDRESS],
-        CONF_SCAN_NETMASK: suggestions[SCAN_SUBNET_PART_NETMASK],
-        CONF_SCAN_CIDR: suggestions[SCAN_SUBNET_PART_CIDR],
-    }
-
-
-def _language_from_hass(hass: HomeAssistant) -> str:
-    """Return the configured Home Assistant language."""
-    return str(getattr(hass.config, "language", "") or "")
-
-
-def _setup_mode_labels(language: str) -> dict[str, str]:
-    """Return static setup method labels for the initial setup form."""
-    if language.lower().startswith("de"):
-        return {
-            SETUP_MODE_SCAN: "Subnetz-Scan",
-            SETUP_MODE_MANUAL: "Manuell eingeben",
-        }
-    return {
-        SETUP_MODE_SCAN: "Subnet scan",
-        SETUP_MODE_MANUAL: "Enter manually",
-    }
-
-
-def _entry_target(entry: config_entries.ConfigEntry) -> tuple[str, int] | None:
-    """Return normalized host/port from an existing config entry."""
-    merged = merged_entry_data(entry)
-    host_value = merged.get(CONF_HOST)
-    if host_value is None:
-        return None
-    try:
-        host = normalize_host(str(host_value))
-        port = validate_port(int(merged.get(CONF_PORT, DEFAULT_PORT)))
-    except (TypeError, ValueError):
-        return None
-    return host, port
-
-
-def _is_target_used_by_other_entry(
-    hass: HomeAssistant,
-    host: str,
-    port: int,
-    *,
-    exclude_entry_id: str | None = None,
-) -> bool:
-    """Return True when another config entry already uses host/port."""
-    for entry in hass.config_entries.async_entries(DOMAIN):
-        if exclude_entry_id is not None and entry.entry_id == exclude_entry_id:
-            continue
-        target = _entry_target(entry)
-        if target == (host, port):
-            return True
-    return False
 
 
 def _abs_config_path(hass: HomeAssistant, path: str) -> str:

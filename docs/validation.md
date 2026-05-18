@@ -56,6 +56,10 @@ entry setup paths instead of only isolated stubs:
 - Setup and unload.
 - Config-flow setup pairing entry creation.
 - Config-flow duplicate-target rejection.
+- Config-flow setup-method selection for Zeroconf discoveries, subnet scan and
+  manual entry.
+- MAC-based config-entry unique IDs across Zeroconf, scan-prefilled and manual
+  setup.
 - Options-flow connection target changes with pairing confirmation.
 - Reload cleanup and restart behavior.
 - Multiple configured DHE entries.
