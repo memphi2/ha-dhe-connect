@@ -474,21 +474,16 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
         suggested_values: dict[str, Any] | None = None,
     ) -> config_entries.ConfigFlowResult:
         """Show network-address and subnet-mask fields before scanning."""
-        data_schema = vol.Schema(
-            {
-                vol.Required(CONF_SCAN_NETWORK_ADDRESS): str,
-                vol.Required(CONF_SCAN_NETMASK): str,
-            }
-        )
-        if suggested_values:
-            data_schema = self.add_suggested_values_to_schema(
-                data_schema,
-                suggested_values,
-            )
-        return self.async_show_form(
-            step_id="subnet_scan_network_mask",
-            data_schema=data_schema,
-            errors=errors or {},
+        return self._show_subnet_scan_value_form(
+            "subnet_scan_network_mask",
+            vol.Schema(
+                {
+                    vol.Required(CONF_SCAN_NETWORK_ADDRESS): str,
+                    vol.Required(CONF_SCAN_NETMASK): str,
+                }
+            ),
+            errors=errors,
+            suggested_values=suggested_values,
         )
 
     def _show_subnet_scan_cidr_form(
@@ -497,14 +492,29 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
         suggested_values: dict[str, Any] | None = None,
     ) -> config_entries.ConfigFlowResult:
         """Show a CIDR-only subnet field before scanning."""
-        data_schema = vol.Schema({vol.Required(CONF_SCAN_CIDR): str})
+        return self._show_subnet_scan_value_form(
+            "subnet_scan_cidr",
+            vol.Schema({vol.Required(CONF_SCAN_CIDR): str}),
+            errors=errors,
+            suggested_values=suggested_values,
+        )
+
+    def _show_subnet_scan_value_form(
+        self,
+        step_id: str,
+        data_schema: vol.Schema,
+        *,
+        errors: dict[str, str] | None = None,
+        suggested_values: dict[str, Any] | None = None,
+    ) -> config_entries.ConfigFlowResult:
+        """Show one subnet value form with optional suggested values."""
         if suggested_values:
             data_schema = self.add_suggested_values_to_schema(
                 data_schema,
                 suggested_values,
             )
         return self.async_show_form(
-            step_id="subnet_scan_cidr",
+            step_id=step_id,
             data_schema=data_schema,
             errors=errors or {},
         )
