@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
@@ -26,9 +25,7 @@ from .runtime_helpers import get_runtime_data
 class StiebelDHEBinarySensorEntityDescription(BinarySensorEntityDescription):
     """Describe a DHE binary sensor."""
 
-    odb_id: int | None = None
-    radio_key: str | None = None
-    extra_state_attributes: dict[str, Any] | None = None
+    odb_id: int
 
 
 BINARY_SENSOR_DESCRIPTIONS: tuple[StiebelDHEBinarySensorEntityDescription, ...] = (
@@ -39,17 +36,6 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[StiebelDHEBinarySensorEntityDescription, ...] 
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         odb_id=ID_SCALD_PROTECTION_ACTIVE,
-    ),
-    StiebelDHEBinarySensorEntityDescription(
-        key="bluetooth_paired",
-        translation_key="bluetooth_paired",
-        icon="mdi:bluetooth-connect",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        radio_key="paired",
-        extra_state_attributes={
-            "radio_path": "ste.app.radio",
-            "radio_property": "paired",
-        },
     ),
 )
 
@@ -103,34 +89,23 @@ class StiebelDHEBinarySensor(StiebelDHEEntityMixin, BinarySensorEntity):
             name=name,
             client=client,
         )
-        base_extra_state_attributes = dict(description.extra_state_attributes or {})
-        if description.odb_id is not None:
-            base_extra_state_attributes["odb_id"] = description.odb_id
-        self._base_extra_state_attributes = base_extra_state_attributes
+        self._base_extra_state_attributes = {"odb_id": description.odb_id}
         self._attr_extra_state_attributes = dict(self._base_extra_state_attributes)
         self._attr_available = False
         self._attr_is_on: bool | None = None
 
     async def async_added_to_hass(self) -> None:
-        """Subscribe to DHE state updates."""
-        if self.entity_description.odb_id is not None:
-            self.async_on_remove(
-                self._client.add_measurement_callback(self._handle_measurement_update)
-            )
-        if self.entity_description.radio_key is not None:
-            self.async_on_remove(
-                self._client.add_radio_callback(self._handle_radio_update)
-            )
+        """Subscribe to DHE measurements."""
+        self.async_on_remove(
+            self._client.add_measurement_callback(self._handle_measurement_update)
+        )
         self.async_on_remove(
             self._client.add_availability_callback(self._handle_availability_update)
         )
 
-        if self.entity_description.odb_id is not None:
-            last_value = self._client.last_measurements.get(self.entity_description.odb_id)
-            if last_value is not None:
-                self._update_state(last_value)
-        if self.entity_description.radio_key is not None:
-            self._update_radio_state(self._client.last_radio_state)
+        last_value = self._client.last_measurements.get(self.entity_description.odb_id)
+        if last_value is not None:
+            self._update_state(last_value)
 
     def _convert_value(self, value: MeasurementValue) -> bool | None:
         if isinstance(value, bool):
@@ -141,27 +116,18 @@ class StiebelDHEBinarySensor(StiebelDHEEntityMixin, BinarySensorEntity):
         return bool(int(numeric_value))
 
     def _update_extra_state_attributes(self) -> None:
-        dynamic_attributes = {}
-        if self.entity_description.odb_id is not None:
-            dynamic_attributes = self._client.last_measurement_attributes.get(
-                self.entity_description.odb_id,
-                {},
-            )
         self._attr_extra_state_attributes = merge_state_attributes(
             self._base_extra_state_attributes,
-            dynamic_attributes,
+            self._client.last_measurement_attributes.get(
+                self.entity_description.odb_id,
+                {},
+            ),
         )
 
     def _update_state(self, value: MeasurementValue) -> None:
         self._update_extra_state_attributes()
         self._attr_is_on = self._convert_value(value)
         self._attr_available = value_available(self._client.available, self._attr_is_on)
-
-    def _update_radio_state(self, state: dict[str, Any]) -> None:
-        radio_key = self.entity_description.radio_key
-        if radio_key is None or radio_key not in state:
-            return
-        self._update_state(state.get(radio_key))
 
     @callback
     def _handle_measurement_update(self, odb_id: int, value: MeasurementValue) -> None:
@@ -170,14 +136,6 @@ class StiebelDHEBinarySensor(StiebelDHEEntityMixin, BinarySensorEntity):
             return
         self._update_state(value)
         self.async_write_ha_state()
-
-    @callback
-    def _handle_radio_update(self, state: dict[str, Any]) -> None:
-        """Handle radio state updates from the persistent client."""
-        previous = self._attr_is_on
-        self._update_radio_state(state)
-        if self._attr_is_on != previous:
-            self.async_write_ha_state()
 
     @callback
     def _handle_availability_update(self, available: bool) -> None:

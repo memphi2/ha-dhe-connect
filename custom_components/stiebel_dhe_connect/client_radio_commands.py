@@ -43,19 +43,11 @@ class DHEClientRadioCommandsMixin:
         _command_context(self)._handle_radio_value(f"assign:{RADIO_PATH}:volume", volume)
         return volume / 100.0
 
-    async def start_bluetooth_pairing(self) -> bool:
-        """Send the DHE Bluetooth pairing start action."""
-        await self._set_bluetooth_pairing(True)
+    async def disconnect_radio_pairing(self) -> bool:
+        """Send the DHE radio pairing disconnect action."""
+        await self._assign_radio_value("paired", False)
+        _command_context(self)._handle_radio_value(f"assign:{RADIO_PATH}:paired", False)
         return True
-
-    async def disconnect_bluetooth_pairing(self) -> bool:
-        """Send the DHE Bluetooth pairing disconnect action."""
-        await self._set_bluetooth_pairing(False)
-        return True
-
-    async def _set_bluetooth_pairing(self, paired: bool) -> None:
-        await self._assign_radio_value("paired", paired)
-        _command_context(self)._handle_radio_value(f"assign:{RADIO_PATH}:paired", paired)
 
     async def list_radio_genres(self) -> list[str]:
         """Return the DHE radio genre catalog."""

@@ -303,40 +303,6 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         client._assign_radio_favorite_and_wait.assert_not_awaited()
         client._send_ste_command.assert_not_awaited()
 
-    async def test_bluetooth_pairing_buttons_send_observed_radio_paired_values(self) -> None:
-        client_module = _load_client()
-        DHEClient = client_module.DHEClient
-        client = DHEClient.__new__(DHEClient)
-        ctx = object()
-
-        client._send_ste_command = AsyncMock()
-        client._last_app_values = {}
-        client._last_radio_state = {}
-        client._last_radio_favorites = []
-        client._radio_favorites_generation = 0
-        client._radio_callbacks = set()
-
-        async def _run_with_retry(_message, operation):
-            return await operation(ctx)
-
-        client._run_command_with_reconnect_retry = _run_with_retry
-
-        self.assertTrue(await DHEClient.start_bluetooth_pairing(client))
-        client._send_ste_command.assert_awaited_with(
-            ctx,
-            "assign:ste.app.radio:paired",
-            True,
-        )
-        self.assertTrue(client._last_radio_state["paired"])
-
-        self.assertTrue(await DHEClient.disconnect_bluetooth_pairing(client))
-        client._send_ste_command.assert_awaited_with(
-            ctx,
-            "assign:ste.app.radio:paired",
-            False,
-        )
-        self.assertFalse(client._last_radio_state["paired"])
-
     async def test_add_radio_favorite_missing_in_stale_cache_fails_safely(self) -> None:
         client_module = _load_client()
         DHEClient = client_module.DHEClient
