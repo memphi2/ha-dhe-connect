@@ -21,6 +21,10 @@
 
 ### Fixed
 
+- Refreshed missing sensor values again when Home Assistant enables an entity
+  while the DHE client is offline and the client reconnects afterwards.
+- Updated the HA-Test service-smoke default climate entity to the current
+  `climate.dhe_connect_water_heating` registry name.
 - Rejected wildcard and non-contiguous dotted masks in setup scan subnet input
   while keeping normal netmask input such as `192.168.1.0 255.255.255.0`
   supported.

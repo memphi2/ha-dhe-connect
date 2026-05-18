@@ -531,6 +531,82 @@ class TestSensorRecorderAttributes(unittest.TestCase):
                     app_command=None,
                 )
 
+    def test_missing_sensor_refresh_runs_when_client_comes_online(self) -> None:
+        sensor_module = _load_sensor_module()
+        protocol_module = _load_component_module("protocol")
+        description = next(
+            item
+            for item in sensor_module.SENSOR_DESCRIPTIONS
+            if item.key == "shower_timer_remaining"
+        )
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+            online = False
+            last_measurements: dict[int, object] = {}
+            last_measurement_attributes: dict[int, dict[str, object]] = {}
+
+            def __init__(self) -> None:
+                self.release_refresh = asyncio.Event()
+                self.request_measurement_refresh = AsyncMock(
+                    side_effect=self._request_measurement_refresh,
+                )
+
+            async def _request_measurement_refresh(self, **_kwargs) -> None:
+                await self.release_refresh.wait()
+
+            def add_measurement_callback(self, _callback):
+                return lambda: None
+
+            def add_availability_callback(self, _callback):
+                return lambda: None
+
+        class _FakeHass:
+            def __init__(self) -> None:
+                self.tasks = []
+
+            def async_create_task(self, coro, *, name: str | None = None):
+                task = asyncio.create_task(coro, name=name)
+                self.tasks.append(task)
+                return task
+
+        async def _run() -> tuple[_FakeClient, _FakeHass, list[object]]:
+            client = _FakeClient()
+            hass = _FakeHass()
+            removers: list[object] = []
+            sensor = sensor_module.StiebelDHESensor(
+                entry_id="test-entry",
+                name="Test DHE",
+                client=client,
+                description=description,
+            )
+            sensor.hass = hass
+            sensor.async_on_remove = removers.append
+            sensor.async_write_ha_state = lambda: None
+
+            await sensor.async_added_to_hass()
+            self.assertEqual(hass.tasks, [])
+            remover_count_after_add = len(removers)
+
+            client.online = True
+            sensor._handle_availability_update(True)
+            sensor._handle_availability_update(True)
+            self.assertEqual(len(hass.tasks), 1)
+            self.assertEqual(len(removers), remover_count_after_add + 1)
+
+            client.release_refresh.set()
+            await asyncio.gather(*hass.tasks)
+            return client, hass, removers
+
+        client, _hass, _removers = asyncio.run(_run())
+
+        client.request_measurement_refresh.assert_awaited_once_with(
+            odb_id=protocol_module.ID_SHOWER_TIMER_REMAINING,
+            app_command="get:ste.app.showerTimer:remainingMilliseconds",
+        )
+
     def test_availability_update_writes_only_on_effective_sensor_change(self) -> None:
         sensor_module = _load_sensor_module()
         description = next(
