@@ -43,6 +43,13 @@
       "network_scan": {
         "title": "Search for DHE Connect"
       },
+      "zeroconf_confirm": {
+        "title": "Confirm discovered DHE Connect",
+        "description": "Home Assistant discovered this DHE Connect through Zeroconf/mDNS. Set the physical Tmax jumper position, then continue to pairing. The integration is only created after successful pairing and login.",
+        "data": {
+          "internal_scald_protection": "Internal scald protection (Tmax jumper)"
+        }
+      },
       "pairing_confirm": {
         "title": "Confirm pairing",
         "description": "Click OK now. The pairing request appears on the DHE afterwards, and confirmation on the device must be completed there. The integration is only created after successful pairing and login."
@@ -70,7 +77,10 @@
       "invalid_internal_scald_protection": "Invalid Tmax jumper position."
     },
     "abort": {
-      "already_configured": "Stiebel DHE Connect is already configured."
+      "already_configured": "Stiebel DHE Connect is already configured.",
+      "already_in_progress": "Setup for this DHE Connect is already in progress.",
+      "cannot_connect": "Could not connect to the discovered DHE Connect.",
+      "invalid_discovery_parameters": "The discovered DHE Connect did not provide a valid host or port."
     }
   },
   "options": {
