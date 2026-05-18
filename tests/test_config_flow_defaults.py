@@ -626,6 +626,21 @@ class TestSetupScanConfigFlow(
         self.assertEqual(result["errors"]["scan_subnet"], "invalid_scan_subnet")
         self.config_flow.async_scan_dhe_hosts.assert_not_called()
 
+    async def test_user_step_scan_rejects_slash_wildcard_netmask(self) -> None:
+        self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
+
+        result = await self.flow.async_step_user(
+            {
+                self.config_flow.CONF_SCAN_AUTOMATICALLY: True,
+                self.config_flow.CONF_SCAN_SUBNET: "192.168.2.0/0.0.0.255",
+            }
+        )
+
+        self.assertEqual(result["type"], "form")
+        self.assertEqual(result["step_id"], "user")
+        self.assertEqual(result["errors"]["scan_subnet"], "invalid_scan_subnet")
+        self.config_flow.async_scan_dhe_hosts.assert_not_called()
+
     async def test_user_step_runs_scan_then_prefills_manual_form(self) -> None:
         self.config_flow.async_scan_dhe_hosts = AsyncMock(
             return_value=[

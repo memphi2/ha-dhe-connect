@@ -70,6 +70,28 @@ def _netmask_prefix_length(mask_text: str) -> int:
     return 32 - inverted.bit_length()
 
 
+def _parse_ipv4_network(text: str) -> IPv4Network:
+    """Parse an IPv4 network while rejecting wildcard dotted masks."""
+    if "/" not in text:
+        parsed_address = ip_address(text)
+        if not isinstance(parsed_address, IPv4Address):
+            raise ValueError("invalid_scan_subnet")
+        parsed_network = ip_network(f"{parsed_address}/24", strict=False)
+    else:
+        address_text, mask_text = text.split("/", maxsplit=1)
+        if "." in mask_text:
+            prefix_length = _netmask_prefix_length(mask_text)
+            parsed_network = ip_network(
+                f"{address_text}/{prefix_length}",
+                strict=False,
+            )
+        else:
+            parsed_network = ip_network(text, strict=False)
+    if not isinstance(parsed_network, IPv4Network):
+        raise ValueError("invalid_scan_subnet")
+    return parsed_network
+
+
 def dhe_response_evidence(body: bytes, headers: Any) -> tuple[str, ...]:
     """Return evidence markers that make a response look like the DHE web UI."""
     text = body.decode("utf-8", errors="ignore").lower()
@@ -129,13 +151,8 @@ def parse_scan_subnet(value: Any) -> IPv4Network | None:
             parsed_network = ip_network(f"{parts[0]}/{prefix_length}", strict=False)
         elif len(parts) > 2:
             raise ValueError("invalid_scan_subnet")
-        elif "/" in text:
-            parsed_network = ip_network(text, strict=False)
         else:
-            parsed_address = ip_address(text)
-            if not isinstance(parsed_address, IPv4Address):
-                raise ValueError("invalid_scan_subnet")
-            parsed_network = ip_network(f"{parsed_address}/24", strict=False)
+            parsed_network = _parse_ipv4_network(text)
     except ValueError as err:
         raise ValueError("invalid_scan_subnet") from err
 
