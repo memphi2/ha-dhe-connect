@@ -166,8 +166,21 @@ class TestSetupScan(unittest.TestCase):
             {
                 setup_scan.SCAN_SUBNET_PART_NETWORK_ADDRESS: "192.168.2.0",
                 setup_scan.SCAN_SUBNET_PART_NETMASK: "255.255.255.0",
-                setup_scan.SCAN_SUBNET_PART_CIDR: "",
+                setup_scan.SCAN_SUBNET_PART_CIDR: "192.168.2.0/24",
             },
+        )
+
+    def test_setup_scan_mode_options_are_localized(self) -> None:
+        english = setup_scan.setup_scan_mode_options("en")
+        german = setup_scan.setup_scan_mode_options("de")
+
+        self.assertEqual(
+            english[setup_scan.SCAN_SUBNET_MODE_NETWORK_MASK],
+            "Enter network address and subnet mask",
+        )
+        self.assertEqual(
+            german[setup_scan.SCAN_SUBNET_MODE_CIDR],
+            "CIDR-Subnetz eingeben",
         )
 
     def test_setup_scan_status_text_english_states(self) -> None:

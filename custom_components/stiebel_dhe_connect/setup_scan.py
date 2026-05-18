@@ -39,6 +39,9 @@ DHE_MARKERS = (
 SCAN_SUBNET_PART_NETWORK_ADDRESS = "network_address"
 SCAN_SUBNET_PART_NETMASK = "netmask"
 SCAN_SUBNET_PART_CIDR = "cidr"
+SCAN_SUBNET_MODE_CURRENT = "current_subnet"
+SCAN_SUBNET_MODE_NETWORK_MASK = "network_mask"
+SCAN_SUBNET_MODE_CIDR = "cidr"
 
 
 @dataclass(frozen=True)
@@ -225,7 +228,22 @@ def split_scan_subnet_suggestions(network: IPv4Network) -> dict[str, str]:
     return {
         SCAN_SUBNET_PART_NETWORK_ADDRESS: str(network.network_address),
         SCAN_SUBNET_PART_NETMASK: str(network.netmask),
-        SCAN_SUBNET_PART_CIDR: "",
+        SCAN_SUBNET_PART_CIDR: str(network),
+    }
+
+
+def setup_scan_mode_options(language: str) -> dict[str, str]:
+    """Return localized setup-scan subnet selection modes."""
+    if language.lower().startswith("de"):
+        return {
+            SCAN_SUBNET_MODE_CURRENT: "Aktuelles lokales Subnetz verwenden",
+            SCAN_SUBNET_MODE_NETWORK_MASK: "Netzwerkadresse und Subnetzmaske eingeben",
+            SCAN_SUBNET_MODE_CIDR: "CIDR-Subnetz eingeben",
+        }
+    return {
+        SCAN_SUBNET_MODE_CURRENT: "Use current local subnet",
+        SCAN_SUBNET_MODE_NETWORK_MASK: "Enter network address and subnet mask",
+        SCAN_SUBNET_MODE_CIDR: "Enter CIDR subnet",
     }
 
 
