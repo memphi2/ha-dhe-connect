@@ -1004,13 +1004,96 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
                 "Family",
             )
 
+    async def test_timer_duration_update_resets_remaining_like_dhe_ui(self) -> None:
+        client_module = _load_client()
+        protocol_module = _load_protocol()
+        DHEClient = client_module.DHEClient
+
+        client = DHEClient.__new__(DHEClient)
+        client._last_measurements = {}
+        client._measurement_callbacks = set()
+        client._pending_write_future = None
+        client._pending_write_id = None
+        client._pending_write_expected = None
+        captured_calls: list[tuple[int, object]] = []
+        client._measurement_callbacks.add(
+            lambda measurement_id, value: captured_calls.append(
+                (measurement_id, value)
+            )
+        )
+
+        DHEClient._handle_app_timer_value(
+            client,
+            "set:ste.app.brushTimer:durationMilliseconds",
+            120000,
+        )
+
+        self.assertEqual(
+            client._last_measurements[protocol_module.ID_BRUSH_TIMER_DURATION],
+            2.0,
+        )
+        self.assertEqual(
+            client._last_measurements[protocol_module.ID_BRUSH_TIMER_REMAINING],
+            2.0,
+        )
+        self.assertEqual(
+            captured_calls,
+            [
+                (protocol_module.ID_BRUSH_TIMER_DURATION, 2.0),
+                (protocol_module.ID_BRUSH_TIMER_REMAINING, 2.0),
+            ],
+        )
+
+    async def test_timer_reset_restores_remaining_to_configured_duration(self) -> None:
+        client_module = _load_client()
+        protocol_module = _load_protocol()
+        DHEClient = client_module.DHEClient
+
+        client = DHEClient.__new__(DHEClient)
+        client._last_measurements = {
+            protocol_module.ID_SHOWER_TIMER_DURATION: 5.0,
+            protocol_module.ID_SHOWER_TIMER_REMAINING: 0.0,
+            protocol_module.ID_SHOWER_TIMER_ACTIVATION: True,
+        }
+        client._measurement_callbacks = set()
+        client._pending_write_future = None
+        client._pending_write_id = None
+        client._pending_write_expected = None
+        captured_calls: list[tuple[int, object]] = []
+        client._measurement_callbacks.add(
+            lambda measurement_id, value: captured_calls.append(
+                (measurement_id, value)
+            )
+        )
+
+        DHEClient._handle_app_timer_reset(
+            client,
+            "set:ste.app.showerTimer:reset",
+        )
+
+        self.assertEqual(
+            client._last_measurements[protocol_module.ID_SHOWER_TIMER_REMAINING],
+            5.0,
+        )
+        self.assertFalse(
+            client._last_measurements[protocol_module.ID_SHOWER_TIMER_ACTIVATION]
+        )
+        self.assertEqual(
+            captured_calls,
+            [
+                (protocol_module.ID_SHOWER_TIMER_REMAINING, 5.0),
+                (protocol_module.ID_SHOWER_TIMER_ACTIVATION, False),
+            ],
+        )
+
     async def test_shower_timer_writes_use_shower_timer_path(self) -> None:
         client_module = _load_client()
         protocol_module = _load_protocol()
         DHEClient = client_module.DHEClient
 
         client = DHEClient.__new__(DHEClient)
-        client._write_app_value = AsyncMock(side_effect=[5.0, False, 0.0])
+        client._last_measurements = {protocol_module.ID_SHOWER_TIMER_DURATION: 5.0}
+        client._write_app_value = AsyncMock(side_effect=[5.0, False, 5.0])
         client._handle_measurement = Mock()
 
         duration = await DHEClient.set_shower_timer_duration_minutes(client, 5.0)
@@ -1044,8 +1127,18 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
                 "assign:ste.app.showerTimer:reset",
                 True,
                 protocol_module.ID_SHOWER_TIMER_REMAINING,
-                0.0,
+                5.0,
             ),
+        )
+        client._handle_measurement.assert_any_call(
+            protocol_module.ID_SHOWER_TIMER_REMAINING,
+            5.0,
+            force_update=True,
+        )
+        client._handle_measurement.assert_any_call(
+            protocol_module.ID_SHOWER_TIMER_ACTIVATION,
+            False,
+            force_update=True,
         )
 
     async def test_brush_timer_writes_keep_brush_timer_path(self) -> None:
@@ -1054,7 +1147,8 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         DHEClient = client_module.DHEClient
 
         client = DHEClient.__new__(DHEClient)
-        client._write_app_value = AsyncMock(side_effect=[4.0, True, 0.0])
+        client._last_measurements = {protocol_module.ID_BRUSH_TIMER_DURATION: 4.0}
+        client._write_app_value = AsyncMock(side_effect=[4.0, True, 4.0])
         client._handle_measurement = Mock()
 
         duration = await DHEClient.set_brush_timer_duration_minutes(client, 4.0)
@@ -1088,8 +1182,18 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
                 "assign:ste.app.brushTimer:reset",
                 True,
                 protocol_module.ID_BRUSH_TIMER_REMAINING,
-                0.0,
+                4.0,
             ),
+        )
+        client._handle_measurement.assert_any_call(
+            protocol_module.ID_BRUSH_TIMER_REMAINING,
+            4.0,
+            force_update=True,
+        )
+        client._handle_measurement.assert_any_call(
+            protocol_module.ID_BRUSH_TIMER_ACTIVATION,
+            False,
+            force_update=True,
         )
 
     def test_repeated_none_measurements_are_deduped(self) -> None:

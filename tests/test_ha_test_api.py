@@ -271,6 +271,16 @@ class TestHATestApi(unittest.TestCase):
             ha_test_api.DEFAULT_RADIO_ENTITY,
             "media_player.dhe_connect_radio",
         )
+        self.assertEqual(
+            ha_test_api.DEFAULT_TIMER_REMAINING_ENTITY,
+            "sensor.dhe_connect_brush_timer_remaining",
+        )
+
+    def test_timer_state_seconds_parses_home_assistant_timer_text(self) -> None:
+        self.assertEqual(ha_test_api._timer_state_seconds("1:05"), 65)
+        self.assertEqual(ha_test_api._timer_state_seconds("0:00"), 0)
+        self.assertIsNone(ha_test_api._timer_state_seconds("unknown"))
+        self.assertIsNone(ha_test_api._timer_state_seconds("1:99"))
 
     def test_wait_online_returns_immediately_without_restart_stability(self) -> None:
         api = ha_test_api.HomeAssistantApi("http://ha.test")

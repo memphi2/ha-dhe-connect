@@ -139,8 +139,8 @@ data:
 | Saving monitor real energy saving | `kWh` | disabled by default | `measurement` | `set:ste.app.savingMonitor:real.energy_Wh / 1000`, rounded to 2 decimals |
 | Saving monitor real CO2 saving | `kg` | disabled by default | `measurement` | `set:ste.app.savingMonitor:real.emission_Co2Kg`, rounded to 2 decimals |
 | Saving monitor real cost saving | `EUR` | `monetary`, disabled by default | none | `set:ste.app.savingMonitor:real.value_E`, rounded to 2 decimals |
-| Brush timer remaining | `M:SS` | disabled by default | none | `set:ste.app.brushTimer:remainingMilliseconds` |
-| Shower timer remaining | `M:SS` | disabled by default | none | `set:ste.app.showerTimer:remainingMilliseconds` |
+| Brush timer remaining | `M:SS` | disabled by default | none | `set:ste.app.brushTimer:remainingMilliseconds`; locally counts down once `ste.app.brushTimer:activation` is active and resets to the configured duration after reset/expiry |
+| Shower timer remaining | `M:SS` | disabled by default | none | `set:ste.app.showerTimer:remainingMilliseconds`; locally counts down once `ste.app.showerTimer:activation` is active and resets to the configured duration after reset/expiry |
 | Reconnects | count | diagnostic | `total_increasing` | Successful reconnect count after the initial connection |
 | Connection state | text | diagnostic | none | Client session state such as `starting`, `connected`, `reconnecting` or `stopped` |
 | Last reconnect reason | text | diagnostic | none | Last recorded session failure or forced reconnect reason |
@@ -150,7 +150,7 @@ data:
 | WLAN MAC | text | diagnostic, disabled by default | none | `set:ste.common.version:gadgetData.wlan` |
 | Bluetooth MAC | text | diagnostic, disabled by default | none | `set:ste.common.version:gadgetData.bluetooth` |
 
-Consumption sensors expose the DHE chart array as a `chart` attribute and the reported cost as `cost_eur` where available. Saving monitor sensors expose the latest `possible`, `real`, `consumption` and `activation_rate` payloads as attributes. Large chart and catalog payloads are deduplicated before entity writes so repeated DHE messages do not continuously grow the recorder database.
+Consumption sensors expose the DHE chart array as a `chart` attribute and the reported cost as `cost_eur` where available. Saving monitor sensors expose the latest `possible`, `real`, `consumption` and `activation_rate` payloads as attributes. Timer remaining sensors mirror the DHE web interface by counting down locally between DHE timer events while the matching timer activation is on; reset, expiry and duration changes restore the remaining value to the configured timer duration. Large chart and catalog payloads are deduplicated before entity writes so repeated DHE messages do not continuously grow the recorder database.
 
 The browser UI exposes ODB IDs `29` (`ODB_Heizen_Energie`), `30` (`ODB_WW_Volumen`), `63` (`ODB_Gsprt_Energie`) and `64` (`ODB_Gsprt_KW_Volumen`) separately from the `ste.app.consumption:*` and `ste.app.savingMonitor:*` app payloads. The DHE web app labels saving-monitor `possible` as potential saving and saving-monitor `real` as actual saving. Live comparison shows ODB ID `63` tracking the saving-monitor possible energy value, while ODB ID `64` tracks the saving-monitor real water-saving value, so the Home Assistant entities are named by meaning and the protocol source is kept in this reference. ODB ID `30` remains the raw DHE hot-water volume value and is not a saving-monitor entity even when its current value is close to one of the saving-monitor water values. These ODB values stay disabled by default because they are diagnostic protocol values. A `0` returned only as the direct answer to a startup or entity-enable read request is ignored for these IDs; while the DHE connection is active they remain available with an `unknown` state until a real runtime value arrives. A later DHE runtime update with value `0` is still accepted.
 
@@ -205,8 +205,8 @@ Wellness programs are triggered by writing the program ID and then sending ODB I
 
 | Entity | Command | Behavior |
 |---|---|---|
-| Reset brush timer | `assign:ste.app.brushTimer:reset` | Resets brush timer remaining time and activation state; disabled by default |
-| Reset shower timer | `assign:ste.app.showerTimer:reset` | Resets shower timer remaining time and activation state; disabled by default |
+| Reset brush timer | `assign:ste.app.brushTimer:reset` | Resets brush timer remaining time to the configured duration and turns activation off; disabled by default |
+| Reset shower timer | `assign:ste.app.showerTimer:reset` | Resets shower timer remaining time to the configured duration and turns activation off; disabled by default |
 | Repair pairing | local token reset and reconnect | Deletes the stored DHE token, starts a fresh pairing attempt and asks the user to confirm pairing on the DHE; disabled by default |
 | Disconnect radio pairing | `assign:ste.app.radio:paired` with `false` | Sends the observed DHE radio pairing disconnect action |
 | Temperature memory 1-12 | ODB ID `66` command | Sends the temperature stored in the matching memory slot; slots 3 to 12 disabled by default |

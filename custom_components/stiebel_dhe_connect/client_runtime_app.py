@@ -20,6 +20,7 @@ from .protocol import (
     DEVICE_INFO_SET_COMMANDS,
     ID_APP_CURRENCY,
     ID_BRUSH_TIMER_ACTIVATION,
+    ID_BRUSH_TIMER_DURATION,
     ID_BRUSH_TIMER_REMAINING,
     ID_DEVICE_INFO,
     ID_LAST_USAGE_COST,
@@ -28,11 +29,13 @@ from .protocol import (
     ID_LAST_USAGE_WATER,
     ID_SAVING_MONITOR_ACTIVATION_RATE,
     ID_SHOWER_TIMER_ACTIVATION,
+    ID_SHOWER_TIMER_DURATION,
     ID_SHOWER_TIMER_REMAINING,
     LAST_USAGE_SET_COMMAND,
     SAVING_MONITOR_SENSOR_FIELDS,
     SHOWER_TIMER_PATH,
     TEMPERATURE_MEMORY_ID_TO_MEASUREMENT,
+    TIMER_DEFAULT_DURATIONS,
     TIMER_PATH_IDS,
 )
 
@@ -74,7 +77,12 @@ class DHEClientRuntimeAppMixin:
                 return
             if property_name == "activation":
                 self._handle_measurement(measurement_id, _raw_to_bool(raw_value))
-            elif property_name in {"durationMilliseconds", "remainingMilliseconds"}:
+            elif property_name == "durationMilliseconds":
+                minutes = _raw_to_float(raw_value) / 60000.0
+                self._handle_measurement(measurement_id, minutes)
+                remaining_id = TIMER_PATH_IDS[path]["remainingMilliseconds"]
+                self._handle_measurement(remaining_id, minutes, force_update=True)
+            elif property_name == "remainingMilliseconds":
                 self._handle_measurement(measurement_id, _raw_to_float(raw_value) / 60000.0)
         except (TypeError, ValueError):
             return
@@ -85,11 +93,38 @@ class DHEClientRuntimeAppMixin:
         except ValueError:
             return
         if path == BRUSH_TIMER_PATH:
-            self._handle_measurement(ID_BRUSH_TIMER_REMAINING, 0.0, force_update=True)
+            self._handle_measurement(
+                ID_BRUSH_TIMER_REMAINING,
+                self._app_timer_duration_minutes(
+                    ID_BRUSH_TIMER_DURATION,
+                    BRUSH_TIMER_PATH,
+                ),
+                force_update=True,
+            )
             self._handle_measurement(ID_BRUSH_TIMER_ACTIVATION, False, force_update=True)
         elif path == SHOWER_TIMER_PATH:
-            self._handle_measurement(ID_SHOWER_TIMER_REMAINING, 0.0, force_update=True)
+            self._handle_measurement(
+                ID_SHOWER_TIMER_REMAINING,
+                self._app_timer_duration_minutes(
+                    ID_SHOWER_TIMER_DURATION,
+                    SHOWER_TIMER_PATH,
+                ),
+                force_update=True,
+            )
             self._handle_measurement(ID_SHOWER_TIMER_ACTIVATION, False, force_update=True)
+
+    def _app_timer_duration_minutes(
+        self,
+        duration_id: int,
+        path: str,
+    ) -> float:
+        """Return the configured timer duration in minutes."""
+        value = self._last_measurements.get(duration_id)
+        try:
+            duration = _raw_to_float(value)
+        except (TypeError, ValueError):
+            duration = TIMER_DEFAULT_DURATIONS[path]
+        return max(0.0, duration)
 
     def _handle_consumption_value(self, command: str, raw_value: Any) -> None:
         if not isinstance(raw_value, dict):

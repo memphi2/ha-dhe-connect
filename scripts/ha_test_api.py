@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 from dataclasses import dataclass
 from datetime import datetime
 import http.client
@@ -33,9 +34,15 @@ DEFAULT_CONFIG = Path("/mnt/ha-test-config")
 DEFAULT_CLIENT_ID = "http://localhost/"
 DEFAULT_CLIMATE_ENTITY = "climate.dhe_connect_water_heating"
 DEFAULT_RADIO_ENTITY = "media_player.dhe_connect_radio"
+DEFAULT_TIMER_SWITCH_ENTITY = "switch.dhe_connect_brush_timer"
+DEFAULT_TIMER_REMAINING_ENTITY = "sensor.dhe_connect_brush_timer_remaining"
+DEFAULT_TIMER_DURATION_ENTITY = "number.dhe_connect_brush_timer_seconds"
 DEFAULT_BACKUP_DIR = Path("/tmp")
 RADIO_SOURCE_SETTLE_SECONDS = 5.0
 DEFAULT_RADIO_AUTO_OFF_SECONDS = 30.0
+DEFAULT_TIMER_SMOKE_DURATION_SECONDS = 60.0
+DEFAULT_TIMER_SMOKE_OBSERVE_SECONDS = 8.0
+DEFAULT_TIMER_SMOKE_EXPIRY_GRACE_SECONDS = 12.0
 
 
 @dataclass(frozen=True)
@@ -505,6 +512,197 @@ def run_service_smoke(
     return results
 
 
+def run_timer_smoke(
+    api: HomeAssistantApi,
+    access_token: str,
+    *,
+    switch_entity: str,
+    remaining_entity: str,
+    duration_entity: str,
+    duration_seconds: float = DEFAULT_TIMER_SMOKE_DURATION_SECONDS,
+    observe_seconds: float = DEFAULT_TIMER_SMOKE_OBSERVE_SECONDS,
+    expiry_grace_seconds: float = DEFAULT_TIMER_SMOKE_EXPIRY_GRACE_SECONDS,
+) -> list[ServiceSmokeResult]:
+    """Exercise a DHE timer countdown, expiry and reset-to-duration behavior."""
+    results: list[ServiceSmokeResult] = []
+    duration_before = api.get_state(access_token, duration_entity)
+    original_duration = _state_float(duration_before.get("state"))
+    results.append(
+        ServiceSmokeResult(
+            original_duration is not None,
+            f"TIMER duration before state={duration_before.get('state')!r}",
+        )
+    )
+
+    try:
+        api.call_service(
+            access_token,
+            "number",
+            "set_value",
+            {"entity_id": duration_entity, "value": duration_seconds},
+        )
+        time.sleep(2)
+        prepared = api.get_state(access_token, remaining_entity)
+        prepared_seconds = _timer_state_seconds(prepared.get("state"))
+        results.append(
+            ServiceSmokeResult(
+                prepared_seconds is not None
+                and abs(prepared_seconds - duration_seconds) <= 2,
+                (
+                    "TIMER prepared "
+                    f"remaining={prepared.get('state')!r} "
+                    f"duration={duration_seconds:g}s"
+                ),
+            )
+        )
+
+        api.call_service(
+            access_token,
+            "switch",
+            "turn_on",
+            {"entity_id": switch_entity},
+        )
+        observed: list[int] = []
+        deadline = time.monotonic() + max(1.0, observe_seconds)
+        while time.monotonic() <= deadline:
+            state = api.get_state(access_token, remaining_entity)
+            seconds = _timer_state_seconds(state.get("state"))
+            if seconds is not None:
+                observed.append(seconds)
+            time.sleep(1)
+        descending_pairs = sum(
+            1 for left, right in zip(observed, observed[1:]) if right < left
+        )
+        results.append(
+            ServiceSmokeResult(
+                len(set(observed)) >= 3 and descending_pairs >= 2,
+                f"TIMER countdown observed={observed}",
+            )
+        )
+
+        api.call_service(
+            access_token,
+            "switch",
+            "turn_off",
+            {"entity_id": switch_entity},
+        )
+        time.sleep(3)
+        stopped_remaining = api.get_state(access_token, remaining_entity)
+        stopped_switch = api.get_state(access_token, switch_entity)
+        stopped_seconds = _timer_state_seconds(stopped_remaining.get("state"))
+        results.append(
+            ServiceSmokeResult(
+                stopped_switch.get("state") == "off"
+                and stopped_seconds is not None
+                and 0 < stopped_seconds < duration_seconds,
+                (
+                    "TIMER stopped after DHE sync "
+                    f"switch={stopped_switch.get('state')!r} "
+                    f"remaining={stopped_remaining.get('state')!r}"
+                ),
+            )
+        )
+
+        api.call_service(
+            access_token,
+            "number",
+            "set_value",
+            {"entity_id": duration_entity, "value": duration_seconds},
+        )
+        time.sleep(2)
+        reset_for_expiry = api.get_state(access_token, remaining_entity)
+        reset_for_expiry_seconds = _timer_state_seconds(reset_for_expiry.get("state"))
+        results.append(
+            ServiceSmokeResult(
+                reset_for_expiry_seconds is not None
+                and abs(reset_for_expiry_seconds - duration_seconds) <= 2,
+                (
+                    "TIMER reset for expiry "
+                    f"remaining={reset_for_expiry.get('state')!r}"
+                ),
+            )
+        )
+        api.call_service(
+            access_token,
+            "switch",
+            "turn_on",
+            {"entity_id": switch_entity},
+        )
+
+        expiry_deadline = (
+            time.monotonic()
+            + max(1.0, duration_seconds)
+            + expiry_grace_seconds
+        )
+        expired_state: dict[str, Any] | None = None
+        while time.monotonic() <= expiry_deadline:
+            remaining = api.get_state(access_token, remaining_entity)
+            switch = api.get_state(access_token, switch_entity)
+            remaining_seconds = _timer_state_seconds(remaining.get("state"))
+            if (
+                switch.get("state") == "off"
+                and remaining_seconds is not None
+                and abs(remaining_seconds - duration_seconds) <= 2
+            ):
+                expired_state = {
+                    "switch": switch.get("state"),
+                    "remaining": remaining.get("state"),
+                }
+                break
+            time.sleep(2)
+        results.append(
+            ServiceSmokeResult(
+                expired_state is not None,
+                (
+                    "TIMER expiry reset "
+                    f"state={expired_state if expired_state is not None else 'not reached'}"
+                ),
+            )
+        )
+    finally:
+        with contextlib.suppress(Exception):  # noqa: BLE001
+            api.call_service(
+                access_token,
+                "switch",
+                "turn_off",
+                {"entity_id": switch_entity},
+            )
+        if original_duration is not None:
+            with contextlib.suppress(Exception):  # noqa: BLE001
+                api.call_service(
+                    access_token,
+                    "number",
+                    "set_value",
+                    {
+                        "entity_id": duration_entity,
+                        "value": original_duration,
+                    },
+                )
+    return results
+
+
+def _state_float(value: object) -> float | None:
+    try:
+        return float(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _timer_state_seconds(value: object) -> int | None:
+    text = str(value or "").strip()
+    if ":" not in text:
+        return None
+    minutes_text, seconds_text = text.split(":", 1)
+    try:
+        minutes = int(minutes_text)
+        seconds = int(seconds_text)
+    except ValueError:
+        return None
+    if minutes < 0 or seconds < 0 or seconds >= 60:
+        return None
+    return minutes * 60 + seconds
+
+
 def _env_default(name: str, fallback: str) -> str:
     return os.environ.get(name, fallback)
 
@@ -567,6 +765,34 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--service-smoke", action="store_true")
     parser.add_argument("--climate-entity", default=DEFAULT_CLIMATE_ENTITY)
     parser.add_argument("--radio-entity", default=DEFAULT_RADIO_ENTITY)
+    parser.add_argument("--timer-smoke", action="store_true")
+    parser.add_argument("--timer-switch-entity", default=DEFAULT_TIMER_SWITCH_ENTITY)
+    parser.add_argument(
+        "--timer-remaining-entity",
+        default=DEFAULT_TIMER_REMAINING_ENTITY,
+    )
+    parser.add_argument(
+        "--timer-duration-entity",
+        default=DEFAULT_TIMER_DURATION_ENTITY,
+    )
+    parser.add_argument(
+        "--timer-smoke-duration-seconds",
+        type=_non_negative_float,
+        default=DEFAULT_TIMER_SMOKE_DURATION_SECONDS,
+        help="Temporary timer duration used by --timer-smoke.",
+    )
+    parser.add_argument(
+        "--timer-smoke-observe-seconds",
+        type=_non_negative_float,
+        default=DEFAULT_TIMER_SMOKE_OBSERVE_SECONDS,
+        help="Initial countdown observation window for --timer-smoke.",
+    )
+    parser.add_argument(
+        "--timer-smoke-expiry-grace-seconds",
+        type=_non_negative_float,
+        default=DEFAULT_TIMER_SMOKE_EXPIRY_GRACE_SECONDS,
+        help="Extra seconds to wait for DHE timer expiry and reset.",
+    )
     parser.add_argument(
         "--radio-auto-off-seconds",
         type=float,
@@ -662,6 +888,37 @@ def main() -> int:
                 except Exception as err:  # noqa: BLE001
                     print(
                         "FAIL: HA service smoke aborted: "
+                        f"{format_redacted_exception(err)}"
+                    )
+                    exit_code = 3
+                else:
+                    for result in results:
+                        print(f"{'PASS' if result.ok else 'FAIL'}: {result.message}")
+                        if not result.ok:
+                            exit_code = 3
+        if args.timer_smoke:
+            if not api.wait_api_ready(
+                token.access_token,
+                timeout=args.api_ready_timeout,
+            ):
+                print("FAIL: HA authenticated API did not become ready")
+                exit_code = 3
+            else:
+                print("PASS: HA authenticated API ready")
+                try:
+                    results = run_timer_smoke(
+                        api,
+                        token.access_token,
+                        switch_entity=args.timer_switch_entity,
+                        remaining_entity=args.timer_remaining_entity,
+                        duration_entity=args.timer_duration_entity,
+                        duration_seconds=args.timer_smoke_duration_seconds,
+                        observe_seconds=args.timer_smoke_observe_seconds,
+                        expiry_grace_seconds=args.timer_smoke_expiry_grace_seconds,
+                    )
+                except Exception as err:  # noqa: BLE001
+                    print(
+                        "FAIL: HA timer smoke aborted: "
                         f"{format_redacted_exception(err)}"
                     )
                     exit_code = 3

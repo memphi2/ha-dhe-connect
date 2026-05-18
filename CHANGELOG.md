@@ -21,6 +21,12 @@
 
 ### Fixed
 
+- Matched the DHE web UI for brush and shower timer remaining sensors by
+  counting down locally while the corresponding timer activation is on and
+  rebasing the display whenever the DHE sends a new remaining-time event.
+- Restored brush and shower timer remaining values to the configured duration
+  after duration changes, reset commands and timer expiry instead of leaving
+  Home Assistant stuck at `0:00`.
 - Refreshed missing sensor values again when Home Assistant enables an entity
   while the DHE client is offline and the client reconnects afterwards.
 - Updated the HA-Test service-smoke default climate entity to the current

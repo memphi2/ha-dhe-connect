@@ -154,8 +154,8 @@ Best-effort startup reads collect additional values:
 | Command | Purpose |
 |---|---|
 | `get:ste.common.temperature:memory` | Temperature memory slots |
-| `get:ste.app.brushTimer:*` | Brush timer activation, duration and remaining time |
-| `get:ste.app.showerTimer:*` | Shower timer activation, duration and remaining time |
+| `get:ste.app.brushTimer:*` | Brush timer activation, duration and remaining time; the DHE browser UI counts remaining time down locally between device events and resets remaining time to duration on reset/expiry |
+| `get:ste.app.showerTimer:*` | Shower timer activation, duration and remaining time; the DHE browser UI counts remaining time down locally between device events and resets remaining time to duration on reset/expiry |
 | `get:ste.app.radio:station` | Current radio station metadata |
 | `get:ste.app.radio:volume` | Radio volume in percent |
 | `get:ste.app.radio:play` | Radio playback state |

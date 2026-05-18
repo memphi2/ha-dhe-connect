@@ -8,7 +8,9 @@ from .client_command_context import command_context as _command_context
 from .client_constants import APP_COMMAND_CONFIRMATION_TIMEOUT
 from .client_types import DHEError, DHESession, ODBValue
 from .client_value_helpers import clamp as _clamp
+from .client_value_helpers import raw_to_float as _raw_to_float
 from .protocol import (
+    BRUSH_TIMER_DEFAULT_DURATION_MINUTES,
     BRUSH_TIMER_PATH,
     CIRCULATION_SUPPORT_PROGRAM_ID,
     ID_BRUSH_TIMER_ACTIVATION,
@@ -19,6 +21,7 @@ from .protocol import (
     ID_SHOWER_TIMER_REMAINING,
     ID_WELLNESS_ACTIVE,
     ID_WELLNESS_SHOWER_PROGRAM,
+    SHOWER_TIMER_DEFAULT_DURATION_MINUTES,
     SHOWER_TIMER_PATH,
     SUMMER_FITNESS_PROGRAM_ID,
     WELLNESS_COLD_PREVENTION_PROGRAM_ID,
@@ -89,14 +92,18 @@ class DHEClientWellnessTimerCommandsMixin:
         return await self._reset_app_timer(
             BRUSH_TIMER_PATH,
             ID_BRUSH_TIMER_ACTIVATION,
+            ID_BRUSH_TIMER_DURATION,
             ID_BRUSH_TIMER_REMAINING,
+            BRUSH_TIMER_DEFAULT_DURATION_MINUTES,
         )
 
     async def reset_shower_timer(self) -> bool:
         return await self._reset_app_timer(
             SHOWER_TIMER_PATH,
             ID_SHOWER_TIMER_ACTIVATION,
+            ID_SHOWER_TIMER_DURATION,
             ID_SHOWER_TIMER_REMAINING,
+            SHOWER_TIMER_DEFAULT_DURATION_MINUTES,
         )
 
     async def run_wellness_shower_program_winter_refresh(self) -> bool:
@@ -157,15 +164,27 @@ class DHEClientWellnessTimerCommandsMixin:
         )
         return bool(confirmed)
 
-    async def _reset_app_timer(self, path: str, activation_id: int, remaining_id: int) -> bool:
+    async def _reset_app_timer(
+        self,
+        path: str,
+        activation_id: int,
+        duration_id: int,
+        remaining_id: int,
+        default_duration: float,
+    ) -> bool:
         client = _command_context(self)
+        remaining = _configured_timer_duration_minutes(
+            client,
+            duration_id,
+            default_duration,
+        )
         await self._write_app_value(
             f"assign:{path}:reset",
             True,
             remaining_id,
-            0.0,
+            remaining,
         )
-        client._handle_measurement(remaining_id, 0.0, force_update=True)
+        client._handle_measurement(remaining_id, remaining, force_update=True)
         client._handle_measurement(activation_id, False, force_update=True)
         return True
 
@@ -192,3 +211,19 @@ class DHEClientWellnessTimerCommandsMixin:
             _operation,
             on_error=lambda: client._clear_pending_write_future(None),
         )
+
+
+def _configured_timer_duration_minutes(
+    client: Any,
+    duration_id: int,
+    default_duration: float,
+) -> float:
+    """Return the last known configured app timer duration."""
+    try:
+        value = client._last_measurements.get(duration_id)
+    except AttributeError:
+        return default_duration
+    try:
+        return max(0.0, _raw_to_float(value))
+    except (TypeError, ValueError):
+        return default_duration
