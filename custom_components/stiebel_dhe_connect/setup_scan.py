@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from ipaddress import IPv4Address, IPv4Network, ip_address, ip_network
 import socket
@@ -36,6 +36,9 @@ DHE_MARKERS = (
     "manifest-1.9.00.appcache",
     "assets/ste-dhe",
 )
+SCAN_SUBNET_PART_NETWORK_ADDRESS = "network_address"
+SCAN_SUBNET_PART_NETMASK = "netmask"
+SCAN_SUBNET_PART_CIDR = "cidr"
 
 
 @dataclass(frozen=True)
@@ -45,6 +48,53 @@ class DHEHostCandidate:
     host: str
     port: int
     evidence: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class SetupScanSubnetInput:
+    """Split setup-scan subnet form values."""
+
+    network_address: str = ""
+    netmask: str = ""
+    cidr: str = ""
+
+    @classmethod
+    def from_mapping(
+        cls,
+        values: Mapping[str, Any],
+        *,
+        network_key: str,
+        netmask_key: str,
+        cidr_key: str,
+    ) -> SetupScanSubnetInput:
+        """Return normalized split subnet values from a config-flow mapping."""
+        return cls(
+            network_address=str(values.get(network_key) or "").strip(),
+            netmask=str(values.get(netmask_key) or "").strip(),
+            cidr=str(values.get(cidr_key) or "").strip(),
+        )
+
+    def parse(self) -> IPv4Network | None:
+        """Return the selected subnet or None when the scan should use local nets."""
+        if self.cidr:
+            if self.network_address or self.netmask:
+                raise ValueError("invalid_scan_subnet")
+            return parse_scan_subnet(self.cidr)
+        if self.network_address or self.netmask:
+            if not self.network_address or not self.netmask:
+                raise ValueError("invalid_scan_subnet")
+            return parse_scan_subnet(f"{self.network_address} {self.netmask}")
+        return None
+
+    def error_part(self) -> str:
+        """Return the split field part that should receive validation errors."""
+        if self.cidr:
+            return SCAN_SUBNET_PART_CIDR
+        if self.netmask and not self.network_address:
+            return SCAN_SUBNET_PART_NETWORK_ADDRESS
+        if self.network_address:
+            return SCAN_SUBNET_PART_NETMASK
+        return SCAN_SUBNET_PART_CIDR
 
 
 def _is_rfc1918_address(address: IPv4Address) -> bool:
@@ -168,6 +218,15 @@ def parse_scan_subnet(value: Any) -> IPv4Network | None:
     if parsed_network.prefixlen < DHE_SCAN_MIN_PREFIX_LENGTH:
         raise ValueError("scan_subnet_too_large")
     return parsed_network
+
+
+def split_scan_subnet_suggestions(network: IPv4Network) -> dict[str, str]:
+    """Return split setup-scan suggestions for one IPv4 network."""
+    return {
+        SCAN_SUBNET_PART_NETWORK_ADDRESS: str(network.network_address),
+        SCAN_SUBNET_PART_NETMASK: str(network.netmask),
+        SCAN_SUBNET_PART_CIDR: "",
+    }
 
 
 def scan_hosts(networks: Sequence[IPv4Network], *, max_hosts: int) -> list[str]:

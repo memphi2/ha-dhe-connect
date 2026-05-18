@@ -78,11 +78,15 @@ from .protocol import (
 )
 from .setup_scan import (
     DHEHostCandidate,
+    SCAN_SUBNET_PART_CIDR,
+    SCAN_SUBNET_PART_NETMASK,
+    SCAN_SUBNET_PART_NETWORK_ADDRESS,
+    SetupScanSubnetInput,
     async_scan_dhe_hosts,
     candidate_defaults,
     ipv4_scan_networks,
     local_ipv4_addresses_from_hass,
-    parse_scan_subnet,
+    split_scan_subnet_suggestions,
 )
 from .token_file_helpers import (
     LEGACY_TOKEN_FILE,
@@ -100,6 +104,11 @@ CONF_SCAN_NETWORK_ADDRESS = "scan_network_address"
 CONF_SCAN_NETMASK = "scan_netmask"
 CONF_SCAN_CIDR = "scan_cidr"
 SETUP_SCAN_PROGRESS_ACTION = "scan_dhe"
+_SCAN_SUBNET_FIELD_BY_PART = {
+    SCAN_SUBNET_PART_NETWORK_ADDRESS: CONF_SCAN_NETWORK_ADDRESS,
+    SCAN_SUBNET_PART_NETMASK: CONF_SCAN_NETMASK,
+    SCAN_SUBNET_PART_CIDR: CONF_SCAN_CIDR,
+}
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -165,42 +174,28 @@ def _apply_validation_error(errors: dict[str, str], err: ValueError) -> None:
         errors[CONF_HOST] = "invalid_host"
 
 
-def _scan_subnet_from_input(user_input: dict[str, Any]) -> IPv4Network | None:
-    """Return the optional setup-scan subnet from split form fields."""
-    cidr = str(user_input.get(CONF_SCAN_CIDR) or "").strip()
-    network_address = str(user_input.get(CONF_SCAN_NETWORK_ADDRESS) or "").strip()
-    netmask = str(user_input.get(CONF_SCAN_NETMASK) or "").strip()
-
-    if cidr:
-        if network_address or netmask:
-            raise ValueError("invalid_scan_subnet")
-        return parse_scan_subnet(cidr)
-    if network_address or netmask:
-        if not network_address or not netmask:
-            raise ValueError("invalid_scan_subnet")
-        return parse_scan_subnet(f"{network_address} {netmask}")
-    return None
+def _scan_subnet_input(user_input: dict[str, Any]) -> SetupScanSubnetInput:
+    """Return normalized split setup-scan subnet input."""
+    return SetupScanSubnetInput.from_mapping(
+        user_input,
+        network_key=CONF_SCAN_NETWORK_ADDRESS,
+        netmask_key=CONF_SCAN_NETMASK,
+        cidr_key=CONF_SCAN_CIDR,
+    )
 
 
-def _scan_subnet_error_field(user_input: dict[str, Any]) -> str:
+def _scan_subnet_error_field(scan_input: SetupScanSubnetInput) -> str:
     """Return the most helpful form field for a setup-scan subnet error."""
-    if str(user_input.get(CONF_SCAN_CIDR) or "").strip():
-        return CONF_SCAN_CIDR
-    if str(user_input.get(CONF_SCAN_NETMASK) or "").strip() and not str(
-        user_input.get(CONF_SCAN_NETWORK_ADDRESS) or ""
-    ).strip():
-        return CONF_SCAN_NETWORK_ADDRESS
-    if str(user_input.get(CONF_SCAN_NETWORK_ADDRESS) or "").strip():
-        return CONF_SCAN_NETMASK
-    return CONF_SCAN_CIDR
+    return _SCAN_SUBNET_FIELD_BY_PART[scan_input.error_part()]
 
 
-def _scan_subnet_form_defaults(network: IPv4Network) -> dict[str, str]:
-    """Return split setup-scan form defaults for one IPv4 network."""
+def _scan_subnet_suggested_values(network: IPv4Network) -> dict[str, str]:
+    """Return split setup-scan form suggestions for one IPv4 network."""
+    suggestions = split_scan_subnet_suggestions(network)
     return {
-        CONF_SCAN_NETWORK_ADDRESS: str(network.network_address),
-        CONF_SCAN_NETMASK: str(network.netmask),
-        CONF_SCAN_CIDR: "",
+        CONF_SCAN_NETWORK_ADDRESS: suggestions[SCAN_SUBNET_PART_NETWORK_ADDRESS],
+        CONF_SCAN_NETMASK: suggestions[SCAN_SUBNET_PART_NETMASK],
+        CONF_SCAN_CIDR: suggestions[SCAN_SUBNET_PART_CIDR],
     }
 
 
@@ -503,7 +498,7 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
         networks = ipv4_scan_networks(addresses)
         if not networks:
             return {}
-        return _scan_subnet_form_defaults(networks[0])
+        return _scan_subnet_suggested_values(networks[0])
 
     def _show_user_form(
         self,
@@ -574,11 +569,12 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
             return self._show_subnet_scan_form(
                 suggested_values=await self._async_subnet_scan_form_defaults()
             )
+        scan_input = _scan_subnet_input(user_input)
         try:
-            scan_subnet = _scan_subnet_from_input(user_input)
+            scan_subnet = scan_input.parse()
         except ValueError as err:
             return self._show_subnet_scan_form(
-                {_scan_subnet_error_field(user_input): str(err)},
+                {_scan_subnet_error_field(scan_input): str(err)},
                 suggested_values=user_input,
             )
         self._setup_scan_networks = [scan_subnet] if scan_subnet else None
