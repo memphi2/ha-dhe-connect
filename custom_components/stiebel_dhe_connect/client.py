@@ -15,6 +15,8 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .client_command_runner import DHEClientCommandRunnerMixin
 from .client_commands import DHEClientCommandsMixin
+from .client_callbacks import DHEClientCallbacksMixin
+from .client_connection_state import DHEClientConnectionStateMixin
 from .client_constants import DEFAULT_NOMINAL_POWER_KW
 from .client_diagnostics import diagnostic_error as _diagnostic_error
 from .client_errors import (
@@ -28,7 +30,6 @@ from .client_runtime import DHEClientRuntimeMixin
 from .client_transport import DHEClientTransportMixin
 from .client_types import (
     AvailabilityCallback,
-    CallbackRemover,
     DHEError,
     DHESession,
     DiagnosticCallback,
@@ -63,7 +64,6 @@ from .protocol import (
     OPTIONAL_STARTUP_APP_REQUEST_COMMANDS,
     OPTIONAL_STARTUP_ODB_IDS,
     RADIO_CATALOG_FIELDS,
-    TEMPERATURE_MEMORY_SLOT_MEASUREMENTS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -72,6 +72,8 @@ DEVICE_INFO_REQUEST_TIMEOUT_SECONDS = 5.0
 
 class DHEClient(
     DHEClientPairingMixin,
+    DHEClientCallbacksMixin,
+    DHEClientConnectionStateMixin,
     DHEClientCommandsMixin,
     DHEClientCommandRunnerMixin,
     DHEClientRuntimeMixin,
@@ -226,86 +228,6 @@ class DHEClient(
     def diagnostic_state(self) -> dict[str, Any]:
         return self._copy_diagnostic_state()
 
-    def add_setpoint_callback(self, callback: SetpointCallback) -> CallbackRemover:
-        remove = self._add_callback(self._setpoint_callbacks, callback)
-        if self._last_setpoint is not None:
-            self._call_callback("setpoint", callback, self._last_setpoint)
-        return remove
-
-    def add_availability_callback(self, callback: AvailabilityCallback) -> CallbackRemover:
-        remove = self._add_callback(self._availability_callbacks, callback)
-        self._call_callback("availability", callback, self._available)
-        return remove
-
-    def add_online_callback(self, callback: OnlineCallback) -> CallbackRemover:
-        remove = self._add_callback(self._online_callbacks, callback)
-        self._call_callback("online", callback, self._online)
-        return remove
-
-    def add_measurement_callback(self, callback: MeasurementCallback) -> CallbackRemover:
-        remove = self._add_callback(self._measurement_callbacks, callback)
-        for odb_id, value in self._last_measurements.items():
-            self._call_callback("measurement", callback, odb_id, value)
-        if self._temperature_memory_full_list_seen:
-            for measurement_id in TEMPERATURE_MEMORY_SLOT_MEASUREMENTS.values():
-                if measurement_id in self._last_measurements:
-                    continue
-                self._call_callback("measurement", callback, measurement_id, None)
-        return remove
-
-    def add_reconnect_callback(self, callback: ReconnectCallback) -> CallbackRemover:
-        remove = self._add_callback(self._reconnect_callbacks, callback)
-        self._call_callback("reconnect", callback, self._reconnect_count)
-        return remove
-
-    def add_radio_callback(self, callback: RadioCallback) -> CallbackRemover:
-        remove = self._add_callback(self._radio_callbacks, callback)
-        self._call_callback("radio", callback, self._copy_radio_state())
-        return remove
-
-    def add_weather_callback(self, callback: WeatherCallback) -> CallbackRemover:
-        remove = self._add_callback(self._weather_callbacks, callback)
-        self._call_callback("weather", callback, self._copy_weather_state())
-        return remove
-
-    def add_diagnostic_callback(self, callback: DiagnosticCallback) -> CallbackRemover:
-        remove = self._add_callback(self._diagnostic_callbacks, callback)
-        self._call_callback("diagnostic", callback, self._copy_diagnostic_state())
-        return remove
-
-    @staticmethod
-    def _add_callback(callbacks: set[Callable[..., None]], callback: Callable[..., None]) -> CallbackRemover:
-        callbacks.add(callback)
-
-        def _remove_callback() -> None:
-            callbacks.discard(callback)
-
-        return _remove_callback
-
-    def _notify_callbacks(
-        self,
-        callback_name: str,
-        callbacks: set[Callable[..., None]],
-        *args: Any,
-    ) -> None:
-        for callback in tuple(callbacks):
-            self._call_callback(callback_name, callback, *args)
-
-    @staticmethod
-    def _call_callback(
-        callback_name: str,
-        callback: Callable[..., None],
-        *args: Any,
-    ) -> None:
-        try:
-            callback(*args)
-        except Exception:  # noqa: BLE001
-            DHEClient._log_callback_exception(callback_name)
-
-    @staticmethod
-    def _log_callback_exception(callback_name: str) -> None:
-        _LOGGER.debug("DHE %s callback raised an exception", callback_name, exc_info=True)
-
     async def start(self) -> None:
         if self._runner and not self._runner.done():
             return
@@ -314,12 +236,6 @@ class DHEClient(
             self._run_loop(),
             "stiebel_dhe_connect_session_loop",
         )
-
-    def _create_background_task(self, coro: Any, name: str) -> asyncio.Task[Any]:
-        create_background_task = getattr(self.hass, "async_create_background_task", None)
-        if create_background_task is not None:
-            return create_background_task(coro, name)
-        return self.hass.async_create_task(coro, name=name)
 
     async def stop(self) -> None:
         self._stopped.set()
@@ -584,79 +500,3 @@ class DHEClient(
                 future.set_exception(err)
             else:
                 future.cancel()
-
-    def _set_available(self, available: bool, *, immediate: bool = False) -> None:
-        if available or immediate:
-            self._cancel_reconnect_grace_timer()
-        self._emit_availability(available)
-
-    def _emit_availability(self, available: bool) -> None:
-        if self._available == available:
-            return
-        self._available = available
-        self._notify_callbacks(
-            "availability",
-            self._availability_callbacks,
-            available,
-        )
-
-    def _set_online(self, online: bool) -> None:
-        if self._online == online:
-            return
-        self._online = online
-        self._notify_callbacks("online", self._online_callbacks, online)
-
-    def _mark_reconnecting(
-        self,
-        reason: str,
-        *,
-        immediate_availability: bool = False,
-    ) -> float:
-        self._connection_supervisor.mark_disconnected()
-        delay = self._connection_supervisor.next_delay()
-        self._set_online(False)
-        if immediate_availability or self._connection_supervisor.should_mark_unavailable:
-            self._set_available(False, immediate=True)
-        else:
-            self._schedule_reconnect_grace_timer()
-        self._update_diagnostics(
-            connection_state="reconnecting",
-            last_reconnect_reason=reason,
-            next_reconnect_delay_seconds=round(delay, 1),
-        )
-        return delay
-
-    def _schedule_reconnect_grace_timer(self) -> None:
-        remaining = self._connection_supervisor.grace_seconds_remaining()
-        if remaining is None or remaining <= 0:
-            self._set_available(False, immediate=True)
-            return
-        task = self._reconnect_grace_task
-        if task is not None and not task.done():
-            return
-        self._reconnect_grace_task = self._create_background_task(
-            self._expire_reconnect_grace_after(remaining),
-            "stiebel_dhe_connect_reconnect_grace_expiry",
-        )
-
-    def _cancel_reconnect_grace_timer(self) -> None:
-        task = self._reconnect_grace_task
-        self._reconnect_grace_task = None
-        if task is not None and not task.done():
-            task.cancel()
-
-    async def _expire_reconnect_grace_after(self, delay: float) -> None:
-        try:
-            await asyncio.sleep(delay)
-            if (
-                self._ctx is None
-                and not self._ready.is_set()
-                and not self._stopped.is_set()
-                and self._connection_supervisor.should_mark_unavailable
-            ):
-                self._emit_availability(False)
-        except asyncio.CancelledError:
-            return
-        finally:
-            if self._reconnect_grace_task is asyncio.current_task():
-                self._reconnect_grace_task = None
