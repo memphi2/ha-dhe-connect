@@ -262,6 +262,16 @@ class TestHATestApi(unittest.TestCase):
             ("media_player", "turn_off", {"entity_id": "media_player.radio"}),
         )
 
+    def test_default_service_smoke_entities_match_current_registry_names(self) -> None:
+        self.assertEqual(
+            ha_test_api.DEFAULT_CLIMATE_ENTITY,
+            "climate.dhe_connect_water_heating",
+        )
+        self.assertEqual(
+            ha_test_api.DEFAULT_RADIO_ENTITY,
+            "media_player.dhe_connect_radio",
+        )
+
     def test_wait_online_returns_immediately_without_restart_stability(self) -> None:
         api = ha_test_api.HomeAssistantApi("http://ha.test")
 

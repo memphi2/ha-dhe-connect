@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 from copy import deepcopy
 from dataclasses import dataclass
@@ -687,6 +688,8 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
         self._last_written_native_value: MeasurementValue = None
         self._last_written_monotonic: float | None = None
         self._last_written_recorded_attributes: dict[str, Any] | None = None
+        self._missing_measurement_refresh_task: asyncio.Task[Any] | None = None
+        self._missing_measurement_refresh_cancel_registered = False
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE measurements and start the persistent session."""
@@ -716,10 +719,39 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
                     self._recorded_state_attributes()
                 )
                 self.async_write_ha_state()
-            self.hass.async_create_task(
-                self._async_refresh_missing_measurement(),
-                name=f"stiebel_dhe_connect_refresh_{self.entity_description.key}",
-            )
+            self._schedule_missing_measurement_refresh()
+
+    def _schedule_missing_measurement_refresh(self) -> None:
+        """Request a missing value without duplicating concurrent refreshes."""
+        if self._attr_native_value is not None:
+            return
+        task = self._missing_measurement_refresh_task
+        if task is not None and not task.done():
+            return
+        hass = getattr(self, "hass", None)
+        if hass is None:
+            return
+
+        task = hass.async_create_task(
+            self._async_refresh_missing_measurement(),
+            name=f"stiebel_dhe_connect_refresh_{self.entity_description.key}",
+        )
+        self._missing_measurement_refresh_task = task
+        if not self._missing_measurement_refresh_cancel_registered:
+            self.async_on_remove(self._cancel_missing_measurement_refresh)
+            self._missing_measurement_refresh_cancel_registered = True
+
+        def _clear_refresh_task(done_task: asyncio.Task[Any]) -> None:
+            if self._missing_measurement_refresh_task is done_task:
+                self._missing_measurement_refresh_task = None
+
+        task.add_done_callback(_clear_refresh_task)
+
+    def _cancel_missing_measurement_refresh(self) -> None:
+        """Cancel a pending missing-value refresh when the entity is removed."""
+        task = self._missing_measurement_refresh_task
+        if task is not None and not task.done():
+            task.cancel()
 
     async def _async_refresh_missing_measurement(self) -> None:
         """Request this entity's value when it is enabled after startup."""
@@ -820,6 +852,8 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
     @callback
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
+        if available:
+            self._schedule_missing_measurement_refresh()
         next_available = self._available_from_value(available, self._attr_native_value)
         if self._attr_available == next_available:
             return
