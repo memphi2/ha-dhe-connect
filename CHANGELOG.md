@@ -10,6 +10,8 @@
   dedicated client runtime mixin.
 - Split transport URL, packet and token-file helpers into a focused transport
   helper mixin.
+- Split transport authentication and pairing-token handshakes into a focused
+  transport auth mixin.
 
 ## v1.5.1 - 2026-05-18
 
