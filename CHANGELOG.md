@@ -9,6 +9,19 @@
   DHE-like web interfaces on port `8443`; the scan can use the current local
   subnet or an entered IPv4 network with a normal netmask.
 
+### Changed
+
+- Added an explicit release-check guard for final post-publish validation so
+  the current commit can be required to match the published release tag.
+
+### Fixed
+
+- Rejected wildcard and non-contiguous dotted masks in setup scan subnet input
+  while keeping normal netmask input such as `192.168.1.0 255.255.255.0`
+  supported.
+- Rejected slash-form wildcard masks such as `192.168.1.0/0.0.0.255` so all
+  setup scan subnet forms use the same private-network validation rules.
+
 ## v1.4.2 - 2026-05-17
 
 ### Added

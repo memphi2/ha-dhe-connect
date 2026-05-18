@@ -177,6 +177,50 @@ class TestReleaseCheck(unittest.TestCase):
             ("git", "rev-parse", "-q", "--verify", "refs/tags/v1.3.2"),
         )
 
+    def test_head_tag_check_accepts_matching_release_commit(self) -> None:
+        calls: list[tuple[str, ...]] = []
+
+        def _runner(args):
+            calls.append(tuple(args))
+            return release_check.CommandResult(
+                args=tuple(args),
+                returncode=0,
+                stdout="abc123\n",
+                stderr="",
+            )
+
+        result = release_check.check_head_matches_tag("1.3.2", _runner)
+
+        self.assertTrue(result.ok)
+        self.assertEqual(
+            calls,
+            [
+                ("git", "rev-parse", "HEAD"),
+                (
+                    "git",
+                    "rev-parse",
+                    "-q",
+                    "--verify",
+                    "refs/tags/v1.3.2^{commit}",
+                ),
+            ],
+        )
+
+    def test_head_tag_check_rejects_head_after_release_tag(self) -> None:
+        def _runner(args):
+            stdout = "head-sha\n" if args[-1] == "HEAD" else "tag-sha\n"
+            return release_check.CommandResult(
+                args=tuple(args),
+                returncode=0,
+                stdout=stdout,
+                stderr="",
+            )
+
+        result = release_check.check_head_matches_tag("1.3.2", _runner)
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.message, "HEAD matches release tag v1.3.2")
+
     def test_github_release_absent_accepts_only_not_found_response(self) -> None:
         def _runner(args):
             self.assertEqual(
@@ -412,6 +456,36 @@ class TestReleaseCheck(unittest.TestCase):
 
         self.assertTrue(all(result.ok for result in results), results)
         self.assertIn((sys.executable, "scripts/check_typing.py"), commands)
+
+    def test_require_current_tag_adds_head_tag_check(self) -> None:
+        args = release_check._parse_args(["--require-current-tag"])
+        commands: list[tuple[str, ...]] = []
+
+        def _runner(command):
+            commands.append(tuple(command))
+            if tuple(command) == ("gh", "release", "view", "v1.3.2", "--json", "tagName,isDraft"):
+                return release_check.CommandResult(
+                    args=tuple(command),
+                    returncode=1,
+                    stdout="release not found",
+                    stderr="",
+                )
+            return release_check.CommandResult(
+                args=tuple(command),
+                returncode=0,
+                stdout="abc123\n",
+                stderr="",
+            )
+
+        with (
+            patch("scripts.release_check.load_manifest_version", return_value="1.3.2"),
+            patch("scripts.release_check.check_version_files", return_value=[]),
+            patch("scripts.release_check.scan_tracked_files_for_secrets", return_value=release_check.CheckResult(True, "secret scan ok")),
+        ):
+            results = release_check.collect_results(args, _runner)
+
+        self.assertTrue(any(result.message == "HEAD matches release tag v1.3.2" for result in results))
+        self.assertIn(("git", "rev-parse", "HEAD"), commands)
 
     def test_service_smoke_defaults_to_portable_local_ha_url(self) -> None:
         args = release_check._parse_args([])

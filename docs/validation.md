@@ -146,7 +146,7 @@ Before publication, the default expectation is:
 After publication, rerun with:
 
 ```bash
-python scripts/release_check.py --expect-tag present --expect-github-release present
+python scripts/release_check.py --expect-tag present --expect-github-release present --require-current-tag
 ```
 
 The release-readiness helper validates state. It does not create tags, push
