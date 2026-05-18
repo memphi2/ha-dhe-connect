@@ -24,10 +24,13 @@ def radio_attributes(state: dict[str, Any]) -> dict[str, Any]:
         if isinstance(station_genres, list):
             attributes["station_genres"] = [str(genre) for genre in station_genres]
 
-    for key in ("title", "paired"):
-        value = state.get(key)
-        if value not in (None, ""):
-            attributes[key] = value
+    title = state.get("title")
+    if title not in (None, ""):
+        attributes["title"] = title
+
+    bluetooth_paired = state.get("paired")
+    if bluetooth_paired not in (None, ""):
+        attributes["bluetooth_paired"] = bluetooth_paired
 
     favorites = stations(state.get("favorites"))
     if favorites:

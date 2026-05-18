@@ -10,7 +10,7 @@ The integration talks directly to the DHE web interface on your local network. I
 
 ## Status
 
-- Current version: `1.5.0`
+- Current version: `1.5.1`
 - Release channel: stable
 - Home Assistant setup: UI config flow
 - HACS type: custom integration
@@ -46,6 +46,7 @@ web interface or other third-party assets.
 - Eco mode, Eco flow limit, bath fill, child safety, wellness controls, brush timer and shower timer controls.
 - Current water flow, current power, total water and total energy consumption sensors are enabled by default; ODB saving, last usage, timer and saving-monitor sensors start disabled to keep the device card tidy.
 - Compact radio media player for station metadata, current title, short-description fallback, playback, volume and favorites.
+- Bluetooth pairing status plus disabled-by-default start/disconnect buttons for the DHE radio module.
 - Options-flow radio search by full text, DHE genre catalog, country catalog or city catalog.
 - Weather entity for the DHE forecast payload with favorite location selection.
 - General diagnostic status, reconnect count, connection details, scald-protection diagnostics, ODB protocol diagnostics and device information.

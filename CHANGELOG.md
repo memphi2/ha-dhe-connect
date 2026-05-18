@@ -4,6 +4,21 @@
 
 - No changes yet.
 
+## v1.5.1 - 2026-05-18
+
+### Added
+
+- Added disabled-by-default buttons to start and disconnect the DHE Bluetooth
+  pairing flow through the DHE web UI command `assign:ste.app.radio:paired`.
+- Added a `Bluetooth paired` diagnostic binary sensor backed by
+  `get:ste.app.radio:paired`.
+
+### Changed
+
+- Renamed the exposed `ste.app.radio:paired` UI action and media-player
+  attribute to Bluetooth pairing in entity names, translations and
+  documentation.
+
 ## v1.5.0 - 2026-05-18
 
 ### Added
