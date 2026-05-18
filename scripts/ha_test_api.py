@@ -669,16 +669,29 @@ def main() -> int:
                 if args.cleanup_localhost_tokens:
                     try:
                         if args.restart_before_localhost_cleanup and not args.restart:
-                            print(
-                                "INFO: restart before localhost token cleanup: "
-                                f"{api.restart(token.access_token, timeout=args.restart_request_timeout)}"
-                            )
-                            if not api.wait_online(
-                                timeout=args.wait_timeout,
-                                require_seen_down=True,
-                                settle_seconds=args.restart_settle_seconds,
-                            ):
-                                print("WARN: HA did not come back online before cleanup")
+                            try:
+                                restart_result = api.restart(
+                                    token.access_token,
+                                    timeout=args.restart_request_timeout,
+                                )
+                            except Exception as restart_err:  # noqa: BLE001
+                                print(
+                                    "WARN: restart before localhost token cleanup failed: "
+                                    f"{format_redacted_exception(restart_err)}"
+                                )
+                            else:
+                                print(
+                                    "INFO: restart before localhost token cleanup: "
+                                    f"{restart_result}"
+                                )
+                                if not api.wait_online(
+                                    timeout=args.wait_timeout,
+                                    require_seen_down=True,
+                                    settle_seconds=args.restart_settle_seconds,
+                                ):
+                                    print(
+                                        "WARN: HA did not come back online before cleanup"
+                                    )
                         cleanup = cleanup_localhost_refresh_tokens_with_retry(
                             args.config,
                             attempts=args.cleanup_localhost_token_attempts,

@@ -353,6 +353,53 @@ class TestHATestApi(unittest.TestCase):
         self.assertNotIn("secret", text)
         self.assertNotIn(".".join(("172", "16", "1", "147")), text)
 
+    def test_main_still_cleans_tokens_when_pre_cleanup_restart_fails(self) -> None:
+        class _Api:
+            def __init__(self, _url: str) -> None:
+                pass
+
+            def wait_online(self, **_kwargs) -> bool:
+                return True
+
+            def login(self, *_args):
+                return ha_test_api.AuthToken("access", "refresh")
+
+            def revoke_refresh_token(self, _refresh_token: str) -> bool:
+                raise RuntimeError("revoke failed")
+
+            def restart(self, *_args, **_kwargs) -> str:
+                raise RuntimeError("restart failed")
+
+        output = io.StringIO()
+        with (
+            patch.object(ha_test_api, "HomeAssistantApi", _Api),
+            patch.object(
+                ha_test_api,
+                "cleanup_localhost_refresh_tokens_with_retry",
+                return_value=ha_test_api.TokenCleanupResult(removed=1, backup_path=None),
+            ) as cleanup,
+            patch.dict(os.environ, {"HA_TEST_PASSWORD": "secret"}),
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "ha_test_api.py",
+                    "--username",
+                    "test-user",
+                    "--cleanup-localhost-tokens",
+                    "--restart-before-localhost-cleanup",
+                ],
+            ),
+            redirect_stdout(output),
+        ):
+            result = ha_test_api.main()
+
+        self.assertEqual(result, 0)
+        cleanup.assert_called_once()
+        text = output.getvalue()
+        self.assertIn("WARN: restart before localhost token cleanup failed", text)
+        self.assertIn("PASS: localhost token cleanup removed=1", text)
+
     def test_ha_scripts_can_run_directly(self) -> None:
         root = Path(__file__).resolve().parents[1]
         for script in ("ha_test_api.py", "ha_test_smoke.py"):
