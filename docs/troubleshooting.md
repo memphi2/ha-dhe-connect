@@ -125,13 +125,16 @@ When the integration cannot connect:
 5. Reload the integration after the DHE web interface is reachable again.
 
 The integration reconnects automatically after socket closes and short DHE
-session drops. Repeated reconnects are visible through the `Reconnects` and
-`Last reconnect reason` sensors.
+session drops. Brief drops stay in a reconnect grace window: cached entities can
+remain available while the `Connection state` diagnostic sensor reports
+`reconnecting`. Repeated reconnects are visible through the `Reconnects`,
+`Next reconnect delay` and `Last reconnect reason` sensors.
 
 ## Entities Stay Unavailable
 
-Entities are live-state based. During reconnects they can become unavailable
-until fresh runtime data arrives from the DHE.
+Entities are live-state based. During short reconnects they keep their cached
+state; after the reconnect grace expires they become unavailable until fresh
+runtime data arrives from the DHE.
 
 For optional entities enabled after startup, reload the integration if the DHE
 has not sent the matching value yet. Some disabled-by-default entities depend on

@@ -15,10 +15,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .client_command_runner import DHEClientCommandRunnerMixin
 from .client_commands import DHEClientCommandsMixin
-from .client_constants import (
-    AVAILABILITY_DROP_GRACE_SECONDS,
-    DEFAULT_NOMINAL_POWER_KW,
-)
+from .client_constants import DEFAULT_NOMINAL_POWER_KW
 from .client_diagnostics import diagnostic_error as _diagnostic_error
 from .client_errors import (
     DHE_TRANSPORT_EXCEPTIONS as _DHE_TRANSPORT_EXCEPTIONS,
@@ -26,6 +23,7 @@ from .client_errors import (
     suppress_transport_errors as _suppress_transport_errors,
 )
 from .client_pairing import DHEClientPairingMixin
+from .client_reconnect_manager import DHEReconnectManager
 from .client_runtime import DHEClientRuntimeMixin
 from .client_transport import DHEClientTransportMixin
 from .client_types import (
@@ -116,7 +114,7 @@ class DHEClient(
         self._last_message_monotonic: float | None = None
         self._message_count = 0
         self._diagnostic_state: dict[str, Any] = {"connection_state": "starting"}
-        self._availability_drop_task: asyncio.Task[None] | None = None
+        self._reconnect_manager = DHEReconnectManager()
         self._last_setpoint: float | None = None
         self._last_measurements: dict[int, MeasurementValue] = {}
         self._last_measurement_attributes: dict[int, dict[str, Any]] = {}
@@ -422,6 +420,7 @@ class DHEClient(
                 self._record_session_connected()
                 self._update_diagnostics(
                     connection_state="connected",
+                    next_reconnect_delay_seconds=None,
                     ping_interval_seconds=self._ctx.ping_interval,
                     session_id=self._ctx.sid,
                     websocket_sid=self._ctx.websocket_sid,
@@ -445,31 +444,28 @@ class DHEClient(
 
     async def _handle_transport_reconnect(self, err: Exception) -> bool:
         """Update state and pause before reconnecting after transport failures."""
-        self._update_diagnostics(
-            connection_state="reconnecting",
-            last_reconnect_reason=_diagnostic_error(err),
-        )
         self._clear_pending_future(err)
         self._clear_pending_write_future(err)
         self._ready.clear()
-        self._set_online(False)
-        self._set_available(False)
         ctx = self._ctx
         self._ctx = None
+        reconnect_delay = self._mark_reconnecting(_diagnostic_error(err))
         if ctx is not None:
             await self._close_session(ctx)
         if self._pause_auto_reconnect_for_pairing:
+            self._set_available(False, immediate=True)
             self._update_diagnostics(
                 connection_state="pairing_failed_waiting_manual_retry",
                 last_reconnect_reason=(
                     "Pairing failed; waiting for manual retry via "
                     "'Pairing erneuern'."
                 ),
+                next_reconnect_delay_seconds=None,
             )
             await self._stopped.wait()
             return True
         with contextlib.suppress(TimeoutError):
-            await asyncio.wait_for(self._stopped.wait(), timeout=10)
+            await asyncio.wait_for(self._stopped.wait(), timeout=reconnect_delay)
         return False
 
     async def _request_setpoint(self, ctx: DHESession) -> None:
@@ -588,22 +584,8 @@ class DHEClient(
                 future.cancel()
 
     def _set_available(self, available: bool, *, immediate: bool = False) -> None:
-        if available:
-            self._cancel_delayed_unavailable()
-            self._emit_availability(True)
-            return
-
-        if immediate:
-            self._cancel_delayed_unavailable()
-            self._emit_availability(False)
-            return
-
-        if self._availability_drop_task is not None and not self._availability_drop_task.done():
-            return
-        self._availability_drop_task = self.hass.async_create_task(
-            self._delayed_set_unavailable(),
-            name="stiebel_dhe_connect_delayed_unavailable",
-        )
+        del immediate
+        self._emit_availability(available)
 
     def _emit_availability(self, available: bool) -> None:
         if self._available == available:
@@ -621,18 +603,20 @@ class DHEClient(
         self._online = online
         self._notify_callbacks("online", self._online_callbacks, online)
 
-    def _cancel_delayed_unavailable(self) -> None:
-        task = self._availability_drop_task
-        self._availability_drop_task = None
-        if task is not None and not task.done():
-            task.cancel()
-
-    async def _delayed_set_unavailable(self) -> None:
-        try:
-            await asyncio.sleep(AVAILABILITY_DROP_GRACE_SECONDS)
-            if self._ctx is None and not self._ready.is_set() and not self._stopped.is_set():
-                self._emit_availability(False)
-        except asyncio.CancelledError:
-            return
-        finally:
-            self._availability_drop_task = None
+    def _mark_reconnecting(
+        self,
+        reason: str,
+        *,
+        immediate_availability: bool = False,
+    ) -> float:
+        self._reconnect_manager.mark_disconnected()
+        delay = self._reconnect_manager.next_delay()
+        self._set_online(False)
+        if immediate_availability or self._reconnect_manager.should_mark_unavailable:
+            self._set_available(False, immediate=True)
+        self._update_diagnostics(
+            connection_state="reconnecting",
+            last_reconnect_reason=reason,
+            next_reconnect_delay_seconds=round(delay, 1),
+        )
+        return delay

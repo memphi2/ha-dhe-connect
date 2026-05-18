@@ -12,6 +12,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
+from homeassistant.const import UnitOfTime
 from homeassistant.core import callback
 from homeassistant.helpers.entity import EntityCategory
 
@@ -54,6 +55,7 @@ DIAGNOSTIC_VOLATILE_ATTRIBUTE_KEYS = frozenset(
         "last_message_received_at",
         "last_message_summary",
         "message_count",
+        "next_reconnect_delay_seconds",
     }
 )
 
@@ -72,6 +74,14 @@ DIAGNOSTIC_SENSOR_DESCRIPTIONS: tuple[StiebelDHEDiagnosticSensorEntityDescriptio
         translation_key="last_reconnect_reason",
         icon="mdi:alert-circle-outline",
         diagnostic_key="last_reconnect_reason",
+    ),
+    StiebelDHEDiagnosticSensorEntityDescription(
+        key="next_reconnect_delay",
+        translation_key="next_reconnect_delay",
+        icon="mdi:timer-sync-outline",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        diagnostic_key="next_reconnect_delay_seconds",
     ),
 )
 
@@ -299,7 +309,7 @@ class StiebelDHEDiagnosticSensor(StiebelDHEEntityMixin, SensorEntity):
         )
         self._attr_should_poll = description.polls
         self._attr_available = False
-        self._attr_native_value: int | str | None = None
+        self._attr_native_value: int | float | str | None = None
         self._attr_extra_state_attributes: dict[str, Any] = {}
         self._last_written_diagnostic_signature: tuple[Any, ...] | None = None
 
@@ -332,7 +342,12 @@ class StiebelDHEDiagnosticSensor(StiebelDHEEntityMixin, SensorEntity):
             and self._client.reconnect_count == 0
         ):
             value = self._no_reconnect_value()
-        self._attr_native_value = value if isinstance(value, (int, str)) else None
+        elif (
+            value is None
+            and self.entity_description.diagnostic_key == "next_reconnect_delay_seconds"
+        ):
+            value = 0
+        self._attr_native_value = value if isinstance(value, (int, float, str)) else None
         self._attr_available = self._attr_native_value is not None
         self._attr_extra_state_attributes = {
             key: value

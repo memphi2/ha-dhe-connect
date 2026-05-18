@@ -565,6 +565,9 @@
       "last_reconnect_reason": {
         "name": "Letzter Reconnect-Grund"
       },
+      "next_reconnect_delay": {
+        "name": "Naechste Reconnect-Verzoegerung"
+      },
       "device_info": {
         "name": "Geräteinfo"
       },

@@ -46,6 +46,8 @@ _LOGGER = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
+    from .client_reconnect_manager import DHEReconnectManager
+
 WEBSOCKET_UPGRADE_TIMEOUT = 8.0
 AUTH_POLL_TIMEOUT_SECONDS = 10.0
 
@@ -77,6 +79,7 @@ class DHEClientTransportMixin:
         _pairing_retry_attempts: int
         _pause_auto_reconnect_for_pairing: bool
         _ready: asyncio.Event
+        _reconnect_manager: DHEReconnectManager
         _reconnect_callbacks: set[ReconnectCallback]
         _reconnect_count: int
         _require_pairing_confirmation: bool
@@ -110,6 +113,13 @@ class DHEClientTransportMixin:
             *,
             immediate: bool = False,
         ) -> None: ...
+
+        def _mark_reconnecting(
+            self,
+            reason: str,
+            *,
+            immediate_availability: bool = False,
+        ) -> float: ...
 
         def _update_diagnostics(self, **updates: Any) -> None: ...
 
@@ -484,11 +494,9 @@ class DHEClientTransportMixin:
         ctx = self._ctx
         self._ctx = None
         self._ready.clear()
-        self._set_online(False)
-        self._set_available(False, immediate=immediate_availability)
-        self._update_diagnostics(
-            connection_state="reconnecting",
-            last_reconnect_reason=reason or "Forced reconnect requested",
+        self._mark_reconnecting(
+            reason or "Forced reconnect requested",
+            immediate_availability=immediate_availability,
         )
         if ctx is not None:
             await self._close_session(ctx)
@@ -499,6 +507,7 @@ class DHEClientTransportMixin:
         await asyncio.wait_for(self._ready.wait(), timeout=timeout)
 
     def _record_session_connected(self) -> None:
+        self._reconnect_manager.mark_connected()
         self._pairing_retry_attempts = 0
         self._pause_auto_reconnect_for_pairing = False
         if not self._has_connected:
@@ -588,7 +597,6 @@ class DHEClientTransportMixin:
             if not self._stopped.is_set():
                 await self._force_reconnect(
                     ctx,
-                    immediate_availability=True,
                     reason=f"Heartbeat failed: {_diagnostic_error(err)}",
                 )
         except RuntimeError as err:
@@ -596,7 +604,6 @@ class DHEClientTransportMixin:
             if not self._stopped.is_set():
                 await self._force_reconnect(
                     ctx,
-                    immediate_availability=True,
                     reason=f"Heartbeat failed: {_diagnostic_error(transport_err)}",
                 )
 

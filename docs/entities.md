@@ -8,14 +8,14 @@ Home Assistant entity names are translated through `translations/en.json` and `t
 |---|---|---|---|
 | DHE Connect | Climate | ODB ID `0`, command ODB ID `66` | Reads target temperature and writes new setpoints in `0.5 C` steps |
 
-The climate entity keeps the last valid target temperature during short reconnect phases and exposes diagnostic attributes:
+The climate entity keeps the last valid target temperature during short reconnect phases. The dedicated diagnostic sensors expose the live reconnect state and delay without adding those volatile values to normal entity attributes.
 
 Its maximum settable target temperature is capped by the `Internal scald protection (Tmax jumper)` integration option. When child safety is active, the Climate maximum uses the lower value of the `Tmax` jumper and the `Child safety temperature limit` number entity. The default internal scald-protection option is `60`.
 
 | Attribute | Meaning |
 |---|---|
 | `communication_model` | `persistent_socketio_websocket` |
-| `connection_state` | `starting`, `connected`, `reconnecting` or `unavailable` |
+| `connection_state` | `starting`, `connected` or `unavailable`; the separate `Connection state` diagnostic sensor reports `reconnecting` during reconnect grace |
 | `readback_id` | ODB ID used for target temperature readback |
 | `write_id` | ODB ID used for setpoint commands |
 | `inlet_temperature` | Latest inlet/cold-water temperature from ODB ID `13` |
@@ -143,6 +143,7 @@ data:
 | Shower timer remaining | `M:SS` | disabled by default | none | `set:ste.app.showerTimer:remainingMilliseconds`; locally counts down once `ste.app.showerTimer:activation` is active and resets to the configured duration after reset/expiry |
 | Reconnects | count | diagnostic | `total_increasing` | Successful reconnect count after the initial connection |
 | Connection state | text | diagnostic | none | Client session state such as `starting`, `connected`, `reconnecting` or `stopped` |
+| Next reconnect delay | `s` | diagnostic | none | Current backoff delay before the next reconnect attempt; `0 s` while connected |
 | Last reconnect reason | text | diagnostic | none | Last recorded session failure or forced reconnect reason |
 | Error status | text | diagnostic | none | General error status, including target temperature below inlet temperature and DHE status code `34` service-required state |
 | Device info | text | diagnostic, disabled by default | none | DHE version and device information commands |

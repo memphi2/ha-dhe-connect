@@ -72,6 +72,7 @@ def _load_client():
     _load_component_module("pairing_helpers")
     _load_component_module("protocol")
     _load_component_module("client_value_helpers")
+    _load_component_module("client_reconnect_manager")
     _load_component_module("client_pairing")
     _load_component_module("client_command_runner")
     _load_component_module("client_radio_commands")
@@ -1327,11 +1328,82 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         client._force_reconnect.assert_awaited_once()
         args, kwargs = client._force_reconnect.await_args
         self.assertEqual(args, (ctx,))
-        self.assertTrue(kwargs["immediate_availability"])
+        self.assertNotIn("immediate_availability", kwargs)
         self.assertEqual(
             kwargs["reason"],
             "Heartbeat failed: RuntimeError: socket write failed",
         )
+
+    async def test_force_reconnect_keeps_available_inside_reconnect_grace(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+
+        client = DHEClient.__new__(DHEClient)
+        client._ctx = None
+        client._ready = client_module.asyncio.Event()
+        client._ready.set()
+        client._stopped = client_module.asyncio.Event()
+        client._online = True
+        client._available = True
+        client._online_callbacks = set()
+        client._availability_callbacks = set()
+        client._diagnostic_callbacks = set()
+        client._diagnostic_state = {}
+        client._last_message_monotonic = None
+        client._notify_callbacks = Mock()
+        client._reconnect_manager = client_module.DHEReconnectManager(
+            base_delay=2.0,
+            max_delay=10.0,
+            grace_period=15.0,
+            monotonic=lambda: 0.0,
+        )
+
+        await DHEClient._force_reconnect(client, reason="test reconnect")
+
+        self.assertFalse(client._ready.is_set())
+        self.assertFalse(client._online)
+        self.assertTrue(client._available)
+        self.assertEqual(client._diagnostic_state["connection_state"], "reconnecting")
+        self.assertEqual(client._diagnostic_state["last_reconnect_reason"], "test reconnect")
+        self.assertEqual(client._diagnostic_state["next_reconnect_delay_seconds"], 2.0)
+
+    async def test_force_reconnect_marks_unavailable_after_reconnect_grace(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        now = 0.0
+
+        client = DHEClient.__new__(DHEClient)
+        client._ctx = None
+        client._ready = client_module.asyncio.Event()
+        client._ready.set()
+        client._stopped = client_module.asyncio.Event()
+        client._online = True
+        client._available = True
+        client._online_callbacks = set()
+        client._availability_callbacks = set()
+        client._diagnostic_callbacks = set()
+        client._diagnostic_state = {}
+        client._last_message_monotonic = None
+        client._notify_callbacks = Mock()
+        client._reconnect_manager = client_module.DHEReconnectManager(
+            base_delay=2.0,
+            max_delay=10.0,
+            grace_period=15.0,
+            monotonic=lambda: now,
+        )
+
+        await DHEClient._force_reconnect(client, reason="first reconnect")
+        self.assertTrue(client._available)
+
+        now = 16.0
+        client._online = True
+        client._ready.set()
+        await DHEClient._force_reconnect(client, reason="second reconnect")
+
+        self.assertFalse(client._available)
+        self.assertEqual(client._diagnostic_state["connection_state"], "reconnecting")
+        self.assertEqual(client._diagnostic_state["last_reconnect_reason"], "second reconnect")
+        self.assertEqual(client._diagnostic_state["next_reconnect_delay_seconds"], 4.0)
 
     async def test_websocket_heartbeat_does_not_hide_programming_runtime_errors(
         self,
