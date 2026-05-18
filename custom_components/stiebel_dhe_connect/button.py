@@ -136,6 +136,20 @@ def _temperature_memory_button_descriptions(
     return tuple(descriptions)
 
 
+def _button_available(
+    description: StiebelDHEButtonEntityDescription,
+    *,
+    client_available: bool,
+    has_seen_availability_state: bool,
+) -> bool:
+    """Return whether a button should be available in Home Assistant."""
+    if description.available_without_connection:
+        return True
+    if description.availability_measurement_id is None:
+        return client_available
+    return client_available and has_seen_availability_state
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -245,8 +259,8 @@ class StiebelDHEButton(StiebelDHEEntityMixin, ButtonEntity):
         self.async_write_ha_state()
 
     def _button_available(self, client_available: bool) -> bool:
-        if self.entity_description.available_without_connection:
-            return True
-        if self.entity_description.availability_measurement_id is None:
-            return client_available
-        return client_available and self._has_seen_availability_state
+        return _button_available(
+            self.entity_description,
+            client_available=client_available,
+            has_seen_availability_state=self._has_seen_availability_state,
+        )
