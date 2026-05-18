@@ -193,6 +193,27 @@ def check_tag(version: str, expectation: str, runner: Runner) -> CheckResult:
     )
 
 
+def check_head_matches_tag(version: str, runner: Runner) -> CheckResult:
+    """Check that the current commit is exactly the release tag commit."""
+    tag = f"{TAG_PREFIX}{version}"
+    head = runner(["git", "rev-parse", "HEAD"])
+    if head.returncode != 0:
+        return CheckResult(False, _command_failed_message(head))
+    tag_commit = runner(
+        ["git", "rev-parse", "-q", "--verify", f"refs/tags/{tag}^{{commit}}"]
+    )
+    if tag_commit.returncode != 0:
+        return CheckResult(False, _command_failed_message(tag_commit))
+    head_sha = head.stdout.strip()
+    tag_sha = tag_commit.stdout.strip()
+    if head_sha == tag_sha:
+        return CheckResult(True, f"HEAD matches release tag {tag} ({head_sha[:12]})")
+    return CheckResult(
+        False,
+        f"HEAD {head_sha[:12]} does not match release tag {tag} ({tag_sha[:12]})",
+    )
+
+
 def check_github_release(version: str, expectation: str, runner: Runner) -> CheckResult:
     """Check whether the GitHub release exists or is still absent."""
     tag = f"{TAG_PREFIX}{version}"
@@ -342,6 +363,11 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         help="Expected state of the GitHub release. Default: absent before publish.",
     )
     parser.add_argument(
+        "--require-current-tag",
+        action="store_true",
+        help="Fail unless HEAD resolves to v<version>; use after publishing a release.",
+    )
+    parser.add_argument(
         "--allow-dirty",
         action="store_true",
         help="Do not fail when the git worktree has uncommitted changes.",
@@ -388,6 +414,8 @@ def collect_results(args: argparse.Namespace, runner: Runner) -> list[CheckResul
             scan_tracked_files_for_secrets(ROOT, runner),
         )
     )
+    if args.require_current_tag:
+        results.append(check_head_matches_tag(version, runner))
 
     if args.run_local_checks:
         results.extend(
