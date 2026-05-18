@@ -115,6 +115,7 @@ class DHEClient(
         self._message_count = 0
         self._diagnostic_state: dict[str, Any] = {"connection_state": "starting"}
         self._reconnect_manager = DHEReconnectManager()
+        self._reconnect_grace_task: asyncio.Task[None] | None = None
         self._last_setpoint: float | None = None
         self._last_measurements: dict[int, MeasurementValue] = {}
         self._last_measurement_attributes: dict[int, dict[str, Any]] = {}
@@ -418,6 +419,7 @@ class DHEClient(
             try:  # noqa: PERF203
                 self._ctx = await self._open_authenticated_session()
                 self._record_session_connected()
+                self._cancel_reconnect_grace_timer()
                 self._update_diagnostics(
                     connection_state="connected",
                     next_reconnect_delay_seconds=None,
@@ -584,7 +586,8 @@ class DHEClient(
                 future.cancel()
 
     def _set_available(self, available: bool, *, immediate: bool = False) -> None:
-        del immediate
+        if available or immediate:
+            self._cancel_reconnect_grace_timer()
         self._emit_availability(available)
 
     def _emit_availability(self, available: bool) -> None:
@@ -614,9 +617,45 @@ class DHEClient(
         self._set_online(False)
         if immediate_availability or self._reconnect_manager.should_mark_unavailable:
             self._set_available(False, immediate=True)
+        else:
+            self._schedule_reconnect_grace_timer()
         self._update_diagnostics(
             connection_state="reconnecting",
             last_reconnect_reason=reason,
             next_reconnect_delay_seconds=round(delay, 1),
         )
         return delay
+
+    def _schedule_reconnect_grace_timer(self) -> None:
+        remaining = self._reconnect_manager.grace_seconds_remaining()
+        if remaining is None or remaining <= 0:
+            self._set_available(False, immediate=True)
+            return
+        task = self._reconnect_grace_task
+        if task is not None and not task.done():
+            return
+        self._reconnect_grace_task = self._create_background_task(
+            self._expire_reconnect_grace_after(remaining),
+            "stiebel_dhe_connect_reconnect_grace_expiry",
+        )
+
+    def _cancel_reconnect_grace_timer(self) -> None:
+        task = self._reconnect_grace_task
+        self._reconnect_grace_task = None
+        if task is not None and not task.done():
+            task.cancel()
+
+    async def _expire_reconnect_grace_after(self, delay: float) -> None:
+        try:
+            await asyncio.sleep(delay)
+            if (
+                self._ctx is None
+                and not self._ready.is_set()
+                and not self._stopped.is_set()
+                and self._reconnect_manager.should_mark_unavailable
+            ):
+                self._emit_availability(False)
+        except asyncio.CancelledError:
+            return
+        finally:
+            self._reconnect_grace_task = None

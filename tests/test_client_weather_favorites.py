@@ -1351,6 +1351,15 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         client._diagnostic_state = {}
         client._last_message_monotonic = None
         client._notify_callbacks = Mock()
+        client._reconnect_grace_task = None
+        scheduled_tasks: list[tuple[object, str]] = []
+
+        def _capture_background_task(coro, name):
+            scheduled_tasks.append((coro, name))
+            coro.close()
+            return types.SimpleNamespace(done=lambda: False, cancel=Mock())
+
+        client._create_background_task = Mock(side_effect=_capture_background_task)
         client._reconnect_manager = client_module.DHEReconnectManager(
             base_delay=2.0,
             max_delay=10.0,
@@ -1366,6 +1375,10 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(client._diagnostic_state["connection_state"], "reconnecting")
         self.assertEqual(client._diagnostic_state["last_reconnect_reason"], "test reconnect")
         self.assertEqual(client._diagnostic_state["next_reconnect_delay_seconds"], 2.0)
+        self.assertEqual(
+            scheduled_tasks[0][1],
+            "stiebel_dhe_connect_reconnect_grace_expiry",
+        )
 
     async def test_force_reconnect_marks_unavailable_after_reconnect_grace(self) -> None:
         client_module = _load_client()
@@ -1385,6 +1398,14 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         client._diagnostic_state = {}
         client._last_message_monotonic = None
         client._notify_callbacks = Mock()
+        client._reconnect_grace_task = None
+        scheduled_task = types.SimpleNamespace(done=lambda: False, cancel=Mock())
+
+        def _capture_background_task(coro, _name):
+            coro.close()
+            return scheduled_task
+
+        client._create_background_task = Mock(side_effect=_capture_background_task)
         client._reconnect_manager = client_module.DHEReconnectManager(
             base_delay=2.0,
             max_delay=10.0,
@@ -1401,9 +1422,35 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         await DHEClient._force_reconnect(client, reason="second reconnect")
 
         self.assertFalse(client._available)
+        scheduled_task.cancel.assert_called_once()
         self.assertEqual(client._diagnostic_state["connection_state"], "reconnecting")
         self.assertEqual(client._diagnostic_state["last_reconnect_reason"], "second reconnect")
         self.assertEqual(client._diagnostic_state["next_reconnect_delay_seconds"], 4.0)
+
+    async def test_reconnect_grace_timer_marks_unavailable_when_expired(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        now = 0.0
+
+        client = DHEClient.__new__(DHEClient)
+        client._ctx = None
+        client._ready = client_module.asyncio.Event()
+        client._stopped = client_module.asyncio.Event()
+        client._available = True
+        client._availability_callbacks = set()
+        client._notify_callbacks = Mock()
+        client._reconnect_grace_task = object()
+        client._reconnect_manager = client_module.DHEReconnectManager(
+            grace_period=15.0,
+            monotonic=lambda: now,
+        )
+        client._reconnect_manager.mark_disconnected()
+
+        now = 15.1
+        await DHEClient._expire_reconnect_grace_after(client, 0)
+
+        self.assertFalse(client._available)
+        self.assertIsNone(client._reconnect_grace_task)
 
     async def test_websocket_heartbeat_does_not_hide_programming_runtime_errors(
         self,

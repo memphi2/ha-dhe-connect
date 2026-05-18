@@ -79,6 +79,7 @@ class DHEClientTransportMixin:
         _pairing_retry_attempts: int
         _pause_auto_reconnect_for_pairing: bool
         _ready: asyncio.Event
+        _reconnect_grace_task: asyncio.Task[None] | None
         _reconnect_manager: DHEReconnectManager
         _reconnect_callbacks: set[ReconnectCallback]
         _reconnect_count: int
@@ -120,6 +121,8 @@ class DHEClientTransportMixin:
             *,
             immediate_availability: bool = False,
         ) -> float: ...
+
+        def _cancel_reconnect_grace_timer(self) -> None: ...
 
         def _update_diagnostics(self, **updates: Any) -> None: ...
 

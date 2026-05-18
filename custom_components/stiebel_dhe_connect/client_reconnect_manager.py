@@ -32,6 +32,13 @@ class DHEReconnectManager:
         """Return the delay before the next reconnect attempt."""
         return self._next_delay
 
+    def grace_seconds_remaining(self) -> float | None:
+        """Return seconds until reconnect grace expires, or None when connected."""
+        if self._disconnected_at is None:
+            return None
+        elapsed = self._monotonic() - self._disconnected_at
+        return max(0.0, self._grace_period - elapsed)
+
     def mark_connected(self) -> None:
         """Record a healthy connection."""
         self._connected_at = self._monotonic()

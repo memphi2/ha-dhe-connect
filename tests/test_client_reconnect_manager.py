@@ -51,6 +51,7 @@ class TestDHEReconnectManager(unittest.TestCase):
         self.assertEqual(manager.next_delay(), 2.0)
         self.assertTrue(manager.in_grace_period)
         self.assertFalse(manager.should_mark_unavailable)
+        self.assertEqual(manager.grace_seconds_remaining(), 15.0)
 
     def test_grace_expires_from_first_disconnect(self) -> None:
         manager = self._manager()
@@ -65,6 +66,7 @@ class TestDHEReconnectManager(unittest.TestCase):
         self.assertEqual(manager.next_delay(), 4.0)
         self.assertFalse(manager.in_grace_period)
         self.assertTrue(manager.should_mark_unavailable)
+        self.assertEqual(manager.grace_seconds_remaining(), 0.0)
 
     def test_backoff_caps_at_max_delay(self) -> None:
         manager = self._manager()
@@ -87,6 +89,11 @@ class TestDHEReconnectManager(unittest.TestCase):
         manager.mark_disconnected()
 
         self.assertEqual(manager.next_delay(), 2.0)
+        self.assertEqual(manager.grace_seconds_remaining(), 15.0)
+
+        manager.mark_connected()
+
+        self.assertIsNone(manager.grace_seconds_remaining())
 
 
 if __name__ == "__main__":
