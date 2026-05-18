@@ -6,6 +6,8 @@
   payload for support and troubleshooting.
 - Split DHE client callback registration and connection availability state into
   focused mixins to keep the main client class smaller.
+- Split radio/weather runtime state handling and readback waiters into a
+  dedicated client runtime mixin.
 
 ## v1.5.1 - 2026-05-18
 
