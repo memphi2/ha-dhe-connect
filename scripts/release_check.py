@@ -332,6 +332,24 @@ def run_ha_service_smoke(
     return check_command(args, runner)
 
 
+def run_zeroconf_smoke(
+    *,
+    timeout: float,
+    expected_port: int,
+    runner: Runner,
+) -> CheckResult:
+    """Run the real Zeroconf/mDNS release smoke gate."""
+    args = [
+        sys.executable,
+        "scripts/zeroconf_smoke.py",
+        "--timeout",
+        str(timeout),
+        "--expected-port",
+        str(expected_port),
+    ]
+    return check_command(args, runner)
+
+
 def _command_failed_message(result: CommandResult) -> str:
     command = redact_sensitive_text(" ".join(result.args))
     detail = redact_sensitive_text((result.stderr or result.stdout or "").strip())
@@ -394,6 +412,23 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         action="store_true",
         help="Run authenticated HA service smoke through scripts/ha_test_api.py.",
     )
+    parser.add_argument(
+        "--run-zeroconf-smoke",
+        action="store_true",
+        help="Run the real Zeroconf/mDNS smoke gate for _ste-dhe._tcp.local.",
+    )
+    parser.add_argument(
+        "--zeroconf-timeout",
+        type=float,
+        default=20.0,
+        help="Timeout in seconds for the real Zeroconf/mDNS smoke gate.",
+    )
+    parser.add_argument(
+        "--zeroconf-expected-port",
+        type=int,
+        default=8443,
+        help="Expected DHE Zeroconf service port.",
+    )
     parser.add_argument("--ha-url", default="http://127.0.0.1:8123")
     parser.add_argument("--ha-username", default="")
     parser.add_argument("--ha-password-env", default="HA_TEST_PASSWORD")
@@ -436,6 +471,15 @@ def collect_results(args: argparse.Namespace, runner: Runner) -> list[CheckResul
                     ],
                     runner,
                 ),
+            )
+        )
+
+    if args.run_zeroconf_smoke:
+        results.append(
+            run_zeroconf_smoke(
+                timeout=args.zeroconf_timeout,
+                expected_port=args.zeroconf_expected_port,
+                runner=runner,
             )
         )
 

@@ -57,15 +57,20 @@ or embedded ports in the host field.
 
 When adding the integration, Home Assistant offers discovered Zeroconf/mDNS
 entries first, then subnet scan and manual host entry. The scan is only a setup
-convenience and checks for DHE-like web interfaces on port `8443`. It does not
-create the integration by itself; pairing and login are still validated before
-the config entry is saved.
+convenience and checks for DHE-like web interfaces. The scan-port field defaults
+to `8443`. It does not create the integration by itself; pairing and login are
+still validated before the config entry is saved.
 
 Subnet fields are shown only after the scan option is selected. Home Assistant
 pre-fills custom subnet forms from its current local subnet when possible. Use
 the current local subnet, enter network address `192.168.1.0` plus subnet mask
 `255.255.255.0`, or enter CIDR `192.168.1.0/24`. If you skip the scan or it
 finds nothing, enter the DHE host/IP and port manually.
+
+Only change the scan port if the DHE web interface is reachable on a
+non-standard port. The scan port affects the setup-time subnet scan only.
+Zeroconf discoveries and manual setup keep using the port reported or entered
+for the selected target.
 
 Zeroconf/mDNS discovery is normally limited to the local subnet/VLAN. It only
 works across subnets when the router or firewall forwards mDNS through a proper
@@ -82,6 +87,17 @@ If the DHE web interface opens from a browser but the scan does not find it:
 2. Confirm that port `8443` is reachable from the Home Assistant host.
 3. Enter the DHE address manually in the setup form.
 4. Continue with the normal pairing confirmation.
+
+For release validation, run the real Zeroconf/mDNS smoke from a network segment
+that can receive the multicast DNS-SD advertisement:
+
+```bash
+python scripts/zeroconf_smoke.py --timeout 20
+```
+
+If that command does not see `_ste-dhe._tcp.local.` while the DHE is reachable
+by IP, treat it as a network multicast visibility issue, not as proof that
+manual setup or the setup subnet scan is broken.
 
 ## Duplicate Or Recreated Devices
 

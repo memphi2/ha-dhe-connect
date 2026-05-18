@@ -59,6 +59,7 @@ from .config_flow_setup import (
     CONF_SCAN_CIDR,
     CONF_SCAN_NETMASK,
     CONF_SCAN_NETWORK_ADDRESS,
+    CONF_SCAN_PORT,
     CONF_SCAN_SUBNET_MODE,
     CONF_SETUP_MODE,
     SETUP_SCAN_PROGRESS_ACTION,
@@ -334,6 +335,7 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
     _setup_scan_done: bool
     _setup_scan_failed: bool
     _setup_scan_networks: list[IPv4Network] | None
+    _setup_scan_port: int
 
     def __init__(self) -> None:
         self._pending_setup_data = None
@@ -342,6 +344,7 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
         self._setup_scan_done = False
         self._setup_scan_failed = False
         self._setup_scan_networks = None
+        self._setup_scan_port = DEFAULT_PORT
 
     def _available_scan_candidates(self) -> list[DHEHostCandidate]:
         """Return scan candidates not already configured."""
@@ -422,6 +425,7 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
                     CONF_SCAN_SUBNET_MODE,
                     default=SCAN_SUBNET_MODE_CURRENT,
                 ): vol.In(mode_options),
+                vol.Optional(CONF_SCAN_PORT, default=self._setup_scan_port): int,
             }
         )
         return self.async_show_form(
@@ -585,7 +589,11 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
             return None
         if self._setup_scan_task is None:
             self._setup_scan_task = self.hass.async_create_task(
-                async_scan_dhe_hosts(self.hass, networks=self._setup_scan_networks),
+                async_scan_dhe_hosts(
+                    self.hass,
+                    networks=self._setup_scan_networks,
+                    port=self._setup_scan_port,
+                ),
             )
             return self.async_show_progress(
                 step_id="network_scan",
@@ -696,6 +704,13 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
         """Choose how the setup scan subnet should be selected."""
         if user_input is None:
             return self._show_subnet_scan_form()
+        try:
+            self._setup_scan_port = validate_port(
+                user_input.get(CONF_SCAN_PORT, DEFAULT_PORT)
+            )
+        except (TypeError, ValueError):
+            return self._show_subnet_scan_form({CONF_SCAN_PORT: "invalid_port"})
+
         mode = user_input.get(CONF_SCAN_SUBNET_MODE)
         if mode == SCAN_SUBNET_MODE_CURRENT:
             self._setup_scan_networks = None

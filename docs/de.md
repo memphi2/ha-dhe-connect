@@ -59,8 +59,8 @@ Beim Hinzufuegen zeigt Home Assistant zuerst einen Einrichtungsweg:
 
 - gefundene DHE-Connect-Geraete aus Zeroconf/mDNS, wenn Home Assistant die
   `_ste-dhe._tcp.local.`-Ankuendigung sieht,
-- `Subnetz-Scan` fuer die Suche nach DHE-aehnlichen Webinterfaces auf Port
-  `8443`,
+- `Subnetz-Scan` fuer die Suche nach DHE-aehnlichen Webinterfaces. Der
+  Scan-Port ist mit `8443` vorbelegt,
 - `Manuell eingeben` fuer direkte Host/IP-Eingabe.
 
 Die Subnetzfelder erscheinen nur nach Auswahl von `Subnetz-Scan`. Der Scan kann
@@ -71,6 +71,10 @@ Subnetzfelder nach Moeglichkeit mit dem aktuellen lokalen Subnetz vor. Wenn ein
 Kandidat gefunden wird, oeffnet die normale Maske mit vorbelegtem Host und Port.
 Wenn nichts gefunden wird, oeffnet dieselbe Maske fuer manuelle Eingabe.
 
+Den Scan-Port nur aendern, wenn das DHE-Webinterface nicht auf `8443` laeuft.
+Der Scan-Port gilt nur fuer den Einrichtungs-Scan; Zeroconf und manuelle
+Einrichtung verwenden den gemeldeten oder eingegebenen Port des Ziels.
+
 Zeroconf/mDNS funktioniert normalerweise nur im lokalen Subnetz/VLAN.
 Subnetzuebergreifende Erkennung braucht einen Router oder eine Firewall mit
 mDNS-Reflector oder Repeater. Eine direkte `.local`-Namensaufloesung oder eine
@@ -78,6 +82,13 @@ Unicast-DNS-SD-Antwort des DHE reicht fuer den Home-Assistant-Zeroconf-Flow
 nicht aus; Home Assistant muss die Multicast-Ankuendigung empfangen. Wenn das
 DHE per IP erreichbar ist, aber nicht automatisch auftaucht, manuell einrichten
 oder den expliziten Subnetz-Scan verwenden.
+
+Vor einem Release sollte der echte Zeroconf/mDNS-Smoke aus einem Netz laufen,
+in dem Home Assistant die DHE-Ankuendigung sehen kann:
+
+```bash
+python scripts/zeroconf_smoke.py --timeout 20
+```
 
 Die UI fragt nach:
 

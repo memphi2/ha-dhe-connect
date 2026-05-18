@@ -392,6 +392,52 @@ class TestHATestApi(unittest.TestCase):
         self.assertFalse(results[-1].ok)
         self.assertIn("missing", results[-1].message)
 
+    def test_entity_smoke_skips_missing_disabled_registry_entities(self) -> None:
+        api = _FakeStateApi([])
+
+        results = ha_test_api.run_entity_smoke(
+            api,
+            "access",
+            entity_ids=("sensor.disabled", "sensor.missing"),
+            disabled_entity_ids={"sensor.disabled"},
+        )
+
+        self.assertTrue(results[1].ok)
+        self.assertIn("skipped disabled", results[1].message)
+        self.assertFalse(results[2].ok)
+        self.assertIn("missing", results[2].message)
+
+    def test_disabled_entity_ids_from_registry_reads_disabled_entities(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = Path(temp_dir) / "config"
+            storage = config / ".storage"
+            storage.mkdir(parents=True)
+            (storage / "core.entity_registry").write_text(
+                json.dumps(
+                    {
+                        "data": {
+                            "entities": [
+                                {
+                                    "entity_id": "sensor.disabled",
+                                    "disabled_by": "integration",
+                                },
+                                {"entity_id": "sensor.user_disabled", "disabled_by": "user"},
+                                {
+                                    "entity_id": "sensor.config_disabled",
+                                    "disabled_by": "config_entry",
+                                },
+                                {"entity_id": "sensor.enabled", "disabled_by": None},
+                            ]
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            disabled = ha_test_api.disabled_entity_ids_from_registry(config)
+
+        self.assertEqual(disabled, {"sensor.disabled"})
+
     def test_default_service_smoke_entities_match_current_registry_names(self) -> None:
         self.assertEqual(
             ha_test_api.DEFAULT_CLIMATE_ENTITY,

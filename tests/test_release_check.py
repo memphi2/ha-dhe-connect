@@ -457,6 +457,39 @@ class TestReleaseCheck(unittest.TestCase):
         self.assertTrue(result.ok)
         self.assertIn("--restart-before-localhost-cleanup", commands[0])
 
+    def test_zeroconf_smoke_uses_real_discovery_script(self) -> None:
+        commands: list[tuple[str, ...]] = []
+
+        def _runner(command):
+            commands.append(tuple(command))
+            return release_check.CommandResult(
+                args=tuple(command),
+                returncode=0,
+                stdout="",
+                stderr="",
+            )
+
+        result = release_check.run_zeroconf_smoke(
+            timeout=12.5,
+            expected_port=9443,
+            runner=_runner,
+        )
+
+        self.assertTrue(result.ok)
+        self.assertEqual(
+            commands,
+            [
+                (
+                    sys.executable,
+                    "scripts/zeroconf_smoke.py",
+                    "--timeout",
+                    "12.5",
+                    "--expected-port",
+                    "9443",
+                )
+            ],
+        )
+
     def test_local_checks_include_type_gate(self) -> None:
         args = release_check._parse_args(
             [
@@ -487,6 +520,53 @@ class TestReleaseCheck(unittest.TestCase):
 
         self.assertTrue(all(result.ok for result in results), results)
         self.assertIn((sys.executable, "scripts/check_typing.py"), commands)
+
+    def test_zeroconf_smoke_flag_adds_release_gate(self) -> None:
+        args = release_check._parse_args(
+            [
+                "--allow-dirty",
+                "--expect-tag",
+                "skip",
+                "--expect-github-release",
+                "skip",
+                "--run-zeroconf-smoke",
+                "--zeroconf-timeout",
+                "9",
+            ]
+        )
+        commands: list[tuple[str, ...]] = []
+
+        def _runner(command):
+            commands.append(tuple(command))
+            return release_check.CommandResult(
+                args=tuple(command),
+                returncode=0,
+                stdout="",
+                stderr="",
+            )
+
+        with (
+            patch("scripts.release_check.load_manifest_version", return_value="1.3.2"),
+            patch("scripts.release_check.check_version_files", return_value=[]),
+            patch(
+                "scripts.release_check.scan_tracked_files_for_secrets",
+                return_value=release_check.CheckResult(True, "secret scan ok"),
+            ),
+        ):
+            results = release_check.collect_results(args, _runner)
+
+        self.assertTrue(all(result.ok for result in results), results)
+        self.assertIn(
+            (
+                sys.executable,
+                "scripts/zeroconf_smoke.py",
+                "--timeout",
+                "9.0",
+                "--expected-port",
+                "8443",
+            ),
+            commands,
+        )
 
     def test_require_current_tag_adds_head_tag_check(self) -> None:
         args = release_check._parse_args(["--require-current-tag"])

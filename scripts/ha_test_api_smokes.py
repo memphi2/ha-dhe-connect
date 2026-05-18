@@ -304,8 +304,10 @@ def run_entity_smoke(
     access_token: str,
     *,
     entity_ids: tuple[str, ...] = DEFAULT_ENTITY_SMOKE_ENTITIES,
+    disabled_entity_ids: set[str] | None = None,
 ) -> list[ServiceSmokeResult]:
     """Check important DHE entities through the live HA state API."""
+    disabled_entity_ids = disabled_entity_ids or set()
     results: list[ServiceSmokeResult] = [
         _info(f"ENTITY smoke: reading {len(entity_ids)} core DHE states from HA")
     ]
@@ -317,6 +319,14 @@ def run_entity_smoke(
     for entity_id in entity_ids:
         state = states.get(entity_id)
         if state is None:
+            if entity_id in disabled_entity_ids:
+                results.append(
+                    ServiceSmokeResult(
+                        True,
+                        f"ENTITY skipped disabled-by-integration {entity_id}",
+                    )
+                )
+                continue
             results.append(ServiceSmokeResult(False, f"ENTITY missing {entity_id}"))
             continue
         results.extend(_entity_smoke_results(entity_id, state))

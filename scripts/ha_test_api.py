@@ -75,6 +75,7 @@ __all__ = [
     "_timer_state_seconds",
     "cleanup_localhost_refresh_tokens",
     "cleanup_localhost_refresh_tokens_with_retry",
+    "disabled_entity_ids_from_registry",
     "run_entity_smoke",
     "run_service_smoke",
     "run_timer_smoke",
@@ -103,6 +104,28 @@ class TokenCleanupResult:
     removed: int
     backup_path: Path | None
     stable: bool = True
+
+
+def disabled_entity_ids_from_registry(config: Path) -> set[str]:
+    """Return entity IDs disabled by integration defaults in the HA registry."""
+    registry_path = config / ".storage" / "core.entity_registry"
+    try:
+        payload = json.loads(registry_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return set()
+    entities = payload.get("data", {}).get("entities", [])
+    if not isinstance(entities, list):
+        return set()
+    disabled: set[str] = set()
+    for entity in entities:
+        if not isinstance(entity, dict):
+            continue
+        if entity.get("disabled_by") != "integration":
+            continue
+        entity_id = entity.get("entity_id")
+        if isinstance(entity_id, str) and entity_id:
+            disabled.add(entity_id)
+    return disabled
 
 
 class HomeAssistantApi:
@@ -635,7 +658,13 @@ def main() -> int:
             else:
                 print("PASS: HA authenticated API ready")
                 try:
-                    results = run_entity_smoke(api, token.access_token)
+                    results = run_entity_smoke(
+                        api,
+                        token.access_token,
+                        disabled_entity_ids=disabled_entity_ids_from_registry(
+                            args.config
+                        ),
+                    )
                 except Exception as err:  # noqa: BLE001
                     print(
                         "FAIL: HA entity smoke aborted: "

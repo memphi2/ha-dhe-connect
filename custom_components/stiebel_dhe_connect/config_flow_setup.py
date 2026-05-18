@@ -20,6 +20,7 @@ from .setup_scan import (
 
 CONF_SCAN_AUTOMATICALLY = "scan_automatically"
 CONF_SCAN_SUBNET_MODE = "scan_subnet_mode"
+CONF_SCAN_PORT = "scan_port"
 CONF_SCAN_NETWORK_ADDRESS = "scan_network_address"
 CONF_SCAN_NETMASK = "scan_netmask"
 CONF_SCAN_CIDR = "scan_cidr"

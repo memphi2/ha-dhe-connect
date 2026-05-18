@@ -15,6 +15,10 @@
   screen lets the user choose between discovered DHE devices, subnet scan and
   manual setup; the scan can use the current local subnet, entered network
   address plus subnet mask, or CIDR notation.
+- Added a setup-scan port field, defaulting to `8443`, for installations where
+  the DHE web interface listens on a non-standard port.
+- Added a real Zeroconf/mDNS smoke helper and release-check gate for
+  `_ste-dhe._tcp.local.` multicast discovery.
 - Added a README pointer and screenshot for the companion
   `ha-dhe-connect-card` Lovelace dashboard card.
 
@@ -44,6 +48,9 @@
   path and MAC-based config-entry unique ID behavior after successful pairing.
 - Documented the difference between direct `.local`/unicast DNS-SD answers and
   Home Assistant Zeroconf discovery, which requires multicast visibility.
+- Expanded Zeroconf and setup-scan flow coverage for realistic mDNS payload
+  shapes, user takeover of in-progress discovery flows, progress-step setup
+  scans and hostname/IP mismatch duplicate prevention after MAC readback.
 
 ### Fixed
 
@@ -79,7 +86,7 @@
 
 ### Validation
 
-- Local test suite: `443 passed`, `46 subtests passed`.
+- Local test suite: `463 passed`, `46 subtests passed`.
 - Integration repository check: `scripts/check_integration.py`.
 - Type gate: `scripts/check_typing.py` over 51 source files.
 - Ruff: `ruff check custom_components tests scripts`.
