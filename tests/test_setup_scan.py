@@ -170,6 +170,47 @@ class TestSetupScan(unittest.TestCase):
             },
         )
 
+    def test_setup_scan_status_text_english_states(self) -> None:
+        self.assertEqual(
+            setup_scan.setup_scan_status_text(
+                "en",
+                scanned=False,
+                found=0,
+                available=0,
+            ),
+            "Enter host/IP, port and physical Tmax jumper position.",
+        )
+        self.assertEqual(
+            setup_scan.setup_scan_status_text(
+                "en",
+                scanned=True,
+                found=2,
+                available=2,
+            ),
+            "Found 2 DHE candidates; the first one is prefilled.",
+        )
+
+    def test_setup_scan_status_text_german_states(self) -> None:
+        self.assertEqual(
+            setup_scan.setup_scan_status_text(
+                "de",
+                scanned=True,
+                found=1,
+                available=1,
+            ),
+            "Ein DHE wurde gefunden und Host/Port sind vorbelegt.",
+        )
+        self.assertEqual(
+            setup_scan.setup_scan_status_text(
+                "de",
+                scanned=True,
+                found=0,
+                available=0,
+                failed=True,
+            ),
+            "Die automatische Suche ist fehlgeschlagen; bitte Host und Port manuell eintragen.",
+        )
+
     def test_candidate_defaults(self) -> None:
         defaults = setup_scan.candidate_defaults(
             setup_scan.DHEHostCandidate("192.0.2.124", 8443),

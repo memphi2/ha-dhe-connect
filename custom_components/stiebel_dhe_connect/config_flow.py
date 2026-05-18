@@ -86,6 +86,7 @@ from .setup_scan import (
     candidate_defaults,
     ipv4_scan_networks,
     local_ipv4_addresses_from_hass,
+    setup_scan_status_text,
     split_scan_subnet_suggestions,
 )
 from .token_file_helpers import (
@@ -228,41 +229,6 @@ def _is_target_used_by_other_entry(
         if target == (host, port):
             return True
     return False
-
-
-def _scan_status_text(
-    hass: HomeAssistant,
-    *,
-    scanned: bool,
-    found: int,
-    available: int,
-    failed: bool = False,
-) -> str:
-    """Return localized setup-scan status text for the setup form."""
-    language = str(getattr(hass.config, "language", "") or "").lower()
-    if language.startswith("de"):
-        if not scanned and not failed:
-            return "Host/IP, Port und Tmax-Jumperposition eintragen."
-        if failed:
-            return "Die automatische Suche ist fehlgeschlagen; bitte Host und Port manuell eintragen."
-        if found == 0:
-            return "Es wurde kein DHE gefunden; bitte Host und Port manuell eintragen."
-        if available == 0:
-            return "Gefundene DHE-Ziele sind bereits konfiguriert; bitte bei Bedarf ein anderes Ziel manuell eintragen."
-        if available == 1:
-            return "Ein DHE wurde gefunden und Host/Port sind vorbelegt."
-        return f"{available} DHE-Kandidaten wurden gefunden; der erste ist vorbelegt."
-    if failed:
-        return "Automatic search failed; enter host and port manually."
-    if not scanned:
-        return "Enter host/IP, port and physical Tmax jumper position."
-    if found == 0:
-        return "No DHE was found; enter host and port manually."
-    if available == 0:
-        return "Found DHE targets are already configured; enter another target manually if needed."
-    if available == 1:
-        return "Found one DHE and prefilled host/port."
-    return f"Found {available} DHE candidates; the first one is prefilled."
 
 
 def _abs_config_path(hass: HomeAssistant, path: str) -> str:
@@ -438,8 +404,8 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
         """Return description placeholders for the setup form."""
         available = self._available_scan_candidates()
         return {
-            "scan_status": _scan_status_text(
-                self.hass,
+            "scan_status": setup_scan_status_text(
+                str(getattr(self.hass.config, "language", "") or ""),
                 scanned=self._setup_scan_done,
                 found=len(self._setup_scan_candidates),
                 available=len(available),

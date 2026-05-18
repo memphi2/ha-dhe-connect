@@ -229,6 +229,40 @@ def split_scan_subnet_suggestions(network: IPv4Network) -> dict[str, str]:
     }
 
 
+def setup_scan_status_text(
+    language: str,
+    *,
+    scanned: bool,
+    found: int,
+    available: int,
+    failed: bool = False,
+) -> str:
+    """Return localized setup-scan status text for the setup form."""
+    if language.lower().startswith("de"):
+        if not scanned and not failed:
+            return "Host/IP, Port und Tmax-Jumperposition eintragen."
+        if failed:
+            return "Die automatische Suche ist fehlgeschlagen; bitte Host und Port manuell eintragen."
+        if found == 0:
+            return "Es wurde kein DHE gefunden; bitte Host und Port manuell eintragen."
+        if available == 0:
+            return "Gefundene DHE-Ziele sind bereits konfiguriert; bitte bei Bedarf ein anderes Ziel manuell eintragen."
+        if available == 1:
+            return "Ein DHE wurde gefunden und Host/Port sind vorbelegt."
+        return f"{available} DHE-Kandidaten wurden gefunden; der erste ist vorbelegt."
+    if failed:
+        return "Automatic search failed; enter host and port manually."
+    if not scanned:
+        return "Enter host/IP, port and physical Tmax jumper position."
+    if found == 0:
+        return "No DHE was found; enter host and port manually."
+    if available == 0:
+        return "Found DHE targets are already configured; enter another target manually if needed."
+    if available == 1:
+        return "Found one DHE and prefilled host/port."
+    return f"Found {available} DHE candidates; the first one is prefilled."
+
+
 def scan_hosts(networks: Sequence[IPv4Network], *, max_hosts: int) -> list[str]:
     """Expand networks into host addresses, capped for setup responsiveness."""
     hosts: list[str] = []
