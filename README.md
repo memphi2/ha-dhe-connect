@@ -114,14 +114,15 @@ To use different local artwork, replace those files with PNGs using the same fil
 ## Configuration
 
 When the integration is added, Home Assistant first asks whether it should scan
-a subnet or continue with manual setup. The scan is optional and only checks for
-DHE-like web interfaces on port `8443`. Subnet fields are shown only after the
-scan option is selected. Home Assistant pre-fills network address and subnet
-mask from its current local subnet when possible. Leave all subnet fields empty
-to scan the current local subnet, adjust network address `192.168.1.0` plus
-subnet mask `255.255.255.0`, or enter CIDR `192.168.1.0/24`; do not fill both
-alternatives. If a candidate is found, the normal setup form opens with host and
-port pre-filled. If no candidate is found, the same form opens for manual entry.
+a subnet or continue with manual setup. The scan is enabled by default, remains
+optional, and only checks for DHE-like web interfaces on port `8443`. Subnet
+fields are shown only after the scan option is selected. Home Assistant
+pre-fills network address and subnet mask from its current local subnet when
+possible. Leave all subnet fields empty to scan the current local subnet, adjust
+network address `192.168.1.0` plus subnet mask `255.255.255.0`, or enter CIDR
+`192.168.1.0/24`; do not fill both alternatives. If a candidate is found, the
+normal setup form opens with host and port pre-filled. If no candidate is found,
+the same form opens for manual entry.
 
 The config flow asks for:
 

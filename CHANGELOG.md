@@ -35,6 +35,8 @@
   subnet mask and CIDR input separately with examples.
 - Prefilled setup-scan network address and subnet mask from Home Assistant's
   current local subnet when available.
+- Made the setup-time network scan opt-out instead of opt-in so new setups
+  offer discovery by default.
 
 ### Fixed
 

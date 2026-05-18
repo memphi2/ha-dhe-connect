@@ -442,7 +442,7 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
             step_id="user",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_SCAN_AUTOMATICALLY, default=False): bool,
+                    vol.Required(CONF_SCAN_AUTOMATICALLY, default=True): bool,
                 }
             ),
             errors=errors or {},
