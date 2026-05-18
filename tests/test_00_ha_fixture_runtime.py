@@ -95,6 +95,8 @@ class _FixtureDHEClient:
         self.weather_remove_calls: list[dict[str, Any]] = []
         self.weather_select_calls: list[dict[str, Any] | str] = []
         self.repair_pairing_calls = 0
+        self.start_bluetooth_pairing_calls = 0
+        self.disconnect_bluetooth_pairing_calls = 0
         self._stopped = asyncio.Event()
         self.callbacks: dict[str, list[Callable[..., None]]] = {
             "availability": [],
@@ -158,6 +160,16 @@ class _FixtureDHEClient:
         self.repair_pairing_calls += 1
         return True
 
+    async def start_bluetooth_pairing(self) -> bool:
+        """Record a Bluetooth pairing start button call."""
+        self.start_bluetooth_pairing_calls += 1
+        return True
+
+    async def disconnect_bluetooth_pairing(self) -> bool:
+        """Record a Bluetooth pairing disconnect button call."""
+        self.disconnect_bluetooth_pairing_calls += 1
+        return True
+
     def emit_availability(self, available: bool) -> None:
         """Emit availability to registered entities."""
         self.available = available
@@ -169,6 +181,12 @@ class _FixtureDHEClient:
         self.last_weather_state = dict(state)
         for callback_fn in list(self.callbacks["weather"]):
             callback_fn(self.last_weather_state)
+
+    def emit_radio(self, state: dict[str, Any]) -> None:
+        """Emit radio state to registered entities."""
+        self.last_radio_state = dict(state)
+        for callback_fn in list(self.callbacks["radio"]):
+            callback_fn(self.last_radio_state)
 
     def emit_measurement(
         self,
@@ -1328,6 +1346,110 @@ async def test_repair_pairing_button_calls_client_when_enabled_with_real_hass_fi
             blocking=True,
         )
         assert client.repair_pairing_calls == 1
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
+
+async def test_bluetooth_pairing_buttons_call_client_when_enabled_with_real_hass_fixture() -> None:
+    """Enable the Bluetooth pairing buttons and press them through HA."""
+    _clear_loaded_integration_modules()
+    integration = importlib.import_module(f"custom_components.{DOMAIN}")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        client = _FixtureDHEClient()
+        entry = _build_mock_entry(
+            host=client.host,
+            port=client.port,
+            name="Bluetooth Fixture DHE",
+            unique_id="bluetooth-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+
+        registry = er.async_get(hass)
+        for key in ("start_bluetooth_pairing", "disconnect_bluetooth_pairing"):
+            registry.async_get_or_create(
+                "button",
+                DOMAIN,
+                f"{DOMAIN}_{entry.entry_id}_{key}",
+                suggested_object_id=f"bluetooth_fixture_dhe_{key}",
+                disabled_by=None,
+            )
+
+        with patch.object(integration, "DHEClient", return_value=client):
+            assert await hass.config_entries.async_setup(entry.entry_id)
+            await hass.async_block_till_done()
+
+        start_button = _entity_id_for_key(
+            hass,
+            entry.entry_id,
+            "button",
+            "start_bluetooth_pairing",
+        )
+        disconnect_button = _entity_id_for_key(
+            hass,
+            entry.entry_id,
+            "button",
+            "disconnect_bluetooth_pairing",
+        )
+
+        assert hass.states.get(start_button) is not None
+        assert hass.states.get(disconnect_button) is not None
+
+        await hass.services.async_call(
+            "button",
+            "press",
+            {"entity_id": start_button},
+            blocking=True,
+        )
+        await hass.services.async_call(
+            "button",
+            "press",
+            {"entity_id": disconnect_button},
+            blocking=True,
+        )
+        assert client.start_bluetooth_pairing_calls == 1
+        assert client.disconnect_bluetooth_pairing_calls == 1
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
+
+async def test_bluetooth_paired_binary_sensor_tracks_radio_pairing_state_with_real_hass_fixture() -> None:
+    """Expose the DHE reported Bluetooth pairing state as a binary sensor."""
+    _clear_loaded_integration_modules()
+    integration = importlib.import_module(f"custom_components.{DOMAIN}")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        client = _FixtureDHEClient()
+        client.last_radio_state = {"paired": True}
+        entry = _build_mock_entry(
+            host=client.host,
+            port=client.port,
+            name="Bluetooth State Fixture DHE",
+            unique_id="bluetooth-state-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+
+        with patch.object(integration, "DHEClient", return_value=client):
+            assert await hass.config_entries.async_setup(entry.entry_id)
+            await hass.async_block_till_done()
+
+        entity_id = _entity_id_for_key(
+            hass,
+            entry.entry_id,
+            "binary_sensor",
+            "bluetooth_paired",
+        )
+        state = hass.states.get(entity_id)
+        assert state is not None
+        assert state.state == "on"
+
+        client.emit_radio({"paired": False})
+        await hass.async_block_till_done()
+        state = hass.states.get(entity_id)
+        assert state is not None
+        assert state.state == "off"
 
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()

@@ -216,6 +216,9 @@
     "binary_sensor": {
       "scald_protection_active": {
         "name": "Verbrühschutz aktiv"
+      },
+      "bluetooth_paired": {
+        "name": "Bluetooth gekoppelt"
       }
     },
     "button": {
@@ -228,8 +231,11 @@
       "repair_pairing": {
         "name": "Pairing erneuern"
       },
-      "disconnect_radio_pairing": {
-        "name": "Radio-Kopplung trennen"
+      "start_bluetooth_pairing": {
+        "name": "Bluetooth-Kopplung starten"
+      },
+      "disconnect_bluetooth_pairing": {
+        "name": "Bluetooth-Kopplung trennen"
       },
       "temperature_memory_1": {
         "name": "Speicher 1"

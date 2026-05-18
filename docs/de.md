@@ -24,6 +24,7 @@ Typische Funktionen:
 - Verbrauchs- und Sparmonitor-Werte, zum Teil bewusst deaktiviert.
 - Temperatur-Speicherplaetze, Eco, Badewannenfuellung, Timer und Wellness.
 - Radio-Player mit Favoriten und Quellenauswahl.
+- Bluetooth-Kopplungsstatus sowie Start-/Trennen-Buttons fuer das DHE-Radiomodul.
 - Wetter-Favoriten aus dem DHE-Webinterface.
 - Diagnosewerte fuer Verbindung, Reconnects, Fehlerstatus und Protokoll.
 
@@ -136,6 +137,7 @@ Standardmaessig sichtbar sind die wichtigsten Betriebswerte, unter anderem:
 - Gesamt-Wasserverbrauch.
 - Gesamt-Heizenergie.
 - Wetter- und Radio-Basisentitaeten.
+- Bluetooth-Kopplungsstatus.
 - Diagnosewerte fuer Verbindung und Reconnects.
 
 Weitere Entitaeten sind absichtlich deaktiviert, damit Home Assistant und der

@@ -31,12 +31,13 @@ Its maximum settable target temperature is capped by the `Internal scald protect
 | Entity | Class / category | Source / behavior |
 |---|---|---|
 | Scald protection active | diagnostic, disabled by default | ODB ID `22`, true when the DHE reports the anti-scald protection as active |
+| Bluetooth paired | diagnostic | `get:ste.app.radio:paired`, true when the DHE reports the Bluetooth/radio module as paired |
 
 ## Media Player
 
 | Entity | Features | Source / command | Behavior |
 |---|---|---|---|
-| Radio | play/pause, volume, source selection, previous/next favorite | `get:ste.app.radio:station`, `volume`, `play`, `paired`, `title`, `favorites`; `assign:ste.app.radio:play`, `volume`, `station` | Shows the current radio title, station short description or station name, controls playback/volume and switches between radio favorites |
+| Radio | play/pause, volume, source selection, previous/next favorite | `get:ste.app.radio:station`, `volume`, `play`, `paired`, `title`, `favorites`; `assign:ste.app.radio:play`, `volume`, `station` | Shows the current radio title, station short description or station name, controls playback/volume, exposes the `bluetooth_paired` attribute and switches between radio favorites |
 
 The radio entity intentionally does not request the full station catalog during startup. It does read the small favorites list so Home Assistant can expose radio favorites as media-player sources and use previous/next to cycle through them. The options flow can search stations by full text, DHE genre catalog, or by DHE country/city catalog plus a search term, then add the selected station as a DHE radio favorite and activate it. Genre searches send the selected genre directly; full-text search sends `{attribute: "text", value: "<query>"}`; country and city searches send the selected catalog value and include the entered search term as additional text. Existing radio favorites can also be removed from the options flow. Catalog, favorites and search payloads are treated as known protocol messages so they do not pollute debug logs.
 
@@ -208,7 +209,8 @@ Wellness programs are triggered by writing the program ID and then sending ODB I
 | Reset brush timer | `assign:ste.app.brushTimer:reset` | Resets brush timer remaining time to the configured duration and turns activation off; disabled by default |
 | Reset shower timer | `assign:ste.app.showerTimer:reset` | Resets shower timer remaining time to the configured duration and turns activation off; disabled by default |
 | Repair pairing | local token reset and reconnect | Deletes the stored DHE token, starts a fresh pairing attempt and asks the user to confirm pairing on the DHE; disabled by default |
-| Disconnect radio pairing | `assign:ste.app.radio:paired` with `false` | Sends the observed DHE radio pairing disconnect action |
+| Start Bluetooth pairing | `assign:ste.app.radio:paired` with `true` | Sends the observed DHE Bluetooth pairing start action; disabled by default |
+| Disconnect Bluetooth pairing | `assign:ste.app.radio:paired` with `false` | Sends the observed DHE Bluetooth pairing disconnect action; disabled by default |
 | Temperature memory 1-12 | ODB ID `66` command | Sends the temperature stored in the matching memory slot; slots 3 to 12 disabled by default |
 | Delete temperature memory 3-12 | `assign:ste.common.temperature:memory` | Deletes the matching memory slot with `operation: delete`; disabled by default; memory slots 1 and 2 are fixed presets and are not deletable |
 
