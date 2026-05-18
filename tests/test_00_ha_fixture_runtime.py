@@ -729,6 +729,7 @@ async def test_repair_pairing_button_calls_client_when_enabled_with_real_hass_fi
     async with async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         client = _FixtureDHEClient()
+        client.available = False
         entry = _build_mock_entry(
             host=client.host,
             port=client.port,
@@ -758,6 +759,7 @@ async def test_repair_pairing_button_calls_client_when_enabled_with_real_hass_fi
         )
         state = hass.states.get(repair_button)
         assert state is not None
+        assert state.state != "unavailable"
 
         client.emit_availability(False)
         await hass.async_block_till_done()
