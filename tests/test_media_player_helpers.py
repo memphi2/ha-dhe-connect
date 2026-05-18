@@ -216,6 +216,50 @@ class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(player._attr_state, media_player.STATE_OFF)
 
+    def test_startup_playback_false_uses_off_state(self) -> None:
+        media_player = _load_media_player_module()
+        player = media_player.StiebelDHERadioMediaPlayer.__new__(
+            media_player.StiebelDHERadioMediaPlayer
+        )
+        player._radio_off_requested = False
+
+        player._apply_playback_state({"play": False})
+
+        self.assertEqual(player._attr_state, media_player.STATE_OFF)
+
+    def test_runtime_playback_false_keeps_paused_state_after_pause(self) -> None:
+        media_player = _load_media_player_module()
+        player = media_player.StiebelDHERadioMediaPlayer.__new__(
+            media_player.StiebelDHERadioMediaPlayer
+        )
+        player._radio_off_requested = False
+        player._attr_state = media_player.STATE_PAUSED
+
+        player._apply_playback_state({"play": False})
+
+        self.assertEqual(player._attr_state, media_player.STATE_PAUSED)
+
+    def test_startup_metadata_without_play_uses_off_state(self) -> None:
+        media_player = _load_media_player_module()
+        player = media_player.StiebelDHERadioMediaPlayer.__new__(
+            media_player.StiebelDHERadioMediaPlayer
+        )
+
+        player._apply_playback_state({"favorites": [{"Id": 1, "Name": "Radio Test"}]})
+
+        self.assertEqual(player._attr_state, media_player.STATE_OFF)
+
+    def test_metadata_without_play_preserves_runtime_state(self) -> None:
+        media_player = _load_media_player_module()
+        player = media_player.StiebelDHERadioMediaPlayer.__new__(
+            media_player.StiebelDHERadioMediaPlayer
+        )
+        player._attr_state = media_player.STATE_PLAYING
+
+        player._apply_playback_state({"favorites": [{"Id": 1, "Name": "Radio Test"}]})
+
+        self.assertEqual(player._attr_state, media_player.STATE_PLAYING)
+
     def test_playback_update_clears_requested_off_state_when_playing(self) -> None:
         media_player = _load_media_player_module()
         player = media_player.StiebelDHERadioMediaPlayer.__new__(
@@ -253,7 +297,7 @@ class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
         player._handle_availability_update(True)
         player._handle_availability_update(False)
 
-        self.assertEqual(writes, [media_player.STATE_PAUSED, media_player.STATE_PAUSED])
+        self.assertEqual(writes, [media_player.STATE_OFF, media_player.STATE_OFF])
         self.assertFalse(player._attr_available)
 
     def test_radio_write_signature_ignores_unrecorded_favorite_payload(self) -> None:

@@ -20,22 +20,72 @@ try:
         format_redacted_exception,
         redact_sensitive_text,
     )
+    from scripts.ha_test_api_smokes import (
+        DEFAULT_CLIMATE_ENTITY,
+        DEFAULT_RADIO_AUTO_OFF_SECONDS,
+        DEFAULT_RADIO_ENTITY,
+        DEFAULT_TIMER_DURATION_ENTITY,
+        DEFAULT_TIMER_REMAINING_ENTITY,
+        DEFAULT_TIMER_SMOKE_DURATION_SECONDS,
+        DEFAULT_TIMER_SMOKE_EXPIRY_GRACE_SECONDS,
+        DEFAULT_TIMER_SMOKE_OBSERVE_SECONDS,
+        DEFAULT_TIMER_SWITCH_ENTITY,
+        _timer_state_seconds,
+        result_prefix,
+        run_entity_smoke,
+        run_service_smoke,
+        run_timer_smoke,
+    )
 except ModuleNotFoundError:
     from ha_test_redaction import (
         format_redacted_exception,
         redact_sensitive_text,
     )
+    from ha_test_api_smokes import (
+        DEFAULT_CLIMATE_ENTITY,
+        DEFAULT_RADIO_AUTO_OFF_SECONDS,
+        DEFAULT_RADIO_ENTITY,
+        DEFAULT_TIMER_DURATION_ENTITY,
+        DEFAULT_TIMER_REMAINING_ENTITY,
+        DEFAULT_TIMER_SMOKE_DURATION_SECONDS,
+        DEFAULT_TIMER_SMOKE_EXPIRY_GRACE_SECONDS,
+        DEFAULT_TIMER_SMOKE_OBSERVE_SECONDS,
+        DEFAULT_TIMER_SWITCH_ENTITY,
+        _timer_state_seconds,
+        result_prefix,
+        run_entity_smoke,
+        run_service_smoke,
+        run_timer_smoke,
+    )
+
+
+__all__ = [
+    "DEFAULT_CLIMATE_ENTITY",
+    "DEFAULT_RADIO_AUTO_OFF_SECONDS",
+    "DEFAULT_RADIO_ENTITY",
+    "DEFAULT_TIMER_DURATION_ENTITY",
+    "DEFAULT_TIMER_REMAINING_ENTITY",
+    "DEFAULT_TIMER_SMOKE_DURATION_SECONDS",
+    "DEFAULT_TIMER_SMOKE_EXPIRY_GRACE_SECONDS",
+    "DEFAULT_TIMER_SMOKE_OBSERVE_SECONDS",
+    "DEFAULT_TIMER_SWITCH_ENTITY",
+    "HomeAssistantApi",
+    "AuthToken",
+    "TokenCleanupResult",
+    "_timer_state_seconds",
+    "cleanup_localhost_refresh_tokens",
+    "cleanup_localhost_refresh_tokens_with_retry",
+    "run_entity_smoke",
+    "run_service_smoke",
+    "run_timer_smoke",
+]
 
 
 DEFAULT_URL = "http://127.0.0.1:8123"
 DEFAULT_USERNAME = ""
 DEFAULT_CONFIG = Path("/mnt/ha-test-config")
 DEFAULT_CLIENT_ID = "http://localhost/"
-DEFAULT_CLIMATE_ENTITY = "climate.dhe_connect_water_heating"
-DEFAULT_RADIO_ENTITY = "media_player.dhe_connect_radio"
 DEFAULT_BACKUP_DIR = Path("/tmp")
-RADIO_SOURCE_SETTLE_SECONDS = 5.0
-DEFAULT_RADIO_AUTO_OFF_SECONDS = 30.0
 
 
 @dataclass(frozen=True)
@@ -53,14 +103,6 @@ class TokenCleanupResult:
     removed: int
     backup_path: Path | None
     stable: bool = True
-
-
-@dataclass(frozen=True)
-class ServiceSmokeResult:
-    """One HA service-smoke result line."""
-
-    ok: bool
-    message: str
 
 
 class HomeAssistantApi:
@@ -240,6 +282,17 @@ class HomeAssistantApi:
         )
         return state
 
+    def get_states(self, access_token: str) -> list[dict[str, Any]]:
+        """Return all Home Assistant state objects."""
+        _, states = self._request_json(
+            "/api/states",
+            None,
+            access_token=access_token,
+        )
+        if isinstance(states, list):
+            return [state for state in states if isinstance(state, dict)]
+        return []
+
     def call_service(
         self,
         access_token: str,
@@ -378,133 +431,6 @@ def cleanup_localhost_refresh_tokens_with_retry(
     )
 
 
-def run_service_smoke(
-    api: HomeAssistantApi,
-    access_token: str,
-    *,
-    climate_entity: str,
-    radio_entity: str,
-    radio_auto_off_seconds: float = DEFAULT_RADIO_AUTO_OFF_SECONDS,
-) -> list[ServiceSmokeResult]:
-    """Exercise the DHE climate and radio services."""
-    results: list[ServiceSmokeResult] = []
-    climate_before = api.get_state(access_token, climate_entity)
-    results.append(
-        ServiceSmokeResult(
-            True,
-            "CLIMATE before "
-            f"state={climate_before.get('state')} "
-            f"target={climate_before.get('attributes', {}).get('temperature')}",
-        )
-    )
-    changed = api.call_service(
-        access_token,
-        "climate",
-        "turn_off",
-        {"entity_id": climate_entity},
-    )
-    results.append(ServiceSmokeResult(True, f"SERVICE climate.turn_off changed={len(changed)}"))
-    time.sleep(5)
-    climate_off = api.get_state(access_token, climate_entity)
-    climate_off_state = climate_off.get("state")
-    results.append(
-        ServiceSmokeResult(
-            climate_off_state == "off",
-            f"CLIMATE off state={climate_off_state}",
-        )
-    )
-    changed = api.call_service(
-        access_token,
-        "climate",
-        "turn_on",
-        {"entity_id": climate_entity},
-    )
-    results.append(ServiceSmokeResult(True, f"SERVICE climate.turn_on changed={len(changed)}"))
-    time.sleep(5)
-    climate_on = api.get_state(access_token, climate_entity)
-    climate_on_state = climate_on.get("state")
-    results.append(
-        ServiceSmokeResult(
-            climate_on_state not in {"off", "unavailable", "unknown"},
-            f"CLIMATE on state={climate_on_state}",
-        )
-    )
-
-    radio_before = api.get_state(access_token, radio_entity)
-    radio_attrs = radio_before.get("attributes", {})
-    sources = radio_attrs.get("source_list") or []
-    current_source = radio_attrs.get("source")
-    results.append(
-        ServiceSmokeResult(
-            True,
-            "RADIO before "
-            f"state={radio_before.get('state')} source={current_source!r} "
-            f"sources={len(sources)}",
-        )
-    )
-    if not sources:
-        results.append(ServiceSmokeResult(True, "RADIO skipped: no sources"))
-        return results
-
-    selected_source = next((source for source in sources if source != current_source), sources[0])
-    changed = api.call_service(
-        access_token,
-        "media_player",
-        "turn_off",
-        {"entity_id": radio_entity},
-    )
-    results.append(
-        ServiceSmokeResult(True, f"SERVICE media_player.turn_off changed={len(changed)}")
-    )
-    time.sleep(3)
-    changed = api.call_service(
-        access_token,
-        "media_player",
-        "select_source",
-        {"entity_id": radio_entity, "source": selected_source},
-    )
-    results.append(
-        ServiceSmokeResult(
-            True,
-            f"SERVICE media_player.select_source changed={len(changed)}",
-        )
-    )
-    time.sleep(RADIO_SOURCE_SETTLE_SECONDS)
-    radio_after = api.get_state(access_token, radio_entity)
-    radio_after_attrs = radio_after.get("attributes", {})
-    radio_after_state = radio_after.get("state")
-    radio_after_source = radio_after_attrs.get("source")
-    results.append(
-        ServiceSmokeResult(
-            radio_after_source == selected_source
-            and radio_after_state not in {"off", "unavailable", "unknown"},
-            "RADIO after "
-            f"state={radio_after_state} "
-            f"source={radio_after_source!r} selected={selected_source!r}",
-        )
-    )
-    remaining_radio_on_seconds = max(
-        0.0,
-        float(radio_auto_off_seconds) - RADIO_SOURCE_SETTLE_SECONDS,
-    )
-    if remaining_radio_on_seconds > 0:
-        time.sleep(remaining_radio_on_seconds)
-    changed = api.call_service(
-        access_token,
-        "media_player",
-        "turn_off",
-        {"entity_id": radio_entity},
-    )
-    results.append(
-        ServiceSmokeResult(
-            True,
-            "SERVICE media_player.turn_off_after_smoke "
-            f"changed={len(changed)} delay={radio_auto_off_seconds:g}s",
-        )
-    )
-    return results
-
-
 def _env_default(name: str, fallback: str) -> str:
     return os.environ.get(name, fallback)
 
@@ -567,6 +493,35 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--service-smoke", action="store_true")
     parser.add_argument("--climate-entity", default=DEFAULT_CLIMATE_ENTITY)
     parser.add_argument("--radio-entity", default=DEFAULT_RADIO_ENTITY)
+    parser.add_argument("--entity-smoke", action="store_true")
+    parser.add_argument("--timer-smoke", action="store_true")
+    parser.add_argument("--timer-switch-entity", default=DEFAULT_TIMER_SWITCH_ENTITY)
+    parser.add_argument(
+        "--timer-remaining-entity",
+        default=DEFAULT_TIMER_REMAINING_ENTITY,
+    )
+    parser.add_argument(
+        "--timer-duration-entity",
+        default=DEFAULT_TIMER_DURATION_ENTITY,
+    )
+    parser.add_argument(
+        "--timer-smoke-duration-seconds",
+        type=_non_negative_float,
+        default=DEFAULT_TIMER_SMOKE_DURATION_SECONDS,
+        help="Temporary timer duration used by --timer-smoke.",
+    )
+    parser.add_argument(
+        "--timer-smoke-observe-seconds",
+        type=_non_negative_float,
+        default=DEFAULT_TIMER_SMOKE_OBSERVE_SECONDS,
+        help="Initial countdown observation window for --timer-smoke.",
+    )
+    parser.add_argument(
+        "--timer-smoke-expiry-grace-seconds",
+        type=_non_negative_float,
+        default=DEFAULT_TIMER_SMOKE_EXPIRY_GRACE_SECONDS,
+        help="Extra seconds to wait for DHE timer expiry and reset.",
+    )
     parser.add_argument(
         "--radio-auto-off-seconds",
         type=float,
@@ -667,7 +622,60 @@ def main() -> int:
                     exit_code = 3
                 else:
                     for result in results:
-                        print(f"{'PASS' if result.ok else 'FAIL'}: {result.message}")
+                        print(f"{result_prefix(result)}: {result.message}")
+                        if not result.ok:
+                            exit_code = 3
+        if args.entity_smoke:
+            if not api.wait_api_ready(
+                token.access_token,
+                timeout=args.api_ready_timeout,
+            ):
+                print("FAIL: HA authenticated API did not become ready")
+                exit_code = 3
+            else:
+                print("PASS: HA authenticated API ready")
+                try:
+                    results = run_entity_smoke(api, token.access_token)
+                except Exception as err:  # noqa: BLE001
+                    print(
+                        "FAIL: HA entity smoke aborted: "
+                        f"{format_redacted_exception(err)}"
+                    )
+                    exit_code = 3
+                else:
+                    for result in results:
+                        print(f"{result_prefix(result)}: {result.message}")
+                        if not result.ok:
+                            exit_code = 3
+        if args.timer_smoke:
+            if not api.wait_api_ready(
+                token.access_token,
+                timeout=args.api_ready_timeout,
+            ):
+                print("FAIL: HA authenticated API did not become ready")
+                exit_code = 3
+            else:
+                print("PASS: HA authenticated API ready")
+                try:
+                    results = run_timer_smoke(
+                        api,
+                        token.access_token,
+                        switch_entity=args.timer_switch_entity,
+                        remaining_entity=args.timer_remaining_entity,
+                        duration_entity=args.timer_duration_entity,
+                        duration_seconds=args.timer_smoke_duration_seconds,
+                        observe_seconds=args.timer_smoke_observe_seconds,
+                        expiry_grace_seconds=args.timer_smoke_expiry_grace_seconds,
+                    )
+                except Exception as err:  # noqa: BLE001
+                    print(
+                        "FAIL: HA timer smoke aborted: "
+                        f"{format_redacted_exception(err)}"
+                    )
+                    exit_code = 3
+                else:
+                    for result in results:
+                        print(f"{result_prefix(result)}: {result.message}")
                         if not result.ok:
                             exit_code = 3
     finally:

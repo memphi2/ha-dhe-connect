@@ -42,12 +42,16 @@ from .entity_state_helpers import (
     format_minutes_duration,
     measurement_attribute_text,
     merge_state_attributes,
+    switch_state_from_value,
     value_available,
 )
 from .protocol import (
+    BRUSH_TIMER_DEFAULT_DURATION_MINUTES,
     BRUSH_TIMER_PATH,
     ID_BATH_FILL_CURRENT_VOLUME,
     ID_BATH_FILL_REMAINING_VOLUME,
+    ID_BRUSH_TIMER_ACTIVATION,
+    ID_BRUSH_TIMER_DURATION,
     ID_BRUSH_TIMER_REMAINING,
     ID_DEVICE_INFO,
     ID_DEVICE_STATUS,
@@ -81,12 +85,15 @@ from .protocol import (
     ID_SAVING_MONITOR_REAL_WATER,
     ID_SAVING_MONITOR_WATER,
     ID_SCALD_PROTECTION_TEMPERATURE_LIMIT,
+    ID_SHOWER_TIMER_ACTIVATION,
+    ID_SHOWER_TIMER_DURATION,
     ID_SHOWER_TIMER_REMAINING,
     ID_WATER_CONSUMPTION_WEEK,
     ID_WATER_CONSUMPTION_YEAR,
     ID_WATER_CONSUMPTION_YEARS,
     ID_WATER_FLOW,
     ODB_ZERO_REQUEST_READBACK_IGNORE_IDS,
+    SHOWER_TIMER_DEFAULT_DURATION_MINUTES,
     SHOWER_TIMER_PATH,
 )
 from .runtime_helpers import get_runtime_data
@@ -98,6 +105,7 @@ from .sensor_diagnostics import (
 )
 
 DEVICE_STATUS_SERVICE_REQUIRED = _DEVICE_STATUS_SERVICE_REQUIRED
+TIMER_COUNTDOWN_INTERVAL_SECONDS = 1.0
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -106,6 +114,9 @@ class StiebelDHESensorEntityDescription(SensorEntityDescription):
 
     odb_id: int
     attribute_key: str | None = None
+    timer_activation_odb_id: int | None = None
+    timer_duration_odb_id: int | None = None
+    timer_default_duration_minutes: float | None = None
     timer_path: str | None = None
     timer_property: str | None = None
     source_command: str | None = None
@@ -528,6 +539,9 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         translation_key="brush_timer_remaining",
         icon="mdi:toothbrush",
         odb_id=ID_BRUSH_TIMER_REMAINING,
+        timer_activation_odb_id=ID_BRUSH_TIMER_ACTIVATION,
+        timer_duration_odb_id=ID_BRUSH_TIMER_DURATION,
+        timer_default_duration_minutes=BRUSH_TIMER_DEFAULT_DURATION_MINUTES,
         timer_path=BRUSH_TIMER_PATH,
         timer_property="remainingMilliseconds",
     ),
@@ -536,6 +550,9 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         translation_key="shower_timer_remaining",
         icon="mdi:timer-sand",
         odb_id=ID_SHOWER_TIMER_REMAINING,
+        timer_activation_odb_id=ID_SHOWER_TIMER_ACTIVATION,
+        timer_duration_odb_id=ID_SHOWER_TIMER_DURATION,
+        timer_default_duration_minutes=SHOWER_TIMER_DEFAULT_DURATION_MINUTES,
         timer_path=SHOWER_TIMER_PATH,
         timer_property="remainingMilliseconds",
     ),
@@ -690,6 +707,11 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
         self._last_written_recorded_attributes: dict[str, Any] | None = None
         self._missing_measurement_refresh_task: asyncio.Task[Any] | None = None
         self._missing_measurement_refresh_cancel_registered = False
+        self._timer_active = False
+        self._timer_countdown_task: asyncio.Task[Any] | None = None
+        self._timer_countdown_cancel_registered = False
+        self._timer_remaining_base_minutes: float | None = None
+        self._timer_remaining_base_monotonic: float | None = None
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE measurements and start the persistent session."""
@@ -700,9 +722,11 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
             self._client.add_availability_callback(self._handle_availability_update)
         )
 
+        self._sync_timer_activation_from_client()
         last_value = self._client.last_measurements.get(self.entity_description.odb_id)
         if last_value is not None:
             self._update_extra_state_attributes()
+            self._update_timer_remaining_base(last_value)
             self._attr_native_value = self._convert_value(last_value)
             self._attr_available = self._available_from_value(
                 self._client_online(),
@@ -711,6 +735,7 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
             self._last_written_native_value = self._attr_native_value
             self._last_written_monotonic = time.monotonic()
             self._last_written_recorded_attributes = self._recorded_state_attributes()
+            self._schedule_timer_countdown()
         elif self._client.online:
             if self.entity_description.available_without_value:
                 self._update_extra_state_attributes()
@@ -725,6 +750,10 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
         """Request a missing value without duplicating concurrent refreshes."""
         if self._attr_native_value is not None:
             return
+        self._schedule_measurement_refresh()
+
+    def _schedule_measurement_refresh(self) -> None:
+        """Request the current DHE value without duplicating refreshes."""
         task = self._missing_measurement_refresh_task
         if task is not None and not task.done():
             return
@@ -795,6 +824,180 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
 
         return format_minutes_duration(value)
 
+    def _sync_timer_activation_from_client(self) -> None:
+        """Load the latest timer activation state for a timer remaining sensor."""
+        activation_id = self.entity_description.timer_activation_odb_id
+        if activation_id is None:
+            return
+        activation = switch_state_from_value(
+            self._client.last_measurements.get(activation_id)
+        )
+        if activation is not None:
+            self._timer_active = activation
+
+    def _update_timer_remaining_base(self, value: MeasurementValue) -> None:
+        """Store the baseline used for local timer countdown display."""
+        if self.entity_description.timer_activation_odb_id is None:
+            return
+        remaining_minutes = coerce_float(value)
+        if remaining_minutes is None:
+            self._timer_remaining_base_minutes = None
+            self._timer_remaining_base_monotonic = None
+            self._cancel_timer_countdown()
+            return
+        self._timer_remaining_base_minutes = max(0.0, remaining_minutes)
+        self._timer_remaining_base_monotonic = time.monotonic()
+
+    def _timer_remaining_minutes(self) -> float | None:
+        """Return locally adjusted timer remaining minutes."""
+        remaining = self._timer_remaining_base_minutes
+        if remaining is None:
+            return None
+        if not self._timer_active:
+            return remaining
+        started = self._timer_remaining_base_monotonic
+        if started is None:
+            return remaining
+        elapsed_seconds = max(0.0, time.monotonic() - started)
+        return max(0.0, remaining - elapsed_seconds / 60.0)
+
+    def _timer_countdown_native_value(self) -> str | None:
+        """Return the formatted local timer countdown value."""
+        return format_minutes_duration(self._timer_remaining_minutes())
+
+    def _timer_duration_minutes(self) -> float | None:
+        """Return the configured timer duration in minutes."""
+        duration_id = self.entity_description.timer_duration_odb_id
+        duration = None
+        if duration_id is not None:
+            duration = coerce_float(self._client.last_measurements.get(duration_id))
+        if duration is None:
+            duration = self.entity_description.timer_default_duration_minutes
+        if duration is None:
+            return None
+        return max(0.0, duration)
+
+    def _reset_timer_remaining_to_duration(self) -> None:
+        """Reset local timer remaining display to the configured duration."""
+        duration = self._timer_duration_minutes()
+        if duration is None:
+            return
+        self._timer_active = False
+        self._timer_remaining_base_minutes = duration
+        self._timer_remaining_base_monotonic = time.monotonic()
+        native_value = format_minutes_duration(duration)
+        if native_value is None or native_value == self._attr_native_value:
+            return
+        self._attr_native_value = native_value
+        self._attr_available = self._available_from_value(
+            self._client_online(),
+            self._attr_native_value,
+        )
+        self._last_written_native_value = self._attr_native_value
+        self._last_written_monotonic = time.monotonic()
+        self._last_written_recorded_attributes = self._recorded_state_attributes()
+        self.async_write_ha_state()
+
+    @callback
+    def _handle_timer_activation_update(self, value: MeasurementValue) -> None:
+        """Start or stop local countdown when a timer activation changes."""
+        activation = switch_state_from_value(value)
+        if activation is None:
+            activation = False
+        if activation:
+            if not self._timer_active and self._timer_remaining_base_minutes is not None:
+                self._timer_remaining_base_monotonic = time.monotonic()
+            self._timer_active = True
+            if self._timer_remaining_base_minutes is None:
+                self._schedule_missing_measurement_refresh()
+            self._schedule_timer_countdown()
+            return
+
+        if self._timer_active:
+            current_remaining = self._timer_remaining_minutes()
+            if current_remaining is not None and current_remaining <= 0:
+                self._timer_active = False
+                self._cancel_timer_countdown()
+                self._reset_timer_remaining_to_duration()
+                return
+            if current_remaining is not None:
+                self._timer_remaining_base_minutes = current_remaining
+                self._timer_remaining_base_monotonic = time.monotonic()
+                self._write_timer_countdown_state()
+        self._timer_active = False
+        self._cancel_timer_countdown()
+        self._schedule_measurement_refresh()
+
+    def _timer_countdown_should_run(self) -> bool:
+        """Return whether this entity should keep ticking locally."""
+        if not self._timer_active or not self._client_online():
+            return False
+        remaining = self._timer_remaining_minutes()
+        return remaining is not None and remaining > 0
+
+    def _schedule_timer_countdown(self) -> None:
+        """Start local second-by-second countdown for active timers."""
+        if self.entity_description.timer_activation_odb_id is None:
+            return
+        if not self._timer_countdown_should_run():
+            return
+        task = self._timer_countdown_task
+        if task is not None and not task.done():
+            return
+        hass = getattr(self, "hass", None)
+        if hass is None:
+            return
+
+        task = hass.async_create_task(
+            self._async_timer_countdown(),
+            name=f"stiebel_dhe_connect_timer_countdown_{self.entity_description.key}",
+        )
+        self._timer_countdown_task = task
+        if not self._timer_countdown_cancel_registered:
+            self.async_on_remove(self._cancel_timer_countdown)
+            self._timer_countdown_cancel_registered = True
+
+        def _clear_countdown_task(done_task: asyncio.Task[Any]) -> None:
+            if self._timer_countdown_task is done_task:
+                self._timer_countdown_task = None
+
+        task.add_done_callback(_clear_countdown_task)
+
+    def _cancel_timer_countdown(self) -> None:
+        """Cancel the local timer countdown task."""
+        task = self._timer_countdown_task
+        if task is None:
+            return
+        if not task.done():
+            task.cancel()
+        self._timer_countdown_task = None
+
+    async def _async_timer_countdown(self) -> None:
+        """Write locally adjusted timer remaining state while a timer runs."""
+        while self._timer_active and self._client_online():
+            await asyncio.sleep(TIMER_COUNTDOWN_INTERVAL_SECONDS)
+            if not self._timer_active or not self._client_online():
+                break
+            self._write_timer_countdown_state()
+            if not self._timer_countdown_should_run():
+                self._reset_timer_remaining_to_duration()
+                break
+
+    def _write_timer_countdown_state(self) -> None:
+        """Write the locally adjusted timer remaining state when it changed."""
+        native_value = self._timer_countdown_native_value()
+        if native_value is None or native_value == self._attr_native_value:
+            return
+        self._attr_native_value = native_value
+        self._attr_available = self._available_from_value(
+            self._client_online(),
+            self._attr_native_value,
+        )
+        self._last_written_native_value = self._attr_native_value
+        self._last_written_monotonic = time.monotonic()
+        self._last_written_recorded_attributes = self._recorded_state_attributes()
+        self.async_write_ha_state()
+
     def _available_from_value(self, connected: bool, value: MeasurementValue) -> bool:
         """Return whether the sensor should be available for this value."""
         if self.entity_description.available_without_value:
@@ -826,10 +1029,14 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
     @callback
     def _handle_measurement_update(self, odb_id: int, value: MeasurementValue) -> None:
         """Handle converted measurement updates from the persistent client."""
+        if odb_id == self.entity_description.timer_activation_odb_id:
+            self._handle_timer_activation_update(value)
+            return
         if odb_id != self.entity_description.odb_id:
             return
 
         self._update_extra_state_attributes()
+        self._update_timer_remaining_base(value)
         recorded_attributes = self._recorded_state_attributes()
         recorded_attributes_changed = (
             recorded_attributes != self._last_written_recorded_attributes
@@ -843,17 +1050,22 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
             self._attr_native_value,
             recorded_attributes_changed=recorded_attributes_changed,
         ):
+            self._schedule_timer_countdown()
             return
         self._last_written_native_value = self._attr_native_value
         self._last_written_monotonic = time.monotonic()
         self._last_written_recorded_attributes = recorded_attributes
         self.async_write_ha_state()
+        self._schedule_timer_countdown()
 
     @callback
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
+        if not available:
+            self._cancel_timer_countdown()
         if available:
             self._schedule_missing_measurement_refresh()
+            self._schedule_timer_countdown()
         next_available = self._available_from_value(available, self._attr_native_value)
         if self._attr_available == next_available:
             return

@@ -113,9 +113,18 @@ HA_TEST_PASSWORD=your-ha-password \
 python scripts/ha_test_api.py --config /mnt/ha-test-config --cleanup-localhost-tokens
 ```
 
-Only use `--service-smoke` when active service calls are acceptable. It can call
-`climate.turn_off`, `climate.turn_on`, `media_player.turn_off` and
-`media_player.select_source`.
+Use `--entity-smoke` for read-only API validation of the core DHE entities. It
+checks that the climate, radio, weather, connection, live flow/power and timer
+entities are present, available and expose the expected state shape.
+
+Only use `--service-smoke` or `--timer-smoke` when active service calls are
+acceptable. `--service-smoke` can call `climate.turn_off`, `climate.turn_on`,
+`media_player.turn_off` and `media_player.select_source`. `--timer-smoke`
+temporarily changes the brush timer duration, starts/stops the brush timer,
+verifies local countdown, rapid restart, stop readback sync and expiry reset,
+then restores the original timer duration. If the device-status sensor reports
+water running (`status_2` or `status_4`) at the start, `--timer-smoke` skips its
+active timer actions.
 
 The helper tries to revoke its temporary refresh token. If Home Assistant
 rejects that revoke request, use `--cleanup-localhost-tokens` with the mounted

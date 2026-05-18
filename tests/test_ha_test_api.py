@@ -202,6 +202,7 @@ class TestHATestApi(unittest.TestCase):
                     "attributes": {"source": "A", "source_list": ["A", "B"]},
                 },
                 {"state": "playing", "attributes": {"source": "B"}},
+                {"state": "off", "attributes": {"source": "A"}},
             ]
         )
 
@@ -211,10 +212,11 @@ class TestHATestApi(unittest.TestCase):
                 "access",
                 climate_entity="climate.dhe",
                 radio_entity="media_player.radio",
-            )
+        )
 
         self.assertTrue(all(result.ok for result in results))
-        self.assertIn("turn_off_after_smoke", results[-1].message)
+        self.assertEqual(results[0].level, "INFO")
+        self.assertIn("restore_after_smoke", results[-1].message)
         sleep.assert_any_call(25.0)
         self.assertEqual(
             api.calls,
@@ -226,6 +228,11 @@ class TestHATestApi(unittest.TestCase):
                     "media_player",
                     "select_source",
                     {"entity_id": "media_player.radio", "source": "B"},
+                ),
+                (
+                    "media_player",
+                    "select_source",
+                    {"entity_id": "media_player.radio", "source": "A"},
                 ),
                 ("media_player", "turn_off", {"entity_id": "media_player.radio"}),
             ],
@@ -242,6 +249,7 @@ class TestHATestApi(unittest.TestCase):
                     "attributes": {"source": "A", "source_list": ["A", "B"]},
                 },
                 {"state": "idle", "attributes": {"source": "A"}},
+                {"state": "off", "attributes": {"source": "A"}},
             ]
         )
 
@@ -256,11 +264,133 @@ class TestHATestApi(unittest.TestCase):
 
         self.assertFalse(results[-2].ok)
         self.assertIn("selected='B'", results[-2].message)
-        self.assertIn("turn_off_after_smoke", results[-1].message)
+        self.assertIn("restore_after_smoke", results[-1].message)
         self.assertEqual(
             api.calls[-1],
             ("media_player", "turn_off", {"entity_id": "media_player.radio"}),
         )
+
+    def test_service_smoke_fails_when_idle_radio_does_not_restore_to_off(self) -> None:
+        api = _FakeServiceApi(
+            [
+                {"state": "heat", "attributes": {"temperature": 42.0}},
+                {"state": "off", "attributes": {}},
+                {"state": "heat", "attributes": {}},
+                {
+                    "state": "idle",
+                    "attributes": {"source": "A", "source_list": ["A", "B"]},
+                },
+                {"state": "playing", "attributes": {"source": "B"}},
+                {"state": "idle", "attributes": {"source": "A"}},
+            ]
+        )
+
+        with patch.object(ha_test_api.time, "sleep"):
+            results = ha_test_api.run_service_smoke(
+                api,
+                "access",
+                climate_entity="climate.dhe",
+                radio_entity="media_player.radio",
+            )
+
+        self.assertFalse(results[-1].ok)
+        self.assertIn("state='idle'", results[-1].message)
+
+    def test_service_smoke_skips_when_water_is_running(self) -> None:
+        api = _FakeServiceApi([], device_status="status_4")
+
+        results = ha_test_api.run_service_smoke(
+            api,
+            "access",
+            climate_entity="climate.dhe",
+            radio_entity="media_player.radio",
+        )
+
+        self.assertTrue(all(result.ok for result in results))
+        self.assertEqual(results[0].level, "INFO")
+        self.assertIn("skipped", results[-1].message)
+        self.assertEqual(api.calls, [])
+
+    def test_entity_smoke_checks_core_dhe_state_shapes(self) -> None:
+        api = _FakeStateApi(
+            [
+                {
+                    "entity_id": "climate.dhe",
+                    "state": "heat",
+                    "attributes": {"temperature": 42.0},
+                },
+                {
+                    "entity_id": "media_player.radio",
+                    "state": "off",
+                    "attributes": {"source_list": ["A"]},
+                },
+                {
+                    "entity_id": "sensor.connection",
+                    "state": "connected",
+                    "attributes": {},
+                },
+                {
+                    "entity_id": "sensor.power",
+                    "state": "0.0",
+                    "attributes": {},
+                },
+                {
+                    "entity_id": "sensor.timer_remaining",
+                    "state": "1:00",
+                    "attributes": {},
+                },
+                {
+                    "entity_id": "switch.timer",
+                    "state": "off",
+                    "attributes": {},
+                },
+                {
+                    "entity_id": "number.duration",
+                    "state": "60",
+                    "attributes": {},
+                },
+            ]
+        )
+
+        results = ha_test_api.run_entity_smoke(
+            api,
+            "access",
+            entity_ids=(
+                "climate.dhe",
+                "media_player.radio",
+                "sensor.connection",
+                "sensor.power",
+                "sensor.timer_remaining",
+                "switch.timer",
+                "number.duration",
+            ),
+        )
+
+        self.assertTrue(all(result.ok for result in results))
+        self.assertEqual(results[0].level, "INFO")
+
+    def test_entity_smoke_reports_missing_or_bad_entities(self) -> None:
+        api = _FakeStateApi(
+            [
+                {
+                    "entity_id": "sensor.connection",
+                    "state": "unknown",
+                    "attributes": {},
+                },
+            ]
+        )
+
+        results = ha_test_api.run_entity_smoke(
+            api,
+            "access",
+            entity_ids=("sensor.connection", "sensor.missing"),
+        )
+
+        self.assertEqual(results[0].level, "INFO")
+        self.assertFalse(results[1].ok)
+        self.assertIn("unknown", results[1].message)
+        self.assertFalse(results[-1].ok)
+        self.assertIn("missing", results[-1].message)
 
     def test_default_service_smoke_entities_match_current_registry_names(self) -> None:
         self.assertEqual(
@@ -271,6 +401,37 @@ class TestHATestApi(unittest.TestCase):
             ha_test_api.DEFAULT_RADIO_ENTITY,
             "media_player.dhe_connect_radio",
         )
+        self.assertEqual(
+            ha_test_api.DEFAULT_TIMER_REMAINING_ENTITY,
+            "sensor.dhe_connect_brush_timer_remaining",
+        )
+
+    def test_timer_state_seconds_parses_home_assistant_timer_text(self) -> None:
+        self.assertEqual(ha_test_api._timer_state_seconds("1:05"), 65)
+        self.assertEqual(ha_test_api._timer_state_seconds("0:00"), 0)
+        self.assertIsNone(ha_test_api._timer_state_seconds("unknown"))
+        self.assertIsNone(ha_test_api._timer_state_seconds("1:99"))
+
+    def test_timer_smoke_skips_when_water_is_running(self) -> None:
+        api = _FakeServiceApi(
+            [
+                {"state": "180", "attributes": {}},
+            ],
+            device_status="status_2",
+        )
+
+        results = ha_test_api.run_timer_smoke(
+            api,
+            "access",
+            switch_entity="switch.timer",
+            remaining_entity="sensor.timer_remaining",
+            duration_entity="number.duration",
+        )
+
+        self.assertTrue(all(result.ok for result in results))
+        self.assertEqual(results[0].level, "INFO")
+        self.assertIn("skipped", results[-1].message)
+        self.assertEqual(api.calls, [])
 
     def test_wait_online_returns_immediately_without_restart_stability(self) -> None:
         api = ha_test_api.HomeAssistantApi("http://ha.test")
@@ -599,11 +760,19 @@ class TestHATestApi(unittest.TestCase):
 
 
 class _FakeServiceApi:
-    def __init__(self, states: list[dict[str, object]]) -> None:
+    def __init__(
+        self,
+        states: list[dict[str, object]],
+        *,
+        device_status: str = "normal",
+    ) -> None:
         self._states = states
+        self._device_status = device_status
         self.calls: list[tuple[str, str, dict[str, object]]] = []
 
-    def get_state(self, _access_token: str, _entity_id: str) -> dict[str, object]:
+    def get_state(self, _access_token: str, entity_id: str) -> dict[str, object]:
+        if entity_id == "sensor.dhe_connect_device_status":
+            return {"entity_id": entity_id, "state": self._device_status}
         return self._states.pop(0)
 
     def call_service(
@@ -615,6 +784,14 @@ class _FakeServiceApi:
     ) -> list[dict[str, object]]:
         self.calls.append((domain, service, payload))
         return [{"entity_id": payload["entity_id"]}]
+
+
+class _FakeStateApi:
+    def __init__(self, states: list[dict[str, object]]) -> None:
+        self._states = states
+
+    def get_states(self, _access_token: str) -> list[dict[str, object]]:
+        return self._states
 
 
 class _FakeResponse:

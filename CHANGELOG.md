@@ -11,6 +11,12 @@
 
 ### Changed
 
+- Treat startup radio metadata without an explicit playing flag as `off` so HA
+  no longer shows an idle radio after integration start when the DHE radio is not
+  running.
+- Expanded the authenticated HA-Test API smoke checks with read-only core
+  entity validation and a rapid timer restart case so timer task regressions,
+  missing key entities and bad entity state shapes are caught before release.
 - Added an explicit release-check guard for final post-publish validation so
   the current commit can be required to match the published release tag.
 - Made HA-Test localhost-token cleanup retry the mounted auth-file cleanup so
@@ -21,6 +27,12 @@
 
 ### Fixed
 
+- Matched the DHE web UI for brush and shower timer remaining sensors by
+  counting down locally while the corresponding timer activation is on and
+  rebasing the display whenever the DHE sends a new remaining-time event.
+- Restored brush and shower timer remaining values to the configured duration
+  after duration changes, reset commands and timer expiry instead of leaving
+  Home Assistant stuck at `0:00`.
 - Refreshed missing sensor values again when Home Assistant enables an entity
   while the DHE client is offline and the client reconnects afterwards.
 - Updated the HA-Test service-smoke default climate entity to the current

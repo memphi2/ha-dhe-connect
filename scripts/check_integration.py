@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import struct
 import sys
 import unittest
 from pathlib import Path
@@ -18,6 +19,10 @@ PINNED_VALIDATION_ACTIONS = {
     "home-assistant/actions/hassfest",
 }
 _ACTION_REF_RE = re.compile(r"^\s*(?:-\s*)?uses:\s*([^@\s]+)@([^\s#]+)", re.MULTILINE)
+BRAND_PNGS = {
+    "custom_components/stiebel_dhe_connect/brand/icon.png": (256, 256),
+    "custom_components/stiebel_dhe_connect/brand/logo.png": (512, 512),
+}
 
 
 def _load_json(path: Path) -> dict:
@@ -89,13 +94,13 @@ def check_repository_files(version: str) -> None:
         "LICENSE",
         "hacs.json",
         "custom_components/stiebel_dhe_connect/services.yaml",
-        "custom_components/stiebel_dhe_connect/brand/icon.png",
-        "custom_components/stiebel_dhe_connect/brand/logo.png",
+        *BRAND_PNGS,
         "docs/troubleshooting.md",
         "docs/validation.md",
     ):
         if not (ROOT / relative).exists():
             _fail(f"required file missing: {relative}")
+    check_brand_pngs()
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"Current version: `{version}`" not in readme:
@@ -108,6 +113,34 @@ def check_repository_files(version: str) -> None:
         _fail("README validation reference points to docs/validation.md")
     if (ROOT / "info.md").exists():
         _fail("legacy info.md release notes must not be restored; use CHANGELOG.md")
+
+
+def check_brand_pngs() -> None:
+    for relative, expected_size in BRAND_PNGS.items():
+        path = ROOT / relative
+        try:
+            width, height, bit_depth, color_type = _png_ihdr(path)
+        except ValueError as err:
+            _fail(f"{relative} is not a valid PNG: {err}")
+        if (width, height) != expected_size:
+            _fail(
+                f"{relative} is {width}x{height}, expected "
+                f"{expected_size[0]}x{expected_size[1]}"
+            )
+        if bit_depth != 8 or color_type != 6:
+            _fail(f"{relative} must be an 8-bit RGBA PNG")
+
+
+def _png_ihdr(path: Path) -> tuple[int, int, int, int]:
+    with path.open("rb") as file:
+        data = file.read(33)
+    if len(data) < 33 or data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError("bad signature")
+    chunk_length, chunk_type = struct.unpack(">I4s", data[8:16])
+    if chunk_length != 13 or chunk_type != b"IHDR":
+        raise ValueError("missing IHDR")
+    width, height, bit_depth, color_type = struct.unpack(">IIBB", data[16:26])
+    return width, height, bit_depth, color_type
 
 
 def check_github_actions() -> None:

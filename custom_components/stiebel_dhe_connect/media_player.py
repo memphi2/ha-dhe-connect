@@ -34,7 +34,6 @@ from .runtime_helpers import get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
 
-STATE_IDLE = MediaPlayerState.IDLE if MediaPlayerState is not None else "idle"
 STATE_OFF = (
     MediaPlayerState.OFF
     if MediaPlayerState is not None and hasattr(MediaPlayerState, "OFF")
@@ -289,11 +288,17 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
             self._radio_off_requested = False
             self._attr_state = STATE_PLAYING
         elif play is False:
+            current_state = getattr(self, "_attr_state", None)
             self._attr_state = (
-                STATE_OFF if getattr(self, "_radio_off_requested", False) else STATE_PAUSED
+                STATE_OFF
+                if (
+                    getattr(self, "_radio_off_requested", False)
+                    or current_state in {None, STATE_OFF}
+                )
+                else STATE_PAUSED
             )
-        elif state:
-            self._attr_state = STATE_IDLE
+        elif state and getattr(self, "_attr_state", None) is None:
+            self._attr_state = STATE_OFF
 
     def _apply_volume_state(self, state: dict[str, Any]) -> None:
         """Apply HA volume level from the DHE radio state."""

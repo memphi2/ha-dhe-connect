@@ -9,7 +9,7 @@ import types
 import sys
 import time
 import unittest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 try:
     from tests.test_aiohttp_stubs import _ensure_aiohttp_stub
@@ -199,6 +199,285 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         self.assertNotIn("bath_fill_current_volume", sensor_module.SENSOR_WRITE_FILTERS)
         self.assertNotIn("brush_timer_remaining", sensor_module.SENSOR_WRITE_FILTERS)
         self.assertNotIn("shower_timer_remaining", sensor_module.SENSOR_WRITE_FILTERS)
+
+    def test_timer_remaining_counts_down_locally_while_active(self) -> None:
+        sensor_module = _load_sensor_module()
+        protocol_module = _load_component_module("protocol")
+        description = next(
+            item
+            for item in sensor_module.SENSOR_DESCRIPTIONS
+            if item.key == "brush_timer_remaining"
+        )
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+            online = True
+            last_measurements: dict[int, object] = {}
+            last_measurement_attributes: dict[int, dict[str, object]] = {}
+
+        sensor = sensor_module.StiebelDHESensor(
+            entry_id="test-entry",
+            name="Test DHE",
+            client=_FakeClient(),
+            description=description,
+        )
+        writes: list[str | float | None] = []
+        sensor.async_write_ha_state = lambda: writes.append(sensor._attr_native_value)
+
+        with patch.object(sensor_module.time, "monotonic", return_value=100.0):
+            sensor._handle_measurement_update(
+                protocol_module.ID_BRUSH_TIMER_REMAINING,
+                121.0 / 60.0,
+            )
+        with patch.object(sensor_module.time, "monotonic", return_value=101.0):
+            sensor._handle_measurement_update(
+                protocol_module.ID_BRUSH_TIMER_ACTIVATION,
+                True,
+            )
+        with patch.object(sensor_module.time, "monotonic", return_value=108.0):
+            sensor._write_timer_countdown_state()
+
+        self.assertTrue(sensor._timer_active)
+        self.assertEqual(sensor._attr_native_value, "1:54")
+        self.assertEqual(writes, ["2:01", "1:54"])
+
+    def test_timer_remaining_freezes_current_value_when_deactivated(self) -> None:
+        sensor_module = _load_sensor_module()
+        protocol_module = _load_component_module("protocol")
+        description = next(
+            item
+            for item in sensor_module.SENSOR_DESCRIPTIONS
+            if item.key == "shower_timer_remaining"
+        )
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+            online = True
+            last_measurements: dict[int, object] = {}
+            last_measurement_attributes: dict[int, dict[str, object]] = {}
+
+        sensor = sensor_module.StiebelDHESensor(
+            entry_id="test-entry",
+            name="Test DHE",
+            client=_FakeClient(),
+            description=description,
+        )
+        writes: list[str | float | None] = []
+        sensor.async_write_ha_state = lambda: writes.append(sensor._attr_native_value)
+
+        with patch.object(sensor_module.time, "monotonic", return_value=10.0):
+            sensor._handle_measurement_update(
+                protocol_module.ID_SHOWER_TIMER_REMAINING,
+                1.0,
+            )
+            sensor._handle_measurement_update(
+                protocol_module.ID_SHOWER_TIMER_ACTIVATION,
+                True,
+            )
+        with patch.object(sensor_module.time, "monotonic", return_value=20.0):
+            sensor._handle_measurement_update(
+                protocol_module.ID_SHOWER_TIMER_ACTIVATION,
+                False,
+            )
+        with patch.object(sensor_module.time, "monotonic", return_value=40.0):
+            sensor._write_timer_countdown_state()
+
+        self.assertFalse(sensor._timer_active)
+        self.assertEqual(sensor._attr_native_value, "0:50")
+        self.assertEqual(writes, ["1:00", "0:50"])
+
+    def test_timer_stop_refreshes_remaining_from_dhe_even_when_value_exists(self) -> None:
+        sensor_module = _load_sensor_module()
+        protocol_module = _load_component_module("protocol")
+        description = next(
+            item
+            for item in sensor_module.SENSOR_DESCRIPTIONS
+            if item.key == "shower_timer_remaining"
+        )
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+            online = True
+            last_measurements: dict[int, object] = {}
+            last_measurement_attributes: dict[int, dict[str, object]] = {}
+
+            def __init__(self) -> None:
+                self.request_measurement_refresh = AsyncMock()
+
+        class _FakeHass:
+            def __init__(self) -> None:
+                self.tasks = []
+
+            def async_create_task(self, coro, *, name: str | None = None):
+                task = asyncio.create_task(coro, name=name)
+                self.tasks.append(task)
+                return task
+
+        async def _run() -> _FakeClient:
+            client = _FakeClient()
+            hass = _FakeHass()
+            sensor = sensor_module.StiebelDHESensor(
+                entry_id="test-entry",
+                name="Test DHE",
+                client=client,
+                description=description,
+            )
+            sensor.hass = hass
+            sensor.async_on_remove = lambda _callback: None
+            sensor.async_write_ha_state = lambda: None
+
+            with patch.object(sensor_module.time, "monotonic", return_value=10.0):
+                sensor._handle_measurement_update(
+                    protocol_module.ID_SHOWER_TIMER_REMAINING,
+                    1.0,
+                )
+                sensor._handle_measurement_update(
+                    protocol_module.ID_SHOWER_TIMER_ACTIVATION,
+                    True,
+                )
+            with patch.object(sensor_module.time, "monotonic", return_value=20.0):
+                sensor._handle_measurement_update(
+                    protocol_module.ID_SHOWER_TIMER_ACTIVATION,
+                    False,
+                )
+            await asyncio.gather(*hass.tasks, return_exceptions=True)
+            return client
+
+        client = asyncio.run(_run())
+
+        client.request_measurement_refresh.assert_awaited_once_with(
+            odb_id=protocol_module.ID_SHOWER_TIMER_REMAINING,
+            app_command="get:ste.app.showerTimer:remainingMilliseconds",
+        )
+
+    def test_timer_reactivation_restarts_cancelled_countdown_task(self) -> None:
+        sensor_module = _load_sensor_module()
+        protocol_module = _load_component_module("protocol")
+        description = next(
+            item
+            for item in sensor_module.SENSOR_DESCRIPTIONS
+            if item.key == "brush_timer_remaining"
+        )
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+            online = True
+            last_measurements: dict[int, object] = {}
+            last_measurement_attributes: dict[int, dict[str, object]] = {}
+
+            def __init__(self) -> None:
+                self.request_measurement_refresh = AsyncMock()
+
+        class _FakeHass:
+            def __init__(self) -> None:
+                self.tasks: list[asyncio.Task[object]] = []
+
+            def async_create_task(self, coro, *, name: str | None = None):
+                task = asyncio.create_task(coro, name=name)
+                self.tasks.append(task)
+                return task
+
+        async def _run() -> list[asyncio.Task[object]]:
+            client = _FakeClient()
+            hass = _FakeHass()
+            sensor = sensor_module.StiebelDHESensor(
+                entry_id="test-entry",
+                name="Test DHE",
+                client=client,
+                description=description,
+            )
+            sensor.hass = hass
+            sensor.async_on_remove = lambda _callback: None
+            sensor.async_write_ha_state = lambda: None
+
+            with patch.object(sensor_module.time, "monotonic", return_value=10.0):
+                sensor._handle_measurement_update(
+                    protocol_module.ID_BRUSH_TIMER_REMAINING,
+                    1.0,
+                )
+                sensor._handle_measurement_update(
+                    protocol_module.ID_BRUSH_TIMER_ACTIVATION,
+                    True,
+                )
+            first_task = sensor._timer_countdown_task
+            with patch.object(sensor_module.time, "monotonic", return_value=11.0):
+                sensor._handle_measurement_update(
+                    protocol_module.ID_BRUSH_TIMER_ACTIVATION,
+                    False,
+                )
+                sensor._handle_measurement_update(
+                    protocol_module.ID_BRUSH_TIMER_ACTIVATION,
+                    True,
+                )
+            second_task = sensor._timer_countdown_task
+            self.assertIsNotNone(first_task)
+            self.assertIsNotNone(second_task)
+            self.assertIsNot(first_task, second_task)
+            self.assertGreater(first_task.cancelling(), 0)
+            self.assertIn(second_task, hass.tasks)
+            sensor._timer_active = False
+            sensor._cancel_timer_countdown()
+            await asyncio.gather(*hass.tasks, return_exceptions=True)
+            return hass.tasks
+
+        tasks = asyncio.run(_run())
+
+        self.assertGreaterEqual(len(tasks), 2)
+
+    def test_timer_remaining_resets_to_duration_when_expired(self) -> None:
+        sensor_module = _load_sensor_module()
+        protocol_module = _load_component_module("protocol")
+        description = next(
+            item
+            for item in sensor_module.SENSOR_DESCRIPTIONS
+            if item.key == "brush_timer_remaining"
+        )
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+            online = True
+            last_measurements = {
+                protocol_module.ID_BRUSH_TIMER_DURATION: 3.0,
+            }
+            last_measurement_attributes: dict[int, dict[str, object]] = {}
+
+        sensor = sensor_module.StiebelDHESensor(
+            entry_id="test-entry",
+            name="Test DHE",
+            client=_FakeClient(),
+            description=description,
+        )
+        writes: list[str | float | None] = []
+        sensor.async_write_ha_state = lambda: writes.append(sensor._attr_native_value)
+
+        with patch.object(sensor_module.time, "monotonic", return_value=10.0):
+            sensor._handle_measurement_update(
+                protocol_module.ID_BRUSH_TIMER_REMAINING,
+                1.0 / 60.0,
+            )
+            sensor._handle_measurement_update(
+                protocol_module.ID_BRUSH_TIMER_ACTIVATION,
+                True,
+            )
+        with patch.object(sensor_module.time, "monotonic", return_value=12.0):
+            sensor._handle_measurement_update(
+                protocol_module.ID_BRUSH_TIMER_ACTIVATION,
+                False,
+            )
+
+        self.assertFalse(sensor._timer_active)
+        self.assertEqual(sensor._attr_native_value, "3:00")
+        self.assertEqual(writes, ["0:01", "3:00"])
 
     def test_flow_filter_blocks_tiny_jitter_but_allows_visible_delta_or_interval(self) -> None:
         sensor_module = _load_sensor_module()
