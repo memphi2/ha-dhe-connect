@@ -101,6 +101,26 @@ def ensure_homeassistant_stubs() -> None:
 
             persistent_notification.async_create = async_create
             components.persistent_notification = persistent_notification
+        if not hasattr(components, "diagnostics"):
+            diagnostics = _module("homeassistant.components.diagnostics")
+            diagnostics.REDACTED = "**REDACTED**"
+
+            def async_redact_data(value: Any, keys: set[str]) -> Any:
+                if isinstance(value, dict):
+                    return {
+                        key: (
+                            diagnostics.REDACTED
+                            if str(key) in keys
+                            else async_redact_data(item, keys)
+                        )
+                        for key, item in value.items()
+                    }
+                if isinstance(value, list):
+                    return [async_redact_data(item, keys) for item in value]
+                return value
+
+            diagnostics.async_redact_data = async_redact_data
+            components.diagnostics = diagnostics
         if not hasattr(components, "sensor"):
             from dataclasses import dataclass, field
 
@@ -277,6 +297,26 @@ def ensure_homeassistant_stubs() -> None:
 
     persistent_notification.async_create = async_create
     components.persistent_notification = persistent_notification
+
+    diagnostics = _module("homeassistant.components.diagnostics")
+    diagnostics.REDACTED = "**REDACTED**"
+
+    def async_redact_data(value: Any, keys: set[str]) -> Any:
+        if isinstance(value, dict):
+            return {
+                key: (
+                    diagnostics.REDACTED
+                    if str(key) in keys
+                    else async_redact_data(item, keys)
+                )
+                for key, item in value.items()
+            }
+        if isinstance(value, list):
+            return [async_redact_data(item, keys) for item in value]
+        return value
+
+    diagnostics.async_redact_data = async_redact_data
+    components.diagnostics = diagnostics
 
     sensor = _module("homeassistant.components.sensor")
 

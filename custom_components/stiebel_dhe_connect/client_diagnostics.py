@@ -27,12 +27,31 @@ TOKEN_QUERY_RE = re.compile(
     r"(?i)([?&](?:access_token|refresh_token|token|code)=)[^&\s]+"
 )
 URL_CREDENTIAL_RE = re.compile(r"(?i)(https?://)[^/\s:@]+:[^/\s@]+@")
+URL_USERINFO_RE = re.compile(r"(?i)(https?://)[^/\s@]+@")
+URL_HOST_RE = re.compile(
+    r"(?i)\b(https?://)"
+    r"(?:<redacted>@)?"
+    r"(?:\[[^\]\s/]+]|[^/\s:@?#]+)"
+    r"(?::[0-9]+)?"
+)
 PRIVATE_HOST_RE = re.compile(
     r"(?<![0-9])(?:"
     r"10(?:\.[0-9]{1,3}){3}|"
     r"172\.(?:1[6-9]|2[0-9]|3[0-1])(?:\.[0-9]{1,3}){2}|"
     r"192\.168(?:\.[0-9]{1,3}){2}"
     r")(?::[0-9]+)?(?![0-9])"
+)
+LOCAL_HOST_RE = re.compile(
+    r"(?i)(?<![a-z0-9-])"
+    r"(?:[a-z0-9-]+\.)*"
+    r"[a-z0-9-]+\.local\.?"
+    r"(?::[0-9]+)?"
+    r"(?![a-z0-9-])"
+)
+MAC_ADDRESS_RE = re.compile(
+    r"(?i)(?<![0-9a-f])"
+    r"(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}"
+    r"(?![0-9a-f])"
 )
 
 
@@ -41,11 +60,15 @@ def redact_diagnostic_text(value: object) -> str:
     text = str(value)
     text = BEARER_TOKEN_RE.sub("Bearer <redacted>", text)
     text = URL_CREDENTIAL_RE.sub(r"\1<redacted>@", text)
+    text = URL_USERINFO_RE.sub(r"\1<redacted>@", text)
     text = TOKEN_QUERY_RE.sub(r"\1<redacted>", text)
+    text = URL_HOST_RE.sub(r"\1<host>", text)
     text = SECRET_FIELD_RE.sub(r"\1\2<redacted>", text)
     text = AUTHORIZATION_FIELD_RE.sub(r"\1\2<redacted>", text)
     text = TOKEN_FIELD_RE.sub(r"\1\2<redacted>", text)
-    return PRIVATE_HOST_RE.sub("<private-host>", text)
+    text = MAC_ADDRESS_RE.sub("<mac-address>", text)
+    text = PRIVATE_HOST_RE.sub("<private-host>", text)
+    return LOCAL_HOST_RE.sub("<local-host>", text)
 
 
 def _redacted_leaf(value: Any) -> Any:

@@ -35,6 +35,7 @@ files = [
     "custom_components/stiebel_dhe_connect/config_flow_setup.py",
     "custom_components/stiebel_dhe_connect/connection_helpers.py",
     "custom_components/stiebel_dhe_connect/const.py",
+    "custom_components/stiebel_dhe_connect/diagnostics.py",
     "custom_components/stiebel_dhe_connect/engineio_helpers.py",
     "custom_components/stiebel_dhe_connect/entity_helpers.py",
     "custom_components/stiebel_dhe_connect/entity_state_helpers.py",
