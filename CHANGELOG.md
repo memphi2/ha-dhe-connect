@@ -2,12 +2,18 @@
 
 ## Unreleased
 
+- No changes yet.
+
+## v1.5.0 - 2026-05-18
+
 ### Added
 
 - Added an optional setup-time DHE scan in the UI config flow. The first setup
   screen lets the user choose between manual setup and a subnet scan for
   DHE-like web interfaces on port `8443`; the scan can use the current local
-  subnet or an entered IPv4 network with a normal netmask.
+  subnet, entered network address plus subnet mask, or CIDR notation.
+- Added a README pointer and screenshot for the companion
+  `ha-dhe-connect-card` Lovelace dashboard card.
 
 ### Changed
 
@@ -24,6 +30,11 @@
   failed revoke request.
 - Made authenticated release service-smoke request an HA restart before
   fallback auth-file cleanup when token revocation fails.
+- Moved setup-scan subnet input into a dedicated scan step so manual setup no
+  longer shows subnet fields. The scan step now labels network address,
+  subnet mask and CIDR input separately with examples.
+- Prefilled setup-scan network address and subnet mask from Home Assistant's
+  current local subnet when available.
 
 ### Fixed
 
@@ -44,6 +55,8 @@
   supported.
 - Rejected slash-form wildcard masks such as `192.168.1.0/0.0.0.255` so all
   setup scan subnet forms use the same private-network validation rules.
+- Fixed the setup-scan config-flow path so the scan-choice step transitions
+  through a valid subnet form before the progress step.
 
 ## v1.4.2 - 2026-05-17
 

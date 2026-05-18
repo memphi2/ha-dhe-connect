@@ -3,10 +3,18 @@
     "step": {
       "user": {
         "title": "Einrichtung starten",
-        "description": "Standard ist die manuelle Einrichtung. Aktiviere die Suche nur, wenn Home Assistant vorab ein Subnetz nach dem DHE Connect durchsuchen soll. Ohne Subnetzangabe wird das aktuelle lokale Subnetz verwendet.",
+        "description": "Standard ist die manuelle Einrichtung. Aktiviere die Suche nur, wenn Home Assistant vorab ein Subnetz nach dem DHE Connect durchsuchen soll.",
         "data": {
-          "scan_automatically": "Subnetz nach DHE Connect durchsuchen",
-          "scan_subnet": "Zu scannendes Subnetz (z. B. 192.168.1.0 255.255.255.0)"
+          "scan_automatically": "Subnetz nach DHE Connect durchsuchen"
+        }
+      },
+      "subnet_scan": {
+        "title": "Subnetz-Scan",
+        "description": "Netzwerkadresse und Subnetzmaske werden nach Möglichkeit aus dem aktuellen lokalen Subnetz von Home Assistant vorbelegt. Alle Felder leer lassen, um das aktuelle lokale Subnetz zu scannen, oder entweder Netzwerkadresse plus Subnetzmaske oder das CIDR-Subnetz anpassen. Nicht beide Varianten gleichzeitig ausfüllen.",
+        "data": {
+          "scan_network_address": "Netzwerkadresse (z. B. 192.168.1.0)",
+          "scan_netmask": "Subnetzmaske (z. B. 255.255.255.0)",
+          "scan_cidr": "oder CIDR-Subnetz (z. B. 192.168.1.0/24)"
         }
       },
       "manual": {
@@ -41,8 +49,8 @@
       "auth_timeout": "Anmeldung am DHE hat zu lange gedauert. Bitte erneut versuchen.",
       "cannot_connect": "Verbindung zum DHE nicht möglich. IP-Adresse und Port prüfen.",
       "invalid_host": "Ungültiger Host. Bitte nur IP-Adresse oder Hostname ohne Pfad, Benutzername oder Port eingeben.",
-      "invalid_scan_subnet": "Ungültiges Subnetz. Beispiel: 192.168.1.0 255.255.255.0",
-      "scan_subnet_too_large": "Das Subnetz ist zu groß. Bitte ein kleineres privates IPv4-Subnetz verwenden, z. B. 192.168.1.0 255.255.255.0.",
+      "invalid_scan_subnet": "Ungültiges Subnetz. Entweder Netzwerkadresse 192.168.1.0 mit Subnetzmaske 255.255.255.0 oder CIDR 192.168.1.0/24 verwenden.",
+      "scan_subnet_too_large": "Das Subnetz ist zu groß. Bitte ein kleineres privates IPv4-Subnetz verwenden, z. B. Netzwerkadresse 192.168.1.0 mit Subnetzmaske 255.255.255.0 oder CIDR 192.168.1.0/24.",
       "embedded_port_not_supported": "Bitte Port nicht im Hostfeld angeben (z. B. \"192.168.1.10\"). Den Port nur im Port-Feld eintragen.",
       "invalid_port": "Ungültiger Port. Der Port muss zwischen 1 und 65535 liegen.",
       "invalid_internal_scald_protection": "Ungültige Tmax-Jumperposition."

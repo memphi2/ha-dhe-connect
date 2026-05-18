@@ -80,6 +80,8 @@ from .setup_scan import (
     DHEHostCandidate,
     async_scan_dhe_hosts,
     candidate_defaults,
+    ipv4_scan_networks,
+    local_ipv4_addresses_from_hass,
     parse_scan_subnet,
 )
 from .token_file_helpers import (
@@ -94,7 +96,9 @@ SETUP_PAIRING_TIMEOUT_SECONDS = 180.0
 ID_APP_CURRENCY = _ID_APP_CURRENCY
 _currency_options = _schema_currency_options
 CONF_SCAN_AUTOMATICALLY = "scan_automatically"
-CONF_SCAN_SUBNET = "scan_subnet"
+CONF_SCAN_NETWORK_ADDRESS = "scan_network_address"
+CONF_SCAN_NETMASK = "scan_netmask"
+CONF_SCAN_CIDR = "scan_cidr"
 SETUP_SCAN_PROGRESS_ACTION = "scan_dhe"
 
 _LOGGER = logging.getLogger(__name__)
@@ -159,6 +163,45 @@ def _apply_validation_error(errors: dict[str, str], err: ValueError) -> None:
         errors[CONF_HOST] = code
     else:
         errors[CONF_HOST] = "invalid_host"
+
+
+def _scan_subnet_from_input(user_input: dict[str, Any]) -> IPv4Network | None:
+    """Return the optional setup-scan subnet from split form fields."""
+    cidr = str(user_input.get(CONF_SCAN_CIDR) or "").strip()
+    network_address = str(user_input.get(CONF_SCAN_NETWORK_ADDRESS) or "").strip()
+    netmask = str(user_input.get(CONF_SCAN_NETMASK) or "").strip()
+
+    if cidr:
+        if network_address or netmask:
+            raise ValueError("invalid_scan_subnet")
+        return parse_scan_subnet(cidr)
+    if network_address or netmask:
+        if not network_address or not netmask:
+            raise ValueError("invalid_scan_subnet")
+        return parse_scan_subnet(f"{network_address} {netmask}")
+    return None
+
+
+def _scan_subnet_error_field(user_input: dict[str, Any]) -> str:
+    """Return the most helpful form field for a setup-scan subnet error."""
+    if str(user_input.get(CONF_SCAN_CIDR) or "").strip():
+        return CONF_SCAN_CIDR
+    if str(user_input.get(CONF_SCAN_NETMASK) or "").strip() and not str(
+        user_input.get(CONF_SCAN_NETWORK_ADDRESS) or ""
+    ).strip():
+        return CONF_SCAN_NETWORK_ADDRESS
+    if str(user_input.get(CONF_SCAN_NETWORK_ADDRESS) or "").strip():
+        return CONF_SCAN_NETMASK
+    return CONF_SCAN_CIDR
+
+
+def _scan_subnet_form_defaults(network: IPv4Network) -> dict[str, str]:
+    """Return split setup-scan form defaults for one IPv4 network."""
+    return {
+        CONF_SCAN_NETWORK_ADDRESS: str(network.network_address),
+        CONF_SCAN_NETMASK: str(network.netmask),
+        CONF_SCAN_CIDR: "",
+    }
 
 
 def _entry_target(entry: config_entries.ConfigEntry) -> tuple[str, int] | None:
@@ -419,11 +462,48 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_SCAN_AUTOMATICALLY, default=False): bool,
-                    vol.Optional(CONF_SCAN_SUBNET, default=""): str,
                 }
             ),
             errors=errors or {},
         )
+
+    def _show_subnet_scan_form(
+        self,
+        errors: dict[str, str] | None = None,
+        suggested_values: dict[str, Any] | None = None,
+    ) -> config_entries.ConfigFlowResult:
+        """Show optional subnet fields before running the setup scan."""
+        data_schema = vol.Schema(
+            {
+                vol.Optional(CONF_SCAN_NETWORK_ADDRESS): str,
+                vol.Optional(CONF_SCAN_NETMASK): str,
+                vol.Optional(CONF_SCAN_CIDR): str,
+            }
+        )
+        if suggested_values:
+            data_schema = self.add_suggested_values_to_schema(
+                data_schema,
+                suggested_values,
+            )
+        return self.async_show_form(
+            step_id="subnet_scan",
+            data_schema=data_schema,
+            errors=errors or {},
+        )
+
+    async def _async_subnet_scan_form_defaults(self) -> dict[str, str]:
+        """Return setup-scan defaults from Home Assistant's local IPv4 subnet."""
+        try:
+            addresses = await self.hass.async_add_executor_job(
+                local_ipv4_addresses_from_hass,
+                self.hass,
+            )
+        except (AttributeError, OSError, RuntimeError):
+            return {}
+        networks = ipv4_scan_networks(addresses)
+        if not networks:
+            return {}
+        return _scan_subnet_form_defaults(networks[0])
 
     def _show_user_form(
         self,
@@ -481,14 +561,28 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
             return await self.async_step_manual(user_input)
 
         if user_input.get(CONF_SCAN_AUTOMATICALLY):
-            try:
-                scan_subnet = parse_scan_subnet(user_input.get(CONF_SCAN_SUBNET))
-            except ValueError as err:
-                return self._show_setup_choice_form({CONF_SCAN_SUBNET: str(err)})
-            self._setup_scan_networks = [scan_subnet] if scan_subnet else None
-            return await self.async_step_network_scan()
+            return await self.async_step_subnet_scan()
 
         return await self.async_step_manual()
+
+    async def async_step_subnet_scan(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ):
+        """Collect optional subnet input before running the setup scan."""
+        if user_input is None:
+            return self._show_subnet_scan_form(
+                suggested_values=await self._async_subnet_scan_form_defaults()
+            )
+        try:
+            scan_subnet = _scan_subnet_from_input(user_input)
+        except ValueError as err:
+            return self._show_subnet_scan_form(
+                {_scan_subnet_error_field(user_input): str(err)},
+                suggested_values=user_input,
+            )
+        self._setup_scan_networks = [scan_subnet] if scan_subnet else None
+        return await self.async_step_network_scan()
 
     async def async_step_network_scan(
         self,
