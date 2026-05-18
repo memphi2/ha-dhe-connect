@@ -13,6 +13,11 @@
 
 - Added an explicit release-check guard for final post-publish validation so
   the current commit can be required to match the published release tag.
+- Made HA-Test localhost-token cleanup retry the mounted auth-file cleanup so
+  Home Assistant cannot immediately re-persist temporary test tokens after a
+  failed revoke request.
+- Made authenticated release service-smoke request an HA restart before
+  fallback auth-file cleanup when token revocation fails.
 
 ### Fixed
 

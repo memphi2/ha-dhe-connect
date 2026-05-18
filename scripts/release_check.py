@@ -327,6 +327,7 @@ def run_ha_service_smoke(
         password_env,
         "--service-smoke",
         "--cleanup-localhost-tokens",
+        "--restart-before-localhost-cleanup",
     ]
     return check_command(args, runner)
 

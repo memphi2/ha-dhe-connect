@@ -119,7 +119,12 @@ Only use `--service-smoke` when active service calls are acceptable. It can call
 
 The helper tries to revoke its temporary refresh token. If Home Assistant
 rejects that revoke request, use `--cleanup-localhost-tokens` with the mounted
-config so leftover localhost tokens are removed from `.storage/auth`.
+config so leftover localhost tokens are removed from `.storage/auth`. The
+fallback cleanup retries the mounted auth-file cleanup because a running Home
+Assistant instance can briefly re-persist token state after a failed revoke. For
+authenticated service smoke, the release helper restarts HA before the fallback
+cleanup so the mounted auth file is not immediately overwritten by stale runtime
+state.
 
 When `--service-smoke` selects a radio source, it turns the radio off again
 after 30 seconds by default. Use `--radio-auto-off-seconds` only when a longer

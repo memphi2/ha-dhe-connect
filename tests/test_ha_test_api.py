@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 import io
 import json
 import os
@@ -94,6 +95,101 @@ class TestHATestApi(unittest.TestCase):
             self.assertEqual(result.removed, 0)
             self.assertIsNone(result.backup_path)
             self.assertFalse(backup_dir.exists())
+
+    def test_cleanup_backups_use_microsecond_precision(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = Path(temp_dir) / "config"
+            backup_dir = Path(temp_dir) / "backup"
+            _write_auth(config, [{"id": "drop", "client_id": "http://localhost/"}])
+
+            with patch.object(ha_test_api, "datetime") as datetime_mock:
+                datetime_mock.now.side_effect = [
+                    datetime(2026, 5, 18, 7, 0, 0, 111111),
+                    datetime(2026, 5, 18, 7, 0, 0, 222222),
+                ]
+                first = ha_test_api.cleanup_localhost_refresh_tokens(
+                    config,
+                    backup_dir=backup_dir,
+                )
+                (config / ".storage" / "auth").write_text(
+                    json.dumps(
+                        {
+                            "data": {
+                                "refresh_tokens": [
+                                    {
+                                        "id": "drop",
+                                        "client_id": "http://localhost/",
+                                    }
+                                ]
+                            }
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                second = ha_test_api.cleanup_localhost_refresh_tokens(
+                    config,
+                    backup_dir=backup_dir,
+                )
+
+            self.assertIsNotNone(first.backup_path)
+            self.assertIsNotNone(second.backup_path)
+            self.assertNotEqual(first.backup_path, second.backup_path)
+            self.assertTrue(first.backup_path.exists())
+            self.assertTrue(second.backup_path.exists())
+
+    def test_cleanup_retry_repeats_until_auth_file_stays_clean(self) -> None:
+        backup_path = Path("/tmp/auth-backup.json")
+        results = [
+            ha_test_api.TokenCleanupResult(removed=70, backup_path=backup_path),
+            ha_test_api.TokenCleanupResult(removed=1, backup_path=Path("/tmp/again.json")),
+            ha_test_api.TokenCleanupResult(removed=0, backup_path=None),
+        ]
+
+        with (
+            patch.object(
+                ha_test_api,
+                "cleanup_localhost_refresh_tokens",
+                side_effect=results,
+            ) as cleanup,
+            patch.object(ha_test_api.time, "sleep") as sleep,
+        ):
+            result = ha_test_api.cleanup_localhost_refresh_tokens_with_retry(
+                Path("/config"),
+                attempts=5,
+                interval=0.5,
+            )
+
+        self.assertEqual(result.removed, 71)
+        self.assertEqual(result.backup_path, backup_path)
+        self.assertEqual(cleanup.call_count, 3)
+        sleep.assert_any_call(0.5)
+        self.assertEqual(sleep.call_count, 2)
+
+    def test_cleanup_retry_reports_unstable_when_attempts_are_exhausted(self) -> None:
+        backup_path = Path("/tmp/auth-backup.json")
+        results = [
+            ha_test_api.TokenCleanupResult(removed=1, backup_path=backup_path),
+            ha_test_api.TokenCleanupResult(removed=1, backup_path=Path("/tmp/again.json")),
+        ]
+
+        with (
+            patch.object(
+                ha_test_api,
+                "cleanup_localhost_refresh_tokens",
+                side_effect=results,
+            ),
+            patch.object(ha_test_api.time, "sleep") as sleep,
+        ):
+            result = ha_test_api.cleanup_localhost_refresh_tokens_with_retry(
+                Path("/config"),
+                attempts=2,
+                interval=0.5,
+            )
+
+        self.assertEqual(result.removed, 2)
+        self.assertEqual(result.backup_path, backup_path)
+        self.assertFalse(result.stable)
+        sleep.assert_called_once_with(0.5)
 
     def test_service_smoke_reports_successful_climate_and_radio_actions(self) -> None:
         api = _FakeServiceApi(
@@ -324,6 +420,159 @@ class TestHATestApi(unittest.TestCase):
         self.assertNotIn("def456", text)
         self.assertNotIn("secret", text)
         self.assertNotIn(".".join(("172", "16", "1", "147")), text)
+
+    def test_main_still_cleans_tokens_when_pre_cleanup_restart_fails(self) -> None:
+        class _Api:
+            def __init__(self, _url: str) -> None:
+                pass
+
+            def wait_online(self, **_kwargs) -> bool:
+                return True
+
+            def login(self, *_args):
+                return ha_test_api.AuthToken("access", "refresh")
+
+            def revoke_refresh_token(self, _refresh_token: str) -> bool:
+                raise RuntimeError("revoke failed")
+
+            def restart(self, *_args, **_kwargs) -> str:
+                raise RuntimeError("restart failed")
+
+        output = io.StringIO()
+        with (
+            patch.object(ha_test_api, "HomeAssistantApi", _Api),
+            patch.object(
+                ha_test_api,
+                "cleanup_localhost_refresh_tokens_with_retry",
+                return_value=ha_test_api.TokenCleanupResult(removed=1, backup_path=None),
+            ) as cleanup,
+            patch.dict(os.environ, {"HA_TEST_PASSWORD": "secret"}),
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "ha_test_api.py",
+                    "--username",
+                    "test-user",
+                    "--cleanup-localhost-tokens",
+                    "--restart-before-localhost-cleanup",
+                ],
+            ),
+            redirect_stdout(output),
+        ):
+            result = ha_test_api.main()
+
+        self.assertEqual(result, 0)
+        cleanup.assert_called_once()
+        text = output.getvalue()
+        self.assertIn("WARN: restart before localhost token cleanup failed", text)
+        self.assertIn("PASS: localhost token cleanup removed=1", text)
+
+    def test_main_restarts_again_before_cleanup_when_restart_was_requested(self) -> None:
+        instances = []
+
+        class _Api:
+            def __init__(self, _url: str) -> None:
+                self.restart_count = 0
+                instances.append(self)
+
+            def wait_online(self, **_kwargs) -> bool:
+                return True
+
+            def login(self, *_args):
+                return ha_test_api.AuthToken("access", "refresh")
+
+            def restart(self, *_args, **_kwargs) -> str:
+                self.restart_count += 1
+                return "restart requested"
+
+            def revoke_refresh_token(self, _refresh_token: str) -> bool:
+                raise RuntimeError("revoke failed")
+
+        with (
+            patch.object(ha_test_api, "HomeAssistantApi", _Api),
+            patch.object(
+                ha_test_api,
+                "cleanup_localhost_refresh_tokens_with_retry",
+                return_value=ha_test_api.TokenCleanupResult(removed=1, backup_path=None),
+            ),
+            patch.dict(os.environ, {"HA_TEST_PASSWORD": "secret"}),
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "ha_test_api.py",
+                    "--username",
+                    "test-user",
+                    "--restart",
+                    "--cleanup-localhost-tokens",
+                    "--restart-before-localhost-cleanup",
+                ],
+            ),
+        ):
+            result = ha_test_api.main()
+
+        self.assertEqual(result, 0)
+        self.assertEqual(instances[0].restart_count, 2)
+
+    def test_main_returns_failure_when_cleanup_does_not_stabilize(self) -> None:
+        class _Api:
+            def __init__(self, _url: str) -> None:
+                pass
+
+            def wait_online(self, **_kwargs) -> bool:
+                return True
+
+            def login(self, *_args):
+                return ha_test_api.AuthToken("access", "refresh")
+
+            def revoke_refresh_token(self, _refresh_token: str) -> bool:
+                raise RuntimeError("revoke failed")
+
+        output = io.StringIO()
+        with (
+            patch.object(ha_test_api, "HomeAssistantApi", _Api),
+            patch.object(
+                ha_test_api,
+                "cleanup_localhost_refresh_tokens_with_retry",
+                return_value=ha_test_api.TokenCleanupResult(
+                    removed=2,
+                    backup_path=None,
+                    stable=False,
+                ),
+            ),
+            patch.dict(os.environ, {"HA_TEST_PASSWORD": "secret"}),
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "ha_test_api.py",
+                    "--username",
+                    "test-user",
+                    "--cleanup-localhost-tokens",
+                ],
+            ),
+            redirect_stdout(output),
+        ):
+            result = ha_test_api.main()
+
+        self.assertEqual(result, 3)
+        self.assertIn("WARN: localhost token cleanup", output.getvalue())
+
+    def test_parse_args_rejects_negative_cleanup_interval(self) -> None:
+        with (
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "ha_test_api.py",
+                    "--cleanup-localhost-token-interval",
+                    "-0.1",
+                ],
+            ),
+            self.assertRaises(SystemExit),
+        ):
+            ha_test_api._parse_args()
 
     def test_ha_scripts_can_run_directly(self) -> None:
         root = Path(__file__).resolve().parents[1]

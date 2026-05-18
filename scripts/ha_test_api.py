@@ -52,6 +52,7 @@ class TokenCleanupResult:
 
     removed: int
     backup_path: Path | None
+    stable: bool = True
 
 
 @dataclass(frozen=True)
@@ -334,7 +335,7 @@ def cleanup_localhost_refresh_tokens(
     backup_dir.mkdir(parents=True, exist_ok=True)
     backup_path = backup_dir / (
         "ha-test-auth-before-localhost-cleanup-"
-        f"{datetime.now().strftime('%Y%m%d%H%M%S')}.json"
+        f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}.json"
     )
     backup_path.write_text(
         json.dumps(original_data, ensure_ascii=False, indent=2),
@@ -342,6 +343,39 @@ def cleanup_localhost_refresh_tokens(
     )
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     return TokenCleanupResult(removed=removed, backup_path=backup_path)
+
+
+def cleanup_localhost_refresh_tokens_with_retry(
+    config: Path,
+    *,
+    client_id: str = DEFAULT_CLIENT_ID,
+    backup_dir: Path = DEFAULT_BACKUP_DIR,
+    attempts: int = 5,
+    interval: float = 1.0,
+) -> TokenCleanupResult:
+    """Remove localhost refresh tokens until the mounted auth file stays clean."""
+    remaining_attempts = max(1, attempts)
+    total_removed = 0
+    first_backup_path: Path | None = None
+    stable = False
+    for attempt in range(remaining_attempts):
+        result = cleanup_localhost_refresh_tokens(
+            config,
+            client_id=client_id,
+            backup_dir=backup_dir,
+        )
+        total_removed += result.removed
+        first_backup_path = first_backup_path or result.backup_path
+        if result.removed == 0:
+            stable = True
+            break
+        if attempt + 1 < remaining_attempts:
+            time.sleep(interval)
+    return TokenCleanupResult(
+        removed=total_removed,
+        backup_path=first_backup_path,
+        stable=stable,
+    )
 
 
 def run_service_smoke(
@@ -475,6 +509,13 @@ def _env_default(name: str, fallback: str) -> str:
     return os.environ.get(name, fallback)
 
 
+def _non_negative_float(value: str) -> float:
+    parsed = float(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("must be non-negative")
+    return parsed
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run HA API actions against the mounted DHE test installation.",
@@ -536,6 +577,26 @@ def _parse_args() -> argparse.Namespace:
         "--cleanup-localhost-tokens",
         action="store_true",
         help="Remove temporary localhost auth tokens from --config if revoke fails.",
+    )
+    parser.add_argument(
+        "--cleanup-localhost-token-attempts",
+        type=int,
+        default=5,
+        help="Number of mounted-auth cleanup attempts after token revoke failure.",
+    )
+    parser.add_argument(
+        "--cleanup-localhost-token-interval",
+        type=_non_negative_float,
+        default=1.0,
+        help="Seconds to wait between mounted-auth cleanup attempts.",
+    )
+    parser.add_argument(
+        "--restart-before-localhost-cleanup",
+        action="store_true",
+        help=(
+            "Restart HA before mounted-auth cleanup after revoke failure so "
+            "running auth state cannot immediately re-persist stale test tokens."
+        ),
     )
     return parser.parse_args()
 
@@ -621,17 +682,50 @@ def main() -> int:
                 )
                 if args.cleanup_localhost_tokens:
                     try:
-                        cleanup = cleanup_localhost_refresh_tokens(args.config)
+                        if args.restart_before_localhost_cleanup:
+                            try:
+                                restart_result = api.restart(
+                                    token.access_token,
+                                    timeout=args.restart_request_timeout,
+                                )
+                            except Exception as restart_err:  # noqa: BLE001
+                                print(
+                                    "WARN: restart before localhost token cleanup failed: "
+                                    f"{format_redacted_exception(restart_err)}"
+                                )
+                            else:
+                                print(
+                                    "INFO: restart before localhost token cleanup: "
+                                    f"{restart_result}"
+                                )
+                                if not api.wait_online(
+                                    timeout=args.wait_timeout,
+                                    require_seen_down=True,
+                                    settle_seconds=args.restart_settle_seconds,
+                                ):
+                                    print(
+                                        "WARN: HA did not come back online before cleanup"
+                                    )
+                        cleanup = cleanup_localhost_refresh_tokens_with_retry(
+                            args.config,
+                            attempts=args.cleanup_localhost_token_attempts,
+                            interval=args.cleanup_localhost_token_interval,
+                        )
                     except Exception as cleanup_err:  # noqa: BLE001
                         print(
                             "WARN: localhost token cleanup failed: "
                             f"{format_redacted_exception(cleanup_err)}"
                         )
                     else:
+                        prefix = "PASS" if cleanup.stable else "WARN"
                         print(
-                            "PASS: localhost token cleanup "
-                            f"removed={cleanup.removed} backup={cleanup.backup_path}"
+                            f"{prefix}: localhost token cleanup "
+                            f"removed={cleanup.removed} "
+                            f"stable={cleanup.stable} "
+                            f"backup={cleanup.backup_path}"
                         )
+                        if not cleanup.stable:
+                            exit_code = 3
     return exit_code
 
 

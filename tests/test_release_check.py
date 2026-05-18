@@ -434,6 +434,29 @@ class TestReleaseCheck(unittest.TestCase):
         failures = [result.message for result in results if not result.ok]
         self.assertIn("--ha-username is required for service smoke", failures)
 
+    def test_service_smoke_restarts_before_localhost_cleanup(self) -> None:
+        commands: list[tuple[str, ...]] = []
+
+        def _runner(command):
+            commands.append(tuple(command))
+            return release_check.CommandResult(
+                args=tuple(command),
+                returncode=0,
+                stdout="",
+                stderr="",
+            )
+
+        result = release_check.run_ha_service_smoke(
+            config=Path("/config"),
+            url="http://ha.test",
+            username="user",
+            password_env="HA_TEST_PASSWORD",
+            runner=_runner,
+        )
+
+        self.assertTrue(result.ok)
+        self.assertIn("--restart-before-localhost-cleanup", commands[0])
+
     def test_local_checks_include_type_gate(self) -> None:
         args = release_check._parse_args(
             [
