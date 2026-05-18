@@ -246,12 +246,16 @@ It checks the manifest, HACS metadata, required repository files, release-note s
 
 The full validation and release-readiness flow, including type checks, fake-DHE tests, Home Assistant fixture tests, mounted HA smoke checks and release checks, lives in [docs/validation.md](docs/validation.md).
 
-Release candidates should also pass the real Zeroconf/mDNS smoke gate from a
-network where the DHE advertisement is visible:
+Release candidates should also pass the optional real Zeroconf/mDNS smoke gate
+from the release-lab network where the DHE advertisement is expected to be
+visible:
 
 ```bash
 python scripts/zeroconf_smoke.py --timeout 20
 ```
+
+This is not a universal CI check. It depends on local multicast visibility and
+can fail in VLAN or firewall setups even when the integration code is correct.
 
 ## Security notes
 
