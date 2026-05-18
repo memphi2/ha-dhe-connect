@@ -204,10 +204,13 @@ def check_head_matches_tag(version: str, runner: Runner) -> CheckResult:
     )
     if tag_commit.returncode != 0:
         return CheckResult(False, _command_failed_message(tag_commit))
-    matches = head.stdout.strip() == tag_commit.stdout.strip()
+    head_sha = head.stdout.strip()
+    tag_sha = tag_commit.stdout.strip()
+    if head_sha == tag_sha:
+        return CheckResult(True, f"HEAD matches release tag {tag} ({head_sha[:12]})")
     return CheckResult(
-        matches,
-        f"HEAD matches release tag {tag}",
+        False,
+        f"HEAD {head_sha[:12]} does not match release tag {tag} ({tag_sha[:12]})",
     )
 
 

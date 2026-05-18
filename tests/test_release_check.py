@@ -192,6 +192,7 @@ class TestReleaseCheck(unittest.TestCase):
         result = release_check.check_head_matches_tag("1.3.2", _runner)
 
         self.assertTrue(result.ok)
+        self.assertEqual(result.message, "HEAD matches release tag v1.3.2 (abc123)")
         self.assertEqual(
             calls,
             [
@@ -208,7 +209,11 @@ class TestReleaseCheck(unittest.TestCase):
 
     def test_head_tag_check_rejects_head_after_release_tag(self) -> None:
         def _runner(args):
-            stdout = "head-sha\n" if args[-1] == "HEAD" else "tag-sha\n"
+            stdout = (
+                "123456789abcde\n"
+                if args[-1] == "HEAD"
+                else "fedcba98765432\n"
+            )
             return release_check.CommandResult(
                 args=tuple(args),
                 returncode=0,
@@ -219,7 +224,10 @@ class TestReleaseCheck(unittest.TestCase):
         result = release_check.check_head_matches_tag("1.3.2", _runner)
 
         self.assertFalse(result.ok)
-        self.assertEqual(result.message, "HEAD matches release tag v1.3.2")
+        self.assertEqual(
+            result.message,
+            "HEAD 123456789abc does not match release tag v1.3.2 (fedcba987654)",
+        )
 
     def test_github_release_absent_accepts_only_not_found_response(self) -> None:
         def _runner(args):
@@ -484,7 +492,12 @@ class TestReleaseCheck(unittest.TestCase):
         ):
             results = release_check.collect_results(args, _runner)
 
-        self.assertTrue(any(result.message == "HEAD matches release tag v1.3.2" for result in results))
+        self.assertTrue(
+            any(
+                result.message == "HEAD matches release tag v1.3.2 (abc123)"
+                for result in results
+            )
+        )
         self.assertIn(("git", "rev-parse", "HEAD"), commands)
 
     def test_service_smoke_defaults_to_portable_local_ha_url(self) -> None:
