@@ -38,12 +38,12 @@ class TestSetupScan(unittest.TestCase):
 
     def test_ipv4_scan_networks_include_current_private_24_only(self) -> None:
         networks = setup_scan.ipv4_scan_networks(
-            {"127.0.0.1", "169.254.1.1", "172.16.1.147"}
+            {"127.0.0.1", "169.254.1.1", "192.168.1.147"}
         )
 
         self.assertEqual(
             [str(network) for network in networks],
-            ["172.16.1.0/24"],
+            ["192.168.1.0/24"],
         )
 
     def test_ipv4_scan_networks_preserve_input_order(self) -> None:
