@@ -16,7 +16,7 @@ files = [
     "custom_components/stiebel_dhe_connect/client_errors.py",
     "custom_components/stiebel_dhe_connect/client_mapping.py",
     "custom_components/stiebel_dhe_connect/client_pairing.py",
-    "custom_components/stiebel_dhe_connect/client_reconnect_manager.py",
+    "custom_components/stiebel_dhe_connect/client_connection_supervisor.py",
     "custom_components/stiebel_dhe_connect/client_radio_commands.py",
     "custom_components/stiebel_dhe_connect/client_runtime.py",
     "custom_components/stiebel_dhe_connect/client_runtime_app.py",

@@ -23,7 +23,7 @@ from .client_errors import (
     suppress_transport_errors as _suppress_transport_errors,
 )
 from .client_pairing import DHEClientPairingMixin
-from .client_reconnect_manager import DHEReconnectManager
+from .client_connection_supervisor import DHEConnectionSupervisor
 from .client_runtime import DHEClientRuntimeMixin
 from .client_transport import DHEClientTransportMixin
 from .client_types import (
@@ -114,7 +114,7 @@ class DHEClient(
         self._last_message_monotonic: float | None = None
         self._message_count = 0
         self._diagnostic_state: dict[str, Any] = {"connection_state": "starting"}
-        self._reconnect_manager = DHEReconnectManager()
+        self._connection_supervisor = DHEConnectionSupervisor()
         self._reconnect_grace_task: asyncio.Task[None] | None = None
         self._last_setpoint: float | None = None
         self._last_measurements: dict[int, MeasurementValue] = {}
@@ -612,10 +612,10 @@ class DHEClient(
         *,
         immediate_availability: bool = False,
     ) -> float:
-        self._reconnect_manager.mark_disconnected()
-        delay = self._reconnect_manager.next_delay()
+        self._connection_supervisor.mark_disconnected()
+        delay = self._connection_supervisor.next_delay()
         self._set_online(False)
-        if immediate_availability or self._reconnect_manager.should_mark_unavailable:
+        if immediate_availability or self._connection_supervisor.should_mark_unavailable:
             self._set_available(False, immediate=True)
         else:
             self._schedule_reconnect_grace_timer()
@@ -627,7 +627,7 @@ class DHEClient(
         return delay
 
     def _schedule_reconnect_grace_timer(self) -> None:
-        remaining = self._reconnect_manager.grace_seconds_remaining()
+        remaining = self._connection_supervisor.grace_seconds_remaining()
         if remaining is None or remaining <= 0:
             self._set_available(False, immediate=True)
             return
@@ -652,7 +652,7 @@ class DHEClient(
                 self._ctx is None
                 and not self._ready.is_set()
                 and not self._stopped.is_set()
-                and self._reconnect_manager.should_mark_unavailable
+                and self._connection_supervisor.should_mark_unavailable
             ):
                 self._emit_availability(False)
         except asyncio.CancelledError:

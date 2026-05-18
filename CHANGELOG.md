@@ -12,7 +12,7 @@
 - Kept the released v1.5.0 device/entity surface as the stable baseline after
   dropping the experimental Bluetooth pairing entities from the development
   branch.
-- Replaced the delayed unavailable task with an internal reconnect manager. Short
+- Replaced the delayed unavailable task with an internal connection supervisor. Short
   transport drops now stay in a reconnect grace window while the diagnostic
   connection state reports `reconnecting`; repeated failures then mark entities
   unavailable and use capped exponential retry delays.
