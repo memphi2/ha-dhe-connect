@@ -2,25 +2,7 @@
 
 ## Unreleased
 
-- Home Assistant and HACS display names now use `DHE Connect`; the repository
-  documentation keeps the unofficial community-project disclaimer.
-- Added Home Assistant Reconfigure flow support for updating the existing DHE
-  entry without changing entity IDs or config-entry identity.
-- Added fixable Home Assistant Repairs issue support for rejected stored DHE
-  pairing tokens, backed by the existing pairing validation path.
-- Fixed DHE radio state handling so Home Assistant source selection and live
-  radio metadata updates can recover a stale `off` media-player state without
-  losing the restored pre-restart media-player state; fresh installs still
-  fall back to `off` when the DHE does not publish playback state.
-- Fixed host-change/reconfigure cleanup by keeping HA device identity stable
-  across IP/hostname changes and merging empty host-derived legacy devices.
-- Hardened setup after restart by falling back from an unreachable option
-  hostname to the original paired config-entry target before marking the entry
-  not ready.
-- Fixed Home Assistant state-class metadata for diagnostic ODB energy and water
-  saving totals and documented their expected first-use `unknown` startup state.
-- Expanded validation documentation with Bronze, Silver and Gold-core evidence
-  mapping plus the live checks needed for Repairs/Reconfigure.
+- No changes yet.
 
 ## v1.6.0 - 2026-05-20
 

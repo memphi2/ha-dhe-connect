@@ -284,7 +284,9 @@ def setup_scan_status_text(
 def scan_hosts(networks: Sequence[IPv4Network], *, max_hosts: int) -> list[str]:
     """Expand networks into host addresses, capped for setup responsiveness."""
     hosts: list[str] = []
-    iterators: list[Iterator[IPv4Address]] = [network.hosts() for network in networks]
+    iterators: list[Iterator[IPv4Address]] = []
+    for network in networks:
+        iterators.append(iter(network.hosts()))
     while iterators and len(hosts) < max_hosts:
         next_round: list[Iterator[IPv4Address]] = []
         for iterator in iterators:
