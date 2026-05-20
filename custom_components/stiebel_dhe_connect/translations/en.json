@@ -108,7 +108,6 @@
   "issues": {
     "pairing_required": {
       "title": "DHE pairing needs repair",
-      "description": "Home Assistant can reach **{name}**, but the DHE no longer accepts the stored local pairing token. Start the repair and confirm the new pairing request on the DHE display.",
       "fix_flow": {
         "step": {
           "confirm": {

@@ -108,7 +108,6 @@
   "issues": {
     "pairing_required": {
       "title": "DHE-Pairing muss repariert werden",
-      "description": "Home Assistant erreicht **{name}**, aber der DHE akzeptiert das gespeicherte lokale Pairing-Token nicht mehr. Starte die Reparatur und bestätige die neue Pairing-Anfrage am DHE-Display.",
       "fix_flow": {
         "step": {
           "confirm": {
