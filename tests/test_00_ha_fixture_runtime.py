@@ -1,0 +1,1903 @@
+"""Runtime tests using Home Assistant's real pytest fixtures."""
+
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Callable
+import importlib
+from ipaddress import ip_address, ip_network
+from pathlib import Path
+import sys
+import types
+from typing import Any
+from unittest.mock import AsyncMock, patch
+
+import pytest
+import pytest_homeassistant_custom_component
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_test_home_assistant,
+)
+
+from homeassistant import config_entries, loader
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
+from homeassistant.helpers import entity_registry as er
+
+
+pytestmark = pytest.mark.asyncio
+DOMAIN = "stiebel_dhe_connect"
+DEFAULT_PORT = 8443
+ROOT = Path(__file__).resolve().parents[1]
+_DEFAULT_ZEROCONF_HOST = object()
+
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+try:
+    from tests.test_fake_dhe_engineio_server import (
+        FakeDHEEngineIOServer,
+        PAIRING_TOKEN,
+    )
+except ModuleNotFoundError:
+    from test_fake_dhe_engineio_server import (
+        FakeDHEEngineIOServer,
+        PAIRING_TOKEN,
+    )
+
+
+@pytest.fixture(autouse=True)
+def _isolate_discovery_cache():
+    """Keep persisted discovery prompts from leaking between HA fixture tests."""
+    cache_path = (
+        Path(pytest_homeassistant_custom_component.__file__).resolve().parent
+        / "testing_config"
+        / ".storage"
+        / "stiebel_dhe_connect_discovery_cache"
+    )
+    cache_path.unlink(missing_ok=True)
+    yield
+    cache_path.unlink(missing_ok=True)
+
+
+def _schema_defaults(schema: Any) -> dict[str, Any]:
+    """Return voluptuous marker defaults from a flow schema."""
+    defaults: dict[str, Any] = {}
+    for marker in getattr(schema, "schema", {}):
+        key = getattr(marker, "schema", None)
+        default = getattr(marker, "default", None)
+        if callable(default):
+            default = default()
+        defaults[key] = default
+    return defaults
+
+
+def _schema_suggested_values(schema: Any) -> dict[str, Any]:
+    """Return Home Assistant suggested values from a flow schema."""
+    suggested_values: dict[str, Any] = {}
+    for marker in getattr(schema, "schema", {}):
+        key = getattr(marker, "schema", None)
+        description = getattr(marker, "description", None) or {}
+        if "suggested_value" in description:
+            suggested_values[key] = description["suggested_value"]
+    return suggested_values
+
+
+async def _ensure_network_loaded(hass: HomeAssistant) -> None:
+    """Load HA's network singleton before aiohttp creates its DNS resolver."""
+    network_module = importlib.import_module("homeassistant.components.network")
+    async_get_network = getattr(network_module, "async_get_network", None)
+    if async_get_network is None:
+        network_module = importlib.import_module(
+            "homeassistant.components.network.network"
+        )
+        async_get_network = getattr(network_module, "async_get_network")
+    await async_get_network(hass)
+
+
+class _FixtureDHEClient:
+    """Minimal DHE client test double for real Home Assistant runtime setup."""
+
+    host = "127.0.0.1"
+    port = DEFAULT_PORT
+    legacy_device_identifier = None
+    available = True
+    online = True
+    reconnect_count = 0
+    last_setpoint = 39.5
+
+    def __init__(
+        self,
+        *,
+        host: str = "127.0.0.1",
+        port: int = DEFAULT_PORT,
+        last_setpoint: float = 39.5,
+    ) -> None:
+        self.host = host
+        self.port = port
+        self.last_setpoint = last_setpoint
+        self.last_measurements: dict[int, Any] = {}
+        self.last_measurement_attributes: dict[int, dict[str, Any]] = {}
+        self.last_device_info: dict[str, Any] = {}
+        self.last_radio_state: dict[str, Any] = {}
+        self.last_weather_state: dict[str, Any] = {}
+        self.last_wellness_programs: tuple[dict[str, Any], ...] = ()
+        self.weather_search_results: list[dict[str, Any]] = []
+        self.diagnostic_state: dict[str, Any] = {}
+        self.start_called = False
+        self.stop_called = False
+        self.weather_search_calls: list[tuple[str, int]] = []
+        self.weather_add_calls: list[dict[str, Any]] = []
+        self.weather_toggle_calls: list[dict[str, Any]] = []
+        self.weather_remove_calls: list[dict[str, Any]] = []
+        self.weather_select_calls: list[dict[str, Any] | str] = []
+        self.repair_pairing_calls = 0
+        self._stopped = asyncio.Event()
+        self.callbacks: dict[str, list[Callable[..., None]]] = {
+            "availability": [],
+            "diagnostic": [],
+            "measurement": [],
+            "radio": [],
+            "reconnect": [],
+            "setpoint": [],
+            "weather": [],
+            "wellness_programs": [],
+        }
+
+    async def start(self) -> None:
+        """Mimic the long-running DHE background session."""
+        self.start_called = True
+        try:
+            await self._stopped.wait()
+        except asyncio.CancelledError:
+            raise
+
+    async def stop(self) -> None:
+        """Stop the fake background session."""
+        self.stop_called = True
+        self._stopped.set()
+
+    async def request_measurement_refresh(self, **_kwargs: Any) -> None:
+        """Mock a measurement refresh request from the sensor runtime path."""
+        return None
+
+    async def search_weather_locations(
+        self,
+        name: str,
+        country_id: int,
+    ) -> list[dict[str, Any]]:
+        """Record a weather search and return configured fake results."""
+        self.weather_search_calls.append((name, int(country_id)))
+        self.last_weather_state["forecast_results"] = list(self.weather_search_results)
+        self.emit_weather(self.last_weather_state)
+        return list(self.weather_search_results)
+
+    async def add_weather_favorite(self, location: dict[str, Any]) -> bool:
+        """Record a weather favorite add call."""
+        self.weather_add_calls.append(dict(location))
+        return True
+
+    async def toggle_weather_favorite(self, location: dict[str, Any]) -> bool:
+        """Record a weather favorite toggle call."""
+        self.weather_toggle_calls.append(dict(location))
+        return True
+
+    async def remove_weather_favorite(self, location: dict[str, Any]) -> bool:
+        """Record a weather favorite remove call."""
+        self.weather_remove_calls.append(dict(location))
+        return True
+
+    async def select_weather_location(self, location: dict[str, Any] | str) -> bool:
+        """Record a weather location selection call."""
+        if isinstance(location, dict):
+            self.weather_select_calls.append(dict(location))
+        else:
+            self.weather_select_calls.append(str(location))
+        return True
+
+    async def repair_pairing(self) -> bool:
+        """Record a repair pairing button call."""
+        self.repair_pairing_calls += 1
+        return True
+
+    def emit_availability(self, available: bool) -> None:
+        """Emit availability to registered entities."""
+        self.available = available
+        for callback_fn in list(self.callbacks["availability"]):
+            callback_fn(available)
+
+    def emit_weather(self, state: dict[str, Any]) -> None:
+        """Emit weather state to registered entities."""
+        self.last_weather_state = dict(state)
+        for callback_fn in list(self.callbacks["weather"]):
+            callback_fn(self.last_weather_state)
+
+    def emit_measurement(
+        self,
+        odb_id: int,
+        value: Any,
+        attributes: dict[str, Any] | None = None,
+    ) -> None:
+        """Emit one measurement to registered entities."""
+        self.last_measurements[odb_id] = value
+        if attributes is not None:
+            self.last_measurement_attributes[odb_id] = dict(attributes)
+        for callback_fn in list(self.callbacks["measurement"]):
+            callback_fn(odb_id, value)
+
+    def emit_reconnect(self, reconnect_count: int) -> None:
+        """Emit a reconnect-count update to registered entities."""
+        self.reconnect_count = reconnect_count
+        for callback_fn in list(self.callbacks["reconnect"]):
+            callback_fn(reconnect_count)
+
+    def emit_diagnostic(self, state: dict[str, Any]) -> None:
+        """Emit a diagnostic-state update to registered entities."""
+        self.diagnostic_state = dict(state)
+        for callback_fn in list(self.callbacks["diagnostic"]):
+            callback_fn(self.diagnostic_state)
+
+    @callback
+    def add_availability_callback(self, callback_fn: Callable[[bool], None]):
+        self.callbacks["availability"].append(callback_fn)
+        callback_fn(self.available)
+        return lambda: self.callbacks["availability"].remove(callback_fn)
+
+    @callback
+    def add_diagnostic_callback(self, callback_fn: Callable[[dict[str, Any]], None]):
+        self.callbacks["diagnostic"].append(callback_fn)
+        callback_fn(self.diagnostic_state)
+        return lambda: self.callbacks["diagnostic"].remove(callback_fn)
+
+    @callback
+    def add_measurement_callback(self, callback_fn: Callable[[int, Any], None]):
+        self.callbacks["measurement"].append(callback_fn)
+        return lambda: self.callbacks["measurement"].remove(callback_fn)
+
+    @callback
+    def add_radio_callback(self, callback_fn: Callable[[dict[str, Any]], None]):
+        self.callbacks["radio"].append(callback_fn)
+        callback_fn(self.last_radio_state)
+        return lambda: self.callbacks["radio"].remove(callback_fn)
+
+    @callback
+    def add_reconnect_callback(self, callback_fn: Callable[[int], None]):
+        self.callbacks["reconnect"].append(callback_fn)
+        callback_fn(self.reconnect_count)
+        return lambda: self.callbacks["reconnect"].remove(callback_fn)
+
+    @callback
+    def add_setpoint_callback(self, callback_fn: Callable[[float], None]):
+        self.callbacks["setpoint"].append(callback_fn)
+        callback_fn(self.last_setpoint)
+        return lambda: self.callbacks["setpoint"].remove(callback_fn)
+
+    @callback
+    def add_weather_callback(self, callback_fn: Callable[[dict[str, Any]], None]):
+        self.callbacks["weather"].append(callback_fn)
+        callback_fn(self.last_weather_state)
+        return lambda: self.callbacks["weather"].remove(callback_fn)
+
+    @callback
+    def add_wellness_programs_callback(
+        self,
+        callback_fn: Callable[[tuple[dict[str, Any], ...]], None],
+    ):
+        self.callbacks["wellness_programs"].append(callback_fn)
+        callback_fn(self.last_wellness_programs)
+        return lambda: self.callbacks["wellness_programs"].remove(callback_fn)
+
+
+async def test_entry_setup_and_unload_with_real_hass_fixture() -> None:
+    """Set up and unload the integration through HA's ConfigEntries manager."""
+    _clear_loaded_integration_modules()
+    integration = importlib.import_module(f"custom_components.{DOMAIN}")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        await _assert_entry_setup_and_unload(hass, integration)
+
+
+async def test_async_setup_registers_services_before_entry_load() -> None:
+    """Register integration services at domain setup time."""
+    _clear_loaded_integration_modules()
+    integration = importlib.import_module(f"custom_components.{DOMAIN}")
+    async with async_test_home_assistant() as hass:
+        assert await integration.async_setup(hass, {})
+        assert hass.services.has_service(DOMAIN, "search_weather_location")
+
+        with pytest.raises(HomeAssistantError, match="not loaded"):
+            await hass.services.async_call(
+                DOMAIN,
+                "search_weather_location",
+                {"name": "Berlin", "country_id": 49},
+                blocking=True,
+            )
+
+
+async def test_entry_setup_raises_not_ready_when_target_unreachable() -> None:
+    """Do not set up platforms until the configured DHE endpoint responds."""
+    _clear_loaded_integration_modules()
+    integration = importlib.import_module(f"custom_components.{DOMAIN}")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        entry = _build_mock_entry(
+            host="offline-dhe.local",
+            port=DEFAULT_PORT,
+            name="Offline Fixture DHE",
+            unique_id="offline-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+
+        with patch.object(
+            integration,
+            "_async_can_connect",
+            AsyncMock(return_value=False),
+        ):
+            with pytest.raises(ConfigEntryNotReady):
+                await integration.async_setup_entry(hass, entry)
+
+
+async def test_entry_reload_restarts_client_with_real_hass_fixture() -> None:
+    """Reload through HA and assert runtime cleanup/startup remains balanced."""
+    _clear_loaded_integration_modules()
+    integration = importlib.import_module(f"custom_components.{DOMAIN}")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        first_client = _FixtureDHEClient()
+        second_client = _FixtureDHEClient(last_setpoint=41.0)
+        entry = _build_mock_entry(
+            host=first_client.host,
+            port=first_client.port,
+            name="Reload Fixture DHE",
+            unique_id="reload-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+
+        with (
+            patch.object(
+                integration,
+                "DHEClient",
+                side_effect=[first_client, second_client],
+            ),
+            patch.object(integration, "_async_can_connect", AsyncMock(return_value=True)),
+        ):
+            assert await hass.config_entries.async_setup(entry.entry_id)
+            await hass.async_block_till_done()
+            assert await hass.config_entries.async_reload(entry.entry_id)
+            await hass.async_block_till_done()
+
+        assert first_client.stop_called
+        assert second_client.start_called
+        assert entry.state is ConfigEntryState.LOADED
+        assert entry.runtime_data.client is second_client
+        assert hass.services.has_service(DOMAIN, "search_weather_location")
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+        assert second_client.stop_called
+        assert not hass.services.has_service(DOMAIN, "search_weather_location")
+
+
+async def test_runtime_auth_failure_starts_reauth_once_with_real_hass_fixture() -> None:
+    """Auth-failure diagnostics from the client start HA reauth once."""
+    _clear_loaded_integration_modules()
+    integration = importlib.import_module(f"custom_components.{DOMAIN}")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        client = _FixtureDHEClient()
+        entry = _build_mock_entry(
+            host=client.host,
+            port=client.port,
+            name="Auth Failure Fixture DHE",
+            unique_id="auth-failure-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+
+        with (
+            patch.object(integration, "DHEClient", return_value=client),
+            patch.object(integration, "_async_can_connect", AsyncMock(return_value=True)),
+        ):
+            assert await hass.config_entries.async_setup(entry.entry_id)
+            await hass.async_block_till_done()
+
+        with patch.object(entry, "async_start_reauth") as start_reauth:
+            client.emit_diagnostic({"connection_state": "auth_failed"})
+            client.emit_diagnostic({"auth_failure": True})
+            await hass.async_block_till_done()
+
+        start_reauth.assert_called_once()
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
+
+async def test_multiple_entries_keep_services_and_unique_ids_separate() -> None:
+    """Load two DHE entries and verify service lifetime plus entity IDs."""
+    _clear_loaded_integration_modules()
+    integration = importlib.import_module(f"custom_components.{DOMAIN}")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        client_one = _FixtureDHEClient(host="127.0.0.1", port=8443)
+        client_two = _FixtureDHEClient(host="127.0.0.2", port=8444)
+        entry_one = _build_mock_entry(
+            host=client_one.host,
+            port=client_one.port,
+            name="Fixture DHE One",
+            unique_id="fixture-dhe-one",
+        )
+        entry_two = _build_mock_entry(
+            host=client_two.host,
+            port=client_two.port,
+            name="Fixture DHE Two",
+            unique_id="fixture-dhe-two",
+        )
+        entry_one.add_to_hass(hass)
+        entry_two.add_to_hass(hass)
+
+        with (
+            patch.object(
+                integration,
+                "DHEClient",
+                side_effect=[client_one, client_two],
+            ),
+            patch.object(integration, "_async_can_connect", AsyncMock(return_value=True)),
+        ):
+            assert await hass.config_entries.async_setup(entry_one.entry_id)
+            if entry_two.state is ConfigEntryState.NOT_LOADED:
+                assert await hass.config_entries.async_setup(entry_two.entry_id)
+            await hass.async_block_till_done()
+
+        registry = er.async_get(hass)
+        climate_entries = [
+            entity
+            for entity in er.async_entries_for_config_entry(registry, entry_one.entry_id)
+            + er.async_entries_for_config_entry(registry, entry_two.entry_id)
+            if entity.domain == "climate"
+        ]
+        unique_ids = {entity.unique_id for entity in climate_entries}
+
+        assert entry_one.state is ConfigEntryState.LOADED
+        assert entry_two.state is ConfigEntryState.LOADED
+        assert len(climate_entries) == 2
+        assert len(unique_ids) == 2
+        assert any(entry_one.entry_id in unique_id for unique_id in unique_ids)
+        assert any(entry_two.entry_id in unique_id for unique_id in unique_ids)
+        assert hass.services.has_service(DOMAIN, "search_weather_location")
+
+        assert await hass.config_entries.async_unload(entry_one.entry_id)
+        await hass.async_block_till_done()
+        assert client_one.stop_called
+        assert hass.services.has_service(DOMAIN, "search_weather_location")
+
+        assert await hass.config_entries.async_unload(entry_two.entry_id)
+        await hass.async_block_till_done()
+        assert client_two.stop_called
+        assert not hass.services.has_service(DOMAIN, "search_weather_location")
+
+
+async def test_services_route_to_requested_entry_with_real_hass_fixture() -> None:
+    """Call registered services through HA and verify entry_id routing."""
+    _clear_loaded_integration_modules()
+    integration = importlib.import_module(f"custom_components.{DOMAIN}")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        client_one = _FixtureDHEClient(host="127.0.0.1", port=8443)
+        client_two = _FixtureDHEClient(host="127.0.0.2", port=8444)
+        client_one.weather_search_results = [
+            {"LocationId": "one", "Name": "One", "Country": "Test"}
+        ]
+        client_two.weather_search_results = [
+            {"LocationId": "two", "Name": "Two", "Country": "Test"}
+        ]
+        entry_one = _build_mock_entry(
+            host=client_one.host,
+            port=client_one.port,
+            name="Fixture DHE One",
+            unique_id="fixture-service-one",
+        )
+        entry_two = _build_mock_entry(
+            host=client_two.host,
+            port=client_two.port,
+            name="Fixture DHE Two",
+            unique_id="fixture-service-two",
+        )
+        entry_one.add_to_hass(hass)
+        entry_two.add_to_hass(hass)
+
+        with (
+            patch.object(
+                integration,
+                "DHEClient",
+                side_effect=[client_one, client_two],
+            ),
+            patch.object(integration, "_async_can_connect", AsyncMock(return_value=True)),
+        ):
+            assert await hass.config_entries.async_setup(entry_one.entry_id)
+            if entry_two.state is ConfigEntryState.NOT_LOADED:
+                assert await hass.config_entries.async_setup(entry_two.entry_id)
+            await hass.async_block_till_done()
+
+        await hass.services.async_call(
+            DOMAIN,
+            "search_weather_location",
+            {
+                "entry_id": entry_two.entry_id,
+                "name": "Berlin",
+                "country_id": 34,
+            },
+            blocking=True,
+        )
+        await hass.services.async_call(
+            DOMAIN,
+            "add_weather_favorite",
+            {
+                "entry_id": entry_two.entry_id,
+                "location_id": "two",
+            },
+            blocking=True,
+        )
+
+        assert client_one.weather_search_calls == []
+        assert client_one.weather_add_calls == []
+        assert client_two.weather_search_calls == [("Berlin", 34)]
+        assert client_two.weather_add_calls == [
+            {"LocationId": "two", "Name": "Two", "Country": "Test"}
+        ]
+
+        with pytest.raises(HomeAssistantError, match="Multiple .* entry_id"):
+            await hass.services.async_call(
+                DOMAIN,
+                "search_weather_location",
+                {
+                    "name": "Hamburg",
+                    "country_id": 34,
+                },
+                blocking=True,
+            )
+
+        assert await hass.config_entries.async_unload(entry_one.entry_id)
+        assert await hass.config_entries.async_unload(entry_two.entry_id)
+        await hass.async_block_till_done()
+
+
+async def test_weather_services_use_cached_candidates_with_real_hass_fixture() -> None:
+    """Verify weather services resolve cached results, favorites and raw IDs."""
+    _clear_loaded_integration_modules()
+    integration = importlib.import_module(f"custom_components.{DOMAIN}")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        client = _FixtureDHEClient()
+        client.last_weather_state = {
+            "forecast_results": [
+                {"LocationId": "result-one", "Name": "Result One"},
+                {"LocationId": "result-two", "Name": "Result Two"},
+            ],
+            "favorites": [
+                {"LocationId": "favorite-one", "Name": "Favorite One"},
+            ],
+            "location": {"LocationId": "current-one", "Name": "Current One"},
+        }
+        entry = _build_mock_entry(
+            host=client.host,
+            port=client.port,
+            name="Weather Service Fixture DHE",
+            unique_id="weather-service-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+
+        with (
+            patch.object(integration, "DHEClient", return_value=client),
+            patch.object(integration, "_async_can_connect", AsyncMock(return_value=True)),
+        ):
+            assert await hass.config_entries.async_setup(entry.entry_id)
+            await hass.async_block_till_done()
+
+        await hass.services.async_call(
+            DOMAIN,
+            "add_weather_favorite",
+            {"result_number": 2},
+            blocking=True,
+        )
+        await hass.services.async_call(
+            DOMAIN,
+            "toggle_weather_favorite",
+            {"location_id": "favorite-one"},
+            blocking=True,
+        )
+        await hass.services.async_call(
+            DOMAIN,
+            "select_weather_location",
+            {"location_id": "current-one"},
+            blocking=True,
+        )
+        await hass.services.async_call(
+            DOMAIN,
+            "remove_weather_favorite",
+            {"location_id": "raw-location-id"},
+            blocking=True,
+        )
+
+        assert client.weather_search_calls == []
+        assert client.weather_add_calls == [
+            {"LocationId": "result-two", "Name": "Result Two"}
+        ]
+        assert client.weather_toggle_calls == [
+            {"LocationId": "favorite-one", "Name": "Favorite One"}
+        ]
+        assert client.weather_select_calls == [
+            {"LocationId": "current-one", "Name": "Current One"}
+        ]
+        assert client.weather_remove_calls == [{"LocationId": "raw-location-id"}]
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
+
+async def test_weather_service_dhe_errors_raise_homeassistant_error() -> None:
+    """Convert DHE client failures into HA service errors without hiding them."""
+    _clear_loaded_integration_modules()
+    integration = importlib.import_module(f"custom_components.{DOMAIN}")
+    client_types = importlib.import_module(
+        f"custom_components.{DOMAIN}.client_types"
+    )
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        client = _FixtureDHEClient()
+        client.last_weather_state = {
+            "forecast_results": [
+                {"LocationId": "result-one", "Name": "Result One"},
+            ],
+        }
+        failure = client_types.DHEError("write failed")
+        client.add_weather_favorite = AsyncMock(side_effect=failure)
+        entry = _build_mock_entry(
+            host=client.host,
+            port=client.port,
+            name="Weather Error Fixture DHE",
+            unique_id="weather-error-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+
+        with (
+            patch.object(integration, "DHEClient", return_value=client),
+            patch.object(integration, "_async_can_connect", AsyncMock(return_value=True)),
+        ):
+            assert await hass.config_entries.async_setup(entry.entry_id)
+            await hass.async_block_till_done()
+
+        with pytest.raises(
+            HomeAssistantError,
+            match="Could not add DHE weather favorite: write failed",
+        ) as err_info:
+            await hass.services.async_call(
+                DOMAIN,
+                "add_weather_favorite",
+                {"result_number": 1},
+                blocking=True,
+            )
+
+        assert err_info.value.__cause__ is failure
+        client.add_weather_favorite.assert_awaited_once_with(
+            {"LocationId": "result-one", "Name": "Result One"}
+        )
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
+
+async def test_config_flow_creates_entry_after_pairing_with_real_hass_fixture() -> None:
+    """Run setup flow through HA's config-flow manager until entry creation."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+
+        can_connect = AsyncMock(return_value=True)
+        validate_pairing = AsyncMock(
+            return_value=config_flow.SetupPairingResult(
+                unique_id="aa:bb:cc:dd:ee:ff",
+            )
+        )
+        with (
+            patch.object(config_flow, "_can_connect", can_connect),
+            patch.object(config_flow, "_validate_setup_pairing", validate_pairing),
+        ):
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_USER},
+                data={
+                    CONF_HOST: "http://dhe-fixture.local/",
+                    CONF_PORT: DEFAULT_PORT,
+                    CONF_NAME: "Flow Fixture DHE",
+                    config_flow.CONF_INTERNAL_SCALD_PROTECTION: "50",
+                },
+            )
+
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "pairing_confirm"
+            can_connect.assert_awaited_once_with(
+                hass,
+                "dhe-fixture.local",
+                DEFAULT_PORT,
+            )
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                user_input={},
+            )
+
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert result["title"] == "Flow Fixture DHE"
+        assert result["data"] == {
+            CONF_HOST: "dhe-fixture.local",
+            CONF_PORT: DEFAULT_PORT,
+            CONF_NAME: "Flow Fixture DHE",
+            config_flow.CONF_INTERNAL_SCALD_PROTECTION: "50",
+        }
+        assert result["result"].unique_id == "aa:bb:cc:dd:ee:ff"
+        validate_pairing.assert_awaited_once()
+        pairing_args = validate_pairing.await_args.args
+        assert pairing_args[:3] == (
+            hass,
+            "dhe-fixture.local",
+            DEFAULT_PORT,
+        )
+        assert pairing_args[3].endswith("_dhe-fixture.local_8443.txt")
+
+
+async def test_reauth_flow_repairs_pairing_with_real_hass_fixture() -> None:
+    """Run HA reauth flow and verify it validates a fresh DHE pairing."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        entry = _build_mock_entry(
+            host="reauth-dhe.local",
+            port=DEFAULT_PORT,
+            name="Reauth Fixture DHE",
+            unique_id="reauth-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+
+        can_connect = AsyncMock(return_value=True)
+        validate_pairing = AsyncMock(return_value=config_flow.SetupPairingResult())
+        with (
+            patch.object(config_flow, "_can_connect", can_connect),
+            patch.object(config_flow, "_validate_setup_pairing", validate_pairing),
+        ):
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={
+                    "source": config_entries.SOURCE_REAUTH,
+                    "entry_id": entry.entry_id,
+                },
+                data=dict(entry.data),
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "reauth_confirm"
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                user_input={},
+            )
+
+        assert result["type"] is FlowResultType.ABORT
+        assert result["reason"] == "reauth_successful"
+        can_connect.assert_awaited_once_with(hass, "reauth-dhe.local", DEFAULT_PORT)
+        validate_pairing.assert_awaited_once()
+
+
+async def test_config_flow_scan_choice_prefills_manual_form_with_real_hass_fixture() -> None:
+    """Run optional setup scan progress before the manual setup form."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+
+        scan = AsyncMock(
+            return_value=[
+                types.SimpleNamespace(
+                    host="192.0.2.124",
+                    port=DEFAULT_PORT,
+                    evidence=("STE DHE App",),
+                )
+            ]
+        )
+        with (
+            patch.object(config_flow, "async_scan_dhe_hosts", scan),
+            patch.object(
+                config_flow,
+                "local_ipv4_addresses_from_hass",
+                return_value=["192.168.50.10"],
+            ),
+        ):
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_USER},
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "user"
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                {config_flow.CONF_SETUP_MODE: config_flow.SETUP_MODE_SCAN},
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "subnet_scan"
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                {
+                    config_flow.CONF_SCAN_SUBNET_MODE: (
+                        config_flow.SCAN_SUBNET_MODE_NETWORK_MASK
+                    )
+                },
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "subnet_scan_network_mask"
+            suggested = _schema_suggested_values(result["data_schema"])
+            assert suggested[config_flow.CONF_SCAN_NETWORK_ADDRESS] == "192.168.50.0"
+            assert suggested[config_flow.CONF_SCAN_NETMASK] == "255.255.255.0"
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                {
+                    config_flow.CONF_SCAN_NETWORK_ADDRESS: "192.168.50.0",
+                    config_flow.CONF_SCAN_NETMASK: "255.255.255.0",
+                },
+            )
+            assert result["type"] is FlowResultType.SHOW_PROGRESS
+            assert result["progress_action"] == "scan_dhe"
+
+            await hass.async_block_till_done()
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+            )
+
+        assert result["type"] is FlowResultType.FORM
+        assert result["step_id"] == "manual"
+        defaults = _schema_defaults(result["data_schema"])
+        assert defaults[CONF_HOST] == "192.0.2.124"
+        assert defaults[CONF_PORT] == DEFAULT_PORT
+        scan.assert_awaited_once_with(
+            hass,
+            networks=[ip_network("192.168.50.0/24")],
+            port=DEFAULT_PORT,
+        )
+
+
+async def test_config_flow_current_subnet_scan_progress_with_real_hass_fixture() -> None:
+    """Exercise HA config-flow progress handling for the current-subnet scan."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+
+        scan = AsyncMock(return_value=[])
+        with patch.object(config_flow, "async_scan_dhe_hosts", scan):
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_USER},
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "user"
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                {config_flow.CONF_SETUP_MODE: config_flow.SETUP_MODE_SCAN},
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "subnet_scan"
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                {
+                    config_flow.CONF_SCAN_SUBNET_MODE: (
+                        config_flow.SCAN_SUBNET_MODE_CURRENT
+                    ),
+                    config_flow.CONF_SCAN_PORT: DEFAULT_PORT,
+                },
+            )
+            assert result["type"] is FlowResultType.SHOW_PROGRESS
+            assert result["step_id"] == "network_scan"
+            assert result["progress_action"] == "scan_dhe"
+
+            await hass.async_block_till_done()
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "manual"
+
+        defaults = _schema_defaults(result["data_schema"])
+        assert defaults[CONF_PORT] == DEFAULT_PORT
+        assert "host" not in defaults or defaults[CONF_HOST] in (None, "")
+        assert "No DHE" in result["description_placeholders"]["scan_status"]
+        scan.assert_awaited_once_with(hass, networks=None, port=DEFAULT_PORT)
+
+
+async def test_scan_prefilled_flow_uses_pairing_unique_id_with_real_hass_fixture() -> None:
+    """Create a scanned entry with the same MAC unique-id path as Zeroconf."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+
+        scan = AsyncMock(
+            return_value=[
+                types.SimpleNamespace(
+                    host="192.0.2.124",
+                    port=DEFAULT_PORT,
+                    evidence=("STE DHE App",),
+                )
+            ]
+        )
+        can_connect = AsyncMock(return_value=True)
+        validate_pairing = AsyncMock(
+            return_value=config_flow.SetupPairingResult(
+                unique_id="aa:bb:cc:dd:ee:ff",
+            )
+        )
+        with (
+            patch.object(config_flow, "async_scan_dhe_hosts", scan),
+            patch.object(config_flow, "_can_connect", can_connect),
+            patch.object(config_flow, "_validate_setup_pairing", validate_pairing),
+        ):
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_USER},
+            )
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                {config_flow.CONF_SETUP_MODE: config_flow.SETUP_MODE_SCAN},
+            )
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                {
+                    config_flow.CONF_SCAN_SUBNET_MODE: (
+                        config_flow.SCAN_SUBNET_MODE_CURRENT
+                    )
+                },
+            )
+            assert result["type"] is FlowResultType.SHOW_PROGRESS
+
+            await hass.async_block_till_done()
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "manual"
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                {
+                    CONF_HOST: "192.0.2.124",
+                    CONF_PORT: DEFAULT_PORT,
+                    CONF_NAME: "Scanned DHE",
+                    config_flow.CONF_INTERNAL_SCALD_PROTECTION: "55",
+                },
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "pairing_confirm"
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                {},
+            )
+
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert result["result"].unique_id == "aa:bb:cc:dd:ee:ff"
+        assert result["data"][CONF_HOST] == "192.0.2.124"
+        scan.assert_awaited_once()
+        can_connect.assert_awaited_once_with(hass, "192.0.2.124", DEFAULT_PORT)
+        validate_pairing.assert_awaited_once()
+
+
+async def test_config_flow_aborts_duplicate_target_with_real_hass_fixture() -> None:
+    """Verify HA config flow prevents duplicate normalized DHE targets."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        entry = _build_mock_entry(
+            host="dhe-duplicate.local",
+            port=DEFAULT_PORT,
+            name="Existing Fixture DHE",
+            unique_id="existing-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_USER},
+            data={
+                CONF_HOST: "http://dhe-duplicate.local/",
+                CONF_PORT: DEFAULT_PORT,
+                CONF_NAME: "Duplicate Fixture DHE",
+                "internal_scald_protection": "50",
+            },
+        )
+
+        assert result["type"] is FlowResultType.ABORT
+        assert result["reason"] == "already_configured"
+
+
+async def test_zeroconf_flow_collects_tmax_then_creates_entry_after_pairing() -> None:
+    """Run Zeroconf setup without creating an entry before pairing succeeds."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+
+        can_connect = AsyncMock(return_value=True)
+        validate_pairing = AsyncMock(
+            return_value=config_flow.SetupPairingResult(
+                unique_id="aa:bb:cc:dd:ee:ff",
+            )
+        )
+        with (
+            patch.object(config_flow, "_can_connect", can_connect),
+            patch.object(config_flow, "_validate_setup_pairing", validate_pairing),
+        ):
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_ZEROCONF},
+                data=_zeroconf_info("DHE-JA06.local.", DEFAULT_PORT),
+            )
+
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "zeroconf_confirm"
+            defaults = _schema_defaults(result["data_schema"])
+            assert defaults == {config_flow.CONF_INTERNAL_SCALD_PROTECTION: "60"}
+            assert hass.config_entries.async_entries(DOMAIN) == []
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                user_input={config_flow.CONF_INTERNAL_SCALD_PROTECTION: "55"},
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "pairing_confirm"
+            assert hass.config_entries.async_entries(DOMAIN) == []
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                user_input={},
+            )
+
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert result["title"] == "DHE-JA06"
+        assert result["data"] == {
+            CONF_HOST: "192.0.2.124",
+            CONF_PORT: DEFAULT_PORT,
+            CONF_NAME: "DHE-JA06",
+            config_flow.CONF_INTERNAL_SCALD_PROTECTION: "55",
+        }
+        assert result["result"].unique_id == "aa:bb:cc:dd:ee:ff"
+        can_connect.assert_awaited_once_with(hass, "192.0.2.124", DEFAULT_PORT)
+        validate_pairing.assert_awaited_once()
+
+
+async def test_zeroconf_flow_pairs_against_fake_dhe_engineio_server() -> None:
+    """Run Zeroconf -> Tmax -> pairing -> entry creation against Fake-DHE."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
+    client_pairing = importlib.import_module(
+        f"custom_components.{DOMAIN}.client_pairing"
+    )
+    protocol = importlib.import_module(f"custom_components.{DOMAIN}.protocol")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        await _ensure_network_loaded(hass)
+        async with FakeDHEEngineIOServer(protocol.NS) as server:
+            server.queue_pairing_request()
+            server.queue_pairing_result(True)
+            server.queue_token_response(PAIRING_TOKEN)
+            server.queue_authentication()
+            server.queue_device_info()
+
+            with (
+                patch.object(client_pairing.persistent_notification, "async_create"),
+                patch.object(client_pairing.persistent_notification, "async_dismiss"),
+            ):
+                result = await hass.config_entries.flow.async_init(
+                    DOMAIN,
+                    context={"source": config_entries.SOURCE_ZEROCONF},
+                    data=_zeroconf_info(
+                        "DHE-JA06.local.",
+                        server.port,
+                        host=server.host,
+                        ip=server.host,
+                    ),
+                )
+
+                assert result["type"] is FlowResultType.FORM
+                assert result["step_id"] == "zeroconf_confirm"
+                assert hass.config_entries.async_entries(DOMAIN) == []
+
+                result = await hass.config_entries.flow.async_configure(
+                    result["flow_id"],
+                    user_input={config_flow.CONF_INTERNAL_SCALD_PROTECTION: "55"},
+                )
+                assert result["type"] is FlowResultType.FORM
+                assert result["step_id"] == "pairing_confirm"
+
+                result = await hass.config_entries.flow.async_configure(
+                    result["flow_id"],
+                    user_input={},
+                )
+
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert result["title"] == "DHE-JA06"
+        assert result["data"][CONF_HOST] == server.host
+        assert result["data"][CONF_PORT] == server.port
+        assert result["data"][config_flow.CONF_INTERNAL_SCALD_PROTECTION] == "55"
+        assert result["result"].unique_id == "aa:bb:cc:dd:ee:ff"
+        assert any(
+            '"token":""' in packet and '["token_request"' in packet
+            for packet in server.posted_packets
+        )
+        assert any(PAIRING_TOKEN in packet for packet in server.posted_packets)
+
+
+@pytest.mark.parametrize(
+    ("discovery_kwargs", "expected_host", "expected_port", "expected_title"),
+    [
+        (
+            {
+                "hostname": "dhe-ja06.local.",
+                "port": DEFAULT_PORT,
+                "host": "dhe-ja06.local.",
+                "name": "DHE Connect DHE-JA06._ste-dhe._tcp.local.",
+            },
+            "dhe-ja06.local",
+            DEFAULT_PORT,
+            "DHE Connect DHE-JA06",
+        ),
+        (
+            {"hostname": "dhe-ja06.local.", "port": DEFAULT_PORT, "host": None},
+            "dhe-ja06.local",
+            DEFAULT_PORT,
+            "dhe-ja06",
+        ),
+        (
+            {
+                "hostname": "dhe-ja06.local.",
+                "port": DEFAULT_PORT,
+                "host": "192.0.2.125",
+                "name": "DHE-JA06.local.",
+                "ip": "192.0.2.125",
+            },
+            "192.0.2.125",
+            DEFAULT_PORT,
+            "DHE-JA06",
+        ),
+        (
+            {
+                "hostname": "dhe-ja06.local.",
+                "port": DEFAULT_PORT,
+                "host": "192.0.2.126",
+                "name": "DHE-JA06._ste-dhe._tcp.local.",
+                "ip": "192.0.2.126",
+            },
+            "192.0.2.126",
+            DEFAULT_PORT,
+            "DHE-JA06",
+        ),
+        (
+            {
+                "hostname": None,
+                "port": DEFAULT_PORT,
+                "host": "192.0.2.127",
+                "name": "DHE-JA06.local.",
+                "ip": "192.0.2.127",
+            },
+            "192.0.2.127",
+            DEFAULT_PORT,
+            "DHE-JA06",
+        ),
+        (
+            {
+                "hostname": "dhe-ja06.local.",
+                "port": None,
+                "host": "192.0.2.128",
+                "ip": "192.0.2.128",
+            },
+            "192.0.2.128",
+            DEFAULT_PORT,
+            "dhe-ja06",
+        ),
+    ],
+)
+async def test_zeroconf_flow_accepts_realistic_discovery_payload_variants(
+    discovery_kwargs: dict[str, Any],
+    expected_host: str,
+    expected_port: int,
+    expected_title: str,
+) -> None:
+    """Verify real-world mDNS payload shapes normalize to one setup path."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+
+        can_connect = AsyncMock(return_value=True)
+        validate_pairing = AsyncMock(
+            return_value=config_flow.SetupPairingResult(
+                unique_id=f"unique-{expected_host}",
+            )
+        )
+        with (
+            patch.object(config_flow, "_can_connect", can_connect),
+            patch.object(config_flow, "_validate_setup_pairing", validate_pairing),
+        ):
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_ZEROCONF},
+                data=_zeroconf_info(**discovery_kwargs),
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "zeroconf_confirm"
+            can_connect.assert_awaited_once_with(hass, expected_host, expected_port)
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                user_input={config_flow.CONF_INTERNAL_SCALD_PROTECTION: "55"},
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "pairing_confirm"
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                user_input={},
+            )
+
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert result["title"] == expected_title
+        assert result["data"][CONF_HOST] == expected_host
+        assert result["data"][CONF_PORT] == expected_port
+        validate_pairing.assert_awaited_once()
+
+
+@pytest.mark.parametrize(
+    "port",
+    ["not-a-port", 0, -1, 65536],
+)
+async def test_zeroconf_flow_aborts_invalid_port_payload(port: Any) -> None:
+    """Reject discovery payloads that do not contain a usable TCP port."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+
+        can_connect = AsyncMock(return_value=True)
+        with patch.object(config_flow, "_can_connect", can_connect):
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_ZEROCONF},
+                data=_zeroconf_info("dhe-ja06.local.", port),
+            )
+
+        assert result["type"] is FlowResultType.ABORT
+        assert result["reason"] == "invalid_discovery_parameters"
+        can_connect.assert_not_awaited()
+
+
+async def test_user_flow_can_select_in_progress_zeroconf_discovery() -> None:
+    """Run Add Device through the visible Zeroconf/scan/manual choice."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+
+        can_connect = AsyncMock(return_value=True)
+        validate_pairing = AsyncMock(
+            return_value=config_flow.SetupPairingResult(
+                unique_id="aa:bb:cc:dd:ee:ff",
+            )
+        )
+        with (
+            patch.object(config_flow, "_can_connect", can_connect),
+            patch.object(config_flow, "_validate_setup_pairing", validate_pairing),
+        ):
+            zeroconf = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_ZEROCONF},
+                data=_zeroconf_info("DHE-JA06.local.", DEFAULT_PORT),
+            )
+            assert zeroconf["type"] is FlowResultType.FORM
+            assert zeroconf["step_id"] == "zeroconf_confirm"
+
+            user = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_USER},
+            )
+            assert user["type"] is FlowResultType.FORM
+            assert user["step_id"] == "user"
+            defaults = _schema_defaults(user["data_schema"])
+            assert (
+                defaults[config_flow.CONF_SETUP_MODE]
+                == config_flow.SETUP_MODE_SCAN
+            )
+
+            result = await hass.config_entries.flow.async_configure(
+                user["flow_id"],
+                user_input={
+                    config_flow.CONF_SETUP_MODE: "zeroconf:192.0.2.124:8443",
+                },
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "zeroconf_confirm"
+            progress = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+            assert all(flow["flow_id"] != zeroconf["flow_id"] for flow in progress)
+            assert any(flow["flow_id"] == result["flow_id"] for flow in progress)
+
+            duplicate = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_ZEROCONF},
+                data=_zeroconf_info("DHE-JA06.local.", DEFAULT_PORT),
+            )
+            assert duplicate["type"] is FlowResultType.ABORT
+            assert duplicate["reason"] == "already_in_progress"
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                user_input={config_flow.CONF_INTERNAL_SCALD_PROTECTION: "55"},
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "pairing_confirm"
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                user_input={},
+            )
+
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert result["title"] == "DHE-JA06"
+        assert result["data"][CONF_HOST] == "192.0.2.124"
+        assert result["result"].unique_id == "aa:bb:cc:dd:ee:ff"
+        assert can_connect.await_count == 2
+        validate_pairing.assert_awaited_once()
+
+
+async def test_user_zeroconf_takeover_keeps_source_flow_on_connect_failure() -> None:
+    """Keep the original discovery setup path when takeover cannot connect."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+
+        can_connect = AsyncMock(side_effect=[True, False])
+        with patch.object(config_flow, "_can_connect", can_connect):
+            zeroconf = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_ZEROCONF},
+                data=_zeroconf_info("DHE-JA06.local.", DEFAULT_PORT),
+            )
+            assert zeroconf["type"] is FlowResultType.FORM
+            assert zeroconf["step_id"] == "zeroconf_confirm"
+
+            user = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_USER},
+            )
+            result = await hass.config_entries.flow.async_configure(
+                user["flow_id"],
+                user_input={
+                    config_flow.CONF_SETUP_MODE: "zeroconf:192.0.2.124:8443",
+                },
+            )
+
+        assert result["type"] is FlowResultType.ABORT
+        assert result["reason"] == "cannot_connect"
+        assert can_connect.await_count == 2
+        progress = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+        assert any(flow["flow_id"] == zeroconf["flow_id"] for flow in progress)
+
+
+async def test_zeroconf_flow_aborts_duplicate_host_port() -> None:
+    """Verify Zeroconf discovery does not start for an existing DHE target."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        entry = _build_mock_entry(
+            host="192.0.2.124",
+            port=DEFAULT_PORT,
+            name="Existing DHE",
+            unique_id="existing-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_ZEROCONF},
+            data=_zeroconf_info("DHE-JA06.local.", DEFAULT_PORT),
+        )
+
+        assert result["type"] is FlowResultType.ABORT
+        assert result["reason"] == "already_configured"
+
+
+async def test_zeroconf_pairing_aborts_duplicate_mac_after_host_ip_mismatch() -> None:
+    """Abort when Zeroconf finds an existing manual entry through another host."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        entry = _build_mock_entry(
+            host="dhe-ja06.local",
+            port=DEFAULT_PORT,
+            name="Existing DHE",
+            unique_id="aa:bb:cc:dd:ee:ff",
+        )
+        entry.add_to_hass(hass)
+
+        can_connect = AsyncMock(return_value=True)
+        validate_pairing = AsyncMock(
+            return_value=config_flow.SetupPairingResult(
+                unique_id="aa:bb:cc:dd:ee:ff",
+            )
+        )
+        with (
+            patch.object(config_flow, "_can_connect", can_connect),
+            patch.object(config_flow, "_validate_setup_pairing", validate_pairing),
+        ):
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_ZEROCONF},
+                data=_zeroconf_info(
+                    "dhe-ja06.local.",
+                    DEFAULT_PORT,
+                    host="192.0.2.124",
+                ),
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "zeroconf_confirm"
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                user_input={config_flow.CONF_INTERNAL_SCALD_PROTECTION: "55"},
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "pairing_confirm"
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                user_input={},
+            )
+
+        assert result["type"] is FlowResultType.ABORT
+        assert result["reason"] == "already_configured"
+        assert len(hass.config_entries.async_entries(DOMAIN)) == 1
+        can_connect.assert_awaited_once_with(hass, "192.0.2.124", DEFAULT_PORT)
+        validate_pairing.assert_awaited_once()
+
+
+async def test_zeroconf_flow_aborts_matching_flow_already_in_progress() -> None:
+    """Verify duplicate Zeroconf discoveries share one setup flow."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+
+        with patch.object(config_flow, "_can_connect", AsyncMock(return_value=True)):
+            first = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_ZEROCONF},
+                data=_zeroconf_info("DHE-JA06.local.", DEFAULT_PORT),
+            )
+            second = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_ZEROCONF},
+                data=_zeroconf_info("dhe-ja06.local", DEFAULT_PORT),
+            )
+
+        assert first["type"] is FlowResultType.FORM
+        assert first["step_id"] == "zeroconf_confirm"
+        assert second["type"] is FlowResultType.ABORT
+        assert second["reason"] == "already_in_progress"
+
+
+async def test_options_connection_flow_requires_pairing_for_changed_target_with_real_hass_fixture() -> None:
+    """Run connection options through HA's options-flow manager."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        entry = _build_mock_entry(
+            host="old-dhe.local",
+            port=DEFAULT_PORT,
+            name="Old Fixture DHE",
+            unique_id="old-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+
+        can_connect = AsyncMock(return_value=True)
+        validate_pairing = AsyncMock(return_value=config_flow.SetupPairingResult())
+        with (
+            patch.object(config_flow, "_can_connect", can_connect),
+            patch.object(config_flow, "_validate_setup_pairing", validate_pairing),
+        ):
+            result = await hass.config_entries.options.async_init(entry.entry_id)
+            assert result["type"] is FlowResultType.MENU
+
+            result = await hass.config_entries.options.async_configure(
+                result["flow_id"],
+                user_input={"next_step_id": "connection"},
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "connection"
+
+            result = await hass.config_entries.options.async_configure(
+                result["flow_id"],
+                user_input={
+                    CONF_HOST: "new-dhe.local",
+                    CONF_PORT: DEFAULT_PORT,
+                    CONF_NAME: "New Fixture DHE",
+                    config_flow.CONF_INTERNAL_SCALD_PROTECTION: "55",
+                },
+            )
+            assert result["type"] is FlowResultType.FORM
+            assert result["step_id"] == "connection_pairing_confirm"
+            can_connect.assert_awaited_once_with(
+                hass,
+                "new-dhe.local",
+                DEFAULT_PORT,
+            )
+
+            result = await hass.config_entries.options.async_configure(
+                result["flow_id"],
+                user_input={},
+            )
+
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert result["data"] == {
+            CONF_HOST: "new-dhe.local",
+            CONF_PORT: DEFAULT_PORT,
+            CONF_NAME: "New Fixture DHE",
+            config_flow.CONF_INTERNAL_SCALD_PROTECTION: "55",
+        }
+        validate_pairing.assert_awaited_once()
+
+
+async def test_repair_pairing_button_calls_client_when_enabled_with_real_hass_fixture() -> None:
+    """Enable the disabled-by-default repair button and press it through HA."""
+    _clear_loaded_integration_modules()
+    integration = importlib.import_module(f"custom_components.{DOMAIN}")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        client = _FixtureDHEClient()
+        client.available = False
+        entry = _build_mock_entry(
+            host=client.host,
+            port=client.port,
+            name="Repair Fixture DHE",
+            unique_id="repair-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+
+        registry = er.async_get(hass)
+        registry.async_get_or_create(
+            "button",
+            DOMAIN,
+            f"{DOMAIN}_{entry.entry_id}_repair_pairing",
+            suggested_object_id="repair_fixture_dhe_repair_pairing",
+            disabled_by=None,
+        )
+
+        with (
+            patch.object(integration, "DHEClient", return_value=client),
+            patch.object(integration, "_async_can_connect", AsyncMock(return_value=True)),
+        ):
+            assert await hass.config_entries.async_setup(entry.entry_id)
+            await hass.async_block_till_done()
+
+        repair_button = _entity_id_for_key(
+            hass,
+            entry.entry_id,
+            "button",
+            "repair_pairing",
+        )
+        state = hass.states.get(repair_button)
+        assert state is not None
+        assert state.state != "unavailable"
+
+        client.emit_availability(False)
+        await hass.async_block_till_done()
+        state = hass.states.get(repair_button)
+        assert state is not None
+        assert state.state != "unavailable"
+
+        await hass.services.async_call(
+            "button",
+            "press",
+            {"entity_id": repair_button},
+            blocking=True,
+        )
+        assert client.repair_pairing_calls == 1
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
+
+async def test_entity_registry_ids_survive_reload_with_real_hass_fixture() -> None:
+    """Reload an entry and verify HA keeps the same entity registry IDs."""
+    _clear_loaded_integration_modules()
+    integration = importlib.import_module(f"custom_components.{DOMAIN}")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        first_client = _FixtureDHEClient()
+        second_client = _FixtureDHEClient(last_setpoint=41.0)
+        entry = _build_mock_entry(
+            host=first_client.host,
+            port=first_client.port,
+            name="Stable Fixture DHE",
+            unique_id="stable-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+
+        with (
+            patch.object(
+                integration,
+                "DHEClient",
+                side_effect=[first_client, second_client],
+            ),
+            patch.object(integration, "_async_can_connect", AsyncMock(return_value=True)),
+        ):
+            assert await hass.config_entries.async_setup(entry.entry_id)
+            await hass.async_block_till_done()
+            registry = er.async_get(hass)
+            before = {
+                entity.unique_id: entity.entity_id
+                for entity in er.async_entries_for_config_entry(
+                    registry,
+                    entry.entry_id,
+                )
+            }
+
+            assert await hass.config_entries.async_reload(entry.entry_id)
+            await hass.async_block_till_done()
+            after = {
+                entity.unique_id: entity.entity_id
+                for entity in er.async_entries_for_config_entry(
+                    registry,
+                    entry.entry_id,
+                )
+            }
+
+        assert before
+        assert before == after
+        assert first_client.stop_called
+        assert second_client.start_called
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
+
+async def test_runtime_callbacks_update_sensor_states_with_real_hass_fixture() -> None:
+    """Verify runtime callbacks update real HA sensor entities."""
+    _clear_loaded_integration_modules()
+    integration = importlib.import_module(f"custom_components.{DOMAIN}")
+    protocol = importlib.import_module(f"custom_components.{DOMAIN}.protocol")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        client = _FixtureDHEClient()
+        entry = _build_mock_entry(
+            host=client.host,
+            port=client.port,
+            name="Runtime Fixture DHE",
+            unique_id="runtime-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+
+        with (
+            patch.object(integration, "DHEClient", return_value=client),
+            patch.object(integration, "_async_can_connect", AsyncMock(return_value=True)),
+        ):
+            assert await hass.config_entries.async_setup(entry.entry_id)
+            await hass.async_block_till_done()
+
+        water_flow_entity = _entity_id_for_key(hass, entry.entry_id, "sensor", "water_flow")
+        reconnect_entity = _entity_id_for_key(
+            hass,
+            entry.entry_id,
+            "sensor",
+            "reconnect_count",
+        )
+        connection_state_entity = _entity_id_for_key(
+            hass,
+            entry.entry_id,
+            "sensor",
+            "connection_state",
+        )
+
+        client.emit_measurement(protocol.ID_WATER_FLOW, 7.5)
+        client.emit_reconnect(3)
+        client.emit_diagnostic({
+            "connection_state": "reconnecting",
+            "last_reconnect_reason": "fixture reconnect",
+        })
+        await hass.async_block_till_done()
+
+        water_flow_state = hass.states.get(water_flow_entity)
+        reconnect_state = hass.states.get(reconnect_entity)
+        connection_state = hass.states.get(connection_state_entity)
+
+        assert water_flow_state is not None
+        assert water_flow_state.state == "7.5"
+        assert reconnect_state is not None
+        assert reconnect_state.state == "3"
+        assert connection_state is not None
+        assert connection_state.state == "reconnecting"
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
+
+async def test_availability_updates_climate_state_with_real_hass_fixture() -> None:
+    """Verify runtime availability callbacks update HA entity state."""
+    _clear_loaded_integration_modules()
+    integration = importlib.import_module(f"custom_components.{DOMAIN}")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        client = _FixtureDHEClient()
+        entry = _build_mock_entry(
+            host=client.host,
+            port=client.port,
+            name="Availability Fixture DHE",
+            unique_id="availability-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+
+        with (
+            patch.object(integration, "DHEClient", return_value=client),
+            patch.object(integration, "_async_can_connect", AsyncMock(return_value=True)),
+        ):
+            assert await hass.config_entries.async_setup(entry.entry_id)
+            await hass.async_block_till_done()
+
+        entity_id = "climate.availability_fixture_dhe_water_heating"
+        state = hass.states.get(entity_id)
+        assert state is not None
+        assert state.state != "unavailable"
+
+        client.emit_availability(False)
+        await hass.async_block_till_done()
+        state = hass.states.get(entity_id)
+        assert state is not None
+        assert state.state == "unavailable"
+
+        client.emit_availability(True)
+        await hass.async_block_till_done()
+        state = hass.states.get(entity_id)
+        assert state is not None
+        assert state.state != "unavailable"
+        assert state.attributes["connection_state"] == "connected"
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
+
+def _clear_loaded_integration_modules() -> None:
+    """Remove stub-loaded integration modules before HA imports the real package."""
+    for module_name in tuple(sys.modules):
+        if module_name == "custom_components" or module_name.startswith(
+            f"custom_components.{DOMAIN}"
+        ):
+            sys.modules.pop(module_name)
+
+
+async def _assert_entry_setup_and_unload(
+    hass: HomeAssistant,
+    integration: Any,
+) -> None:
+    """Assert runtime setup and unload against a real Home Assistant instance."""
+    client = _FixtureDHEClient()
+    entry = _build_mock_entry(
+        host=client.host,
+        port=client.port,
+        name="Fixture DHE",
+        unique_id="fixture-dhe",
+    )
+    entry.add_to_hass(hass)
+
+    with (
+        patch.object(integration, "DHEClient", return_value=client),
+        patch.object(integration, "_async_can_connect", AsyncMock(return_value=True)),
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.LOADED
+    runtime = entry.runtime_data
+    start_task = runtime.start_task
+    assert runtime.client is client
+    assert client.start_called
+    assert start_task is not None
+    assert not start_task.done()
+    assert hass.services.has_service(DOMAIN, "search_weather_location")
+    assert hass.states.get("climate.fixture_dhe_water_heating") is not None
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.NOT_LOADED
+    assert client.stop_called
+    assert start_task.done()
+    assert getattr(entry, "runtime_data", None) is None
+    assert not hass.services.has_service(DOMAIN, "search_weather_location")
+
+
+def _build_mock_entry(
+    *,
+    host: str,
+    port: int,
+    name: str,
+    unique_id: str,
+) -> MockConfigEntry:
+    """Build a DHE config entry for HA fixture tests."""
+    return MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_HOST: host,
+            CONF_PORT: port,
+            CONF_NAME: name,
+        },
+        title=name,
+        unique_id=unique_id,
+    )
+
+
+def _zeroconf_info(
+    hostname: str | None,
+    port: Any,
+    *,
+    host: str | None | object = _DEFAULT_ZEROCONF_HOST,
+    name: str | None = None,
+    ip: str = "192.0.2.124",
+) -> types.SimpleNamespace:
+    """Build a DHE Zeroconf discovery payload for config-flow tests."""
+    service_hostname = hostname or f"{ip}.local."
+    host_value = ip if host is _DEFAULT_ZEROCONF_HOST else host
+    return types.SimpleNamespace(
+        host=host_value,
+        ip_address=ip_address(ip),
+        ip_addresses=[ip_address(ip)],
+        port=port,
+        hostname=hostname,
+        type="_ste-dhe._tcp.local.",
+        name=name or f"{service_hostname.rstrip('.')}._ste-dhe._tcp.local.",
+        properties={},
+    )
+
+
+def _entity_id_for_key(
+    hass: HomeAssistant,
+    entry_id: str,
+    domain: str,
+    key: str,
+) -> str:
+    """Return one entity ID from its stable integration unique-ID key."""
+    registry = er.async_get(hass)
+    unique_id = f"{DOMAIN}_{entry_id}_{key}"
+    for entity in er.async_entries_for_config_entry(registry, entry_id):
+        if entity.domain == domain and entity.unique_id == unique_id:
+            return entity.entity_id
+    raise AssertionError(f"Entity {domain}.{key} not found for entry {entry_id}")

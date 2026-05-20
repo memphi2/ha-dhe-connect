@@ -1,0 +1,89 @@
+{
+  "version": 2,
+  "firmware_profile": "firmware_b",
+  "description": "Synthetic DHE usage replay for parser and runtime regression tests. Values are artificial and contain no live host, credential or device identifiers.",
+  "engineio_open": "0{\"sid\":\"fixture-b-polling-sid\",\"websocketSid\":\"fixture-b-websocket-sid\",\"pingInterval\":25000}",
+  "socketio_packets": [
+    {
+      "name": "inlet_temperature",
+      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.common.odb:value\",\"value\":{\"id\":13,\"value\":137,\"isValid\":true}}]"
+    },
+    {
+      "name": "water_flow",
+      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.common.odb:value\",\"value\":{\"id\":15,\"value\":27,\"isValid\":true}}]"
+    },
+    {
+      "name": "named_water_flow",
+      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.common.odb:ODB_Is_VS\",\"value\":31}]"
+    },
+    {
+      "name": "shower_timer_duration",
+      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.app.showerTimer:durationMilliseconds\",\"value\":300000}]"
+    },
+    {
+      "name": "shower_timer_activation",
+      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.app.showerTimer:activation\",\"value\":true}]"
+    },
+    {
+      "name": "shower_timer_remaining",
+      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.app.showerTimer:remainingMilliseconds\",\"value\":122000}]"
+    },
+    {
+      "name": "shower_timer_reset",
+      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.app.showerTimer:reset\",\"value\":true}]"
+    },
+    {
+      "name": "last_usage",
+      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.app.consumption:lastUsage\",\"value\":{\"water\":{\"value\":12.34,\"min\":0,\"max\":30},\"energy\":{\"value\":0.9,\"min\":0,\"max\":6},\"time\":{\"value\":420,\"min\":0,\"max\":900},\"costs\":{\"value\":0.52,\"min\":0,\"max\":3}}}]"
+    },
+    {
+      "name": "water_week_consumption",
+      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.app.consumption:waterWeek\",\"value\":{\"chart\":[1,2,3.5],\"sum\":6.5}}]"
+    },
+    {
+      "name": "saving_monitor_real",
+      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.app.savingMonitor:real\",\"value\":{\"water_l\":18.5,\"energy_Wh\":800,\"emission_Co2Kg\":0.21,\"value_E\":0.34}}]"
+    },
+    {
+      "name": "currency",
+      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.common.currency:value\",\"value\":\"EUR\"}]"
+    }
+  ],
+  "expected_runtime_state": {
+    "measurements": {
+      "13": 13.7,
+      "15": 3.1,
+      "1011": false,
+      "1012": 5.0,
+      "1013": 5.0,
+      "1021": 6.5,
+      "1051": 12.34,
+      "1052": 0.9,
+      "1053": 420.0,
+      "1054": 0.52,
+      "1069": 18.5,
+      "1070": 0.8,
+      "1072": 0.21,
+      "1073": 0.34,
+      "1093": "EUR"
+    },
+    "measurement_attributes": {
+      "1021": {
+        "cost_eur": 6.5
+      },
+      "1069": {
+        "saving_monitor_category": "real",
+        "saving_monitor_field": "water_l"
+      }
+    },
+    "runtime_parser_stats": {
+      "odb_value": 3,
+      "timer_value": 3,
+      "timer_reset": 1,
+      "last_usage": 1,
+      "consumption": 1,
+      "saving_monitor": 1,
+      "currency": 1
+    }
+  }
+}
