@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from ipaddress import IPv4Address, IPv4Network, ip_address, ip_network
 import socket
 from typing import Any
+import logging
 
 import aiohttp
 
@@ -17,6 +18,8 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import DEFAULT_PORT
 from .connection_helpers import host_for_url
+
+_LOGGER = logging.getLogger(__name__)
 
 DHE_SCAN_PORT = DEFAULT_PORT
 DHE_SCAN_MAX_HOSTS = 512
@@ -373,7 +376,13 @@ async def async_scan_dhe_hosts(
     if not hosts:
         return []
 
-    session = async_get_clientsession(hass)
+    owns_session = False
+    try:
+        session = async_get_clientsession(hass)
+    except RuntimeError as err:
+        _LOGGER.debug("Falling back to direct aiohttp.ClientSession: %s", err)
+        session = aiohttp.ClientSession()
+        owns_session = True
     timeout = aiohttp.ClientTimeout(
         total=DHE_SCAN_TOTAL_TIMEOUT_SECONDS,
         connect=DHE_SCAN_CONNECT_TIMEOUT_SECONDS,
@@ -386,7 +395,11 @@ async def async_scan_dhe_hosts(
         async with semaphore:
             return await _probe_host(session, host, port, timeout)
 
-    results = await asyncio.gather(*(_bounded_probe(host) for host in hosts))
+    try:
+        results = await asyncio.gather(*(_bounded_probe(host) for host in hosts))
+    finally:
+        if owns_session:
+            await session.close()
     candidates = [result for result in results if result is not None]
     return sorted(candidates, key=lambda candidate: candidate.host)
 
