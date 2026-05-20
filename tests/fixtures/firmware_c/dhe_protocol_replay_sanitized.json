@@ -1,0 +1,94 @@
+{
+  "version": 2,
+  "firmware_profile": "firmware_c",
+  "description": "Synthetic DHE metadata and catalog replay for parser and runtime regression tests. Values are artificial and contain no live host, credential or device identifiers.",
+  "engineio_open": "0{\"sid\":\"fixture-c-polling-sid\",\"websocketSid\":\"fixture-c-websocket-sid\",\"pingInterval\":25000}",
+  "socketio_packets": [
+    {
+      "name": "device_gadget_data",
+      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.common.version:gadgetData\",\"value\":{\"type\":{\"value\":\"DHE Connect 24\"},\"id\":{\"value\":\"1234567-fixture-tail\"},\"wlan\":{\"value\":\"fixture-wlan\"},\"bluetooth\":{\"value\":\"fixture-bt\"}}}]"
+    },
+    {
+      "name": "device_gadget_data_valid",
+      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.common.version:gadgetDataValid\",\"value\":true}]"
+    },
+    {
+      "name": "device_controlunit_name",
+      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.common.version:controlunitName\",\"value\":\"DHE-JA06\"}]"
+    },
+    {
+      "name": "device_order_number",
+      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.common.version:orderNumber\",\"value\":\"fixture-order\"}]"
+    },
+    {
+      "name": "device_contact_data",
+      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.common.version:contactData\",\"value\":{\"company\":\"Example Service\",\"mail\":\"support@example.invalid\",\"phone\":\"0000\"}}]"
+    },
+    {
+      "name": "raw_protocol_version",
+      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.common.odb:value\",\"value\":{\"id\":67,\"value\":1,\"isValid\":true}}]"
+    },
+    {
+      "name": "radio_city_catalog",
+      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.app.radio:city\",\"value\":[\"Fixture City\",\"Example Town\"]}]"
+    },
+    {
+      "name": "radio_genre_catalog",
+      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.app.radio:genre\",\"value\":[\"News\",\"Pop\"]}]"
+    },
+    {
+      "name": "radio_station_results",
+      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.app.radio:stations\",\"value\":[{\"Id\":5101,\"Name\":\"Catalog FM\",\"City\":\"Fixture City\"},{\"Id\":5102,\"Name\":\"Replay Radio\",\"City\":\"Example Town\"}]}]"
+    },
+    {
+      "name": "weather_countries",
+      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.app.weather:countries\",\"value\":[{\"LocationId\":\"country-1\",\"Name\":\"Exampleland\",\"CountryId\":999}]}]"
+    },
+    {
+      "name": "weather_country",
+      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.app.weather:country\",\"value\":999}]"
+    },
+    {
+      "name": "weather_favorites",
+      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.app.weather:favorites\",\"value\":[{\"LocationId\":\"fixture-weather-fav\",\"Name\":\"Fixture City\",\"Country\":\"Exampleland\",\"CountryId\":999}]}]"
+    },
+    {
+      "name": "weather_forecast_results",
+      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.app.weather:forecast\",\"value\":[{\"LocationId\":\"forecast-1\",\"Name\":\"Forecast City\",\"Country\":\"Exampleland\",\"CountryId\":999}]}]"
+    }
+  ],
+  "expected_runtime_state": {
+    "measurements": {
+      "1071": "DHE Connect 24"
+    },
+    "measurement_attributes": {
+      "1071": {
+        "device_type": "DHE Connect 24",
+        "product_id_prefix": "1234567",
+        "raw_odb_protocol_version": 1,
+        "gadget_data_valid": true,
+        "controlunit_name": "DHE-JA06"
+      }
+    },
+    "radio_internal": {
+      "stations.0.Id": 5101,
+      "catalogs.city.1": "Example Town",
+      "catalogs.genre.0": "News"
+    },
+    "weather": {
+      "country_id": 999,
+      "favorites.0.LocationId": "fixture-weather-fav",
+      "forecast_results.0.LocationId": "forecast-1"
+    },
+    "weather_internal": {
+      "countries.0.CountryId": 999
+    },
+    "runtime_parser_stats": {
+      "device_info": 5,
+      "odb_value": 1,
+      "radio_state": 2,
+      "radio_stations": 1,
+      "weather_state": 4
+    }
+  }
+}

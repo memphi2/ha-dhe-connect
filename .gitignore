@@ -1,0 +1,21 @@
+# Local pairing tokens (never commit)
+.tmp_pairing_token_*.txt
+.storage/stiebel_dhe_connect_token.txt
+.storage/stiebel_dhe_connect_token.txt.tmp
+.storage/stiebel_dhe_connect_token_*.txt
+.storage/stiebel_dhe_connect_token_*.txt.tmp
+
+# Local Python cache artifacts
+__pycache__/
+*/__pycache__/
+*.py[cod]
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Local virtual environments
+.venv/
+.venv-*/
