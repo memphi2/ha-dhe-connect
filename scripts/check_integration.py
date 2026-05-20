@@ -46,12 +46,20 @@ SILVER_RULES = {
     "test-coverage",
 }
 PINNED_VALIDATION_ACTIONS = {
+    "actions/checkout",
+    "actions/setup-python",
     "hacs/action",
     "home-assistant/actions/hassfest",
 }
 NODE24_VALIDATION_ACTION_MAJORS = {
     "actions/checkout": 6,
     "actions/setup-python": 6,
+}
+NODE24_VALIDATION_ACTION_PINS = {
+    # v6 tags resolved on 2026-05-20. Keep these in sync with
+    # .github/workflows/validate.yml when refreshing action pins.
+    "actions/checkout": {"de0fac2e4500dabe0009e67214ff5f5447ce83dd"},
+    "actions/setup-python": {"a309ff8b426b58ec0e2a45f0f869d46889d02405"},
 }
 _ACTION_REF_RE = re.compile(r"^\s*(?:-\s*)?uses:\s*([^@\s]+)@([^\s#]+)", re.MULTILINE)
 _MAJOR_VERSION_REF_RE = re.compile(r"^v(?P<major>\d+)(?:\.|$)")
@@ -203,7 +211,10 @@ def check_github_actions() -> None:
         if not refs:
             _fail(f"validation workflow is missing {action}")
         for ref in refs:
-            if not _action_ref_has_minimum_major(ref, minimum_major):
+            if (
+                ref not in NODE24_VALIDATION_ACTION_PINS.get(action, set())
+                and not _action_ref_has_minimum_major(ref, minimum_major)
+            ):
                 _fail(
                     f"{action}@{ref} must be v{minimum_major} or newer "
                     "to avoid GitHub Actions Node.js 20 runtime warnings"

@@ -45,8 +45,8 @@ class TestCheckIntegration(unittest.TestCase):
                 root,
                 """
                 steps:
-                  - uses: actions/checkout@v6.0.2
-                  - uses: actions/setup-python@v6.2.0
+                  - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+                  - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
                   - uses: hacs/action@dcb30e72781db3f207d5236b861172774ab0b485
                   - uses: home-assistant/actions/hassfest@f6f29a7ee3fa0eccadf3620a7b9ee00ab54ec03b
                 """,
@@ -81,8 +81,8 @@ class TestCheckIntegration(unittest.TestCase):
                 root,
                 """
                 steps:
-                  - uses: actions/checkout@v6.0.2
-                  - uses: actions/setup-python@v6.2.0
+                  - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+                  - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
                   - uses: hacs/action@main
                   - uses: home-assistant/actions/hassfest@master
                 """,
@@ -102,8 +102,8 @@ class TestCheckIntegration(unittest.TestCase):
                 root,
                 """
                 steps:
-                  - uses: actions/checkout@v6.0.2
-                  - uses: actions/setup-python@v6.2.0
+                  - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+                  - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
                   - uses: hacs/action@main
                   - uses: hacs/action@dcb30e72781db3f207d5236b861172774ab0b485
                   - uses: home-assistant/actions/hassfest@f6f29a7ee3fa0eccadf3620a7b9ee00ab54ec03b
