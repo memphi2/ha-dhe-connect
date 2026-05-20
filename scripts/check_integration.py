@@ -103,7 +103,7 @@ def check_manifest() -> str:
     manifest = _load_json(INTEGRATION / "manifest.json")
     required = {
         "domain": "stiebel_dhe_connect",
-        "name": "DHE Connect (Unofficial)",
+        "name": "DHE Connect",
         "config_flow": True,
         "iot_class": "local_push",
         "integration_type": "device",
@@ -121,7 +121,7 @@ def check_manifest() -> str:
 
 def check_hacs() -> None:
     hacs = _load_json(ROOT / "hacs.json")
-    if hacs.get("name") != "DHE Connect (Unofficial)":
+    if hacs.get("name") != "DHE Connect":
         _fail("hacs.json name does not match the integration name")
     if hacs.get("render_readme") is not True:
         _fail("hacs.json render_readme must be true")

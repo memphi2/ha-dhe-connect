@@ -97,7 +97,7 @@
   "options": {
     "step": {
       "init": {
-        "title": "Configure DHE Connect (Unofficial)",
+        "title": "Configure DHE Connect",
         "description": "Manage connection settings, device, costs, weather favorites or radio stations.",
         "menu_options": {
           "connection": "Connection/device",

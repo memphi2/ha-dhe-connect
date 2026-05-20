@@ -101,7 +101,7 @@ diagnostics in a compact Mushroom-style layout.
    ```
 
 5. Select category `Integration`.
-6. Install `DHE Connect (Unofficial)`.
+6. Install `DHE Connect`.
 7. Restart Home Assistant.
 8. Add the integration from `Settings` -> `Devices & services`.
 
@@ -113,12 +113,12 @@ Copy the integration directory to:
 /config/custom_components/stiebel_dhe_connect/
 ```
 
-After copying, restart Home Assistant and add `DHE Connect (Unofficial)` from the UI.
+After copying, restart Home Assistant and add `DHE Connect` from the UI.
 
 ### Removal
 
 1. In Home Assistant, open `Settings` -> `Devices & services`.
-2. Open the `DHE Connect (Unofficial)` integration entry.
+2. Open the `DHE Connect` integration entry.
 3. Use the three-dot menu and choose `Delete`.
 4. Restart Home Assistant if you want to remove the custom integration files.
 5. For manual installations, delete
@@ -213,7 +213,7 @@ uses the paired device MAC address when the DHE reports one.
 
 Add one config entry per DHE device:
 
-1. `Settings` -> `Devices & services` -> `Add integration` -> `DHE Connect (Unofficial)`
+1. `Settings` -> `Devices & services` -> `Add integration` -> `DHE Connect`
 2. Enter host, port, name and physical `Tmax` jumper position for that exact DHE
 3. Complete pairing on the device display (required)
 4. Repeat for the next DHE
@@ -222,7 +222,7 @@ Each config entry keeps its own runtime session, token file and entity set.
 
 ### First pairing flow
 
-1. Add `DHE Connect (Unofficial)` from `Settings` -> `Devices & services`.
+1. Add `DHE Connect` from `Settings` -> `Devices & services`.
 2. Enter the DHE host/IP, port, a provisional device name and the physical `Tmax` jumper position.
 3. Submit the form, then click `OK` on the pairing confirmation step.
 4. Confirm the pairing request on the DHE device display and complete the confirmation there (required).

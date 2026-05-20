@@ -45,7 +45,7 @@ Typische Funktionen:
    ```
 
 5. Kategorie `Integration` auswaehlen.
-6. `DHE Connect (Unofficial)` installieren.
+6. `DHE Connect` installieren.
 7. Home Assistant neu starten.
 8. Unter `Einstellungen` -> `Geraete & Dienste` die Integration hinzufuegen.
 

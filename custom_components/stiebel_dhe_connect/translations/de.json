@@ -97,7 +97,7 @@
   "options": {
     "step": {
       "init": {
-        "title": "DHE Connect (Unofficial) konfigurieren",
+        "title": "DHE Connect konfigurieren",
         "description": "Verbindung, Gerät, Kosten, Wetter-Favoriten oder Radio-Sender verwalten.",
         "menu_options": {
           "connection": "Verbindung/Gerät",

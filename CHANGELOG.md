@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-- No changes yet.
+- Home Assistant and HACS display names now use `DHE Connect`; the repository
+  documentation keeps the unofficial community-project disclaimer.
 
 ## v1.6.0 - 2026-05-20
 
