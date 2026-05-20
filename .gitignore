@@ -1,5 +1,6 @@
 # Local pairing tokens (never commit)
 .tmp_pairing_token_*.txt
+.storage/stiebel_dhe_connect_token.txt
 .storage/stiebel_dhe_connect_token_*.txt
 
 # Local Python cache artifacts
