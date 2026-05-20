@@ -15,6 +15,12 @@ def dhe_action_error(message: str, err: DHEError) -> HomeAssistantError:
     return HomeAssistantError(f"{message}: {err}")
 
 
+def raise_if_dhe_unavailable(client: object, message: str) -> None:
+    """Raise a HA action error when a DHE-backed control is offline."""
+    if not bool(getattr(client, "available", False)):
+        raise HomeAssistantError(message)
+
+
 async def run_dhe_action(action: Awaitable[Any], message: str) -> Any:
     """Run one DHE-backed action and expose DHE failures to Home Assistant."""
     try:

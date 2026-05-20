@@ -239,6 +239,7 @@ After successful pairing the local token is stored per configured DHE target at:
 
 With multiple DHE devices, each host/port pair gets its own token file.
 For very long hostnames, the token filename uses a bounded host component with a hash suffix to avoid filesystem filename-length errors.
+When an existing entry is reconfigured to a new host or port, Home Assistant preserves the current local token for the new target and only asks for repair pairing if the DHE later rejects it.
 During explicit setup pairing, stale legacy-shaped or entry-id based token files that do not belong to an existing DHE config entry are removed before a fresh token is requested.
 
 Use the disabled-by-default `Repair pairing` button if you want to force a new pairing from Home Assistant.

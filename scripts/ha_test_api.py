@@ -203,12 +203,8 @@ class HomeAssistantApi:
     def revoke_refresh_token(self, refresh_token: str) -> bool:
         """Revoke a refresh token through the HA auth endpoint."""
         self._request_form(
-            "/auth/token",
-            {
-                "grant_type": "delete",
-                "refresh_token": refresh_token,
-                "client_id": self.client_id,
-            },
+            "/auth/revoke",
+            {"token": refresh_token},
             timeout=10,
         )
         return True
@@ -502,6 +498,15 @@ def _parse_args() -> argparse.Namespace:
         default="HA_TEST_PASSWORD",
         help="Environment variable that contains the HA password.",
     )
+    parser.add_argument(
+        "--access-token-env",
+        default="HA_TEST_ACCESS_TOKEN",
+        help=(
+            "Environment variable that contains a Home Assistant long-lived "
+            "access token. When set, no password login or refresh-token revoke "
+            "is performed."
+        ),
+    )
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument(
         "--login-wait-timeout",
@@ -603,11 +608,12 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = _parse_args()
+    access_token = os.environ.get(args.access_token_env, "").strip()
     password = os.environ.get(args.password_env)
-    if not args.username:
+    if not access_token and not args.username:
         print("FAIL: HA username is required via --username or HA_TEST_USERNAME")
         return 1
-    if not password:
+    if not access_token and not password:
         print(f"FAIL: password env var {args.password_env!r} is not set")
         return 1
 
@@ -622,17 +628,21 @@ def main() -> int:
     refresh_token = ""
     exit_code = 0
     try:
-        try:
-            token = api.login(args.username, password)
-        except Exception as err:  # noqa: BLE001
-            print(f"FAIL: HA auth login failed: {format_redacted_exception(err)}")
-            return 1
-        refresh_token = token.refresh_token
-        print("PASS: HA auth login")
+        if access_token:
+            print("PASS: HA token loaded from env")
+        else:
+            try:
+                token = api.login(args.username, password)
+            except Exception as err:  # noqa: BLE001
+                print(f"FAIL: HA auth login failed: {format_redacted_exception(err)}")
+                return 1
+            access_token = token.access_token
+            refresh_token = token.refresh_token
+            print("PASS: HA auth login")
         if args.restart:
             print(
                 "INFO: "
-                f"{api.restart(token.access_token, timeout=args.restart_request_timeout)}"
+                f"{api.restart(access_token, timeout=args.restart_request_timeout)}"
             )
             if not api.wait_online(
                 timeout=args.wait_timeout,
@@ -644,7 +654,7 @@ def main() -> int:
             print("PASS: HA online")
         if args.service_smoke:
             if not api.wait_api_ready(
-                token.access_token,
+                access_token,
                 timeout=args.api_ready_timeout,
             ):
                 print("FAIL: HA authenticated API did not become ready")
@@ -654,7 +664,7 @@ def main() -> int:
                 try:
                     results = run_service_smoke(
                         api,
-                        token.access_token,
+                        access_token,
                         climate_entity=args.climate_entity,
                         radio_entity=args.radio_entity,
                         radio_auto_off_seconds=args.radio_auto_off_seconds,
@@ -672,7 +682,7 @@ def main() -> int:
                             exit_code = 3
         if args.entity_smoke:
             if not api.wait_api_ready(
-                token.access_token,
+                access_token,
                 timeout=args.api_ready_timeout,
             ):
                 print("FAIL: HA authenticated API did not become ready")
@@ -682,7 +692,7 @@ def main() -> int:
                 try:
                     results = run_entity_smoke(
                         api,
-                        token.access_token,
+                        access_token,
                         disabled_entity_ids=disabled_entity_ids_from_registry(
                             args.config
                         ),
@@ -700,7 +710,7 @@ def main() -> int:
                             exit_code = 3
         if args.timer_smoke:
             if not api.wait_api_ready(
-                token.access_token,
+                access_token,
                 timeout=args.api_ready_timeout,
             ):
                 print("FAIL: HA authenticated API did not become ready")
@@ -710,7 +720,7 @@ def main() -> int:
                 try:
                     results = run_timer_smoke(
                         api,
-                        token.access_token,
+                        access_token,
                         switch_entity=args.timer_switch_entity,
                         remaining_entity=args.timer_remaining_entity,
                         duration_entity=args.timer_duration_entity,
@@ -744,7 +754,7 @@ def main() -> int:
                         if args.restart_before_localhost_cleanup:
                             try:
                                 restart_result = api.restart(
-                                    token.access_token,
+                                    access_token,
                                     timeout=args.restart_request_timeout,
                                 )
                             except Exception as restart_err:  # noqa: BLE001

@@ -11,23 +11,32 @@ from typing import Any, cast
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_NAME
+from homeassistant.config_entries import ConfigEntry, SOURCE_REAUTH
+from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import issue_registry as ir
 
-from .action_error_helpers import run_dhe_action
-from .async_helpers import cancel_task_if_pending
+from .action_error_helpers import raise_if_dhe_unavailable, run_dhe_action
+from .async_helpers import (
+    cancel_task_if_pending,
+    create_background_task,
+    task_cancel_callback,
+)
 from .client import DHEClient
 from .config_entry_helpers import merged_entry_data, entry_target
+from .connection_helpers import normalize_host, validate_port
 from .connection_probe import async_can_connect as _async_can_connect
 from .const import (
     DEFAULT_NAME,
+    DEFAULT_PORT,
     DOMAIN,
     PLATFORMS,
 )
+from .repair_issues import async_create_pairing_issue, async_delete_pairing_issue
 from .runtime_helpers import (
     clear_runtime_data,
     iter_loaded_runtime_data,
@@ -76,6 +85,12 @@ WEATHER_TOGGLE_FAVORITE_SCHEMA = WEATHER_LOCATION_ACTION_SCHEMA
 WEATHER_SELECT_LOCATION_SCHEMA = WEATHER_LOCATION_ACTION_SCHEMA
 WEATHER_ADD_FAVORITE_SCHEMA = WEATHER_LOCATION_ACTION_SCHEMA
 WEATHER_REMOVE_FAVORITE_SCHEMA = WEATHER_LOCATION_ACTION_SCHEMA
+STALE_SENSOR_STATISTIC_TRANSLATION_KEYS = frozenset(
+    {
+        "odb_possible_energy_saving",
+        "odb_actual_water_saving",
+    }
+)
 
 
 @dataclass
@@ -138,11 +153,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     target = entry_target(entry)
     if target is None:
         raise HomeAssistantError("Invalid DHE host/port in config entry")
-    host, port = target
-    name = data.get(CONF_NAME, DEFAULT_NAME)
-
-    if not await _async_can_connect(hass, host, port):
+    reachable_target = await _async_first_reachable_entry_target(hass, entry, target)
+    if reachable_target is None:
         raise ConfigEntryNotReady("Could not connect to DHE before setup")
+    host, port = reachable_target
+    name = data.get(CONF_NAME, DEFAULT_NAME)
 
     token_file = _token_file_for_entry(entry)
     await _async_migrate_legacy_token_if_needed(hass, entry, token_file)
@@ -154,10 +169,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         token_file=token_file,
         name="Home Assistant",
     )
+    client.device_identifier = _device_identifier_for_entry(entry)
     client.legacy_device_identifier = _legacy_device_identifier_for_entry(
         hass,
         entry,
         host,
+    )
+    client.legacy_device_identifiers = _legacy_device_identifiers_for_entry(
+        hass,
+        entry,
+        host,
+        port,
+        client.device_identifier,
     )
 
     runtime = DHEConnectRuntimeData(
@@ -178,13 +201,78 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         clear_runtime_data(entry)
         raise
+    _async_cleanup_empty_legacy_devices(hass, entry, client.device_identifier)
+    _async_clear_stale_sensor_statistic_issues(hass, entry)
     _async_register_services(hass)
-    runtime.start_task = _start_client_background(hass, client)
-    entry.async_on_unload(runtime.start_task.cancel)
     _async_register_reauth_trigger(hass, entry, client)
+    runtime.start_task = _start_client_background(hass, entry, client)
+    entry.async_on_unload(task_cancel_callback(runtime.start_task))
+    async_delete_pairing_issue(hass, entry.entry_id)
+    _async_clear_config_entry_reauth(hass, entry)
+    _async_schedule_config_entry_reauth_clear(hass, entry)
+    _async_schedule_connected_issue_cleanup(hass, entry, client)
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
+
+
+async def _async_first_reachable_entry_target(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    primary_target: tuple[str, int],
+) -> tuple[str, int] | None:
+    """Return the first reachable target, allowing Zeroconf hostname fallbacks."""
+    for host, port in _entry_setup_target_candidates(entry, primary_target):
+        if await _async_can_connect(hass, host, port):
+            return host, port
+    return None
+
+
+def _entry_setup_target_candidates(
+    entry: ConfigEntry,
+    primary_target: tuple[str, int],
+) -> tuple[tuple[str, int], ...]:
+    """Return setup targets in preference order without changing entry data."""
+    candidates = [primary_target]
+    data_target = _target_from_entry_data(entry)
+    if data_target is not None and data_target not in candidates:
+        candidates.append(data_target)
+    return tuple(candidates)
+
+
+def _target_from_entry_data(entry: ConfigEntry) -> tuple[str, int] | None:
+    """Return the original config-entry data target, ignoring option overrides."""
+    try:
+        return (
+            normalize_host(str(entry.data[CONF_HOST])),
+            validate_port(entry.data.get(CONF_PORT, DEFAULT_PORT)),
+        )
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _device_identifier_for_entry(entry: ConfigEntry) -> str:
+    """Return the stable HA device identifier for one config entry."""
+    if entry.unique_id:
+        return f"device:{entry.unique_id}"
+    return f"entry:{entry.entry_id}"
+
+
+def _legacy_device_identifiers_for_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    host: str,
+    port: int,
+    stable_identifier: str,
+) -> set[str]:
+    """Return old host-derived identifiers that should merge into the device."""
+    identifiers = {f"{host}:{port}"}
+    device_registry = dr.async_get(hass)
+    for device in dr.async_entries_for_config_entry(device_registry, entry.entry_id):
+        for domain, identifier in device.identifiers:
+            if domain == DOMAIN and identifier != stable_identifier:
+                identifiers.add(identifier)
+    return identifiers
 
 
 def _legacy_device_identifier_for_entry(
@@ -204,6 +292,108 @@ def _legacy_device_identifier_for_entry(
         if legacy_identifier in device.identifiers:
             return host
     return None
+
+
+def _async_cleanup_empty_legacy_devices(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    stable_identifier: str | None,
+) -> None:
+    """Remove empty host-derived devices left behind by older identity schemes."""
+    if not stable_identifier:
+        return
+
+    device_registry = dr.async_get(hass)
+    entity_registry = er.async_get(hass)
+    canonical_identifier = (DOMAIN, stable_identifier)
+    dhe_devices = [
+        device
+        for device in dr.async_entries_for_config_entry(device_registry, entry.entry_id)
+        if any(domain == DOMAIN for domain, _identifier in device.identifiers)
+    ]
+    if not dhe_devices:
+        return
+
+    identifiers = {canonical_identifier}
+    for device in dhe_devices:
+        identifiers.update(
+            (domain, identifier)
+            for domain, identifier in device.identifiers
+            if domain == DOMAIN
+        )
+
+    entity_counts = {
+        device.id: len(
+            er.async_entries_for_device(
+                entity_registry,
+                device.id,
+                include_disabled_entities=True,
+            )
+        )
+        for device in dhe_devices
+    }
+    canonical_device = next(
+        (device for device in dhe_devices if canonical_identifier in device.identifiers),
+        None,
+    )
+    target_device = canonical_device
+    if canonical_device is None:
+        target_device = max(
+            dhe_devices,
+            key=lambda device: entity_counts[device.id],
+        )
+    elif entity_counts[canonical_device.id] == 0:
+        entity_devices = [
+            device for device in dhe_devices if entity_counts[device.id] > 0
+        ]
+        if entity_devices:
+            target_device = max(
+                entity_devices,
+                key=lambda device: entity_counts[device.id],
+            )
+
+    if target_device is None:
+        return
+
+    if not identifiers.issubset(target_device.identifiers):
+        device_registry.async_update_device(
+            target_device.id,
+            merge_identifiers=identifiers,
+        )
+
+    canonical_device_id = target_device.id
+    for device in dhe_devices:
+        if device.id == canonical_device_id:
+            continue
+        for entity_entry in er.async_entries_for_device(
+            entity_registry,
+            device.id,
+            include_disabled_entities=True,
+        ):
+            entity_registry.async_update_entity(
+                entity_entry.entity_id,
+                device_id=canonical_device_id,
+            )
+        device_registry.async_remove_device(device.id)
+
+
+@callback
+def _async_clear_stale_sensor_statistic_issues(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+) -> None:
+    """Clear HA statistic issues caused by older invalid saving sensor classes."""
+    entity_registry = er.async_get(hass)
+    for entity in er.async_entries_for_config_entry(entity_registry, entry.entry_id):
+        if entity.platform != DOMAIN:
+            continue
+        if entity.translation_key not in STALE_SENSOR_STATISTIC_TRANSLATION_KEYS:
+            continue
+        ir.async_delete_issue(
+            hass,
+            "sensor",
+            f"mean_type_changed_{entity.entity_id}",
+        )
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -230,13 +420,14 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
 
 def _start_client_background(
     hass: HomeAssistant,
+    entry: ConfigEntry,
     client: DHEClient,
 ) -> asyncio.Task[Any]:
     """Start the persistent DHE session without blocking entity setup."""
-    create_background_task = getattr(hass, "async_create_background_task", None)
-    if create_background_task is not None:
-        return create_background_task(client.start(), "stiebel_dhe_connect_start")
-    return hass.async_create_task(client.start(), name="stiebel_dhe_connect_start")
+    create_task = getattr(entry, "async_create_background_task", None)
+    if create_task is not None:
+        return create_task(hass, client.start(), "stiebel_dhe_connect_start")
+    return create_background_task(hass, client.start(), "stiebel_dhe_connect_start")
 
 
 def _async_register_reauth_trigger(
@@ -244,19 +435,133 @@ def _async_register_reauth_trigger(
     entry: ConfigEntry,
     client: DHEClient,
 ) -> None:
-    """Start Home Assistant reauth once the runtime reports auth failure."""
-    reauth_started = False
+    """Create exactly one DHE repair issue when runtime auth fails."""
+    issue_created = False
 
     @callback
     def _handle_diagnostic_update(state: dict[str, Any]) -> None:
-        nonlocal reauth_started
-        if reauth_started:
+        nonlocal issue_created
+        if state.get("connection_state") == "connected":
+            issue_created = False
+            async_delete_pairing_issue(hass, entry.entry_id)
+            _async_clear_config_entry_reauth(hass, entry)
+            _async_clear_stale_sensor_statistic_issues(hass, entry)
+            _async_schedule_connected_issue_cleanup(hass, entry, client)
             return
-        if state.get("auth_failure") is True or state.get("connection_state") == "auth_failed":
-            reauth_started = True
-            entry.async_start_reauth(hass, data=dict(entry.data))
+        if issue_created:
+            return
+        if (
+            state.get("auth_failure") is True
+            or state.get("connection_state") == "auth_failed"
+        ):
+            issue_created = True
+            name = str(
+                merged_entry_data(entry).get(CONF_NAME, entry.title or DEFAULT_NAME)
+            )
+            async_create_pairing_issue(
+                hass,
+                entry.entry_id,
+                name,
+            )
+            _async_clear_config_entry_reauth(hass, entry)
+            _async_schedule_config_entry_reauth_clear(hass, entry)
 
     entry.async_on_unload(client.add_diagnostic_callback(_handle_diagnostic_update))
+
+
+@callback
+def _async_clear_config_entry_reauth(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+) -> None:
+    """Abort stale HA reauth flows and delete HA's generic stale reauth issue."""
+    for flow in _async_entry_reauth_flows(hass, entry):
+        if flow_id := flow.get("flow_id"):
+            hass.config_entries.flow.async_abort(flow_id)
+    ir.async_delete_issue(
+        hass,
+        "homeassistant",
+        f"config_entry_reauth_{entry.domain}_{entry.entry_id}",
+    )
+
+
+def _async_entry_reauth_flows(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+) -> tuple[dict[str, Any], ...]:
+    """Return active reauth flows that belong to a config entry."""
+    flows: list[dict[str, Any]] = []
+    for flow in hass.config_entries.flow.async_progress_by_handler(entry.domain):
+        context = flow.get("context") or {}
+        if context.get("source") != SOURCE_REAUTH:
+            continue
+        if context.get("entry_id") == entry.entry_id:
+            flows.append(flow)
+            continue
+        if entry.unique_id and context.get("unique_id") == entry.unique_id:
+            flows.append(flow)
+    return tuple(flows)
+
+
+def _async_schedule_config_entry_reauth_clear(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+) -> None:
+    """Schedule a delayed cleanup for generic HA reauth leftovers."""
+    task = create_background_task(
+        hass,
+        _async_clear_config_entry_reauth_delayed(hass, entry),
+        name="stiebel_dhe_connect_clear_stale_reauth",
+    )
+    entry.async_on_unload(task_cancel_callback(task))
+
+
+async def _async_clear_config_entry_reauth_delayed(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+) -> None:
+    """Clear generic HA reauth issue after HA has settled issue creation."""
+    await asyncio.sleep(0)
+    _async_clear_config_entry_reauth(hass, entry)
+    await asyncio.sleep(1)
+    _async_clear_config_entry_reauth(hass, entry)
+
+
+def _async_schedule_connected_issue_cleanup(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    client: DHEClient,
+) -> None:
+    """Schedule stale Repairs cleanup once the runtime is truly connected."""
+    task = create_background_task(
+        hass,
+        _async_clear_issues_when_connected(hass, entry, client),
+        name="stiebel_dhe_connect_clear_connected_issues",
+    )
+    entry.async_on_unload(task_cancel_callback(task))
+
+
+async def _async_clear_issues_when_connected(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    client: DHEClient,
+) -> None:
+    """Clear stale repair issues after connected state reaches HA."""
+    for _attempt in range(30):
+        if client.diagnostic_state.get("connection_state") == "connected":
+            break
+        await asyncio.sleep(1)
+    else:
+        return
+
+    for delay in (0, 1, 5):
+        if delay:
+            await asyncio.sleep(delay)
+        if client.diagnostic_state.get("connection_state") != "connected":
+            return
+        async_delete_pairing_issue(hass, entry.entry_id)
+        _async_clear_config_entry_reauth(hass, entry)
+        _async_clear_stale_sensor_statistic_issues(hass, entry)
 
 
 def _async_register_services(hass: HomeAssistant) -> None:
@@ -264,6 +569,10 @@ def _async_register_services(hass: HomeAssistant) -> None:
 
     async def async_search_weather_location(call: ServiceCall) -> None:
         runtime = _resolve_runtime(hass, call.data.get(ATTR_ENTRY_ID))
+        raise_if_dhe_unavailable(
+            runtime.client,
+            "DHE is unavailable; cannot search weather locations",
+        )
         await _run_dhe_service_action(
             runtime.client.search_weather_locations(
                 call.data[ATTR_NAME],
@@ -275,6 +584,10 @@ def _async_register_services(hass: HomeAssistant) -> None:
     async def async_toggle_weather_favorite(call: ServiceCall) -> None:
         runtime = _resolve_runtime(hass, call.data.get(ATTR_ENTRY_ID))
         client = runtime.client
+        raise_if_dhe_unavailable(
+            client,
+            "DHE is unavailable; cannot toggle weather favorite",
+        )
         data = call.data
         results = await _weather_results_from_service_input(
             client,
@@ -299,6 +612,10 @@ def _async_register_services(hass: HomeAssistant) -> None:
     async def async_add_weather_favorite(call: ServiceCall) -> None:
         runtime = _resolve_runtime(hass, call.data.get(ATTR_ENTRY_ID))
         client = runtime.client
+        raise_if_dhe_unavailable(
+            client,
+            "DHE is unavailable; cannot add weather favorite",
+        )
         data = call.data
         results = await _weather_results_from_service_input(
             client,
@@ -323,6 +640,10 @@ def _async_register_services(hass: HomeAssistant) -> None:
     async def async_remove_weather_favorite(call: ServiceCall) -> None:
         runtime = _resolve_runtime(hass, call.data.get(ATTR_ENTRY_ID))
         client = runtime.client
+        raise_if_dhe_unavailable(
+            client,
+            "DHE is unavailable; cannot remove weather favorite",
+        )
         data = call.data
         results = await _weather_results_from_service_input(
             client,
@@ -347,6 +668,10 @@ def _async_register_services(hass: HomeAssistant) -> None:
     async def async_select_weather_location(call: ServiceCall) -> None:
         runtime = _resolve_runtime(hass, call.data.get(ATTR_ENTRY_ID))
         client = runtime.client
+        raise_if_dhe_unavailable(
+            client,
+            "DHE is unavailable; cannot select weather location",
+        )
         data = call.data
         results = await _weather_results_from_service_input(
             client,

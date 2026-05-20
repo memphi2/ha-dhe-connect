@@ -45,6 +45,10 @@ SILVER_RULES = {
     "reauthentication-flow",
     "test-coverage",
 }
+GOLD_CORE_RULES = {
+    "reconfiguration-flow",
+    "repair-issues",
+}
 PINNED_VALIDATION_ACTIONS = {
     "actions/checkout",
     "actions/setup-python",
@@ -179,12 +183,12 @@ def _quality_scale_done_rules(text: str) -> set[str]:
 
 
 def check_quality_scale() -> None:
-    """Ensure the tracked Home Assistant Silver rules stay marked as done."""
+    """Ensure tracked Home Assistant Silver and Gold-core rules stay done."""
     path = INTEGRATION / "quality_scale.yaml"
     done = _quality_scale_done_rules(path.read_text(encoding="utf-8"))
-    missing = sorted(SILVER_RULES - done)
+    missing = sorted((SILVER_RULES | GOLD_CORE_RULES) - done)
     if missing:
-        _fail(f"quality_scale.yaml is missing Silver done rules: {missing}")
+        _fail(f"quality_scale.yaml is missing required done rules: {missing}")
 
 
 def check_github_actions() -> None:

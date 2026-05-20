@@ -58,12 +58,13 @@ rules:
   entity-translations: done
   exception-translations: todo
   icon-translations: todo
-  reconfiguration-flow: todo
+  reconfiguration-flow: done
   repair-issues:
-    status: exempt
+    status: done
     comment: |
-      The integration uses reauthentication and an explicit repair-pairing
-      button; it does not currently create Home Assistant Repairs issues.
+      Stored-token authentication failures create a fixable Home Assistant
+      Repairs issue. The fix flow requests and validates a fresh local pairing
+      token before reloading the existing config entry.
   stale-devices:
     status: exempt
     comment: |
@@ -81,3 +82,407 @@ rules:
     comment: |
       There is no external communication library that accepts a web session.
   strict-typing: todo
+
+evidence:
+  # Explicit Silver mapping: rule -> implementation / tests / documentation.
+  silver:
+    action-exceptions:
+      implementation: >
+        Service actions run through shared DHE action helpers and raise
+        HomeAssistantError while preserving DHEError as the exception cause.
+      tests: >
+        Service failure tests cover a rejected DHE action path.
+      docs: >
+        docs/entities.md documents service use and docs/troubleshooting.md
+        covers action and pairing failures.
+    config-entry-unloading:
+      implementation: >
+        async_unload_entry unloads platforms, cancels the client start task,
+        stops the client, clears runtime data and unregisters services when the
+        last entry is unloaded.
+      tests: >
+        Home Assistant fixture tests cover setup, unload, reload and task
+        cleanup.
+      docs: >
+        docs/validation.md lists unload and reload as Silver validation gates.
+    docs-configuration-parameters:
+      implementation: >
+        Runtime options cover host, port, device name and physical Tmax jumper
+        position.
+      tests: >
+        Repository checks require validation and troubleshooting references.
+      docs: >
+        README.md and docs/troubleshooting.md describe the configurable
+        parameters and safe host/port formats.
+    docs-installation-parameters:
+      implementation: >
+        Installation uses the Home Assistant UI config flow with manual host,
+        subnet scan and Zeroconf discovery choices.
+      tests: >
+        Config-flow and HA fixture tests cover installation paths.
+      docs: >
+        README.md documents installation and setup parameters.
+    entity-unavailable:
+      implementation: >
+        Client availability callbacks and reconnect grace handling mark live
+        entities unavailable only when the DHE session is no longer usable.
+      tests: >
+        Runtime availability, reconnect and offline fixture tests cover
+        unavailable transitions.
+      docs: >
+        docs/troubleshooting.md documents offline, reconnect and live-sensor
+        behavior.
+    integration-owner:
+      implementation: >
+        manifest.json declares code owner metadata for this custom integration.
+      tests: >
+        scripts/check_integration.py validates required manifest fields.
+      docs: >
+        README.md contains support and issue-reporting references.
+    log-when-unavailable:
+      implementation: >
+        Setup and reconnect failures are logged with sanitized context and
+        without exposing host credentials or token values.
+      tests: >
+        Redaction, diagnostics and smoke-output tests cover sensitive-value
+        handling.
+      docs: >
+        docs/troubleshooting.md explains which diagnostics and logs to inspect.
+    parallel-updates:
+      implementation: >
+        Push-style platforms set PARALLEL_UPDATES to 0 because state comes from
+        the shared runtime client.
+      tests: >
+        tests/test_quality_scale_silver.py imports every platform and checks
+        PARALLEL_UPDATES.
+      docs: >
+        docs/validation.md records the push-update validation evidence.
+    reauthentication-flow:
+      implementation: >
+        Stored-token authentication failures start Home Assistant reauth and
+        create a fixable Repairs issue backed by the normal pairing flow.
+      tests: >
+        HA fixture tests cover auth failure, reauth start and repair pairing.
+      docs: >
+        docs/troubleshooting.md documents invalid-token and pairing repair
+        recovery.
+    test-coverage:
+      implementation: >
+        scripts/check_coverage.py runs pytest-cov for deterministic integration
+        modules with a documented Silver coverage gate.
+      tests: >
+        scripts/check_coverage.py and scripts/check_integration.py are part of
+        the release validation command set.
+      docs: >
+        docs/validation.md documents the coverage threshold and every
+        exclusion.
+
+  bronze:
+    action-setup:
+      implementation: >
+        __init__.py registers domain services and services.yaml defines their
+        schemas.
+      tests: >
+        HA fixture and service tests cover registration and routing.
+      docs: >
+        docs/entities.md provides service examples.
+    appropriate-polling:
+      implementation: >
+        The integration is runtime push based; explicit startup reads and setup
+        scans are bounded.
+      tests: >
+        Fake-DHE, timer and recorder tests cover runtime update behavior.
+      docs: >
+        docs/protocol.md and docs/troubleshooting.md describe update behavior.
+    brands:
+      implementation: >
+        Local brand assets are shipped under brand/.
+      tests: >
+        scripts/check_integration.py validates required repository files.
+      docs: >
+        README.md references the optional dashboard/card presentation.
+    common-modules:
+      implementation: >
+        Home Assistant platform modules and shared integration helpers follow
+        standard custom-integration structure.
+      tests: >
+        Import, Ruff and type gates cover module consistency.
+      docs: >
+        README.md links to the integration structure and validation docs.
+    config-flow:
+      implementation: >
+        The config flow supports Zeroconf discoveries, subnet scan and manual
+        host entry before pairing creates the config entry.
+      tests: >
+        HA fixture config-flow, Zeroconf and scan tests cover the setup paths.
+      docs: >
+        README.md and docs/troubleshooting.md document setup choices.
+    config-flow-test-coverage:
+      implementation: >
+        Config-flow helper logic and HA flow transitions are covered by
+        dedicated tests.
+      tests: >
+        tests/test_00_ha_fixture_runtime.py and config-flow helper tests cover
+        flow behavior.
+      docs: >
+        docs/validation.md lists config-flow validation evidence.
+    dependency-transparency:
+      implementation: >
+        manifest.json declares no runtime requirements and the local protocol
+        client is implemented in the integration.
+      tests: >
+        scripts/check_integration.py validates manifest requirements.
+      docs: >
+        README.md documents installation without hidden package setup.
+    docs-actions:
+      implementation: >
+        DHE services and their target-entry behavior are documented.
+      tests: >
+        Service tests cover success and failure paths.
+      docs: >
+        docs/entities.md documents actions and examples.
+    docs-high-level-description:
+      implementation: >
+        README.md describes the local DHE Connect integration scope.
+      tests: >
+        Repository checks validate required README references.
+      docs: >
+        README.md.
+    docs-installation-instructions:
+      implementation: >
+        HACS and custom integration installation paths are documented.
+      tests: >
+        Repository checks validate required docs.
+      docs: >
+        README.md installation section.
+    docs-removal-instructions:
+      implementation: >
+        Removal guidance includes Home Assistant removal and token cleanup.
+      tests: >
+        scripts/check_integration.py validates the removal section.
+      docs: >
+        README.md removal section.
+    entity-event-setup:
+      implementation: >
+        Exempt because entities subscribe to shared client callbacks and not to
+        independent external event sources.
+      tests: >
+        Platform setup and unload tests cover callback registration cleanup.
+      docs: >
+        The exemption is documented in the rules section above.
+    entity-unique-id:
+      implementation: >
+        Entity unique IDs are scoped by config entry and entity description key.
+      tests: >
+        Entity registry and multi-entry tests cover stable IDs.
+      docs: >
+        docs/entities.md describes entity behavior.
+    has-entity-name:
+      implementation: >
+        Entity descriptions use translation keys and Home Assistant entity-name
+        handling.
+      tests: >
+        Translation and entity setup checks cover named entities.
+      docs: >
+        docs/entities.md lists translated entity names.
+    runtime-data:
+      implementation: >
+        DHEConnectRuntimeData stores the runtime client, display name and start
+        task on the config entry.
+      tests: >
+        Setup, reload and unload fixture tests cover runtime-data lifecycle.
+      docs: >
+        docs/validation.md records the runtime-data evidence.
+    test-before-configure:
+      implementation: >
+        Setup validates host, port, reachability, pairing and login before
+        creating a config entry.
+      tests: >
+        Config-flow and Fake-DHE pairing tests cover setup validation.
+      docs: >
+        docs/troubleshooting.md documents setup failures.
+    test-before-setup:
+      implementation: >
+        async_setup_entry checks DHE reachability before platform setup.
+      tests: >
+        ConfigEntryNotReady HA fixture tests cover failed setup.
+      docs: >
+        docs/troubleshooting.md documents offline setup behavior.
+    unique-config-entry:
+      implementation: >
+        Host/port duplicates and MAC-based duplicates abort setup before a
+        second entry is created.
+      tests: >
+        Duplicate target and MAC duplicate tests cover all setup methods.
+      docs: >
+        docs/troubleshooting.md documents duplicate and recreated-device cases.
+
+  gold:
+    devices:
+      implementation: >
+        Device identity is stable per config entry and merges legacy host/IP
+        identifiers when needed.
+      tests: >
+        Entity-registry and multi-entry fixture tests cover device stability.
+      docs: >
+        docs/entities.md and docs/troubleshooting.md document device identity.
+    diagnostics:
+      implementation: >
+        Diagnostics export redacted runtime, discovery, reconnect, parser and
+        device summaries.
+      tests: >
+        tests/test_diagnostics.py covers loaded and unloaded clients plus
+        redaction.
+      docs: >
+        README.md and docs/validation.md document diagnostics behavior.
+    discovery-update-info:
+      implementation: >
+        Tracked as future Gold work because discoveries are setup candidates and
+        do not update existing entry metadata yet.
+      tests: >
+        Future discovery-update tests required before marking done.
+      docs: >
+        Tracked in this file as todo.
+    discovery:
+      implementation: >
+        Zeroconf and subnet scan feed the same pairing-confirm setup path as
+        manual setup.
+      tests: >
+        Zeroconf, scan, discovery-cache and duplicate-flow tests cover
+        discovery behavior.
+      docs: >
+        README.md and docs/troubleshooting.md document discovery limits.
+    docs-data-update:
+      implementation: >
+        Runtime state update, recorder dedupe and first-use unknown behavior
+        are documented.
+      tests: >
+        Recorder, runtime parser and smoke tests cover update behavior.
+      docs: >
+        docs/protocol.md, docs/entities.md and docs/troubleshooting.md.
+    docs-examples:
+      implementation: >
+        Tracked as future Gold work for richer user scenarios and screenshots.
+      tests: >
+        Future documentation checks required before marking done.
+      docs: >
+        Tracked in this file as todo.
+    docs-known-limitations:
+      implementation: >
+        Tracked as future Gold work for a consolidated limitations page.
+      tests: >
+        Future documentation checks required before marking done.
+      docs: >
+        Current limitations are split across README.md and troubleshooting docs.
+    docs-supported-devices:
+      implementation: >
+        Supported DHE Connect device classes and firmware evidence are tracked.
+      tests: >
+        Repository checks require firmware and protocol docs.
+      docs: >
+        docs/firmware_matrix.md and README.md.
+    docs-supported-functions:
+      implementation: >
+        Supported entities, controls, services and protocol sources are listed.
+      tests: >
+        Platform, service and runtime tests cover supported behavior.
+      docs: >
+        docs/entities.md and docs/protocol.md.
+    docs-troubleshooting:
+      implementation: >
+        Troubleshooting covers pairing, token, offline, discovery, recorder,
+        radio, weather and live-sensor states.
+      tests: >
+        Repository checks require the troubleshooting reference.
+      docs: >
+        docs/troubleshooting.md.
+    docs-use-cases:
+      implementation: >
+        Tracked as future Gold work for scenario-based user documentation.
+      tests: >
+        Future documentation checks required before marking done.
+      docs: >
+        Tracked in this file as todo.
+    dynamic-devices:
+      implementation: >
+        Exempt because one config entry represents one physical DHE device and
+        child devices are not dynamically created.
+      tests: >
+        Multi-entry tests cover multiple physical DHE entries.
+      docs: >
+        The exemption is documented in the rules section above.
+    entity-category:
+      implementation: >
+        Diagnostic and configuration entities use Home Assistant entity
+        categories where appropriate.
+      tests: >
+        Entity setup and description tests cover categories.
+      docs: >
+        docs/entities.md.
+    entity-device-class:
+      implementation: >
+        Sensors use explicit Home Assistant device and state classes where a
+        class is valid for the entity.
+      tests: >
+        Entity description tests guard water and energy state-class
+        compatibility.
+      docs: >
+        docs/entities.md.
+    entity-disabled-by-default:
+      implementation: >
+        High-churn, diagnostic and optional protocol entities are disabled by
+        default to keep recorder usage bounded.
+      tests: >
+        Entity registry and recorder tests cover disabled-by-default behavior.
+      docs: >
+        docs/entities.md and docs/troubleshooting.md.
+    entity-translations:
+      implementation: >
+        English and German translations cover entity and config-flow labels.
+      tests: >
+        Translation consistency checks run in scripts/check_integration.py.
+      docs: >
+        Translation files under translations/.
+    exception-translations:
+      implementation: >
+        Tracked as future Gold work for fully translated config and repair
+        exceptions.
+      tests: >
+        Future translation tests required before marking done.
+      docs: >
+        Tracked in this file as todo.
+    icon-translations:
+      implementation: >
+        Tracked as future Gold work for translation-backed icon metadata where
+        Home Assistant supports it.
+      tests: >
+        Future translation/icon tests required before marking done.
+      docs: >
+        Tracked in this file as todo.
+    reconfiguration-flow:
+      implementation: >
+        Reconfigure updates the existing config entry, validates reachability
+        when host or port changes and preserves the existing local token for the
+        new target.
+      tests: >
+        HA fixture reconfigure tests cover unchanged options, changed target
+        token preservation and failed reachability paths.
+      docs: >
+        docs/troubleshooting.md host-or-port-changed section.
+    repair-issues:
+      implementation: >
+        Stored-token failures create a fixable Home Assistant Repairs issue and
+        the fix flow validates fresh pairing before reload.
+      tests: >
+        Repairs issue and fix-flow HA fixture tests cover the path.
+      docs: >
+        docs/troubleshooting.md invalid-token and pairing sections.
+    stale-devices:
+      implementation: >
+        Exempt because removing the config entry removes the single DHE device;
+        legacy host/IP identifiers are merged during setup.
+      tests: >
+        Device cleanup, unload and entity-registry tests cover stale-device
+        behavior.
+      docs: >
+        The exemption is documented in the rules section above.

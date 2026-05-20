@@ -572,6 +572,19 @@ class TestHATestApi(unittest.TestCase):
         self.assertTrue(result)
         self.assertEqual(request_json.call_count, 3)
 
+    def test_revoke_refresh_token_uses_ha_revoke_endpoint(self) -> None:
+        api = ha_test_api.HomeAssistantApi("http://ha.test")
+
+        with patch.object(api, "_request_form", return_value=(200, {})) as request_form:
+            result = api.revoke_refresh_token("refresh-token")
+
+        self.assertTrue(result)
+        request_form.assert_called_once_with(
+            "/auth/revoke",
+            {"token": "refresh-token"},
+            timeout=10,
+        )
+
     def test_main_waits_for_auth_providers_before_login(self) -> None:
         class _Api:
             def __init__(self, _url: str) -> None:
@@ -641,6 +654,34 @@ class TestHATestApi(unittest.TestCase):
         self.assertNotIn("def456", text)
         self.assertNotIn("secret", text)
         self.assertNotIn(".".join(("172", "16", "1", "147")), text)
+
+    def test_main_uses_access_token_env_without_password_login(self) -> None:
+        class _Api:
+            def __init__(self, _url: str) -> None:
+                pass
+
+            def wait_online(self, **_kwargs) -> bool:
+                return True
+
+            def login(self, *_args):
+                raise AssertionError("password login should not run")
+
+        output = io.StringIO()
+        with (
+            patch.object(ha_test_api, "HomeAssistantApi", _Api),
+            patch.dict(os.environ, {"HA_TEST_ACCESS_TOKEN": "secret-token"}, clear=True),
+            patch.object(
+                sys,
+                "argv",
+                ["ha_test_api.py"],
+            ),
+            redirect_stdout(output),
+        ):
+            result = ha_test_api.main()
+
+        self.assertEqual(result, 0)
+        self.assertIn("PASS: HA token loaded from env", output.getvalue())
+        self.assertNotIn("secret-token", output.getvalue())
 
     def test_main_still_cleans_tokens_when_pre_cleanup_restart_fails(self) -> None:
         class _Api:

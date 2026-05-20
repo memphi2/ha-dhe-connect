@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio
 import copy
 import logging
 import os
-from collections.abc import Mapping, Sequence
+import shutil
+from collections.abc import Mapping
 from typing import Any, Protocol, cast
 
 import aiohttp
@@ -16,10 +16,6 @@ from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import HomeAssistant, callback
 
-from .client import (
-    DHEClient,
-)
-from .client_types import DHEError
 from .config_flow_mapping import (
     filter_radio_results_by_text as _filter_radio_results_by_text,
     radio_catalog_options as _radio_catalog_options,
@@ -86,7 +82,6 @@ from .config_flow_discovery import (
     SetupPairingResult,
     ZeroconfSetupChoice,
     coerce_setup_pairing_result as _coerce_setup_pairing_result,
-    device_unique_id_from_info as _device_unique_id_from_info,
     discovery_info_name as _discovery_info_name,
     is_matching_flow_in_progress as _is_matching_flow_in_progress,
     zeroconf_setup_choice_key,
@@ -107,7 +102,7 @@ from .connection_helpers import (
     target_changed,
     validate_port,
 )
-from .connection_probe import async_can_connect as _async_can_connect
+from .client import DHEClient
 from .const import (
     DEFAULT_NAME,
     DEFAULT_PORT,
@@ -117,6 +112,12 @@ from .entity_state_helpers import (
     CONF_INTERNAL_SCALD_PROTECTION,
     INTERNAL_SCALD_PROTECTION_DEFAULT,
     INTERNAL_SCALD_PROTECTION_OPTIONS,
+)
+from .pairing_validation import (
+    _async_clear_setup_token_files as _validation_async_clear_setup_token_files,
+    _abs_config_path as _validation_abs_config_path,
+    can_connect as _can_connect,
+    validate_setup_pairing as _validate_setup_pairing_fn,
 )
 from .pairing_helpers import map_pairing_error
 from .protocol import (
@@ -134,15 +135,10 @@ from .setup_scan import (
     local_ipv4_addresses_from_hass,
     setup_scan_mode_options,
 )
-from .token_file_helpers import (
-    LEGACY_TOKEN_FILE,
-    legacy_token_file_for_entry,
-    legacy_token_files_for_target,
-    stale_unconfigured_token_paths,
-    token_file_for_target,
-)
+from .token_file_helpers import token_file_for_target
 
-SETUP_PAIRING_TIMEOUT_SECONDS = 180.0
+from .client_types import DHEError
+
 ID_APP_CURRENCY = _ID_APP_CURRENCY
 _currency_options = _schema_currency_options
 
@@ -170,6 +166,73 @@ def _apply_suggested_values_to_schema(
             marker = new_marker
         schema[marker] = validator
     return data_schema.__class__(schema)
+
+
+def _connection_data_from_user_input(user_input: Mapping[str, Any]) -> dict[str, Any]:
+    """Return normalized connection data from config/options flow input."""
+    host = normalize_host(user_input[CONF_HOST])
+    port = validate_port(user_input.get(CONF_PORT, DEFAULT_PORT))
+    internal_scald_protection = str(
+        user_input.get(CONF_INTERNAL_SCALD_PROTECTION) or ""
+    ).strip()
+    if internal_scald_protection not in INTERNAL_SCALD_PROTECTION_OPTIONS:
+        raise ValueError("invalid_internal_scald_protection")
+    name = str(user_input.get(CONF_NAME, DEFAULT_NAME)).strip() or DEFAULT_NAME
+    return {
+        CONF_HOST: host,
+        CONF_PORT: port,
+        CONF_NAME: name,
+        CONF_INTERNAL_SCALD_PROTECTION: internal_scald_protection,
+    }
+
+
+def _connection_options_for_entry(
+    entry: config_entries.ConfigEntry,
+    connection_data: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Return options updated with normalized connection fields."""
+    options = dict(entry.options)
+    options.update(connection_data)
+    return options
+
+
+async def _async_preserve_token_for_retarget(
+    hass: HomeAssistant,
+    entry: config_entries.ConfigEntry,
+    connection_data: Mapping[str, Any],
+) -> None:
+    """Copy the existing DHE token when a configured device target changes."""
+    current_target = _entry_target(entry)
+    if current_target is None:
+        return
+    old_host, old_port = current_target
+    new_host = str(connection_data[CONF_HOST])
+    new_port = int(connection_data[CONF_PORT])
+    if not target_changed(
+        {CONF_HOST: old_host, CONF_PORT: old_port},
+        new_host,
+        new_port,
+        default_port=DEFAULT_PORT,
+    ):
+        return
+
+    old_path = _validation_abs_config_path(hass, token_file_for_target(old_host, old_port))
+    new_path = _validation_abs_config_path(hass, token_file_for_target(new_host, new_port))
+    if old_path == new_path:
+        return
+
+    def _copy() -> bool:
+        if not os.path.exists(old_path) or os.path.exists(new_path):
+            return False
+        os.makedirs(os.path.dirname(new_path), exist_ok=True)
+        shutil.copy2(old_path, new_path)
+        return True
+
+    if await hass.async_add_executor_job(_copy):
+        _LOGGER.debug(
+            "Preserved existing DHE token while reconfiguring target for entry=%s",
+            entry.entry_id,
+        )
 
 
 class _OptionsFlowClient(Protocol):
@@ -220,47 +283,6 @@ class _OptionsFlowClient(Protocol):
         ...
 
 
-def _abs_config_path(hass: HomeAssistant, path: str) -> str:
-    """Return a normalized absolute Home Assistant config path."""
-    return os.path.normcase(os.path.abspath(hass.config.path(path)))
-
-
-def _configured_token_paths(hass: HomeAssistant) -> set[str]:
-    """Return token paths that belong to currently configured DHE entries."""
-    paths: set[str] = set()
-    for entry in hass.config_entries.async_entries(DOMAIN):
-        paths.add(_abs_config_path(hass, legacy_token_file_for_entry(entry.entry_id)))
-        target = _entry_target(entry)
-        if target is None:
-            continue
-        entry_host, entry_port = target
-        paths.add(_abs_config_path(hass, token_file_for_target(entry_host, entry_port)))
-        for legacy_path in legacy_token_files_for_target(entry_host, entry_port):
-            paths.add(_abs_config_path(hass, legacy_path))
-    return paths
-
-
-def _setup_token_cleanup_context(
-    hass: HomeAssistant,
-    host: str,
-    port: int,
-    token_file: str,
-) -> tuple[set[str], str, set[str]]:
-    """Return token cleanup data without touching the filesystem."""
-    explicit_paths = {
-        _abs_config_path(hass, token_file),
-        _abs_config_path(hass, LEGACY_TOKEN_FILE),
-    }
-    explicit_paths.update(
-        _abs_config_path(hass, legacy_path)
-        for legacy_path in legacy_token_files_for_target(host, port)
-    )
-
-    configured_paths = _configured_token_paths(hass)
-    storage_path = hass.config.path(".storage")
-    return explicit_paths, storage_path, configured_paths
-
-
 async def _async_clear_setup_token_files(
     hass: HomeAssistant,
     host: str,
@@ -268,49 +290,12 @@ async def _async_clear_setup_token_files(
     token_file: str,
 ) -> None:
     """Remove stale setup tokens before requesting a fresh DHE pairing token."""
-    explicit_paths, storage_path, configured_paths = _setup_token_cleanup_context(
+    await _validation_async_clear_setup_token_files(
         hass,
         host,
         port,
         token_file,
     )
-
-    def _delete() -> list[str]:
-        paths = set(explicit_paths)
-        token_file_names: Sequence[str]
-        try:
-            token_file_names = os.listdir(storage_path)
-        except OSError:
-            token_file_names = ()
-        paths.update(
-            stale_unconfigured_token_paths(
-                storage_path,
-                token_file_names,
-                configured_paths,
-            )
-        )
-        removed: list[str] = []
-        for path in paths:
-            try:
-                os.remove(path)
-            except FileNotFoundError:
-                continue
-            except OSError:
-                continue
-            removed.append(path)
-        return removed
-
-    removed_paths = await hass.async_add_executor_job(_delete)
-    if removed_paths:
-        _LOGGER.debug(
-            "Removed stale DHE setup token files before pairing: %s",
-            ", ".join(sorted(removed_paths)),
-        )
-
-
-async def _can_connect(hass: HomeAssistant, host: str, port: int) -> bool:
-    """Check if the DHE web endpoint is reachable before creating the config entry."""
-    return await _async_can_connect(hass, host, port)
 
 
 async def _validate_setup_pairing(
@@ -319,29 +304,15 @@ async def _validate_setup_pairing(
     port: int,
     token_file: str,
 ) -> SetupPairingResult:
-    """Run one-shot pairing/auth validation before creating the config entry."""
-    await _async_clear_setup_token_files(hass, host, port, token_file)
-    probe_client = DHEClient(
-        hass=hass,
-        host=host,
-        port=port,
-        token_file=token_file,
-        name="Home Assistant",
-    )
-    try:
-        await probe_client.validate_setup_authentication(
-            timeout_seconds=SETUP_PAIRING_TIMEOUT_SECONDS
-        )
-    except asyncio.CancelledError:
-        raise
-    except (DHEError, TimeoutError, OSError, RuntimeError, aiohttp.ClientError) as err:
-        pairing_state = str(probe_client.diagnostic_state.get("pairing_state") or "")
-        return SetupPairingResult(error_key=map_pairing_error(err, pairing_state))
-    device_info = getattr(probe_client, "last_device_info", {})
-    return SetupPairingResult(
-        unique_id=_device_unique_id_from_info(device_info)
-        if isinstance(device_info, Mapping)
-        else None
+    """Validate a DHE pairing attempt using patch-friendly local dependencies."""
+    return await _validate_setup_pairing_fn(
+        hass,
+        host,
+        port,
+        token_file,
+        client_factory=lambda **kwargs: DHEClient(**kwargs),
+        error_mapper=map_pairing_error,
+        clear_setup_token_files=_async_clear_setup_token_files,
     )
 
 
@@ -1006,8 +977,12 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
                 )
                 if pairing_result.error_key is None:
                     self._pending_setup_data = None
+                    from .repair_issues import async_delete_pairing_issue
+
+                    entry = self._get_reauth_entry()
+                    async_delete_pairing_issue(self.hass, entry.entry_id)
                     return self.async_update_reload_and_abort(
-                        self._get_reauth_entry(),
+                        entry,
                         reason="reauth_successful",
                     )
                 errors["base"] = pairing_result.error_key
@@ -1016,6 +991,70 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
             step_id="reauth_confirm",
             data_schema=vol.Schema({}),
             errors=errors,
+        )
+
+    async def async_step_reconfigure(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> config_entries.ConfigFlowResult:
+        """Reconfigure connection details through Home Assistant's flow UI."""
+        entry = self._get_reconfigure_entry()
+        current = merged_entry_data(entry)
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            try:
+                data = _connection_data_from_user_input(user_input)
+            except ValueError as err:
+                _apply_validation_error(errors, err)
+            else:
+                host = data[CONF_HOST]
+                port = data[CONF_PORT]
+                if _is_target_used_by_other_entry(
+                    self.hass,
+                    host,
+                    port,
+                    exclude_entry_id=entry.entry_id,
+                ):
+                    errors["base"] = "already_configured"
+                else:
+                    changed = target_changed(
+                        current,
+                        host,
+                        port,
+                        default_port=DEFAULT_PORT,
+                    )
+                    if changed and not await _can_connect(self.hass, host, port):
+                        errors["base"] = "cannot_connect"
+                        return self._show_reconfigure_form(
+                            errors=errors,
+                            defaults=data,
+                        )
+                    if changed:
+                        await _async_preserve_token_for_retarget(
+                            self.hass,
+                            entry,
+                            data,
+                        )
+                    return self.async_update_reload_and_abort(
+                        entry,
+                        options=_connection_options_for_entry(entry, data),
+                        reason="reconfigure_successful",
+                    )
+
+        return self._show_reconfigure_form(errors=errors, defaults=current)
+
+    def _show_reconfigure_form(
+        self,
+        *,
+        errors: dict[str, str] | None = None,
+        defaults: dict[str, Any] | None = None,
+    ) -> config_entries.ConfigFlowResult:
+        """Show the reconfigure form with stable connection defaults."""
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=_schema(self.hass, defaults),
+            errors=errors or {},
         )
 
     @staticmethod
@@ -1036,7 +1075,6 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
         self._weather_countries: list[dict[str, Any]] = []
         self._weather_favorites: list[dict[str, Any]] = []
         self._weather_results: list[dict[str, Any]] = []
-        self._pending_connection_data: dict[str, Any] | None = None
         self._menu_options: list[str] = [
             "connection",
             "device_settings",
@@ -1077,17 +1115,12 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
 
         if user_input is not None:
             try:
-                host = normalize_host(user_input[CONF_HOST])
-                port = validate_port(user_input.get(CONF_PORT, DEFAULT_PORT))
-                internal_scald_protection = str(
-                    user_input.get(CONF_INTERNAL_SCALD_PROTECTION) or ""
-                ).strip()
-                if internal_scald_protection not in INTERNAL_SCALD_PROTECTION_OPTIONS:
-                    raise ValueError("invalid_internal_scald_protection")
+                data = _connection_data_from_user_input(user_input)
             except ValueError as err:
                 _apply_validation_error(errors, err)
             else:
-                name = str(user_input.get(CONF_NAME, DEFAULT_NAME)).strip() or DEFAULT_NAME
+                host = data[CONF_HOST]
+                port = data[CONF_PORT]
 
                 if _is_target_used_by_other_entry(
                     self.hass,
@@ -1097,12 +1130,6 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
                 ):
                     errors["base"] = "already_configured"
                 else:
-                    data = {
-                        CONF_HOST: host,
-                        CONF_PORT: port,
-                        CONF_NAME: name,
-                        CONF_INTERNAL_SCALD_PROTECTION: internal_scald_protection,
-                    }
                     changed = target_changed(
                         current,
                         host,
@@ -1118,46 +1145,19 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
                         )
 
                     if changed:
-                        self._pending_connection_data = data
-                        return await self.async_step_connection_pairing_confirm()
+                        await _async_preserve_token_for_retarget(
+                            self.hass,
+                            self.config_entry,
+                            data,
+                        )
                     return self.async_create_entry(
                         title="",
-                        data=data,
+                        data=_connection_options_for_entry(self.config_entry, data),
                     )
 
         return self.async_show_form(
             step_id="connection",
             data_schema=_schema(self.hass, current),
-            errors=errors,
-        )
-
-    async def async_step_connection_pairing_confirm(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ):
-        """Confirm pairing/authentication after changing host or port."""
-        if self._pending_connection_data is None:
-            return await self.async_step_connection()
-
-        errors: dict[str, str] = {}
-        if user_input is not None:
-            data = dict(self._pending_connection_data)
-            pairing_result = _coerce_setup_pairing_result(
-                await _validate_setup_pairing(
-                    self.hass,
-                    data[CONF_HOST],
-                    data[CONF_PORT],
-                    token_file_for_target(data[CONF_HOST], data[CONF_PORT]),
-                )
-            )
-            if pairing_result.error_key is None:
-                self._pending_connection_data = None
-                return self.async_create_entry(title="", data=data)
-            errors["base"] = pairing_result.error_key
-
-        return self.async_show_form(
-            step_id="connection_pairing_confirm",
-            data_schema=vol.Schema({}),
             errors=errors,
         )
 

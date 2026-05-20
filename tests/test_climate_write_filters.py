@@ -299,6 +299,22 @@ class TestClimateHvacControls(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(entity._attr_target_temperature, 39.0)
         entity.async_write_ha_state.assert_called_once()
 
+    async def test_set_temperature_unavailable_raises_without_client_call(self) -> None:
+        climate_module = _load_climate_module()
+        client = _FakeClimateClient()
+        client.available = False
+        entity = _build_entity(climate_module, client)
+        entity.async_write_ha_state = Mock()
+
+        with self.assertRaisesRegex(
+            climate_module.HomeAssistantError,
+            "DHE is unavailable",
+        ):
+            await entity.async_set_temperature(temperature=39.0)
+
+        self.assertEqual(client.temperature_calls, [])
+        self.assertEqual(client.heating_calls, [])
+
 
 if __name__ == "__main__":
     unittest.main()

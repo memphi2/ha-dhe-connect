@@ -187,7 +187,10 @@ Dashboard-Auswahllisten erscheint.
 
 Wenn ein Wert nach dem Start noch nie vom DHE gesendet wurde, kann er
 zunaechst `unknown` sein. Das ist besser als ein falscher Nullwert. Sobald das
-DHE den Wert real sendet, uebernimmt die Integration den Runtime-Wert.
+DHE den Wert real sendet, uebernimmt die Integration den Runtime-Wert. Bei
+frisch aktivierten ODB-Gesamt- und Sparwerten passiert das typischerweise nach
+der naechsten echten Warmwasser-Nutzung, weil der DHE den Wert dann erneut
+veroeffentlicht.
 
 ## Recorder und Datenbank
 
@@ -234,6 +237,10 @@ Entitaeten koennen verfuegbar bleiben, waehrend der Diagnosewert
 `Verbindungsstatus` bereits `Verbindet neu` zeigt. Erst nach Ablauf dieser
 Schonfrist werden Live-Entitaeten unavailable, bis wieder frische DHE-Daten
 ankommen.
+Normale DHE-Bedienelemente werden in diesem Zustand blockiert, damit Home
+Assistant keine veralteten Schreibbefehle an ein nicht verfuegbares Geraet
+sendet. Die deaktivierte Entitaet `Repair pairing` bleibt als
+Wiederherstellungs-Ausnahme verfuegbar.
 
 ## Pairing reparieren
 

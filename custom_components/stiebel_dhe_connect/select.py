@@ -12,7 +12,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .action_error_helpers import dhe_action_error
+from .action_error_helpers import dhe_action_error, raise_if_dhe_unavailable
 from .client import DHEClient
 from .client_types import DHEError
 from .entity_helpers import StiebelDHEEntityMixin
@@ -76,6 +76,10 @@ class StiebelDHEWeatherLocationSelect(StiebelDHEEntityMixin, SelectEntity):
 
     async def async_select_option(self, option: str) -> None:
         """Select a DHE weather favorite."""
+        raise_if_dhe_unavailable(
+            self._client,
+            "DHE is unavailable; cannot select weather location",
+        )
         location = self._locations_by_option.get(option)
         if location is None:
             raise HomeAssistantError(f"Unknown weather location option: {option}")

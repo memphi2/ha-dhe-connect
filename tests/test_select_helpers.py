@@ -7,6 +7,7 @@ from pathlib import Path
 import types
 import sys
 import unittest
+from unittest.mock import AsyncMock
 
 try:
     from tests.test_aiohttp_stubs import _ensure_aiohttp_stub
@@ -88,7 +89,7 @@ def _load_select_module():
     return _load_component_module("select")
 
 
-class TestSelectHelpers(unittest.TestCase):
+class TestSelectHelpers(unittest.IsolatedAsyncioTestCase):
     """Validate option and label helpers used by weather location select."""
 
     def test_weather_location_labels_use_location_id_for_exact_duplicates(self) -> None:
@@ -156,6 +157,32 @@ class TestSelectHelpers(unittest.TestCase):
 
         self.assertEqual(writes, ["Berlin, Germany", "Berlin, Germany"])
         self.assertFalse(entity._attr_available)
+
+    async def test_unavailable_select_action_raises_without_client_call(self) -> None:
+        select_module = _load_select_module()
+        location = {"Name": "Berlin", "Country": "Germany", "LocationId": "ID=1"}
+        select_weather_location = AsyncMock(return_value=True)
+        client = types.SimpleNamespace(
+            host="127.0.0.1",
+            port=8443,
+            legacy_device_identifier=None,
+            available=False,
+            select_weather_location=select_weather_location,
+        )
+        entity = select_module.StiebelDHEWeatherLocationSelect(
+            entry_id="test-entry",
+            name="Test DHE",
+            client=client,
+        )
+        entity._locations_by_option = {"Berlin, Germany": location}
+
+        with self.assertRaisesRegex(
+            select_module.HomeAssistantError,
+            "DHE is unavailable",
+        ):
+            await entity.async_select_option("Berlin, Germany")
+
+        select_weather_location.assert_not_awaited()
 
 
 if __name__ == "__main__":

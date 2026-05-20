@@ -26,15 +26,20 @@ Symptoms that usually point to an invalid or stale token:
 - The `Error status` diagnostic sensor reports authentication or token-related
   failures while basic network connectivity is fine.
 
-Use the disabled-by-default `Repair pairing` button first. It removes the token
-for the affected config entry and starts a fresh pairing round without requiring
-manual file edits.
+Use the Home Assistant Repairs issue first when it appears. The repair flow
+requests and validates a fresh local pairing token, then reloads the existing
+config entry. Confirm the pairing request on the DHE display when prompted.
+
+If Home Assistant is loaded but no Repairs issue is visible yet, the
+disabled-by-default `Repair pairing` button remains available as a manual
+fallback. It removes the token for the affected config entry and starts a fresh
+pairing round without requiring manual file edits.
 
 If Home Assistant can still load the config entry and the DHE explicitly stops
 accepting the stored token, the integration starts Home Assistant's
-reauthentication flow. Follow the repair form, then confirm the new pairing
-request on the DHE display. The integration reloads after successful pairing
-and login.
+reauthentication flow and creates a fixable Repairs issue. Follow either the
+reauthentication form or the Repairs form, then confirm the new pairing request
+on the DHE display. The integration reloads after successful pairing and login.
 
 Manual token deletion is only a fallback when Home Assistant cannot load the
 integration far enough to expose the repair button. Token files are stored under:
@@ -49,17 +54,22 @@ issues.
 
 ## Pairing Required Again
 
-Pairing is required again when the DHE no longer accepts the stored local token,
-when the configured target changes, or after device-side pairing state was reset.
+Pairing is required again when the DHE no longer accepts the stored local token
+or after device-side pairing state was reset. A Home Assistant host/port
+Reconfigure keeps the existing local token and only leads to repair pairing if
+the DHE rejects that token after reload.
 The integration does not create a config entry until pairing and login both
 succeed.
 
 Use this sequence:
 
-1. Enable the disabled-by-default `Repair pairing` button.
-2. Press `Repair pairing`.
+1. Open the Home Assistant Repairs issue for the affected DHE entry.
+2. Start the repair flow.
 3. Confirm the new pairing request on the DHE display.
 4. Wait until the `Connection state` diagnostic sensor returns to `connected`.
+
+If the entry is loaded but the Repairs issue is not visible, use the
+disabled-by-default `Repair pairing` button as a fallback.
 
 If pairing is not shown on the DHE display, check that the DHE web interface is
 reachable from the Home Assistant network and that no other client keeps the DHE
@@ -80,9 +90,12 @@ If pairing keeps repeating:
 
 ## Host Or Port Changed
 
-If the DHE address changes, update the integration options or recreate the
-config entry with the new host/port pair. Pairing tokens are scoped to the
-configured target, so a changed host or port usually needs a fresh pairing.
+If the DHE address changes, use Home Assistant's Reconfigure action for the
+DHE Connect config entry. Reconfigure updates the existing config entry instead
+of creating a replacement, so entity IDs and unique IDs stay stable. When the
+configured host or port changes, Home Assistant checks that the new target is
+reachable and copies the existing local token to the new target path. A fresh
+pairing is only needed later if the DHE rejects that token.
 
 Use the config flow fields exactly as intended:
 
@@ -91,6 +104,10 @@ Use the config flow fields exactly as intended:
 
 Do not enter `http://`, `https://`, paths, query strings, usernames, passwords
 or embedded ports in the host field.
+
+When only the device name or physical Tmax jumper position changes, Reconfigure
+saves the updated options without a network check. When host or port changes,
+the new target must be reachable before Home Assistant saves the options.
 
 ## Zeroconf Finds Nothing
 
@@ -189,6 +206,9 @@ During Home Assistant startup or config-entry reload, an unreachable DHE causes
 the config entry to wait for retry instead of setting up stale platform state.
 If the DHE goes offline after setup, entities become unavailable after the
 reconnect grace window and recover when the device responds again.
+Normal DHE controls are blocked while the runtime is unavailable so Home
+Assistant does not send stale writes to an offline device. The disabled-by-
+default `Repair pairing` button remains available as the recovery exception.
 5. Reload the integration after the DHE web interface is reachable again.
 
 If the DHE is powered, reachable from a browser and still shown as offline in
@@ -244,7 +264,10 @@ Check this before treating an empty value as a bug:
 Diagnostic ODB total and saving sensors have special startup handling. A direct
 startup or entity-enable readback of `0` can be a placeholder, so the entity may
 stay available with `unknown` until a real runtime update arrives. Runtime `0`
-values are accepted once the DHE actually publishes them.
+values are accepted once the DHE actually publishes them. On a fresh install or
+after enabling one of these entities for the first time, this usually resolves
+after the next real water-use/runtime event because the DHE then publishes the
+matching total or saving value.
 
 ## Entities Stay Unavailable
 
@@ -266,7 +289,9 @@ Diagnostic ODB total and saving sensors use stricter startup handling:
 
 For these sensors, a direct startup or entity-enable readback of `0` is treated
 as a placeholder. The entity stays available with `unknown` until the DHE sends
-a real runtime update. A later runtime value of `0` is still accepted.
+a real runtime update. This can be visible on fresh installs before the first
+usage event; after water is used, the DHE normally publishes the value promptly.
+A later runtime value of `0` is still accepted.
 
 The ODB saving sensors can be close to saving-monitor sensors, but they are not
 the same source. `ODB_Gsprt_Energie` tracks the saving-monitor possible energy

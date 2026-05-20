@@ -19,6 +19,7 @@ from .client_commands import DHEClientCommandsMixin
 from .client_callbacks import DHEClientCallbacksMixin
 from .client_connection_state import DHEClientConnectionStateMixin
 from .client_constants import DEFAULT_NOMINAL_POWER_KW
+from .client_constants import RUNTIME_STARTUP_PROOF_TIMEOUT_SECONDS
 from .client_diagnostics import diagnostic_error as _diagnostic_error
 from .client_errors import (
     DHE_TRANSPORT_EXCEPTIONS as _DHE_TRANSPORT_EXCEPTIONS,
@@ -72,10 +73,12 @@ from .protocol import (
     OPTIONAL_STARTUP_APP_REQUEST_COMMANDS,
     OPTIONAL_STARTUP_ODB_IDS,
     RADIO_CATALOG_FIELDS,
+    RADIO_PATH,
 )
 
 _LOGGER = logging.getLogger(__name__)
 DEVICE_INFO_REQUEST_TIMEOUT_SECONDS = 5.0
+RUNTIME_STARTUP_PROOF_IDS = frozenset(INITIAL_VALUE_IDS) - {ID_PROTOCOL_VERSION}
 
 
 class DHEClient(
@@ -98,7 +101,9 @@ class DHEClient(
         self._url_host = _host_for_url(self.host)
         self.port = _validate_port(port)
         self.name = name
+        self.device_identifier: str | None = None
         self.legacy_device_identifier: str | None = None
+        self.legacy_device_identifiers: set[str] = set()
         self.base_url = f"http://{self._url_host}:{self.port}"
         self.token_path = (
             token_file if os.path.isabs(token_file) else hass.config.path(token_file)
@@ -178,6 +183,7 @@ class DHEClient(
         self._setpoint_request_address = 0
         self._pending_write_expected: ODBValue | None = None
         self._pending_odb_read_deadlines: dict[int, float] = {}
+        self._pending_app_read_deadlines: dict[str, float] = {}
         self._socketio_message_id = 1
         self._odb_value_handlers: dict[int, Callable[..., None]] = {
             ID_SETPOINT: self._handle_odb_setpoint_value,
@@ -386,16 +392,18 @@ class DHEClient(
                 self._record_session_connected()
                 self._cancel_reconnect_grace_timer()
                 self._update_diagnostics(
-                    connection_state="connected",
+                    connection_state="initializing",
                     next_reconnect_delay_seconds=None,
                     ping_interval_seconds=self._ctx.ping_interval,
                     session_id=self._ctx.sid,
                     websocket_sid=self._ctx.websocket_sid,
                 )
                 self._set_online(True)
+                await self._request_initial_values(self._ctx)
+                await self._wait_for_initial_runtime_values(self._ctx)
                 self._ready.set()
                 self._set_available(True)
-                await self._request_initial_values(self._ctx)
+                self._update_diagnostics(connection_state="connected")
                 while not self._stopped.is_set() and self._ctx is not None:
                     for event in await self._read_events_once(self._ctx):
                         await self._handle_runtime_event(event)
@@ -521,7 +529,16 @@ class DHEClient(
                 self._consume_odb_read_request(odb_id)
 
     async def _request_app_value(self, ctx: DHESession, command: str) -> None:
-        await self._send_ste_command(ctx, command, "")
+        track_radio_readback = command.startswith(f"get:{RADIO_PATH}:")
+        if track_radio_readback:
+            self._mark_app_read_requested(command)
+        sent = False
+        try:
+            await self._send_ste_command(ctx, command, "")
+            sent = True
+        finally:
+            if track_radio_readback and not sent:
+                self._consume_app_read_request(command)
 
     async def _send_ste_command(
         self, ctx: DHESession, command: str, value: Any
@@ -538,6 +555,36 @@ class DHEClient(
     async def _request_optional_app_value(self, ctx: DHESession, command: str) -> None:
         with contextlib.suppress(DHEError):
             await self._request_app_value(ctx, command)
+
+    async def _wait_for_initial_runtime_values(self, ctx: DHESession) -> None:
+        """Wait until the DHE returns at least one runtime startup value."""
+        if self._has_runtime_startup_proof():
+            return
+        deadline = time.monotonic() + RUNTIME_STARTUP_PROOF_TIMEOUT_SECONDS
+        while time.monotonic() < deadline and not self._stopped.is_set():
+            timeout = max(0.1, min(1.0, deadline - time.monotonic()))
+            try:
+                events = await asyncio.wait_for(
+                    self._read_events_once(ctx),
+                    timeout=timeout,
+                )
+            except TimeoutError:
+                continue
+            for event in events:
+                await self._handle_runtime_event(event)
+            if self._has_runtime_startup_proof():
+                return
+        raise DHEAuthError(
+            "DHE authenticated but did not return startup values; "
+            "reauthentication is required"
+        )
+
+    def _has_runtime_startup_proof(self) -> bool:
+        """Return whether the authenticated runtime session produced DHE data."""
+        return any(
+            odb_id in self._last_measurements
+            for odb_id in RUNTIME_STARTUP_PROOF_IDS
+        )
 
     def _new_setpoint_future(
         self, expected: float | None = None

@@ -34,6 +34,7 @@ class StiebelDHEDiagnosticSensorEntityDescription(SensorEntityDescription):
 
 CONNECTION_STATE_OPTIONS = (
     "starting",
+    "initializing",
     "connected",
     "reconnecting",
     "pairing_failed_waiting_manual_retry",
