@@ -183,9 +183,8 @@
       },
       "device_settings": {
         "title": "Costs & emissions",
-        "description": "Set currency, electricity price, water price and CO2 emission on the DHE. Number fields are prefilled with current device values; if available, currency is prefilled from the current device, otherwise it defaults to 'Do not change'.",
+        "description": "Set electricity price, water price and CO2 emission on the DHE. Number fields are prefilled with current device values.",
         "data": {
-          "currency": "Currency",
           "electricity_price": "Electricity price (EUR/kWh)",
           "water_price": "Water price (EUR/m³)",
           "co2_emission": "CO2 emission (kg/kWh)"
@@ -609,6 +608,9 @@
       },
       "shower_timer_remaining": {
         "name": "Shower timer remaining"
+      },
+      "wellness_runtime_normalized": {
+        "name": "Wellness runtime"
       },
       "error_status": {
         "name": "Error status",

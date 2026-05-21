@@ -8,7 +8,7 @@ import logging
 import os
 import time
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -48,6 +48,15 @@ from .client_types import (
     WeatherCallback,
     WellnessProgramsCallback,
 )
+
+if TYPE_CHECKING:
+    from .client_command_context import (
+        DHEClientCommandContext,
+        DHEClientConnectionContext,
+        DHEClientDiagnosticsContext,
+        DHEClientRuntimeContext,
+        DHEClientTransportContext,
+    )
 from .connection_helpers import (
     host_for_url as _host_for_url,
     normalize_host as _normalize_host,
@@ -636,3 +645,15 @@ class DHEClient(
                 future.set_exception(err)
             else:
                 future.cancel()
+
+
+if TYPE_CHECKING:
+
+    def _assert_client_mixin_contracts(client: DHEClient) -> None:
+        """Keep the concrete client structurally compatible with mixin protocols."""
+        command: DHEClientCommandContext = client
+        connection: DHEClientConnectionContext = client
+        diagnostics: DHEClientDiagnosticsContext = client
+        runtime: DHEClientRuntimeContext = client
+        transport: DHEClientTransportContext = client
+        del command, connection, diagnostics, runtime, transport

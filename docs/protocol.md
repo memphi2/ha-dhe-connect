@@ -210,12 +210,6 @@ shows a cold-water phase where the device disables heating, while
 `coldwater=false` displays a reduced cold temperature, usually about `10 C`
 below the hot phase unless explicit `cold`/`hot` fields are present.
 
-Currency changes use the same command as the DHE app:
-
-```json
-{"command": "get:ste.common.currency:value", "value": "eur"}
-```
-
 Temperature memory changes use `assign:ste.common.temperature:memory`. Existing memory slots include the zero-based `id`; adding the next free slot omits `id` and lets the DHE assign it:
 
 ```json
@@ -233,6 +227,16 @@ Radio playback uses `assign:ste.app.radio:*`:
 ```json
 {"command": "assign:ste.app.radio:play", "value": true}
 ```
+
+## Intentionally Ignored App Commands
+
+The web interface exposes a few app commands that are intentionally not mapped
+to Home Assistant entities:
+
+| Command | Reason |
+|---|---|
+| `get/set:ste.app.wellness:progress` | Browser/UI progress helper. Live device tests showed the HA-relevant wellness runtime comes from ODB ID `32` instead. |
+| Vendor web assets | The repository never vendors proprietary JS, HTML, CSS or images. Release checks guard against accidentally adding vendor assets. |
 
 ## ODB Handling
 
@@ -252,7 +256,7 @@ Mapped ODB values are converted before publishing to Home Assistant:
 | `29` | Raw `kWh` ODB heating energy |
 | `30` | Raw value divided by `10` as `m3` ODB hot water volume |
 | `31` | Raw whole liters as current bath fill volume |
-| `32` | Known wellness normalized time value; cached when valid but not exposed as an entity |
+| `32` | Wellness runtime value (`ODB_Wellness_Zeit_Norm`) exposed as disabled diagnostic duration sensor `wellness_runtime_normalized` in seconds; observed as second-by-second runtime counter while running and reset to `0` after stop |
 | `33` | Inverted heating-disabled flag: raw `0` means water heating enabled, raw `1` means off |
 | `34` | Device status enum; raw `1` = normal, raw `2` = water running, raw `3` = service required, raw `4` observed as a water-running transition |
 | `61` and `70` | Combined to the electricity price options value as euros plus cents; euros `0` to `32767`, cents `0` to `99` |
@@ -260,7 +264,6 @@ Mapped ODB values are converted before publishing to Home Assistant:
 | `63` | Raw `kWh` ODB possible energy saving |
 | `64` | Raw value divided by `10` as `m3` ODB actual water saving |
 | `67` | Raw ODB protocol marker; observed value `1` is not the DHE web interface version |
-| `68` | Known currency mode enum; ignored because currency is handled through `ste.common.currency:value` |
 | `69` | CO2 emission decoded as `raw / 1000` kg/kWh, raw range `0` to `32767` |
 
 The user-facing protocol-version diagnostic comes from the DHE web interface
@@ -286,7 +289,7 @@ through the `ODB_DEBUG_NAMES` reverse map before dispatch. Empty ID placeholders
 are ignored, but conflicting non-empty hints such as `id` and `name` resolving to
 different ODB IDs are treated as invalid ODB payloads and are not published.
 
-If a DHE ODB readback is marked with `isValid: false`, it is not published as a normal entity state. Unknown ODB values are logged at debug level for protocol discovery, including the numeric ID, the known Webfrontend ODB name when available, the raw value and the `isValid` flag. Known-but-unexposed values such as ODB IDs `32` and `68` are recognized so they do not pollute debug logs.
+If a DHE ODB readback is marked with `isValid: false`, it is not published as a normal entity state. Unknown ODB values are logged at debug level for protocol discovery, including the numeric ID, the known Webfrontend ODB name when available, the raw value and the `isValid` flag. Known protocol-only values such as ODB ID `68` are recognized so they do not pollute debug logs.
 
 For ODB IDs `29`, `30`, `63` and `64`, a numeric `0` returned as the immediate readback for a `get:ste.common.odb:value` request is also ignored. These diagnostic totals/savings can report `0` when queried at startup even though the DHE has not emitted a fresh operational value yet. A spontaneous DHE runtime update with value `0` is accepted.
 

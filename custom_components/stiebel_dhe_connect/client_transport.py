@@ -399,11 +399,12 @@ class DHEClientTransportMixin(
     async def _get_text(self, url: str, *, timeout: float = 70.0) -> str:
         client_timeout = aiohttp.ClientTimeout(total=timeout)
         async with self._session.get(url, timeout=client_timeout) as resp:
-            body = await resp.read()
+            body: bytes = await resp.read()
             if resp.status < 200 or resp.status >= 300:
                 text = body.decode("utf-8", errors="replace")
                 raise DHEError(f"GET {resp.status}: {text[:200]}")
-            return body.decode("utf-8", errors="replace")
+            decoded = body.decode("utf-8", errors="replace")
+            return decoded
 
     async def _post_packet(self, ctx: DHESession, packet: str) -> str:
         if ctx.websocket is not None:
@@ -418,11 +419,12 @@ class DHEClientTransportMixin(
             headers={"Content-Type": "text/plain;charset=UTF-8"},
             timeout=timeout,
         ) as resp:
-            response_body = await resp.read()
+            response_body: bytes = await resp.read()
             if resp.status < 200 or resp.status >= 300:
                 text = response_body.decode("utf-8", errors="replace")
                 raise DHEError(f"POST {resp.status}: {text[:200]}")
-            return response_body.decode("utf-8", errors="replace")
+            decoded = response_body.decode("utf-8", errors="replace")
+            return decoded
 
     async def _send_websocket_packet(self, ctx: DHESession, packet: str) -> None:
         websocket = ctx.websocket

@@ -1,7 +1,8 @@
 # DHE Connect for Home Assistant (Unofficial)
 
 [![Validate](https://github.com/memphi2/ha-dhe-connect/actions/workflows/validate.yml/badge.svg)](https://github.com/memphi2/ha-dhe-connect/actions/workflows/validate.yml)
-[![GitHub Release](https://img.shields.io/github/v/release/memphi2/ha-dhe-connect?display_name=release)](https://github.com/memphi2/ha-dhe-connect/releases)
+[![Quality](https://img.shields.io/badge/Quality-HA%20QS%20Platinum%20Track-0366d6?style=flat-square)](custom_components/stiebel_dhe_connect/quality_scale.yaml)
+[![GitHub Release](https://img.shields.io/github/v/tag/memphi2/ha-dhe-connect?sort=semver&label=release)](https://github.com/memphi2/ha-dhe-connect/releases)
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://www.hacs.xyz/)
 [![License MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -14,10 +15,9 @@ The integration talks directly to the DHE web interface on your local network. I
 
 ## Status
 
-- Current version: `1.7.0`
-- Release channel: stable release / Gold-core-oriented release candidate
-- Quality target: Home Assistant Quality Scale Gold-core-oriented validation
-  for a custom integration; not an official Home Assistant Core certification
+- Current version: `1.8.0`
+- Release: stable custom integration, Platinum-track quality evidence
+- Quality: Home Assistant Quality Scale (custom integration, not HA Core certified)
 - Home Assistant UI integration name: `DHE Connect` (kept short for clean
   device labels in the HA UI)
 - Home Assistant setup: UI config flow
@@ -27,9 +27,8 @@ The integration talks directly to the DHE web interface on your local network. I
 - Scope: multiple configured DHE Connect devices per Home Assistant instance
 
 This is a custom integration and should be used on a trusted local network.
-The `v1.7.0` line is prepared as a Gold-core-oriented custom-integration
-release candidate with Repairs/Reconfigure evidence, not as an official Home
-Assistant Core certification.
+v1.8.0 adds strict typing, deterministic runtime validation and Platinum-track
+hardening. Not an official Home Assistant Core certification.
 
 Development and protocol mapping for this release were assisted by OpenAI Codex.
 
@@ -91,6 +90,7 @@ diagnostics in a compact Mushroom-style layout.
 | Tested device and firmware matrix | [docs/firmware_matrix.md](docs/firmware_matrix.md) |
 | Protocol and ODB mapping notes for maintainers | [docs/protocol.md](docs/protocol.md) |
 | Local tests, HA smoke checks and release-readiness flow | [docs/validation.md](docs/validation.md) |
+| Platinum preparation checklist | [docs/platinum_prep.md](docs/platinum_prep.md) |
 | Security and token-handling notes | [SECURITY.md](SECURITY.md) |
 
 ## Installation

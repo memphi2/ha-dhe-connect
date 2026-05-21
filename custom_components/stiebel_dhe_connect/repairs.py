@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import cast
-
 import voluptuous as vol
 
 from homeassistant import data_entry_flow
@@ -58,11 +56,11 @@ class PairingRequiredRepairFlow(RepairsFlow):
         errors: dict[str, str] = {}
         host, port = target
         if user_input is not None:
-            if not await config_flow._can_connect(self.hass, host, port):
+            if not await config_flow.can_connect_for_repair(self.hass, host, port):
                 errors["base"] = "cannot_connect"
             else:
                 pairing_result = _coerce_setup_pairing_result(
-                    await config_flow._validate_setup_pairing(
+                    await config_flow.validate_setup_pairing_for_repair(
                         self.hass,
                         host,
                         port,
@@ -123,7 +121,7 @@ async def async_create_fix_flow(
     entry = hass.config_entries.async_get_entry(entry_id)
     if entry is None or entry.domain != DOMAIN:
         return MissingEntryRepairFlow()
-    return PairingRequiredRepairFlow(cast(ConfigEntry, entry))
+    return PairingRequiredRepairFlow(entry)
 
 
 def _pairing_fix_issue_type(issue_id: str) -> str | None:

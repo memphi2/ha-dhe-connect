@@ -73,6 +73,11 @@ GOLD_EVIDENCE_RULES = {
     "repair-issues",
     "stale-devices",
 }
+PLATINUM_RULES = {
+    "async-dependency",
+    "inject-websession",
+    "strict-typing",
+}
 
 
 def _done_rules(text: str) -> set[str]:
@@ -102,6 +107,16 @@ def test_quality_scale_tracks_silver_and_gold_core_rules() -> None:
     """Keep Home Assistant Silver and Gold-core rule tracking explicit."""
     text = QUALITY_SCALE.read_text(encoding="utf-8")
     assert sorted((SILVER_RULES | GOLD_CORE_RULES) - _done_rules(text)) == []
+
+
+def test_quality_scale_tracks_platinum_rules_as_done_or_exempt() -> None:
+    """Keep local Platinum-oriented evidence from drifting back to todo."""
+    data = yaml.safe_load(QUALITY_SCALE.read_text(encoding="utf-8"))
+    rules = data["rules"]
+    for rule in PLATINUM_RULES:
+        value = rules[rule]
+        status = value if isinstance(value, str) else value["status"]
+        assert status in {"done", "exempt"}, rule
 
 
 def test_quality_scale_evidence_maps_rules_to_tests_and_docs() -> None:

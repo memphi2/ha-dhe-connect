@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, cast
 
 from homeassistant.components.diagnostics import REDACTED, async_redact_data
 from homeassistant.config_entries import ConfigEntry
@@ -221,7 +221,10 @@ def _transport_diagnostics(statistics: Mapping[Any, Any]) -> dict[str, Any]:
 
 
 def _anonymize(value: dict[str, Any]) -> dict[str, Any]:
-    return _redact_private_text(async_redact_data(value, TO_REDACT))
+    redacted = _redact_private_text(async_redact_data(value, TO_REDACT))
+    if isinstance(redacted, dict):
+        return cast(dict[str, Any], redacted)
+    return {}
 
 
 def _redact_private_text(value: Any) -> Any:

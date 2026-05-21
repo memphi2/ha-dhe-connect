@@ -26,10 +26,10 @@ TOKEN_FIELD_RE = re.compile(
 TOKEN_QUERY_RE = re.compile(
     r"(?i)([?&](?:access_token|refresh_token|token|code)=)[^&\s]+"
 )
-URL_CREDENTIAL_RE = re.compile(r"(?i)(https?://)[^/\s:@]+:[^/\s@]+@")
-URL_USERINFO_RE = re.compile(r"(?i)(https?://)[^/\s@]+@")
+URL_CREDENTIAL_RE = re.compile(r"(?i)((?:https?|wss?)://)[^/\s:@]+:[^/\s@]+@")
+URL_USERINFO_RE = re.compile(r"(?i)((?:https?|wss?)://)[^/\s@]+@")
 URL_HOST_RE = re.compile(
-    r"(?i)\b(https?://)"
+    r"(?i)\b((?:https?|wss?)://)"
     r"(?:<redacted>@)?"
     r"(?:\[[^\]\s/]+]|[^/\s:@?#]+)"
     r"(?::[0-9]+)?"

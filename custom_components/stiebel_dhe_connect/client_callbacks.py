@@ -140,6 +140,8 @@ class DHEClientCallbacksMixin:
         callbacks: set[Callable[..., None]],
         *args: Any,
     ) -> None:
+        if not callbacks:
+            return
         for callback in tuple(callbacks):
             self._call_callback(callback_name, callback, *args)
 

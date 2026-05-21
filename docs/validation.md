@@ -4,9 +4,9 @@ This document collects the checks used before merging release-prep or hardening
 work. The commands below do not publish a Git tag or GitHub release by
 themselves.
 
-## Release Validation Command Set (v1.7.0)
+## Release Validation Command Set (v1.8.0)
 
-Run this release gate before opening or finalizing a v1.7.0 release-prep pull
+Run this release gate before opening or finalizing a v1.8.0 release-prep pull
 request:
 
 ```bash
@@ -41,9 +41,9 @@ What those checks cover:
   changelog state, tracked-file secret hygiene, generated-artifact hygiene,
   local validation commands and optional lab smoke gates.
 
-This validation set is maintained for this custom repository. It is intended to
-support a Gold-core-oriented quality target for a custom integration, but it is
-not an official Home Assistant Core certification.
+This validation set is maintained for this custom repository.
+It targets Platinum-track quality goals for a custom integration and is not an
+official Home Assistant Core certification.
 
 During active development, when the tree is intentionally dirty, use the same
 release check with `--allow-dirty --expect-tag skip --expect-github-release
@@ -54,6 +54,46 @@ should run without `--allow-dirty`.
 
 The GitHub `Validate` workflow runs HACS, Hassfest, pytest, repository checks,
 type checks and Ruff. Keep local results and CI results aligned before merging.
+
+## Platinum Preparation
+
+For the active `v1.8.0` hardening branch, the local Platinum-oriented evidence
+and validation sequence are tracked in
+[docs/platinum_prep.md](docs/platinum_prep.md).
+
+## Gold Evidence Log Template
+
+Use this template when recording manual live validation for release notes or
+firmware matrix updates:
+
+```text
+Date: YYYY-MM-DD
+Branch/tag: vX.Y.Z
+Device family: ...
+Firmware/web-app version: ...
+Test scope:
+- Setup/pairing
+- Reconfigure
+- Repairs
+- Reconnect/offline recovery
+- Live sensors (water/power)
+- Timers
+- Optional features (radio/weather/savings)
+Result summary:
+- Pass/partial with concise notes
+Open deviations:
+- ...
+Privacy check:
+- No private host/token/MAC/serial data recorded
+```
+
+## Icon Translation Status
+
+`icon-translations` remains `exempt` for this integration because the entity
+surface uses static icon assignments without translated dynamic icon metadata.
+
+If the integration introduces dynamic icon variants in the future, this status
+must be revisited and moved from `exempt` to implemented coverage with tests.
 
 ## Quality Scale Evidence Matrix
 

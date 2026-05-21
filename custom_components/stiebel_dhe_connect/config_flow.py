@@ -6,7 +6,7 @@ import copy
 import logging
 import os
 import shutil
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any, Protocol, cast
 
 import aiohttp
@@ -27,20 +27,17 @@ from .config_flow_mapping import (
 from .config_flow_schemas import (
     ATTR_CO2_EMISSION,
     ATTR_COUNTRY_ID,
-    ATTR_CURRENCY,
     ATTR_ELECTRICITY_PRICE,
     ATTR_RADIO_FILTER_TEXT,
     ATTR_RADIO_SEARCH_TYPE,
     ATTR_RADIO_SELECTION,
     ATTR_RESULT,
     ATTR_WATER_PRICE,
-    CURRENCY_UNCHANGED,
     MAX_RADIO_RESULT_OPTIONS,
     MAX_WEATHER_RESULT_OPTIONS,
     RADIO_CATALOG_SEARCH_TYPES,
     RADIO_FILTER_SEARCH_TYPES,
     RADIO_SEARCH_TYPES,
-    currency_options as _schema_currency_options,
     device_settings_defaults as _device_settings_defaults,
     device_settings_schema as _device_settings_schema,
     internal_scald_protection_options as _internal_scald_protection_options,
@@ -124,16 +121,27 @@ from .pairing_validation import (
 )
 from .pairing_helpers import map_pairing_error
 from .repair_issues import DISCOVERY_CONFLICT_ISSUE
+from .error_codes import (
+    ALREADY_CONFIGURED,
+    ALREADY_IN_PROGRESS,
+    INVALID_DISCOVERY_PARAMETERS,
+    INVALID_INTERNAL_SCALD_PROTECTION,
+    INVALID_PORT,
+    INVALID_SCAN_SUBNET_MODE,
+    INVALID_SETUP_MODE,
+    LOW_CONFIDENCE_DISCOVERY,
+    RECENTLY_DISCOVERED,
+)
 from .protocol import (
     CO2_EMISSION_MAX,
     ELECTRICITY_PRICE_MAX,
-    ID_APP_CURRENCY as _ID_APP_CURRENCY,
     WATER_PRICE_MAX,
 )
 from .setup_scan import (
     SCAN_SUBNET_MODE_CIDR,
     SCAN_SUBNET_MODE_CURRENT,
     SCAN_SUBNET_MODE_NETWORK_MASK,
+    SetupScanSubnetInput,
     async_scan_dhe_hosts,
     ipv4_scan_networks,
     local_ipv4_addresses_from_hass,
@@ -142,9 +150,6 @@ from .setup_scan import (
 from .token_file_helpers import token_file_for_target
 
 from .client_types import DHEError
-
-ID_APP_CURRENCY = _ID_APP_CURRENCY
-_currency_options = _schema_currency_options
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -231,7 +236,7 @@ def _connection_data_from_user_input(user_input: Mapping[str, Any]) -> dict[str,
         user_input.get(CONF_INTERNAL_SCALD_PROTECTION) or ""
     ).strip()
     if internal_scald_protection not in INTERNAL_SCALD_PROTECTION_OPTIONS:
-        raise ValueError("invalid_internal_scald_protection")
+        raise ValueError(INVALID_INTERNAL_SCALD_PROTECTION)
     name = str(user_input.get(CONF_NAME, DEFAULT_NAME)).strip() or DEFAULT_NAME
     return {
         CONF_HOST: host,
@@ -303,8 +308,6 @@ async def _async_preserve_token_for_retarget(
 
 class _OptionsFlowClient(Protocol):
     """Client surface used by the options flow."""
-
-    async def set_currency(self, currency: str) -> str: ...
 
     async def set_electricity_price(self, euros_per_kwh: float) -> float: ...
 
@@ -382,6 +385,25 @@ async def _validate_setup_pairing(
     )
 
 
+async def can_connect_for_repair(
+    hass: HomeAssistant,
+    host: str,
+    port: int,
+) -> bool:
+    """Return whether a repair flow can reach the configured DHE target."""
+    return await _can_connect(hass, host, port)
+
+
+async def validate_setup_pairing_for_repair(
+    hass: HomeAssistant,
+    host: str,
+    port: int,
+    token_file: str,
+) -> SetupPairingResult:
+    """Validate repair pairing through the shared setup-pairing path."""
+    return await _validate_setup_pairing(hass, host, port, token_file)
+
+
 async def _async_record_discovery_safely(
     hass: HomeAssistant,
     discovery_record: DiscoveryRecord,
@@ -401,7 +423,7 @@ async def _async_record_discovery_safely(
         _LOGGER.debug("DHE discovery cache update failed: %s", err)
 
 
-class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
+class StiebelDHEConnectConfigFlow(
     config_entries.ConfigFlow,
     domain=DOMAIN,
 ):
@@ -629,10 +651,11 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
         """Start the setup path for a discovered DHE target."""
         _async_delete_discovery_conflict_issue(self.hass, host, port)
         if _is_target_used_by_other_entry(self.hass, host, port):
-            return self.async_abort(reason="already_configured")
-        self.context[FLOW_CONTEXT_DISCOVERED_HOST] = host
-        self.context[FLOW_CONTEXT_DISCOVERED_PORT] = port
-        self.context[FLOW_CONTEXT_DISCOVERY_NAME] = name
+            return self.async_abort(reason=ALREADY_CONFIGURED)
+        flow_context = cast(dict[str, Any], self.context)
+        flow_context[FLOW_CONTEXT_DISCOVERED_HOST] = host
+        flow_context[FLOW_CONTEXT_DISCOVERED_PORT] = port
+        flow_context[FLOW_CONTEXT_DISCOVERY_NAME] = name
         if not await _can_connect(self.hass, host, port):
             if discovery_record is not None:
                 await _async_record_discovery_safely(
@@ -719,6 +742,28 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
         )
         await self.hass.config_entries.async_reload(entry.entry_id)
 
+    async def _async_abort_discovery_conflict(
+        self,
+        *,
+        host: str,
+        port: int,
+        name: str,
+        discovery_record: DiscoveryRecord,
+    ) -> config_entries.ConfigFlowResult:
+        """Record one discovery conflict and abort with the conflict reason."""
+        await _async_record_discovery_safely(
+            self.hass,
+            discovery_record,
+            result="conflicting_identity",
+        )
+        _async_create_discovery_conflict_issue(
+            self.hass,
+            host,
+            port,
+            name,
+        )
+        return self.async_abort(reason="conflicting_discovery_identity")
+
     async def _async_handle_setup_scan(self) -> config_entries.ConfigFlowResult | None:
         """Start or finish the optional setup scan."""
         if self._setup_scan.done:
@@ -760,7 +805,10 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
         self._setup_scan.task = None
         return self.async_show_progress_done(next_step_id="manual")
 
-    async def async_step_user(self, user_input: dict[str, Any] | None = None):
+    async def async_step_user(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> config_entries.ConfigFlowResult:
         """Handle the initial setup choice."""
         if not user_input:
             try:
@@ -792,9 +840,9 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
                     source_flow_id=choice.flow_id,
                 )
 
-        return self._show_setup_choice_form({CONF_SETUP_MODE: "invalid_setup_mode"})
+        return self._show_setup_choice_form({CONF_SETUP_MODE: INVALID_SETUP_MODE})
 
-    async def async_step_zeroconf(self, discovery_info: Any):
+    async def async_step_zeroconf(self, discovery_info: Any) -> config_entries.ConfigFlowResult:
         """Handle a DHE discovered by Zeroconf/mDNS."""
         try:
             host_value = (
@@ -806,7 +854,7 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
             raw_port = getattr(discovery_info, "port", None)
             port = DEFAULT_PORT if raw_port is None else validate_port(raw_port)
         except (TypeError, ValueError):
-            return self.async_abort(reason="invalid_discovery_parameters")
+            return self.async_abort(reason=INVALID_DISCOVERY_PARAMETERS)
 
         if _is_matching_flow_in_progress(
             self.hass,
@@ -814,7 +862,7 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
             port,
             current_flow_id=getattr(self, "flow_id", None),
         ):
-            return self.async_abort(reason="already_in_progress")
+            return self.async_abort(reason=ALREADY_IN_PROGRESS)
 
         name = _discovery_info_name(discovery_info)
         discovery_record = _zeroconf_discovery_record(
@@ -824,40 +872,28 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
             discovery_info=discovery_info,
         )
         if discovery_record.hard_conflict:
-            await _async_record_discovery_safely(
-                self.hass,
-                discovery_record,
-                result="conflicting_identity",
+            return await self._async_abort_discovery_conflict(
+                host=host,
+                port=port,
+                name=name,
+                discovery_record=discovery_record,
             )
-            _async_create_discovery_conflict_issue(
-                self.hass,
-                host,
-                port,
-                name,
-            )
-            return self.async_abort(reason="conflicting_discovery_identity")
         if discovery_record.confidence < DISCOVERY_MIN_PROMPT_CONFIDENCE:
             await _async_record_discovery_safely(
                 self.hass,
                 discovery_record,
                 result="low_confidence",
             )
-            return self.async_abort(reason="low_confidence_discovery")
+            return self.async_abort(reason=LOW_CONFIDENCE_DISCOVERY)
 
         matched_entries = self._entries_for_discovery_identity(discovery_info)
         if len(matched_entries) > 1:
-            await _async_record_discovery_safely(
-                self.hass,
-                discovery_record,
-                result="conflicting_identity",
+            return await self._async_abort_discovery_conflict(
+                host=host,
+                port=port,
+                name=name,
+                discovery_record=discovery_record,
             )
-            _async_create_discovery_conflict_issue(
-                self.hass,
-                host,
-                port,
-                name,
-            )
-            return self.async_abort(reason="conflicting_discovery_identity")
         if len(matched_entries) == 1:
             matched_entry = matched_entries[0]
             if _is_target_used_by_other_entry(
@@ -866,24 +902,18 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
                 port,
                 exclude_entry_id=matched_entry.entry_id,
             ):
-                await _async_record_discovery_safely(
-                    self.hass,
-                    discovery_record,
-                    result="conflicting_identity",
+                return await self._async_abort_discovery_conflict(
+                    host=host,
+                    port=port,
+                    name=name,
+                    discovery_record=discovery_record,
                 )
-                _async_create_discovery_conflict_issue(
-                    self.hass,
-                    host,
-                    port,
-                    name,
-                )
-                return self.async_abort(reason="conflicting_discovery_identity")
             current_target = _entry_target(matched_entry)
             if current_target is None:
-                return self.async_abort(reason="invalid_discovery_parameters")
+                return self.async_abort(reason=INVALID_DISCOVERY_PARAMETERS)
             existing_host, existing_port = current_target
             if existing_host == host and existing_port == port:
-                return self.async_abort(reason="already_configured")
+                return self.async_abort(reason=ALREADY_CONFIGURED)
             await self._async_update_discovered_existing_entry(
                 matched_entry,
                 host=host,
@@ -895,10 +925,10 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
                 result="updated_existing",
             )
             _async_delete_discovery_conflict_issue(self.hass, host, port)
-            return self.async_abort(reason="already_configured")
+            return self.async_abort(reason=ALREADY_CONFIGURED)
 
         if _is_target_used_by_other_entry(self.hass, host, port):
-            return self.async_abort(reason="already_configured")
+            return self.async_abort(reason=ALREADY_CONFIGURED)
         try:
             recent_prompt_seen = await _async_recent_discovery_prompt_seen(
                 self.hass,
@@ -913,7 +943,7 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
                 discovery_record,
                 result="recently_discovered",
             )
-            return self.async_abort(reason="recently_discovered")
+            return self.async_abort(reason=RECENTLY_DISCOVERED)
 
         return await self._async_start_discovered_setup(
             host,
@@ -926,7 +956,7 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
     async def async_step_zeroconf_confirm(
         self,
         user_input: dict[str, Any] | None = None,
-    ):
+    ) -> config_entries.ConfigFlowResult:
         """Collect physical Tmax jumper setting for a Zeroconf setup flow."""
         if self._pending_setup_data is None:
             return await self.async_step_user()
@@ -938,7 +968,7 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
             ).strip()
             if internal_scald_protection not in INTERNAL_SCALD_PROTECTION_OPTIONS:
                 errors[CONF_INTERNAL_SCALD_PROTECTION] = (
-                    "invalid_internal_scald_protection"
+                    INVALID_INTERNAL_SCALD_PROTECTION
                 )
             else:
                 self._pending_setup_data[CONF_INTERNAL_SCALD_PROTECTION] = (
@@ -951,7 +981,7 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
     async def async_step_subnet_scan(
         self,
         user_input: dict[str, Any] | None = None,
-    ):
+    ) -> config_entries.ConfigFlowResult:
         """Choose how the setup scan subnet should be selected."""
         if user_input is None:
             return self._show_subnet_scan_form()
@@ -960,7 +990,7 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
                 user_input.get(CONF_SCAN_PORT, DEFAULT_PORT)
             )
         except (TypeError, ValueError):
-            return self._show_subnet_scan_form({CONF_SCAN_PORT: "invalid_port"})
+            return self._show_subnet_scan_form({CONF_SCAN_PORT: INVALID_PORT})
 
         mode = user_input.get(CONF_SCAN_SUBNET_MODE)
         if mode == SCAN_SUBNET_MODE_CURRENT:
@@ -971,44 +1001,53 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
         if mode == SCAN_SUBNET_MODE_CIDR:
             return await self.async_step_subnet_scan_cidr()
         return self._show_subnet_scan_form(
-            {CONF_SCAN_SUBNET_MODE: "invalid_scan_subnet_mode"}
+            {CONF_SCAN_SUBNET_MODE: INVALID_SCAN_SUBNET_MODE}
         )
 
     async def async_step_subnet_scan_network_mask(
         self,
         user_input: dict[str, Any] | None = None,
-    ):
+    ) -> config_entries.ConfigFlowResult:
         """Collect a network address and subnet mask before scanning."""
-        if user_input is None:
-            return self._show_subnet_scan_network_mask_form(
-                suggested_values=await self._async_subnet_scan_form_defaults()
-            )
-        scan_input = _scan_subnet_network_mask_input(user_input)
-        try:
-            scan_subnet = _required_scan_subnet(scan_input)
-        except ValueError as err:
-            return self._show_subnet_scan_network_mask_form(
-                {_scan_subnet_network_mask_error_field(scan_input): str(err)},
-                suggested_values=user_input,
-            )
-        self._setup_scan.networks = [scan_subnet]
-        return await self.async_step_network_scan()
+        return await self._async_step_subnet_scan_value(
+            user_input,
+            parse_input=_scan_subnet_network_mask_input,
+            error_field=_scan_subnet_network_mask_error_field,
+            show_form=self._show_subnet_scan_network_mask_form,
+        )
 
     async def async_step_subnet_scan_cidr(
         self,
         user_input: dict[str, Any] | None = None,
-    ):
+    ) -> config_entries.ConfigFlowResult:
         """Collect a CIDR subnet before scanning."""
+        return await self._async_step_subnet_scan_value(
+            user_input,
+            parse_input=_scan_subnet_cidr_input,
+            error_field=lambda _scan_input: CONF_SCAN_CIDR,
+            show_form=self._show_subnet_scan_cidr_form,
+        )
+
+    async def _async_step_subnet_scan_value(
+        self,
+        user_input: dict[str, Any] | None,
+        *,
+        parse_input: Callable[[dict[str, Any]], SetupScanSubnetInput],
+        error_field: Callable[[SetupScanSubnetInput], str],
+        show_form: Callable[
+            ...,
+            config_entries.ConfigFlowResult,
+        ],
+    ) -> config_entries.ConfigFlowResult:
+        """Handle one subnet-value form (CIDR or network-mask) before scanning."""
         if user_input is None:
-            return self._show_subnet_scan_cidr_form(
-                suggested_values=await self._async_subnet_scan_form_defaults()
-            )
-        scan_input = _scan_subnet_cidr_input(user_input)
+            return show_form(suggested_values=await self._async_subnet_scan_form_defaults())
+        scan_input = parse_input(user_input)
         try:
             scan_subnet = _required_scan_subnet(scan_input)
         except ValueError as err:
-            return self._show_subnet_scan_cidr_form(
-                {CONF_SCAN_CIDR: str(err)},
+            return show_form(
+                {error_field(scan_input): str(err)},
                 suggested_values=user_input,
             )
         self._setup_scan.networks = [scan_subnet]
@@ -1017,14 +1056,17 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
     async def async_step_network_scan(
         self,
         user_input: dict[str, Any] | None = None,
-    ):
+    ) -> config_entries.ConfigFlowResult:
         """Scan the current local subnet when the user explicitly requests it."""
         scan_result = await self._async_handle_setup_scan()
         if scan_result is not None:
             return scan_result
         return await self.async_step_manual()
 
-    async def async_step_manual(self, user_input: dict[str, Any] | None = None):
+    async def async_step_manual(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> config_entries.ConfigFlowResult:
         """Handle manual setup, optionally prefilled by a completed scan."""
         errors: dict[str, str] = {}
 
@@ -1039,12 +1081,12 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
                     user_input.get(CONF_INTERNAL_SCALD_PROTECTION) or ""
                 ).strip()
                 if internal_scald_protection not in INTERNAL_SCALD_PROTECTION_OPTIONS:
-                    raise ValueError("invalid_internal_scald_protection")
+                    raise ValueError(INVALID_INTERNAL_SCALD_PROTECTION)
             except ValueError as err:
                 _apply_validation_error(errors, err)
             else:
                 if _is_target_used_by_other_entry(self.hass, host, port):
-                    return self.async_abort(reason="already_configured")
+                    return self.async_abort(reason=ALREADY_CONFIGURED)
                 name = str(user_input.get(CONF_NAME, DEFAULT_NAME)).strip() or DEFAULT_NAME
 
                 if not await _can_connect(self.hass, host, port):
@@ -1068,7 +1110,7 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
 
     async def async_step_pairing_confirm(
         self, user_input: dict[str, Any] | None = None
-    ):
+    ) -> config_entries.ConfigFlowResult:
         """Validate pairing/authentication before creating the entry."""
         if self._pending_setup_data is None:
             return await self.async_step_user()
@@ -1245,7 +1287,9 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
 
     @staticmethod
     @callback
-    def async_get_options_flow(_config_entry: config_entries.ConfigEntry):
+    def async_get_options_flow(
+        _config_entry: config_entries.ConfigEntry,
+    ) -> config_entries.OptionsFlow:
         """Return the options flow handler."""
         return StiebelDHEConnectOptionsFlow()
 
@@ -1287,14 +1331,20 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
             errors["base"] = "not_loaded"
         return client
 
-    async def async_step_init(self, user_input: dict[str, Any] | None = None):
+    async def async_step_init(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> config_entries.ConfigFlowResult:
         """Show the options menu."""
         return self.async_show_menu(
             step_id="init",
             menu_options=self._menu_options,
         )
 
-    async def async_step_connection(self, user_input: dict[str, Any] | None = None):
+    async def async_step_connection(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> config_entries.ConfigFlowResult:
         """Manage connection options."""
         current = merged_entry_data(self.config_entry)
         errors: dict[str, str] = {}
@@ -1350,7 +1400,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
     async def async_step_device_settings(
         self,
         user_input: dict[str, Any] | None = None,
-    ):
+    ) -> config_entries.ConfigFlowResult:
         """Manage DHE cost and emission settings."""
         errors: dict[str, str] = {}
         client = self._client_or_mark_not_loaded(errors)
@@ -1358,9 +1408,6 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
         defaults = _device_settings_defaults(client) if client is not None else {}
         if user_input is not None and not errors and client is not None:
             try:
-                currency = str(
-                    user_input.get(ATTR_CURRENCY) or CURRENCY_UNCHANGED
-                ).strip()
                 electricity_price = _optional_float(
                     user_input.get(ATTR_ELECTRICITY_PRICE),
                     0.0,
@@ -1377,8 +1424,6 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
                     CO2_EMISSION_MAX,
                 )
 
-                if currency and currency != CURRENCY_UNCHANGED:
-                    await client.set_currency(currency)
                 if electricity_price is not None:
                     await client.set_electricity_price(electricity_price)
                 if water_price is not None:
@@ -1401,7 +1446,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
     async def async_step_weather_favorite(
         self,
         user_input: dict[str, Any] | None = None,
-    ):
+    ) -> config_entries.ConfigFlowResult:
         """Search DHE weather locations to add a favorite."""
         errors: dict[str, str] = {}
         client = self._client_or_mark_not_loaded(errors)
@@ -1447,7 +1492,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
     async def async_step_weather_favorite_result(
         self,
         user_input: dict[str, Any] | None = None,
-    ):
+    ) -> config_entries.ConfigFlowResult:
         """Select one weather search result and save it as favorite."""
         errors: dict[str, str] = {}
         client = self._client_or_mark_not_loaded(errors)
@@ -1480,7 +1525,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
     async def async_step_remove_weather_favorite(
         self,
         user_input: dict[str, Any] | None = None,
-    ):
+    ) -> config_entries.ConfigFlowResult:
         """Remove a DHE weather favorite."""
         errors: dict[str, str] = {}
         client = self._client_or_mark_not_loaded(errors)
@@ -1518,7 +1563,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
     async def async_step_radio_favorite(
         self,
         user_input: dict[str, Any] | None = None,
-    ):
+    ) -> config_entries.ConfigFlowResult:
         """Select how DHE radio stations should be searched."""
         errors: dict[str, str] = {}
         defaults = user_input or {}
@@ -1541,7 +1586,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
     async def async_step_radio_favorite_catalog(
         self,
         user_input: dict[str, Any] | None = None,
-    ):
+    ) -> config_entries.ConfigFlowResult:
         """Search DHE radio stations by a selected catalog value."""
         errors: dict[str, str] = {}
         client = self._client_or_mark_not_loaded(errors)
@@ -1627,7 +1672,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
     async def async_step_radio_favorite_result(
         self,
         user_input: dict[str, Any] | None = None,
-    ):
+    ) -> config_entries.ConfigFlowResult:
         """Select one radio station search result and save it as favorite."""
         errors: dict[str, str] = {}
         client = self._client_or_mark_not_loaded(errors)
@@ -1660,7 +1705,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
     async def async_step_remove_radio_favorite(
         self,
         user_input: dict[str, Any] | None = None,
-    ):
+    ) -> config_entries.ConfigFlowResult:
         """Remove a DHE radio favorite."""
         errors: dict[str, str] = {}
         client = self._client_or_mark_not_loaded(errors)

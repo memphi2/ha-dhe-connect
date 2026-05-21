@@ -64,6 +64,18 @@ class TestSetupScan(unittest.TestCase):
             ["192.168.1.1", "192.168.1.2"],
         )
 
+    def test_scan_concurrency_for_host_count_is_bounded(self) -> None:
+        self.assertEqual(setup_scan.scan_concurrency_for_host_count(0), 1)
+        self.assertEqual(setup_scan.scan_concurrency_for_host_count(10), 10)
+        self.assertEqual(
+            setup_scan.scan_concurrency_for_host_count(512),
+            256,
+        )
+        self.assertEqual(
+            setup_scan.scan_concurrency_for_host_count(1024),
+            256,
+        )
+
     def test_scan_hosts_interleaves_networks_before_host_cap(self) -> None:
         hosts = setup_scan.scan_hosts(
             [ip_network("192.168.1.0/30"), ip_network("192.168.2.0/30")],
