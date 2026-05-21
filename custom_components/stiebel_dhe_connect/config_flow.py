@@ -656,6 +656,7 @@ class StiebelDHEConnectConfigFlow(
         flow_context[FLOW_CONTEXT_DISCOVERED_HOST] = host
         flow_context[FLOW_CONTEXT_DISCOVERED_PORT] = port
         flow_context[FLOW_CONTEXT_DISCOVERY_NAME] = name
+        flow_context["title_placeholders"] = {"name": name}
         if not await _can_connect(self.hass, host, port):
             if discovery_record is not None:
                 await _async_record_discovery_safely(

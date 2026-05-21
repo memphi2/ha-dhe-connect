@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from ipaddress import ip_address
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -38,6 +39,23 @@ _STABLE_ID_KEYS = (
     "serial_number",
     "unique_id",
 )
+_DISPLAY_NAME_PROPERTY_KEYS = (
+    "friendly_name",
+    "friendlyname",
+    "device_name",
+    "devicename",
+    "name",
+    "hostname",
+)
+_TECHNICAL_DISCOVERY_NAMES = {
+    "",
+    DOMAIN,
+    DOMAIN.replace("_", "-"),
+    DHE_ZEROCONF_SERVICE.rstrip("."),
+    DHE_ZEROCONF_SERVICE.rstrip(".").replace("_", ""),
+    "_ste-dhe",
+    "ste-dhe",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,18 +177,85 @@ def coerce_setup_pairing_result(result: Any) -> SetupPairingResult:
 
 def discovery_info_name(discovery_info: Any) -> str:
     """Return a human-friendly name from a Zeroconf discovery payload."""
-    raw_name = (
-        getattr(discovery_info, "name", None)
-        or getattr(discovery_info, "hostname", None)
-        or DEFAULT_NAME
+    for raw_name in _discovery_name_candidates(discovery_info):
+        if name := _clean_discovery_name(raw_name):
+            return name
+    return DEFAULT_NAME
+
+
+def _discovery_name_candidates(discovery_info: Any) -> tuple[Any, ...]:
+    """Return display-name candidates ordered by specificity."""
+    property_candidates = tuple(
+        _discovery_display_property(discovery_info, key)
+        for key in _DISPLAY_NAME_PROPERTY_KEYS
     )
+    return (
+        *property_candidates,
+        getattr(discovery_info, "name", None)
+        or getattr(discovery_info, "server", None),
+        getattr(discovery_info, "hostname", None),
+        _host_display_fallback(getattr(discovery_info, "host", None)),
+        _host_display_fallback(getattr(discovery_info, "ip_address", None)),
+    )
+
+
+def _discovery_display_property(discovery_info: Any, key: str) -> str | None:
+    """Return one raw display property without lowercasing the value."""
+    raw = (
+        getattr(discovery_info, "decoded_properties", None)
+        or getattr(discovery_info, "properties", None)
+        or {}
+    )
+    if not isinstance(raw, Mapping):
+        return None
+    key_options = {key, key.replace("_", "")}
+    for raw_key, raw_value in raw.items():
+        if _normalize_property_text(raw_key) in key_options:
+            return _decode_property_display_value(raw_value)
+    return None
+
+
+def _decode_property_display_value(value: Any) -> str | None:
+    """Return a decoded property value for display-name use."""
+    if value in (None, ""):
+        return None
+    if isinstance(value, bytes):
+        text = value.decode("utf-8", "ignore")
+    else:
+        text = str(value)
+    return text.strip() or None
+
+
+def _clean_discovery_name(raw_name: Any) -> str | None:
+    """Return a sanitized device name or None for technical placeholders."""
+    if raw_name in (None, ""):
+        return None
     name = str(raw_name).strip().rstrip(".")
     service_suffix = f".{DHE_ZEROCONF_SERVICE.rstrip('.')}"
     if name.endswith(service_suffix):
         name = name[: -len(service_suffix)]
     if name.lower().endswith(".local"):
         name = name[:-6]
-    return name or DEFAULT_NAME
+    name = name.strip().rstrip(".")
+    if name.lower() in _TECHNICAL_DISCOVERY_NAMES:
+        return None
+    if name.lower().endswith("._tcp"):
+        return None
+    return name or None
+
+
+def _host_display_fallback(value: Any) -> str | None:
+    """Return a last-resort per-target name when discovery has no label."""
+    if value in (None, ""):
+        return None
+    text = str(value).strip().rstrip(".")
+    if not text:
+        return None
+    try:
+        ip_address(text)
+    except ValueError:
+        return text
+    return f"{DEFAULT_NAME} {text}"
 
 
 def discovery_context_target(flow: Mapping[str, Any]) -> tuple[str, int] | None:

@@ -260,14 +260,13 @@ class TestConfigEntryDiagnostics(unittest.TestCase):
                 "product_id_prefix",
                 "protocol_version",
                 "raw_odb_protocol_version",
-                "web_app_version",
                 "wlan_mac",
             ],
         )
         self.assertEqual(result["runtime"]["device"]["device_type"], "DHE Connect")
         self.assertEqual(result["runtime"]["device"]["product_id_prefix"], "1234567")
         self.assertEqual(result["runtime"]["device"]["protocol_version"], "1.9.00")
-        self.assertEqual(result["runtime"]["device"]["web_app_version"], "1.9.00")
+        self.assertNotIn("web_app_version", result["runtime"]["device"])
         self.assertEqual(result["runtime"]["device"]["raw_odb_protocol_version"], 1)
         self.assertTrue(result["runtime"]["device"]["has_wlan_mac"])
         self.assertTrue(result["runtime"]["device"]["has_bluetooth_mac"])

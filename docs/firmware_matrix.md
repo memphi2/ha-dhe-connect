@@ -95,7 +95,7 @@ the matrix interpretation conservative:
 ## How To Add A Result
 
 1. Open the DHE web interface and note the firmware or web-app version shown by
-   the device. The integration also exposes the web-app/protocol version through
+   the device. The integration also exposes the protocol version through
    diagnostics and the protocol-version entity when available.
 2. Run the normal repository checks and at least one Home Assistant smoke run
    against the device.
