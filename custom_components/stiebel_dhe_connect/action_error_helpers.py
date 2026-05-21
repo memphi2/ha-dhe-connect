@@ -8,17 +8,47 @@ from typing import Any
 from homeassistant.exceptions import HomeAssistantError
 
 from .client_types import DHEError
+from .const import DOMAIN
+
+
+def _translated_homeassistant_error(
+    message: str,
+    *,
+    translation_key: str,
+    translation_placeholders: dict[str, str] | None = None,
+) -> HomeAssistantError:
+    """Return a translated HA error, with safe fallback for lightweight tests."""
+    try:
+        return HomeAssistantError(
+            message,
+            translation_domain=DOMAIN,
+            translation_key=translation_key,
+            translation_placeholders=translation_placeholders or {},
+        )
+    except TypeError:
+        return HomeAssistantError(message)
 
 
 def dhe_action_error(message: str, err: DHEError) -> HomeAssistantError:
     """Return the Home Assistant exception for a failed DHE-backed action."""
-    return HomeAssistantError(f"{message}: {err}")
+    return _translated_homeassistant_error(
+        f"{message}: {err}",
+        translation_key="dhe_action_failed",
+        translation_placeholders={
+            "operation": message,
+            "error": str(err),
+        },
+    )
 
 
 def raise_if_dhe_unavailable(client: object, message: str) -> None:
     """Raise a HA action error when a DHE-backed control is offline."""
     if not bool(getattr(client, "available", False)):
-        raise HomeAssistantError(message)
+        raise _translated_homeassistant_error(
+            message,
+            translation_key="dhe_unavailable_action",
+            translation_placeholders={"operation": message},
+        )
 
 
 async def run_dhe_action(action: Awaitable[Any], message: str) -> Any:

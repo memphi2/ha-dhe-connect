@@ -209,6 +209,13 @@ If discovery identity hints are inconsistent, Home Assistant can raise
 `DHE discovery conflict detected`. In that case, continue with manual setup
 using one stable host/IP and port.
 
+If Zeroconf later finds the same physical device under a changed host/IP, the
+integration can update the existing config-entry target only when stable device
+identity matches (for example paired WLAN/Bluetooth MAC). It never rewrites a
+target on weak host/name hints alone. If the discovered target is already used
+by another configured entry, Home Assistant raises a discovery-conflict repair
+issue and does not overwrite either entry.
+
 Before successful pairing, the integration does not create a device. If setup is
 cancelled or pairing times out, start the flow again and confirm pairing on the
 DHE display.

@@ -83,8 +83,10 @@ from .config_flow_discovery import (
     SetupPairingResult,
     ZeroconfSetupChoice,
     coerce_setup_pairing_result as _coerce_setup_pairing_result,
+    discovery_identity_candidates as _discovery_identity_candidates,
     discovery_info_name as _discovery_info_name,
     is_matching_flow_in_progress as _is_matching_flow_in_progress,
+    normalize_mac as _normalize_discovery_mac,
     zeroconf_setup_choice_key,
     zeroconf_setup_choices_from_progress as _zeroconf_setup_choices_from_progress,
 )
@@ -247,6 +249,17 @@ def _connection_options_for_entry(
     options = dict(entry.options)
     options.update(connection_data)
     return options
+
+
+def _normalized_entry_unique_id(entry: config_entries.ConfigEntry) -> str | None:
+    """Return normalized config-entry unique ID for discovery identity matching."""
+    unique_id = str(entry.unique_id or "").strip().lower()
+    if not unique_id:
+        return None
+    normalized_mac = _normalize_discovery_mac(unique_id)
+    if normalized_mac is not None:
+        return normalized_mac
+    return unique_id
 
 
 async def _async_preserve_token_for_retarget(
@@ -647,6 +660,65 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
         )
         return await self.async_step_zeroconf_confirm()
 
+    def _entries_for_discovery_identity(
+        self,
+        discovery_info: Any,
+    ) -> tuple[config_entries.ConfigEntry, ...]:
+        """Return config entries whose unique ID matches Zeroconf identity data."""
+        identity_candidates = _discovery_identity_candidates(discovery_info)
+        if not identity_candidates:
+            return ()
+        entries: dict[str, config_entries.ConfigEntry] = {}
+        for entry in self.hass.config_entries.async_entries(DOMAIN):
+            normalized_unique_id = _normalized_entry_unique_id(entry)
+            if (
+                normalized_unique_id is None
+                or normalized_unique_id not in identity_candidates
+            ):
+                continue
+            entries[entry.entry_id] = entry
+        return tuple(entries.values())
+
+    async def _async_update_discovered_existing_entry(
+        self,
+        entry: config_entries.ConfigEntry,
+        *,
+        host: str,
+        port: int,
+    ) -> None:
+        """Apply a discovery host/port update to one existing config entry."""
+        merged = merged_entry_data(entry)
+        name = (
+            str(merged.get(CONF_NAME, entry.title or DEFAULT_NAME)).strip()
+            or DEFAULT_NAME
+        )
+        internal_scald_protection = str(
+            merged.get(
+                CONF_INTERNAL_SCALD_PROTECTION,
+                INTERNAL_SCALD_PROTECTION_DEFAULT,
+            )
+        ).strip() or INTERNAL_SCALD_PROTECTION_DEFAULT
+        connection_data = {
+            CONF_HOST: host,
+            CONF_PORT: port,
+            CONF_NAME: name,
+            CONF_INTERNAL_SCALD_PROTECTION: internal_scald_protection,
+        }
+        await _async_preserve_token_for_retarget(
+            self.hass,
+            entry,
+            connection_data,
+        )
+        updated_data = dict(entry.data)
+        updated_data[CONF_HOST] = host
+        updated_data[CONF_PORT] = port
+        self.hass.config_entries.async_update_entry(
+            entry,
+            data=updated_data,
+            options=_connection_options_for_entry(entry, connection_data),
+        )
+        await self.hass.config_entries.async_reload(entry.entry_id)
+
     async def _async_handle_setup_scan(self) -> config_entries.ConfigFlowResult | None:
         """Start or finish the optional setup scan."""
         if self._setup_scan.done:
@@ -736,8 +808,6 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
         except (TypeError, ValueError):
             return self.async_abort(reason="invalid_discovery_parameters")
 
-        if _is_target_used_by_other_entry(self.hass, host, port):
-            return self.async_abort(reason="already_configured")
         if _is_matching_flow_in_progress(
             self.hass,
             host,
@@ -773,6 +843,62 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
                 result="low_confidence",
             )
             return self.async_abort(reason="low_confidence_discovery")
+
+        matched_entries = self._entries_for_discovery_identity(discovery_info)
+        if len(matched_entries) > 1:
+            await _async_record_discovery_safely(
+                self.hass,
+                discovery_record,
+                result="conflicting_identity",
+            )
+            _async_create_discovery_conflict_issue(
+                self.hass,
+                host,
+                port,
+                name,
+            )
+            return self.async_abort(reason="conflicting_discovery_identity")
+        if len(matched_entries) == 1:
+            matched_entry = matched_entries[0]
+            if _is_target_used_by_other_entry(
+                self.hass,
+                host,
+                port,
+                exclude_entry_id=matched_entry.entry_id,
+            ):
+                await _async_record_discovery_safely(
+                    self.hass,
+                    discovery_record,
+                    result="conflicting_identity",
+                )
+                _async_create_discovery_conflict_issue(
+                    self.hass,
+                    host,
+                    port,
+                    name,
+                )
+                return self.async_abort(reason="conflicting_discovery_identity")
+            current_target = _entry_target(matched_entry)
+            if current_target is None:
+                return self.async_abort(reason="invalid_discovery_parameters")
+            existing_host, existing_port = current_target
+            if existing_host == host and existing_port == port:
+                return self.async_abort(reason="already_configured")
+            await self._async_update_discovered_existing_entry(
+                matched_entry,
+                host=host,
+                port=port,
+            )
+            await _async_record_discovery_safely(
+                self.hass,
+                discovery_record,
+                result="updated_existing",
+            )
+            _async_delete_discovery_conflict_issue(self.hass, host, port)
+            return self.async_abort(reason="already_configured")
+
+        if _is_target_used_by_other_entry(self.hass, host, port):
+            return self.async_abort(reason="already_configured")
         try:
             recent_prompt_seen = await _async_recent_discovery_prompt_seen(
                 self.hass,

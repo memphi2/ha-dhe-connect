@@ -81,7 +81,10 @@ diagnostics in a compact Mushroom-style layout.
 | Installation and normal use | This README |
 | German quick guide | [docs/de.md](docs/de.md) |
 | Entity list, attributes and service examples | [docs/entities.md](docs/entities.md) |
+| Automation examples | [docs/examples.md](docs/examples.md) |
+| Practical Home Assistant scenarios | [docs/use-cases.md](docs/use-cases.md) |
 | Pairing, connectivity and recorder troubleshooting | [docs/troubleshooting.md](docs/troubleshooting.md) |
+| Known network and runtime limitations | [docs/known_limitations.md](docs/known_limitations.md) |
 | Tested device and firmware matrix | [docs/firmware_matrix.md](docs/firmware_matrix.md) |
 | Protocol and ODB mapping notes for maintainers | [docs/protocol.md](docs/protocol.md) |
 | Local tests, HA smoke checks and release-readiness flow | [docs/validation.md](docs/validation.md) |

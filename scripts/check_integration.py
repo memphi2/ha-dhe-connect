@@ -143,6 +143,9 @@ def check_repository_files(version: str) -> None:
         "custom_components/stiebel_dhe_connect/brand/logo.png",
         "docs/troubleshooting.md",
         "docs/validation.md",
+        "docs/examples.md",
+        "docs/use-cases.md",
+        "docs/known_limitations.md",
         "docs/legal.md",
     ):
         if not (ROOT / relative).exists():
@@ -157,6 +160,12 @@ def check_repository_files(version: str) -> None:
         _fail("README troubleshooting reference points to docs/troubleshooting.md")
     if "[docs/validation.md](docs/validation.md)" not in readme:
         _fail("README validation reference points to docs/validation.md")
+    if "[docs/examples.md](docs/examples.md)" not in readme:
+        _fail("README examples reference points to docs/examples.md")
+    if "[docs/use-cases.md](docs/use-cases.md)" not in readme:
+        _fail("README use-cases reference points to docs/use-cases.md")
+    if "[docs/known_limitations.md](docs/known_limitations.md)" not in readme:
+        _fail("README known-limitations reference points to docs/known_limitations.md")
     if "[docs/legal.md](docs/legal.md)" not in readme:
         _fail("README legal reference points to docs/legal.md")
     if "### Removal" not in readme:

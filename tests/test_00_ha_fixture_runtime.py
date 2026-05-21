@@ -2501,6 +2501,98 @@ async def test_zeroconf_flow_aborts_duplicate_host_port() -> None:
         assert result["reason"] == "already_configured"
 
 
+async def test_zeroconf_updates_existing_entry_for_identity_matched_host_change() -> None:
+    """Update host/port on an existing entry when Zeroconf identity matches."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        entry = _build_mock_entry(
+            host="dhe-ja06.local",
+            port=DEFAULT_PORT,
+            name="Existing DHE",
+            unique_id="aa:bb:cc:dd:ee:ff",
+        )
+        entry.add_to_hass(hass)
+
+        preserve_token = AsyncMock()
+        reload_entry = AsyncMock(return_value=True)
+        with (
+            patch.object(
+                config_flow,
+                "_async_preserve_token_for_retarget",
+                preserve_token,
+            ),
+            patch.object(hass.config_entries, "async_reload", reload_entry),
+        ):
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_ZEROCONF},
+                data=_zeroconf_info(
+                    "dhe-ja06.local.",
+                    9443,
+                    host="192.0.2.124",
+                    properties={"wlan_mac": "aa-bb-cc-dd-ee-ff"},
+                ),
+            )
+
+        assert result["type"] is FlowResultType.ABORT
+        assert result["reason"] == "already_configured"
+        updated_entry = hass.config_entries.async_get_entry(entry.entry_id)
+        assert updated_entry is not None
+        assert updated_entry.data[CONF_HOST] == "192.0.2.124"
+        assert updated_entry.data[CONF_PORT] == 9443
+        assert len(hass.config_entries.async_entries(DOMAIN)) == 1
+        preserve_token.assert_awaited_once()
+        reload_entry.assert_awaited_once_with(entry.entry_id)
+
+
+async def test_zeroconf_identity_match_aborts_on_target_conflict_without_update() -> None:
+    """Abort with conflict when identity matches one entry but target belongs to another."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        matched_entry = _build_mock_entry(
+            host="dhe-ja06.local",
+            port=DEFAULT_PORT,
+            name="Matched DHE",
+            unique_id="aa:bb:cc:dd:ee:ff",
+        )
+        target_entry = _build_mock_entry(
+            host="192.0.2.150",
+            port=DEFAULT_PORT,
+            name="Other DHE",
+            unique_id="11:22:33:44:55:66",
+        )
+        matched_entry.add_to_hass(hass)
+        target_entry.add_to_hass(hass)
+
+        issue_registry = ir.async_get(hass)
+        issue_id = config_flow._discovery_conflict_issue_id("192.0.2.150", DEFAULT_PORT)
+
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_ZEROCONF},
+            data=_zeroconf_info(
+                "dhe-ja06.local.",
+                DEFAULT_PORT,
+                host="192.0.2.150",
+                properties={"wlan_mac": "aa-bb-cc-dd-ee-ff"},
+            ),
+        )
+
+        assert result["type"] is FlowResultType.ABORT
+        assert result["reason"] == "conflicting_discovery_identity"
+        assert len(hass.config_entries.async_entries(DOMAIN)) == 2
+        assert matched_entry.data[CONF_HOST] == "dhe-ja06.local"
+        issue = issue_registry.async_get_issue(DOMAIN, issue_id)
+        assert issue is not None
+        assert issue.translation_key == "discovery_conflict"
+
+
 async def test_zeroconf_pairing_aborts_duplicate_mac_after_host_ip_mismatch() -> None:
     """Abort when Zeroconf finds an existing manual entry through another host."""
     _clear_loaded_integration_modules()
@@ -3492,6 +3584,7 @@ def _zeroconf_info(
     host: str | None | object = _DEFAULT_ZEROCONF_HOST,
     name: str | None = None,
     ip: str = "192.0.2.124",
+    properties: dict[str, Any] | None = None,
 ) -> types.SimpleNamespace:
     """Build a DHE Zeroconf discovery payload for config-flow tests."""
     service_hostname = hostname or f"{ip}.local."
@@ -3504,7 +3597,7 @@ def _zeroconf_info(
         hostname=hostname,
         type="_ste-dhe._tcp.local.",
         name=name or f"{service_hostname.rstrip('.')}._ste-dhe._tcp.local.",
-        properties={},
+        properties=properties or {},
     )
 
 

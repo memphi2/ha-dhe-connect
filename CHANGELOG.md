@@ -2,7 +2,16 @@
 
 ## Unreleased
 
-- No changes yet.
+- Zeroconf discovery-update-info path updates an existing config entry host/port
+  when stable discovery identity matches exactly.
+- Conflicting identity-vs-target discovery cases abort cleanly and create a
+  discovery-conflict issue without creating duplicate entries.
+- User-facing DHE action errors now use translation-backed Home Assistant
+  exceptions.
+- Added `docs/examples.md`, `docs/use-cases.md` and
+  `docs/known_limitations.md`, with README links.
+- Added translation and discovery-update fixture coverage for the new Gold-core
+  evidence paths.
 
 ## v1.7.0 - 2026-05-21
 

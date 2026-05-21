@@ -149,6 +149,14 @@
       "description": "Das konfigurierte Ziel `{host}:{port}` für **{name}** ist nicht erreichbar. Host/Port und Netzwerkpfad prüfen und bei Bedarf über Neu konfigurieren korrigieren."
     }
   },
+  "exceptions": {
+    "dhe_action_failed": {
+      "message": "DHE-Aktion fehlgeschlagen: {error} ({operation})"
+    },
+    "dhe_unavailable_action": {
+      "message": "DHE ist nicht verfügbar: {operation}"
+    }
+  },
   "options": {
     "step": {
       "init": {

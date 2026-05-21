@@ -119,7 +119,12 @@ table below mirrors that evidence for human review and release notes.
 | `reconfiguration-flow` | done | Reconfigure updates the existing config entry options, checks changed host/port reachability and preserves the existing token. | Reconfigure HA fixture tests. | Troubleshooting host/port section. |
 | `repair-issues` | done | Runtime/setup faults create actionable Repairs issues (`pairing_required`, `token_invalid`, `device_unreachable`, `discovery_conflict`, `host_changed_or_unreachable`); token/pairing issues are fixable and reuse the pairing validation flow. | Repairs lifecycle and fix-flow HA fixture tests (including grace-window suppression). | Troubleshooting pairing/token/offline/discovery/host sections. |
 | `stale-devices` | exempt | Removing the config entry removes the HA device; no dynamic child-device lifecycle exists. | Unload tests. | `quality_scale.yaml`. |
-| `discovery-update-info`, `docs-examples`, `docs-known-limitations`, `docs-use-cases`, `exception-translations`, `icon-translations` | not Gold-core for this step | Tracked as future quality-scale work. | `quality_scale.yaml` keeps them visible. | Future docs/release prep. |
+| `discovery-update-info` | done | Identity-matched Zeroconf can update host/port on an existing entry without creating duplicates. | HA fixture discovery-update and conflict tests. | `docs/troubleshooting.md`. |
+| `docs-examples` | done | Dedicated examples page with YAML automation and dashboard snippets. | Repository docs-link checks. | `docs/examples.md`. |
+| `docs-use-cases` | done | Practical scenario guide for common HA deployments. | Repository docs-link checks. | `docs/use-cases.md`. |
+| `docs-known-limitations` | done | Explicit local-network, mDNS and firmware variability limits are documented. | Repository docs-link checks. | `docs/known_limitations.md`. |
+| `exception-translations` | done | DHE action exceptions are translation-key based for user-facing errors. | Translation tests and service error tests. | Translation files and troubleshooting notes. |
+| `icon-translations` | exempt | Static icon surface; no dynamic translated icon metadata needed. | Entity translation and icon checks in repository validation. | `quality_scale.yaml` exemption comment. |
 
 ## Gold Core Live Checks
 

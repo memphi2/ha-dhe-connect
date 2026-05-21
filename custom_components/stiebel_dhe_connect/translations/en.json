@@ -149,6 +149,14 @@
       "description": "The configured target `{host}:{port}` for **{name}** is unreachable. Verify host/port and network path, then use Reconfigure to correct the target if needed."
     }
   },
+  "exceptions": {
+    "dhe_action_failed": {
+      "message": "{operation}: {error}"
+    },
+    "dhe_unavailable_action": {
+      "message": "{operation}"
+    }
+  },
   "options": {
     "step": {
       "init": {

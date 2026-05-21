@@ -38,15 +38,15 @@ rules:
   # Gold
   devices: done
   diagnostics: done
-  discovery-update-info: todo
+  discovery-update-info: done
   discovery: done
   docs-data-update: done
-  docs-examples: todo
-  docs-known-limitations: todo
+  docs-examples: done
+  docs-known-limitations: done
   docs-supported-devices: done
   docs-supported-functions: done
   docs-troubleshooting: done
-  docs-use-cases: todo
+  docs-use-cases: done
   dynamic-devices:
     status: exempt
     comment: |
@@ -56,8 +56,12 @@ rules:
   entity-device-class: done
   entity-disabled-by-default: done
   entity-translations: done
-  exception-translations: todo
-  icon-translations: todo
+  exception-translations: done
+  icon-translations:
+    status: exempt
+    comment: |
+      The integration uses static icon definitions and does not expose dynamic
+      icon states that require translation-backed icon metadata.
   reconfiguration-flow: done
   repair-issues:
     status: done
@@ -338,12 +342,14 @@ evidence:
         README.md and docs/validation.md document diagnostics behavior.
     discovery-update-info:
       implementation: >
-        Tracked as future Gold work because discoveries are setup candidates and
-        do not update existing entry metadata yet.
+        Zeroconf identity candidates now include stable MAC/device-id hints and
+        can update host/port on an existing config entry only when identity
+        matches exactly.
       tests: >
-        Future discovery-update tests required before marking done.
+        HA fixture Zeroconf tests cover identity-matched host/port updates,
+        conflict aborts and no-duplicate behavior.
       docs: >
-        Tracked in this file as todo.
+        docs/troubleshooting.md documents update and conflict behavior.
     discovery:
       implementation: >
         Zeroconf and subnet scan feed the same pairing-confirm setup path as
@@ -363,18 +369,19 @@ evidence:
         docs/protocol.md, docs/entities.md and docs/troubleshooting.md.
     docs-examples:
       implementation: >
-        Tracked as future Gold work for richer user scenarios and screenshots.
+        A dedicated automation/dashboard example page is provided.
       tests: >
-        Future documentation checks required before marking done.
+        scripts/check_integration.py enforces the docs link set.
       docs: >
-        Tracked in this file as todo.
+        docs/examples.md.
     docs-known-limitations:
       implementation: >
-        Tracked as future Gold work for a consolidated limitations page.
+        A dedicated known-limitations page documents network and protocol
+        constraints for this local integration.
       tests: >
-        Future documentation checks required before marking done.
+        scripts/check_integration.py enforces the docs link set.
       docs: >
-        Current limitations are split across README.md and troubleshooting docs.
+        docs/known_limitations.md.
     docs-supported-devices:
       implementation: >
         Supported DHE Connect device classes and firmware evidence are tracked.
@@ -399,11 +406,12 @@ evidence:
         docs/troubleshooting.md.
     docs-use-cases:
       implementation: >
-        Tracked as future Gold work for scenario-based user documentation.
+        A dedicated use-case document summarizes pragmatic Home Assistant usage
+        scenarios.
       tests: >
-        Future documentation checks required before marking done.
+        scripts/check_integration.py enforces the docs link set.
       docs: >
-        Tracked in this file as todo.
+        docs/use-cases.md.
     dynamic-devices:
       implementation: >
         Exempt because one config entry represents one physical DHE device and
@@ -446,20 +454,20 @@ evidence:
         Translation files under translations/.
     exception-translations:
       implementation: >
-        Tracked as future Gold work for fully translated config and repair
-        exceptions.
+        DHE action exceptions now use translated HomeAssistantError keys with
+        redacted placeholders and runtime-safe fallback for lightweight stubs.
       tests: >
-        Future translation tests required before marking done.
+        Translation tests require action exception keys in both locales.
       docs: >
-        Tracked in this file as todo.
+        Translation files under translations/ and docs/troubleshooting.md.
     icon-translations:
       implementation: >
-        Tracked as future Gold work for translation-backed icon metadata where
-        Home Assistant supports it.
+        Exempt because this integration uses static icon mappings and has no
+        translated dynamic icon state surface.
       tests: >
-        Future translation/icon tests required before marking done.
+        Entity-translation and icon checks are covered by repository validation.
       docs: >
-        Tracked in this file as todo.
+        Exemption rationale is documented in the rules section above.
     reconfiguration-flow:
       implementation: >
         Reconfigure updates the existing config entry, validates reachability
