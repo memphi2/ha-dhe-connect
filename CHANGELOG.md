@@ -4,6 +4,65 @@
 
 - No changes yet.
 
+## v1.7.0 - 2026-05-21
+
+Gold-core-oriented release-preparation update for the custom integration.
+This is not an official Home Assistant Core certification.
+
+### Home Assistant Repairs
+
+- Fixable Repairs issues for rejected/stored-token runtime failures:
+  `pairing_required` and `token_invalid`.
+- Repairs fix flow validates fresh local pairing via the same pairing validation
+  path used by setup/reauth.
+- Repairs issues are cleared automatically after recovered authenticated
+  connection.
+- Repairs reload the existing config entry and do not create a new device/entity
+  structure.
+
+### Reconfigure Flow
+
+- Existing config entry can update host, port, display name and internal
+  scald-protection/Tmax setting through the Home Assistant reconfigure UI.
+- Host/port changes validate reachability before apply.
+- Duplicate target prevention blocks moving one entry onto another entry target.
+- Existing token file is preserved conservatively on retarget; no token deletion
+  is performed by reconfigure.
+- Reconfigure updates and reloads the existing config entry.
+
+### Quality Scale Evidence
+
+- `custom_components/stiebel_dhe_connect/quality_scale.yaml` tracks
+  Bronze/Silver/Gold-core rules with explicit rule-to-evidence mapping.
+- Silver rules are tracked as `done` or documented `exempt` where applicable.
+- Gold-core-oriented evidence is documented for diagnostics, discovery,
+  reconfiguration-flow and repair-issues without claiming official HA-Core
+  certification.
+
+### Tests And Validation Scope
+
+- HA fixture tests cover Repairs/Repair flow behavior, reauth, reconfigure,
+  unload/reload and multi-entry behavior.
+- Coverage gate remains enforced via `pytest-cov` for deterministic integration
+  modules (`>=95%` threshold).
+- Repository validation includes `check_integration`, `check_typing`, Ruff and
+  `release_check`.
+
+### Validation
+
+- `python scripts/check_coverage.py`: `614 passed`; scoped integration coverage
+  gate `95%`.
+- `python scripts/check_integration.py`: `545` tests ran (`OK`);
+  `integration checks ok`.
+- `python scripts/check_typing.py`: `Success: no issues found in 69 source files`.
+- `python -m ruff check custom_components/stiebel_dhe_connect tests scripts`:
+  `All checks passed!`
+- `python scripts/release_check.py --run-local-checks --expect-tag absent --expect-github-release absent`:
+  passed all content checks, failed only on the expected dirty worktree state
+  during release-prep editing.
+- `python scripts/release_check.py --run-local-checks --allow-dirty --expect-tag absent --expect-github-release absent`:
+  `release check ok`.
+
 ## v1.6.0 - 2026-05-20
 
 Initial public release of `DHE Connect (Unofficial)` after the repository

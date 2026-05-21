@@ -36,7 +36,15 @@ from .const import (
     DOMAIN,
     PLATFORMS,
 )
-from .repair_issues import async_create_pairing_issue, async_delete_pairing_issue
+from .repair_issues import (
+    DISCOVERY_CONFLICT_ISSUE,
+    DEVICE_UNREACHABLE_ISSUE,
+    HOST_CHANGED_OR_UNREACHABLE_ISSUE,
+    PAIRING_REQUIRED_ISSUE,
+    TOKEN_INVALID_ISSUE,
+    async_create_repair_issue,
+    async_delete_repair_issues,
+)
 from .runtime_helpers import (
     clear_runtime_data,
     iter_loaded_runtime_data,
@@ -156,6 +164,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise HomeAssistantError("Invalid DHE host/port in config entry")
     reachable_target = await _async_first_reachable_entry_target(hass, entry, target)
     if reachable_target is None:
+        name = str(data.get(CONF_NAME, entry.title or DEFAULT_NAME)).strip() or DEFAULT_NAME
+        host, port = target
+        async_create_repair_issue(
+            hass,
+            entry.entry_id,
+            _setup_unreachable_issue_type(entry, target),
+            name,
+            placeholders={CONF_HOST: host, CONF_PORT: port},
+        )
         raise ConfigEntryNotReady("Could not connect to DHE before setup")
     host, port = reachable_target
     name = data.get(CONF_NAME, DEFAULT_NAME)
@@ -208,7 +225,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _async_register_reauth_trigger(hass, entry, client)
     runtime.start_task = _start_client_background(hass, entry, client)
     entry.async_on_unload(task_cancel_callback(runtime.start_task))
-    async_delete_pairing_issue(hass, entry.entry_id)
+    async_delete_repair_issues(hass, entry.entry_id)
     _async_clear_config_entry_reauth(hass, entry)
     _async_schedule_config_entry_reauth_clear(hass, entry)
     _async_schedule_connected_issue_cleanup(hass, entry, client)
@@ -250,6 +267,17 @@ def _target_from_entry_data(entry: ConfigEntry) -> tuple[str, int] | None:
         )
     except (KeyError, TypeError, ValueError):
         return None
+
+
+def _setup_unreachable_issue_type(
+    entry: ConfigEntry,
+    merged_target: tuple[str, int],
+) -> str:
+    """Classify setup-time unreachable targets."""
+    data_target = _target_from_entry_data(entry)
+    if data_target is not None and data_target != merged_target:
+        return HOST_CHANGED_OR_UNREACHABLE_ISSUE
+    return DEVICE_UNREACHABLE_ISSUE
 
 
 def _device_identifier_for_entry(entry: ConfigEntry) -> str:
@@ -436,38 +464,162 @@ def _async_register_reauth_trigger(
     entry: ConfigEntry,
     client: DHEClient,
 ) -> None:
-    """Create exactly one DHE repair issue when runtime auth fails."""
-    issue_created = False
+    """Create at most one active DHE repair issue from runtime diagnostics."""
+    active_issue_type: str | None = None
+    entry_name = str(
+        merged_entry_data(entry).get(CONF_NAME, entry.title or DEFAULT_NAME)
+    ).strip() or DEFAULT_NAME
+
+    @callback
+    def _target_placeholders() -> dict[str, str]:
+        target = entry_target(entry)
+        if target is None:
+            return {}
+        host, port = target
+        return {CONF_HOST: host, CONF_PORT: str(port)}
+
+    @callback
+    def _create_issue(issue_type: str) -> None:
+        nonlocal active_issue_type
+        if active_issue_type == issue_type:
+            return
+        async_delete_repair_issues(hass, entry.entry_id, keep_types=(issue_type,))
+        async_create_repair_issue(
+            hass,
+            entry.entry_id,
+            issue_type,
+            entry_name,
+            placeholders=_target_placeholders(),
+        )
+        active_issue_type = issue_type
 
     @callback
     def _handle_diagnostic_update(state: dict[str, Any]) -> None:
-        nonlocal issue_created
+        nonlocal active_issue_type
         if state.get("connection_state") == "connected":
-            issue_created = False
-            async_delete_pairing_issue(hass, entry.entry_id)
+            active_issue_type = None
+            async_delete_repair_issues(hass, entry.entry_id)
             _async_clear_config_entry_reauth(hass, entry)
             _async_clear_stale_sensor_statistic_issues(hass, entry)
             _async_schedule_connected_issue_cleanup(hass, entry, client)
             return
-        if issue_created:
-            return
+
         if (
             state.get("auth_failure") is True
             or state.get("connection_state") == "auth_failed"
         ):
-            issue_created = True
-            name = str(
-                merged_entry_data(entry).get(CONF_NAME, entry.title or DEFAULT_NAME)
-            )
-            async_create_pairing_issue(
-                hass,
-                entry.entry_id,
-                name,
-            )
+            issue_type = _auth_repair_issue_type(state)
+            _create_issue(issue_type)
             _async_clear_config_entry_reauth(hass, entry)
             _async_schedule_config_entry_reauth_clear(hass, entry)
+            return
+
+        runtime_issue_type = _runtime_connectivity_issue_type(entry, client, state)
+        if runtime_issue_type is not None:
+            _create_issue(runtime_issue_type)
+            return
+
+        if active_issue_type in {
+            DEVICE_UNREACHABLE_ISSUE,
+            DISCOVERY_CONFLICT_ISSUE,
+            HOST_CHANGED_OR_UNREACHABLE_ISSUE,
+        }:
+            active_issue_type = None
+            async_delete_repair_issues(hass, entry.entry_id)
 
     entry.async_on_unload(client.add_diagnostic_callback(_handle_diagnostic_update))
+
+
+def _auth_repair_issue_type(state: dict[str, Any]) -> str:
+    """Classify auth failures into pairing-required vs token-invalid."""
+    reason = str(state.get("last_reconnect_reason", "")).lower()
+    if any(
+        marker in reason
+        for marker in (
+            "auth",
+            "token",
+            "unauthorized",
+            "invalid",
+            "forbidden",
+        )
+    ):
+        return TOKEN_INVALID_ISSUE
+    return PAIRING_REQUIRED_ISSUE
+
+
+def _runtime_connectivity_issue_type(
+    entry: ConfigEntry,
+    client: DHEClient,
+    state: dict[str, Any],
+) -> str | None:
+    """Return connectivity-related repair type or None."""
+    connection_state = str(state.get("connection_state", ""))
+    if (
+        state.get("discovery_conflict") is True
+        or connection_state == DISCOVERY_CONFLICT_ISSUE
+    ):
+        return DISCOVERY_CONFLICT_ISSUE
+    if connection_state not in {"reconnecting", "unavailable"}:
+        return None
+    reconnect_state = getattr(client, "reconnect_supervisor_state", None)
+    if callable(reconnect_state):
+        reconnect_state = reconnect_state()
+    if not isinstance(reconnect_state, dict):
+        reconnect_state = {}
+    if (
+        not reconnect_state
+        and state.get("should_mark_unavailable") is True
+    ):
+        reconnect_state = {"should_mark_unavailable": True}
+    if reconnect_state.get("should_mark_unavailable") is not True:
+        return None
+
+    merged_target = entry_target(entry)
+    data_target = _target_from_entry_data(entry)
+    if (
+        merged_target is not None
+        and data_target is not None
+        and merged_target != data_target
+    ):
+        return HOST_CHANGED_OR_UNREACHABLE_ISSUE
+
+    reason = str(state.get("last_reconnect_reason", "")).lower()
+    if _reason_indicates_runtime_auth_issue(reason):
+        return TOKEN_INVALID_ISSUE
+    if _reason_indicates_host_target_issue(reason):
+        return HOST_CHANGED_OR_UNREACHABLE_ISSUE
+    return DEVICE_UNREACHABLE_ISSUE
+
+
+def _reason_indicates_runtime_auth_issue(reason: str) -> bool:
+    """Return True when reconnect diagnostics indicate auth/token loss."""
+    return any(
+        marker in reason
+        for marker in (
+            "unauthorized",
+            "forbidden",
+            "auth",
+            "token",
+            "session id unknown",
+            "invalid session",
+        )
+    )
+
+
+def _reason_indicates_host_target_issue(reason: str) -> bool:
+    """Return True when reconnect diagnostics point to host/target problems."""
+    return any(
+        marker in reason
+        for marker in (
+            "name or service not known",
+            "temporary failure in name resolution",
+            "nxdomain",
+            "dns",
+            "host lookup",
+            "no route to host",
+            "network is unreachable",
+        )
+    )
 
 
 @callback
@@ -560,7 +712,7 @@ async def _async_clear_issues_when_connected(
             await asyncio.sleep(delay)
         if client.diagnostic_state.get("connection_state") != "connected":
             return
-        async_delete_pairing_issue(hass, entry.entry_id)
+        async_delete_repair_issues(hass, entry.entry_id)
         _async_clear_config_entry_reauth(hass, entry)
         _async_clear_stale_sensor_statistic_issues(hass, entry)
 

@@ -120,6 +120,33 @@
           "invalid_entry": "The DHE Connect entry has no valid host or port."
         }
       }
+    },
+    "token_invalid": {
+      "title": "DHE token is invalid",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Repair DHE pairing",
+            "description": "The stored token for **{name}** at `{host}:{port}` is no longer accepted by the DHE. Click OK to request and validate a new local pairing token, then confirm pairing on the DHE display."
+          }
+        },
+        "abort": {
+          "entry_not_found": "The DHE Connect entry no longer exists.",
+          "invalid_entry": "The DHE Connect entry has no valid host or port."
+        }
+      }
+    },
+    "device_unreachable": {
+      "title": "DHE device is unreachable",
+      "description": "Home Assistant cannot reach **{name}** at `{host}:{port}`. Check power, network routing/firewall and whether the DHE web interface is reachable from the Home Assistant host."
+    },
+    "discovery_conflict": {
+      "title": "DHE discovery conflict detected",
+      "description": "Home Assistant detected conflicting discovery identity hints for **{name}**. Use the existing configured entry or complete setup manually by entering a stable host/IP and port."
+    },
+    "host_changed_or_unreachable": {
+      "title": "Configured DHE host is unreachable",
+      "description": "The configured target `{host}:{port}` for **{name}** is unreachable. Verify host/port and network path, then use Reconfigure to correct the target if needed."
     }
   },
   "options": {

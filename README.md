@@ -11,10 +11,10 @@ The integration talks directly to the DHE web interface on your local network. I
 
 ## Status
 
-- Current version: `1.6.0`
-- Release channel: initial stable release
-- Quality target: Home Assistant Quality Scale Silver-oriented validation for a
-  custom integration; not an official Home Assistant core certification
+- Current version: `1.7.0`
+- Release channel: stable release / Gold-core-oriented release candidate
+- Quality target: Home Assistant Quality Scale Gold-core-oriented validation
+  for a custom integration; not an official Home Assistant Core certification
 - Home Assistant setup: UI config flow
 - HACS type: custom integration
 - IoT class: local push
@@ -22,9 +22,9 @@ The integration talks directly to the DHE web interface on your local network. I
 - Scope: multiple configured DHE Connect devices per Home Assistant instance
 
 This is a custom integration and should be used on a trusted local network.
-The repository is intentionally published as a clean initial release at
-`v1.6.0`; earlier development history is not required for installation or
-normal operation.
+The `v1.7.0` line is prepared as a Gold-core-oriented custom-integration
+release candidate with Repairs/Reconfigure evidence, not as an official Home
+Assistant Core certification.
 
 Development and protocol mapping for this release were assisted by OpenAI Codex.
 

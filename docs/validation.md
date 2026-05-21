@@ -4,17 +4,17 @@ This document collects the checks used before merging release-prep or hardening
 work. The commands below do not publish a Git tag or GitHub release by
 themselves.
 
-## Silver Validation Command Set
+## Release Validation Command Set (v1.7.0)
 
-Run the Silver-oriented gate before opening a pull request or release-prep
-commit:
+Run this release gate before opening or finalizing a v1.7.0 release-prep pull
+request:
 
 ```bash
 python scripts/check_coverage.py
 python scripts/check_integration.py
 python scripts/check_typing.py
 python -m ruff check custom_components/stiebel_dhe_connect tests scripts
-python scripts/release_check.py --run-local-checks
+python scripts/release_check.py --run-local-checks --expect-tag absent --expect-github-release absent
 ```
 
 What those checks cover:
@@ -42,8 +42,8 @@ What those checks cover:
   local validation commands and optional lab smoke gates.
 
 This validation set is maintained for this custom repository. It is intended to
-match the Home Assistant Quality Scale Silver expectations that apply to the
-integration, but it is not an official Home Assistant core certification.
+support a Gold-core-oriented quality target for a custom integration, but it is
+not an official Home Assistant Core certification.
 
 During active development, when the tree is intentionally dirty, use the same
 release check with `--allow-dirty --expect-tag skip --expect-github-release
@@ -117,7 +117,7 @@ table below mirrors that evidence for human review and release notes.
 | `entity-disabled-by-default` | done | High-churn/diagnostic entities default disabled to protect recorder usage. | Entity-registry and recorder smoke tests. | `docs/entities.md`, troubleshooting recorder notes. |
 | `entity-translations` | done | Entity names and control labels are translated in English and German. | Translation consistency checks. | Translation files. |
 | `reconfiguration-flow` | done | Reconfigure updates the existing config entry options, checks changed host/port reachability and preserves the existing token. | Reconfigure HA fixture tests. | Troubleshooting host/port section. |
-| `repair-issues` | done | Stored-token failures create a fixable Repairs issue; the fix flow validates fresh pairing and reloads the entry. | Repairs issue and fix-flow HA fixture tests. | Troubleshooting invalid-token section. |
+| `repair-issues` | done | Runtime/setup faults create actionable Repairs issues (`pairing_required`, `token_invalid`, `device_unreachable`, `discovery_conflict`, `host_changed_or_unreachable`); token/pairing issues are fixable and reuse the pairing validation flow. | Repairs lifecycle and fix-flow HA fixture tests (including grace-window suppression). | Troubleshooting pairing/token/offline/discovery/host sections. |
 | `stale-devices` | exempt | Removing the config entry removes the HA device; no dynamic child-device lifecycle exists. | Unload tests. | `quality_scale.yaml`. |
 | `discovery-update-info`, `docs-examples`, `docs-known-limitations`, `docs-use-cases`, `exception-translations`, `icon-translations` | not Gold-core for this step | Tracked as future quality-scale work. | `quality_scale.yaml` keeps them visible. | Future docs/release prep. |
 
@@ -131,30 +131,39 @@ system, run these live checks:
 2. Reconfigure the DHE entry with a changed host or port; verify no DHE pairing
    prompt appears, the same config entry reloads and entities stay stable.
 3. Force or simulate an invalid stored token; verify Home Assistant creates a
-   fixable DHE Repairs issue and starts the normal reauthentication path once.
-4. Complete the Repairs fix flow; confirm pairing on the DHE display, verify
+   single fixable DHE Repairs issue (`DHE token is invalid` or
+   `DHE pairing needs repair`) and starts no duplicate reauth loops.
+4. Simulate reconnecting with `should_mark_unavailable=False`; verify no
+   `DHE device is unreachable` issue appears during reconnect grace.
+5. Simulate reconnecting with `should_mark_unavailable=True`; verify
+   `DHE device is unreachable` appears and clears automatically after recovery.
+6. Complete the Repairs fix flow; confirm pairing on the DHE display, verify
    the issue disappears and the connection returns to `connected`.
-5. Restart Home Assistant and reload the integration; verify no stale Repairs
-   issue remains and entity unique IDs did not change.
+7. Restart Home Assistant and reload the integration; verify no stale Repairs
+   issues remain and entity unique IDs did not change.
 
 ### Manual Repairs Live Checks
 
-Run these four manual checks on the HA test system before treating the Repairs
+Run these six manual checks on the HA test system before treating the Repairs
 work as complete:
 
 1. Trigger an invalid stored-token state and verify that Home Assistant creates
-   exactly one fixable `DHE pairing needs repair` issue for the affected config
-   entry.
+   exactly one fixable issue (`DHE token is invalid` or
+   `DHE pairing needs repair`) for the affected config entry.
 2. Start the Repairs flow while the DHE is reachable, confirm the pairing
    request on the DHE display, and verify that the same config entry reloads
    without creating a second device or changing entity IDs.
-3. Start the Repairs flow while the DHE is unreachable or the pairing request is
-   not confirmed, and verify that the flow shows the expected error and keeps
-   the Repairs issue open.
-4. After a successful repair, reload the integration and restart Home Assistant;
-   verify that the Repairs issue stays gone, `Connection state` returns to
-   `connected`, and the disabled-by-default `Repair pairing` button is still
-   available as a fallback when enabled.
+3. Start the Repairs flow while the DHE is unreachable or pairing is not
+   confirmed, and verify that the flow shows the expected error and keeps the
+   issue open.
+4. Power off or isolate the DHE long enough to pass reconnect grace; verify
+   `DHE device is unreachable` appears once and clears after the device is back.
+5. Trigger a host/port mismatch (wrong host or changed subnet) and verify
+   `Configured DHE host is unreachable` appears for that entry.
+6. After a successful repair/recovery, reload the integration and restart Home
+   Assistant; verify that no stale Repairs issues remain, `Connection state`
+   returns to `connected`, and the disabled-by-default `Repair pairing` button
+   is still available as fallback when enabled.
 
 ## Silver Coverage Gate
 

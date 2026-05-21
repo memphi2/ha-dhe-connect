@@ -120,6 +120,33 @@
           "invalid_entry": "Der DHE-Connect-Eintrag hat keinen gültigen Host oder Port."
         }
       }
+    },
+    "token_invalid": {
+      "title": "DHE-Token ist ungültig",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "DHE-Pairing reparieren",
+            "description": "Das gespeicherte Token für **{name}** unter `{host}:{port}` wird vom DHE nicht mehr akzeptiert. Jetzt OK klicken, um ein neues lokales Pairing-Token anzufordern und zu prüfen, dann die Pairing-Anfrage am DHE-Display bestätigen."
+          }
+        },
+        "abort": {
+          "entry_not_found": "Der DHE-Connect-Eintrag existiert nicht mehr.",
+          "invalid_entry": "Der DHE-Connect-Eintrag hat keinen gültigen Host oder Port."
+        }
+      }
+    },
+    "device_unreachable": {
+      "title": "DHE-Gerät ist nicht erreichbar",
+      "description": "Home Assistant kann **{name}** unter `{host}:{port}` nicht erreichen. Stromversorgung, Netzwerk-Routing/Firewall und die Erreichbarkeit der DHE-Weboberfläche vom Home-Assistant-Host prüfen."
+    },
+    "discovery_conflict": {
+      "title": "DHE-Discovery-Konflikt erkannt",
+      "description": "Home Assistant hat widersprüchliche Discovery-Identitätshinweise für **{name}** erkannt. Vorhandenen Eintrag verwenden oder die Einrichtung manuell mit stabilem Host/IP und Port abschließen."
+    },
+    "host_changed_or_unreachable": {
+      "title": "Konfigurierter DHE-Host ist nicht erreichbar",
+      "description": "Das konfigurierte Ziel `{host}:{port}` für **{name}** ist nicht erreichbar. Host/Port und Netzwerkpfad prüfen und bei Bedarf über Neu konfigurieren korrigieren."
     }
   },
   "options": {

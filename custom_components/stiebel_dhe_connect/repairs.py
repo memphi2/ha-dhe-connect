@@ -18,10 +18,18 @@ from .const import DOMAIN
 from .config_flow_discovery import coerce_setup_pairing_result as _coerce_setup_pairing_result
 from .repair_issues import (
     PAIRING_REQUIRED_ISSUE,
-    async_delete_pairing_issue,
-    pairing_required_issue_id,
+    TOKEN_INVALID_ISSUE,
+    async_delete_repair_issues,
+    repair_issue_id,
 )
 from .token_file_helpers import token_file_for_target
+
+_PAIRING_FIX_FLOW_ISSUES = frozenset(
+    {
+        PAIRING_REQUIRED_ISSUE,
+        TOKEN_INVALID_ISSUE,
+    }
+)
 
 
 class PairingRequiredRepairFlow(RepairsFlow):
@@ -62,7 +70,7 @@ class PairingRequiredRepairFlow(RepairsFlow):
                     )
                 )
                 if pairing_result.error_key is None:
-                    async_delete_pairing_issue(self.hass, self._entry.entry_id)
+                    async_delete_repair_issues(self.hass, self._entry.entry_id)
                     if self._entry.state in (
                         ConfigEntryState.LOADED,
                         ConfigEntryState.SETUP_RETRY,
@@ -103,15 +111,24 @@ async def async_create_fix_flow(
     data: dict[str, str | int | float | None] | None,
 ) -> RepairsFlow:
     """Create a Repairs flow for a DHE issue."""
-    if not issue_id.startswith(f"{PAIRING_REQUIRED_ISSUE}_"):
+    issue_type = _pairing_fix_issue_type(issue_id)
+    if issue_type is None:
         raise ValueError(f"unknown repair {issue_id}")
 
     raw_entry_id = data.get("entry_id") if data else None
-    entry_id = str(raw_entry_id or issue_id.removeprefix(f"{PAIRING_REQUIRED_ISSUE}_"))
-    if issue_id != pairing_required_issue_id(entry_id):
+    entry_id = str(raw_entry_id or issue_id.removeprefix(f"{issue_type}_"))
+    if issue_id != repair_issue_id(issue_type, entry_id):
         raise ValueError(f"repair issue does not match entry {entry_id}")
 
     entry = hass.config_entries.async_get_entry(entry_id)
     if entry is None or entry.domain != DOMAIN:
         return MissingEntryRepairFlow()
     return PairingRequiredRepairFlow(cast(ConfigEntry, entry))
+
+
+def _pairing_fix_issue_type(issue_id: str) -> str | None:
+    """Return the supported fix-flow issue type for one issue id."""
+    for issue_type in _PAIRING_FIX_FLOW_ISSUES:
+        if issue_id.startswith(f"{issue_type}_"):
+            return issue_type
+    return None

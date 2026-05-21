@@ -1776,12 +1776,17 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         DHEClient = client_module.DHEClient
         now = 0.0
 
+        diagnostic_callback = Mock()
         client = DHEClient.__new__(DHEClient)
         client._ctx = None
         client._ready = client_module.asyncio.Event()
         client._stopped = client_module.asyncio.Event()
         client._available = True
         client._availability_callbacks = set()
+        client._diagnostic_callbacks = {diagnostic_callback}
+        client._copy_diagnostic_state = Mock(
+            return_value={"connection_state": "reconnecting"}
+        )
         client._notify_callbacks = Mock()
         client._reconnect_grace_task = object()
         client._connection_supervisor = client_module.DHEConnectionSupervisor(
@@ -1796,6 +1801,12 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(client._available)
         self.assertIsNone(client._reconnect_grace_task)
+        self.assertTrue(
+            any(
+                call.args and call.args[0] == "diagnostic"
+                for call in client._notify_callbacks.call_args_list
+            )
+        )
 
     async def test_stale_reconnect_grace_timer_does_not_clear_new_timer(self) -> None:
         client_module = _load_client()

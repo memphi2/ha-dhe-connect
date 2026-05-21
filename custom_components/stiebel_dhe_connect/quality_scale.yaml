@@ -62,9 +62,10 @@ rules:
   repair-issues:
     status: done
     comment: |
-      Stored-token authentication failures create a fixable Home Assistant
-      Repairs issue. The fix flow requests and validates a fresh local pairing
-      token before reloading the existing config entry.
+      Runtime and setup faults create actionable Home Assistant Repairs issues:
+      pairing_required, token_invalid, device_unreachable,
+      discovery_conflict and host_changed_or_unreachable. Pairing/token issues
+      are fixable and reuse the pairing validation flow.
   stale-devices:
     status: exempt
     comment: |
@@ -471,12 +472,14 @@ evidence:
         docs/troubleshooting.md host-or-port-changed section.
     repair-issues:
       implementation: >
-        Stored-token failures create a fixable Home Assistant Repairs issue and
-        the fix flow validates fresh pairing before reload.
+        Runtime/setup faults create actionable Repairs issues. Pairing/token
+        failures are fixable and use the same pairing validation flow.
       tests: >
-        Repairs issue and fix-flow HA fixture tests cover the path.
+        HA fixture tests cover repair issue creation, grace-window suppression,
+        issue cleanup and pairing/token fix-flow behavior.
       docs: >
-        docs/troubleshooting.md invalid-token and pairing sections.
+        docs/troubleshooting.md covers pairing/token/offline/discovery/host
+        repair guidance.
     stale-devices:
       implementation: >
         Exempt because removing the config entry removes the single DHE device;

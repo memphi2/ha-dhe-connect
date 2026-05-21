@@ -15,6 +15,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import issue_registry as ir
 
 from .config_flow_mapping import (
     filter_radio_results_by_text as _filter_radio_results_by_text,
@@ -120,6 +121,7 @@ from .pairing_validation import (
     validate_setup_pairing as _validate_setup_pairing_fn,
 )
 from .pairing_helpers import map_pairing_error
+from .repair_issues import DISCOVERY_CONFLICT_ISSUE
 from .protocol import (
     CO2_EMISSION_MAX,
     ELECTRICITY_PRICE_MAX,
@@ -143,6 +145,57 @@ ID_APP_CURRENCY = _ID_APP_CURRENCY
 _currency_options = _schema_currency_options
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _discovery_conflict_issue_id(host: str, port: int) -> str:
+    """Return a stable issue id for one conflicting discovery target."""
+    host_part = "".join(char if char.isalnum() else "_" for char in host).strip("_")
+    if not host_part:
+        host_part = "unknown_host"
+    return f"{DISCOVERY_CONFLICT_ISSUE}_setup_{host_part}_{port}"
+
+
+@callback
+def _async_create_discovery_conflict_issue(
+    hass: HomeAssistant,
+    host: str,
+    port: int,
+    name: str,
+) -> None:
+    """Create a non-fixable issue for conflicting discovery identity hints."""
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        _discovery_conflict_issue_id(host, port),
+        is_fixable=False,
+        is_persistent=False,
+        severity=ir.IssueSeverity.ERROR,
+        translation_key=DISCOVERY_CONFLICT_ISSUE,
+        translation_placeholders={
+            "name": name or DEFAULT_NAME,
+            CONF_HOST: host,
+            CONF_PORT: str(port),
+        },
+        data={
+            "host": host,
+            "port": port,
+            "source": "zeroconf",
+        },
+    )
+
+
+@callback
+def _async_delete_discovery_conflict_issue(
+    hass: HomeAssistant,
+    host: str,
+    port: int,
+) -> None:
+    """Delete a conflicting discovery issue for one target."""
+    ir.async_delete_issue(
+        hass,
+        DOMAIN,
+        _discovery_conflict_issue_id(host, port),
+    )
 
 
 def _schema_marker_key(marker: object) -> Any:
@@ -561,6 +614,7 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
         auto_discovery_prompt: bool = False,
     ) -> config_entries.ConfigFlowResult:
         """Start the setup path for a discovered DHE target."""
+        _async_delete_discovery_conflict_issue(self.hass, host, port)
         if _is_target_used_by_other_entry(self.hass, host, port):
             return self.async_abort(reason="already_configured")
         self.context[FLOW_CONTEXT_DISCOVERED_HOST] = host
@@ -704,6 +758,12 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
                 self.hass,
                 discovery_record,
                 result="conflicting_identity",
+            )
+            _async_create_discovery_conflict_issue(
+                self.hass,
+                host,
+                port,
+                name,
             )
             return self.async_abort(reason="conflicting_discovery_identity")
         if discovery_record.confidence < DISCOVERY_MIN_PROMPT_CONFIDENCE:

@@ -16,7 +16,7 @@ Start with these checks before changing configuration:
 5. Check Home Assistant logs for `custom_components.stiebel_dhe_connect`.
 6. If the issue started after testing development builds, reload the integration once and restart Home Assistant if entities still look stale.
 
-## Invalid Token
+## Pairing Required / Token Invalid / Repairs
 
 Symptoms that usually point to an invalid or stale token:
 
@@ -29,6 +29,9 @@ Symptoms that usually point to an invalid or stale token:
 Use the Home Assistant Repairs issue first when it appears. The repair flow
 requests and validates a fresh local pairing token, then reloads the existing
 config entry. Confirm the pairing request on the DHE display when prompted.
+Depending on runtime diagnostics, the issue title can be either
+`DHE pairing needs repair` or `DHE token is invalid`; both use the same repair
+flow and require confirmation on the DHE display.
 
 If Home Assistant is loaded but no Repairs issue is visible yet, the
 disabled-by-default `Repair pairing` button remains available as a manual
@@ -75,6 +78,18 @@ If pairing is not shown on the DHE display, check that the DHE web interface is
 reachable from the Home Assistant network and that no other client keeps the DHE
 session busy.
 
+## Device Unreachable During Repair
+
+If the Repairs flow is opened while the DHE target is offline or unreachable,
+the flow keeps the issue open and shows `cannot_connect`.
+
+Use this sequence:
+
+1. Verify host and port in the integration entry.
+2. Confirm the DHE web interface is reachable from the Home Assistant host.
+3. If host/port changed, run `Reconfigure` first and save the reachable target.
+4. Start the Repairs flow again and confirm pairing on the DHE display.
+
 ## Pairing Fails Or Repeats
 
 Pairing requires confirmation on the DHE display. If the setup flow reaches the
@@ -88,7 +103,7 @@ If pairing keeps repeating:
 3. Confirm the new pairing request on the DHE display.
 4. Wait until the `Connection state` diagnostic sensor returns to `connected`.
 
-## Host Or Port Changed
+## Reconfigure Host Or Port
 
 If the DHE address changes, use Home Assistant's Reconfigure action for the
 DHE Connect config entry. Reconfigure updates the existing config entry instead
@@ -96,6 +111,8 @@ of creating a replacement, so entity IDs and unique IDs stay stable. When the
 configured host or port changes, Home Assistant checks that the new target is
 reachable and copies the existing local token to the new target path. A fresh
 pairing is only needed later if the DHE rejects that token.
+If the configured target cannot be reached during setup/retry, Home Assistant
+raises `Configured DHE host is unreachable`.
 
 Use the config flow fields exactly as intended:
 
@@ -181,13 +198,16 @@ For a focused discovery debug run, set the environment variable
 logging for `custom_components.stiebel_dhe_connect`. Disable it again after the
 test; it is meant for short evidence collection, not normal operation.
 
-## Duplicate Or Recreated Devices
+## Duplicate Device / Discovery Conflict
 
 Home Assistant blocks duplicate DHE config entries by normalized host and port
 before pairing. After successful pairing, the integration also stores the
 paired device MAC address as the config-entry unique ID when the DHE reports
 one. Zeroconf, subnet scan and manual setup use the same pairing-confirm path,
 so all setup methods get the same unique-ID behavior.
+If discovery identity hints are inconsistent, Home Assistant can raise
+`DHE discovery conflict detected`. In that case, continue with manual setup
+using one stable host/IP and port.
 
 Before successful pairing, the integration does not create a device. If setup is
 cancelled or pairing times out, start the flow again and confirm pairing on the
@@ -206,6 +226,8 @@ During Home Assistant startup or config-entry reload, an unreachable DHE causes
 the config entry to wait for retry instead of setting up stale platform state.
 If the DHE goes offline after setup, entities become unavailable after the
 reconnect grace window and recover when the device responds again.
+After the reconnect grace window expires, Home Assistant can raise
+`DHE device is unreachable` until connectivity is restored.
 Normal DHE controls are blocked while the runtime is unavailable so Home
 Assistant does not send stale writes to an offline device. The disabled-by-
 default `Repair pairing` button remains available as the recovery exception.
