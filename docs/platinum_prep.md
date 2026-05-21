@@ -1,7 +1,7 @@
 # Platinum Preparation (v1.8.0 branch)
 
 This document tracks the hardening work used to move this custom integration
-from a Gold-core-oriented release line toward Home Assistant Quality Scale
+from a Gold-track baseline toward Home Assistant Quality Scale
 Platinum readiness.
 
 It does not claim official Home Assistant Core certification.

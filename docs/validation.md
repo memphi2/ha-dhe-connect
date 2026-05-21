@@ -41,9 +41,9 @@ What those checks cover:
   changelog state, tracked-file secret hygiene, generated-artifact hygiene,
   local validation commands and optional lab smoke gates.
 
-This validation set is maintained for this custom repository. It is intended to
-support a Gold-core-oriented quality target for a custom integration, but it is
-not an official Home Assistant Core certification.
+This validation set is maintained for this custom repository.
+It targets Platinum-track quality goals for a custom integration and is not an
+official Home Assistant Core certification.
 
 During active development, when the tree is intentionally dirty, use the same
 release check with `--allow-dirty --expect-tag skip --expect-github-release
