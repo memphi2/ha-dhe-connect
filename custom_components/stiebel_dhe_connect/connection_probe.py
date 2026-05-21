@@ -36,7 +36,8 @@ async def async_can_connect(
     try:
         async with session.get(url, timeout=timeout_seconds) as resp:
             await resp.read()
-            return 200 <= resp.status < 500
+            status = int(resp.status)
+            return 200 <= status < 500
     except (aiohttp.ClientError, TimeoutError, OSError):
         return False
     finally:

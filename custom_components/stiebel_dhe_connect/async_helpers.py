@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 from homeassistant.core import HomeAssistant
 
@@ -27,8 +27,12 @@ def create_background_task(
     """Create a non-startup-blocking Home Assistant background task."""
     create_task = getattr(hass, "async_create_background_task", None)
     if create_task is not None:
-        return create_task(coro, name)
-    return hass.async_create_task(coro, name=name)
+        create_task_fn = cast(
+            Callable[[Any, str], asyncio.Task[Any]],
+            create_task,
+        )
+        return create_task_fn(coro, name)
+    return cast(asyncio.Task[Any], hass.async_create_task(coro, name=name))
 
 
 def task_cancel_callback(task: asyncio.Task[Any]) -> Callable[[], None]:

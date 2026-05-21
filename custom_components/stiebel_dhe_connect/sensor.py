@@ -7,7 +7,7 @@ from contextlib import suppress
 from copy import deepcopy
 from dataclasses import dataclass
 import time
-from typing import Any
+from typing import Any, cast
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -1029,10 +1029,13 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
     def _dynamic_state_attributes(self) -> dict[str, Any]:
         if self.entity_description.attribute_key is not None:
             return {}
-        return self._client.last_measurement_attributes.get(
+        attributes = self._client.last_measurement_attributes.get(
             self.entity_description.odb_id,
             {},
         )
+        if not isinstance(attributes, dict):
+            return {}
+        return cast(dict[str, Any], attributes)
 
     def _recorded_state_attributes(self) -> dict[str, Any]:
         """Return state attributes that are visible to the recorder."""

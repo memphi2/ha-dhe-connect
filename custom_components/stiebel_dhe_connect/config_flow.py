@@ -134,6 +134,7 @@ from .setup_scan import (
     SCAN_SUBNET_MODE_CIDR,
     SCAN_SUBNET_MODE_CURRENT,
     SCAN_SUBNET_MODE_NETWORK_MASK,
+    SetupScanSubnetInput,
     async_scan_dhe_hosts,
     ipv4_scan_networks,
     local_ipv4_addresses_from_hass,
@@ -1006,8 +1007,8 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
         self,
         user_input: dict[str, Any] | None,
         *,
-        parse_input: Callable[[dict[str, Any]], Any],
-        error_field: Callable[[Any], str],
+        parse_input: Callable[[dict[str, Any]], SetupScanSubnetInput],
+        error_field: Callable[[SetupScanSubnetInput], str],
         show_form: Callable[
             ...,
             config_entries.ConfigFlowResult,

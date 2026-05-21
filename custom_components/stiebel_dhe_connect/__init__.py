@@ -428,7 +428,8 @@ def _async_clear_stale_sensor_statistic_issues(
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     runtime = getattr(entry, "runtime_data", None)
-    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unloaded_result = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unloaded = bool(unloaded_result)
 
     if unloaded:
         if runtime is not None:
@@ -455,8 +456,14 @@ def _start_client_background(
     """Start the persistent DHE session without blocking entity setup."""
     create_task = getattr(entry, "async_create_background_task", None)
     if create_task is not None:
-        return create_task(hass, client.start(), "stiebel_dhe_connect_start")
-    return create_background_task(hass, client.start(), "stiebel_dhe_connect_start")
+        return cast(
+            asyncio.Task[Any],
+            create_task(hass, client.start(), "stiebel_dhe_connect_start"),
+        )
+    return cast(
+        asyncio.Task[Any],
+        create_background_task(hass, client.start(), "stiebel_dhe_connect_start"),
+    )
 
 
 def _async_register_reauth_trigger(
@@ -903,13 +910,14 @@ async def _weather_results_from_service_input(
     if data.get(ATTR_NAME):
         if ATTR_COUNTRY_ID not in data:
             raise HomeAssistantError(missing_country_error)
-        return await _run_dhe_service_action(
+        searched = await _run_dhe_service_action(
             client.search_weather_locations(
                 data[ATTR_NAME],
                 data[ATTR_COUNTRY_ID],
             ),
             "Could not search DHE weather locations",
         )
+        return _weather_locations(searched)
     return _weather_locations(client.last_weather_state.get("forecast_results"))
 
 

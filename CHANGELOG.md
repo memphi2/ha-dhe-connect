@@ -14,6 +14,9 @@
   errors when translation kwargs are not supported by the exception signature.
 - Added `docs/platinum_prep.md` and linked it from README/validation docs to
   track the remaining strict-typing path toward Platinum readiness.
+- Hardened the typing gate by enabling mypy `warn_return_any` and
+  `warn_unused_ignores`, and fixed the resulting no-any-return issues across
+  setup, diagnostics, transport and service helper paths.
 
 ## v1.7.0 - 2026-05-21
 
