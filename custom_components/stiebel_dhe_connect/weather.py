@@ -182,7 +182,7 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
         self._attr_condition = weather_model.current_condition_from_day(today, now=now)
         self._attr_native_temperature = weather_model.current_temperature(today, now=now)
         self._forecast = [
-                cast("Forecast", forecast)
+            cast("Forecast", forecast)
             for day in days
             if (
                 forecast := weather_model.forecast_from_day(
