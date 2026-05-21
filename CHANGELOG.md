@@ -88,14 +88,14 @@ It is not an official Home Assistant Core certification.
 
 ### Validation
 
-- `python scripts/check_typing.py`: `Success: no issues found in 69 source files`.
+- `python scripts/check_typing.py`: `Success: no issues found in 70 source files`.
 - `python -m ruff check custom_components/stiebel_dhe_connect tests scripts`:
   `All checks passed!`
-- `python scripts/check_integration.py`: `555` tests ran (`OK`);
+- `python scripts/check_integration.py`: `556` tests ran (`OK`);
   `integration checks ok`.
-- `python scripts/check_coverage.py`: `632 passed`; scoped integration coverage
+- `python scripts/check_coverage.py`: `633 passed`; scoped integration coverage
   gate `96%`.
-- `python scripts/release_check.py --run-local-checks --allow-dirty --expect-tag absent --expect-github-release absent`:
+- `python scripts/release_check.py --run-local-checks --expect-tag absent --expect-github-release absent`:
   `release check ok`; tag and GitHub release for `v1.8.0` are absent.
 
 ## v1.7.0 - 2026-05-21
