@@ -10,7 +10,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .action_error_helpers import dhe_action_error
+from .action_error_helpers import dhe_action_error, raise_if_dhe_unavailable
 from .client import DHEClient
 from .client_types import DHEError, MeasurementValue
 from .entity_helpers import (
@@ -246,6 +246,11 @@ class StiebelDHEButton(StiebelDHEEntityMixin, ButtonEntity):
     async def async_press(self) -> None:
         """Execute the DHE button action."""
         try:
+            if not self.entity_description.available_without_connection:
+                raise_if_dhe_unavailable(
+                    self._client,
+                    f"DHE is unavailable; cannot execute button {self.entity_description.key}",
+                )
             method = getattr(self._client, self.entity_description.method)
             await method(*self.entity_description.method_args)
         except DHEError as err:

@@ -126,6 +126,11 @@ class DHEClientTransportAuthMixin:
             while time.monotonic() < deadline and not self._stopped.is_set():
                 for event in await self._read_polling_events_once(ctx):
                     if event.name == "__closed":
+                        if using_stored_token:
+                            raise DHEAuthError(
+                                "Stored DHE token was not accepted; "
+                                "reauthentication is required"
+                            )
                         raise DHESessionClosed(
                             "DHE closed Socket.IO session during authentication"
                         )
@@ -201,12 +206,22 @@ class DHEClientTransportAuthMixin:
                         return ctx
                     elif event.name == "pairing_request":
                         _LOGGER.debug("DHE auth event: pairing_request")
+                        if using_stored_token:
+                            raise DHEAuthError(
+                                "Stored DHE token is no longer paired with this DHE; "
+                                "reauthentication is required"
+                            )
                         self._record_pairing_requested()
                     elif event.name == "pairing_result":
                         _LOGGER.info(
                             "DHE auth event: pairing_result=%s",
                             _summarize_diagnostic_value(event.data),
                         )
+                        if using_stored_token:
+                            raise DHEAuthError(
+                                "Stored DHE token triggered DHE pairing confirmation; "
+                                "reauthentication is required"
+                            )
                         self._record_pairing_result(event.data)
                 if (
                     authenticated_received

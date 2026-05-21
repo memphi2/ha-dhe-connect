@@ -91,6 +91,39 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         self.assertIn("consumption", attributes)
         self.assertIn("activation_rate", attributes)
 
+    def test_water_and_energy_device_classes_use_valid_state_classes(self) -> None:
+        sensor_module = _load_sensor_module()
+        descriptions = {
+            item.key: item
+            for item in sensor_module.SENSOR_DESCRIPTIONS
+            if item.device_class
+            in {
+                sensor_module.SensorDeviceClass.WATER,
+                sensor_module.SensorDeviceClass.ENERGY,
+            }
+        }
+        valid_state_classes = {
+            None,
+            sensor_module.SensorStateClass.TOTAL,
+            sensor_module.SensorStateClass.TOTAL_INCREASING,
+        }
+
+        self.assertEqual(
+            descriptions["odb_possible_energy_saving"].state_class,
+            sensor_module.SensorStateClass.TOTAL,
+        )
+        self.assertEqual(
+            descriptions["odb_actual_water_saving"].state_class,
+            sensor_module.SensorStateClass.TOTAL,
+        )
+        self.assertNotIn(
+            sensor_module.SensorStateClass.MEASUREMENT,
+            {item.state_class for item in descriptions.values()},
+        )
+        self.assertTrue(
+            all(item.state_class in valid_state_classes for item in descriptions.values())
+        )
+
     def test_scald_protection_limit_uses_visible_icon(self) -> None:
         sensor_module = _load_sensor_module()
         description = next(

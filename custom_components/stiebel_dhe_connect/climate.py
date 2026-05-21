@@ -14,7 +14,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .action_error_helpers import dhe_action_error
+from .action_error_helpers import dhe_action_error, raise_if_dhe_unavailable
 from .client import DHEClient
 from .client_types import DHEError, MeasurementValue
 from .config_entry_helpers import merged_entry_data
@@ -373,6 +373,10 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
             return
 
         try:
+            raise_if_dhe_unavailable(
+                self._client,
+                "DHE is unavailable; cannot set water heating temperature",
+            )
             if self._attr_hvac_mode == HVACMode.OFF or self._water_heating_enabled is False:
                 self._water_heating_enabled = await self._client.set_water_heating_enabled(True)
                 self._attr_hvac_mode = (
@@ -394,6 +398,10 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
             if self._attr_target_temperature is not None:
                 self._target_before_heating_off = self._attr_target_temperature
             try:
+                raise_if_dhe_unavailable(
+                    self._client,
+                    "DHE is unavailable; cannot switch water heating off",
+                )
                 self._water_heating_enabled = await self._client.set_water_heating_enabled(False)
             except DHEError as err:
                 raise dhe_action_error("Could not switch DHE heating off", err) from err
@@ -407,6 +415,10 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
 
         if hvac_mode == HVACMode.HEAT:
             try:
+                raise_if_dhe_unavailable(
+                    self._client,
+                    "DHE is unavailable; cannot switch water heating on",
+                )
                 self._water_heating_enabled = await self._client.set_water_heating_enabled(True)
             except DHEError as err:
                 raise dhe_action_error("Could not switch DHE heating on", err) from err

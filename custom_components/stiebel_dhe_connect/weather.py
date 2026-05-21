@@ -18,6 +18,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
+from .async_helpers import create_background_task
 from .client import DHEClient
 from .entity_helpers import StiebelDHEEntityMixin
 from .entity_state_helpers import connected_and_ready
@@ -146,7 +147,11 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
         except TypeError:  # pragma: no cover - older HA compatibility
             result = update_listeners()
         if inspect.isawaitable(result):
-            self.hass.async_create_task(result)
+            create_background_task(
+                self.hass,
+                result,
+                "stiebel_dhe_connect_weather_listener_update",
+            )
 
     def _apply_weather_state(self, state: dict[str, Any]) -> None:
         if not state:

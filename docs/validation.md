@@ -4,17 +4,17 @@ This document collects the checks used before merging release-prep or hardening
 work. The commands below do not publish a Git tag or GitHub release by
 themselves.
 
-## Silver Validation Command Set
+## Release Validation Command Set (v1.7.0)
 
-Run the Silver-oriented gate before opening a pull request or release-prep
-commit:
+Run this release gate before opening or finalizing a v1.7.0 release-prep pull
+request:
 
 ```bash
 python scripts/check_coverage.py
 python scripts/check_integration.py
 python scripts/check_typing.py
 python -m ruff check custom_components/stiebel_dhe_connect tests scripts
-python scripts/release_check.py --run-local-checks
+python scripts/release_check.py --run-local-checks --expect-tag absent --expect-github-release absent
 ```
 
 What those checks cover:
@@ -42,15 +42,133 @@ What those checks cover:
   local validation commands and optional lab smoke gates.
 
 This validation set is maintained for this custom repository. It is intended to
-match the Home Assistant Quality Scale Silver expectations that apply to the
-integration, but it is not an official Home Assistant core certification.
+support a Gold-core-oriented quality target for a custom integration, but it is
+not an official Home Assistant Core certification.
 
 During active development, when the tree is intentionally dirty, use the same
 release check with `--allow-dirty --expect-tag skip --expect-github-release
-skip`. The final release gate should run without `--allow-dirty`.
+skip`. If `CHANGELOG.md` still has `Unreleased` entries, this command remains a
+release-prep gate and fails by design; do not empty the section until those
+changes are moved into a versioned release section. The final release gate
+should run without `--allow-dirty`.
 
 The GitHub `Validate` workflow runs HACS, Hassfest, pytest, repository checks,
 type checks and Ruff. Keep local results and CI results aligned before merging.
+
+## Quality Scale Evidence Matrix
+
+`custom_components/stiebel_dhe_connect/quality_scale.yaml` is the
+machine-readable status source. It now contains an explicit evidence mapping for
+every tracked Silver rule, followed by Bronze and Gold mappings. The Markdown
+table below mirrors that evidence for human review and release notes.
+
+### Bronze
+
+| Rule | Implementation | Tests / checks | Documentation |
+| --- | --- | --- | --- |
+| `action-setup` | Integration services are registered in `__init__.py` and described in `services.yaml`. | HA fixture service-routing and service-error tests. | `docs/entities.md` service examples. |
+| `appropriate-polling` | Runtime is local push; setup scan and optional startup reads are bounded. | Fake-DHE runtime tests and recorder smoke coverage. | `docs/protocol.md`, `docs/troubleshooting.md`. |
+| `brands` | Local brand icon and logo are shipped under `brand/`. | `scripts/check_integration.py` required-file check. | README card and installation sections. |
+| `common-modules` | Standard HA platform modules and shared helpers are used. | Import, Ruff and type gates. | Repository structure in README. |
+| `config-flow` | Setup supports Zeroconf, subnet scan and manual host entry. | HA fixture setup, Zeroconf and scan-flow tests. | README setup and troubleshooting sections. |
+| `config-flow-test-coverage` | Config-flow branches have real HA fixture coverage plus lightweight helper tests. | `tests/test_00_ha_fixture_runtime.py`, `tests/test_config_flow_defaults.py`. | `docs/validation.md`. |
+| `dependency-transparency` | `manifest.json` declares an empty requirement list; no hidden runtime package install. | Manifest check in `scripts/check_integration.py`. | README installation notes. |
+| `docs-actions` | Services/actions are documented with expected target selection. | Service tests cover success and failure paths. | `docs/entities.md`. |
+| `docs-high-level-description` | README describes local DHE purpose and supported surface. | Repository-file check validates README references. | README. |
+| `docs-installation-instructions` | HACS/custom install path is documented. | Repository-file check. | README installation section. |
+| `docs-removal-instructions` | Removal and token cleanup guidance is documented. | Repository-file check. | README removal section. |
+| `entity-event-setup` | Exempt: entities subscribe to shared client callbacks, not independent external events. | Platform setup and unload fixture tests. | `quality_scale.yaml` exemption comment. |
+| `entity-unique-id` | Every entity uses config-entry scoped unique IDs. | Entity-registry stability and multi-entry tests. | `docs/entities.md`. |
+| `has-entity-name` | Entity descriptions use HA translation keys and device names. | Translation and entity-registry tests. | `docs/entities.md`. |
+| `runtime-data` | `DHEConnectRuntimeData` stores client/name/start task on the config entry. | Setup, reload and unload tests. | `docs/validation.md`. |
+| `test-before-configure` | Setup validates reachability before creating entries. | Config-flow pairing and cannot-connect tests. | Troubleshooting setup sections. |
+| `test-before-setup` | `async_setup_entry` checks DHE reachability before platform setup. | ConfigEntryNotReady fixture test. | Troubleshooting offline section. |
+| `unique-config-entry` | Duplicate host/port and MAC-based setup duplicates are rejected. | Duplicate-target and MAC duplicate tests. | Troubleshooting duplicate-device section. |
+
+### Silver
+
+| Rule | Implementation | Tests / checks | Documentation |
+| --- | --- | --- | --- |
+| `action-exceptions` | Service failures raise `HomeAssistantError` with original `DHEError` as cause. | Failing weather-service path test. | Service troubleshooting. |
+| `config-entry-unloading` | Start tasks, callbacks, services and runtime data are cleaned on unload. | Setup/unload/reload HA fixture tests. | Validation unload notes. |
+| `docs-configuration-parameters` | Host, port, name and Tmax jumper are documented. | Repository-file checks. | README and troubleshooting. |
+| `docs-installation-parameters` | Install and setup parameters are documented. | Repository-file checks. | README. |
+| `entity-unavailable` | Availability callbacks and reconnect grace mark entities unavailable when required. | Runtime availability/reconnect fixture tests. | Troubleshooting offline and reconnect sections. |
+| `integration-owner` | `manifest.json` contains code owner metadata. | Manifest check. | README support links. |
+| `log-when-unavailable` | Setup and reconnect errors are logged without leaking secrets. | Smoke and diagnostics tests. | Troubleshooting logs section. |
+| `parallel-updates` | Platforms set `PARALLEL_UPDATES = 0` for push updates. | `tests/test_quality_scale_silver.py`. | Validation notes. |
+| `reauthentication-flow` | Auth failures start HA reauth and validate fresh pairing. | Reauth HA fixture test. | Troubleshooting invalid-token section. |
+| `test-coverage` | `pytest-cov` gate covers deterministic integration modules above the Silver target. | `scripts/check_coverage.py`. | Silver coverage gate below. |
+
+### Gold Core
+
+| Rule | Status | Implementation | Tests / checks | Documentation |
+| --- | --- | --- | --- | --- |
+| `devices` | done | Device identifiers are config-entry scoped and preserve legacy identifiers only when needed. | Entity-registry and multi-entry fixture tests. | `docs/entities.md`. |
+| `diagnostics` | done | Diagnostics export redacts private identifiers and exposes runtime/discovery summaries. | `tests/test_diagnostics.py`. | README and validation diagnostics notes. |
+| `discovery` | done | Zeroconf, cached discovery choices and user-triggered subnet scan share the setup/pairing path. | Zeroconf, scan and MAC duplicate fixture tests. | README and troubleshooting. |
+| `docs-data-update` | done | Runtime update and recorder behavior is documented. | Recorder smoke and runtime tests. | `docs/protocol.md`, `docs/troubleshooting.md`. |
+| `docs-supported-devices` | done | Supported DHE Connect class and firmware evidence are tracked. | Repository checks for docs. | README and `docs/protocol.md`. |
+| `docs-supported-functions` | done | Supported entities, services and protocol sources are listed. | Entity/platform tests. | `docs/entities.md`. |
+| `docs-troubleshooting` | done | Pairing, token, offline, discovery, recorder and live-sensor issues have guidance. | Repository-file check. | `docs/troubleshooting.md`. |
+| `dynamic-devices` | exempt | One config entry represents one physical DHE device. | Multi-entry fixture tests. | `quality_scale.yaml`. |
+| `entity-category` | done | Diagnostic/config entities use entity categories where appropriate. | Entity setup fixture tests. | `docs/entities.md`. |
+| `entity-device-class` | done | Sensor classes and state classes are explicit where HA has a matching class. | Entity description tests and smoke checks. | `docs/entities.md`. |
+| `entity-disabled-by-default` | done | High-churn/diagnostic entities default disabled to protect recorder usage. | Entity-registry and recorder smoke tests. | `docs/entities.md`, troubleshooting recorder notes. |
+| `entity-translations` | done | Entity names and control labels are translated in English and German. | Translation consistency checks. | Translation files. |
+| `reconfiguration-flow` | done | Reconfigure updates the existing config entry options, checks changed host/port reachability and preserves the existing token. | Reconfigure HA fixture tests. | Troubleshooting host/port section. |
+| `repair-issues` | done | Runtime/setup faults create actionable Repairs issues (`pairing_required`, `token_invalid`, `device_unreachable`, `discovery_conflict`, `host_changed_or_unreachable`); token/pairing issues are fixable and reuse the pairing validation flow. | Repairs lifecycle and fix-flow HA fixture tests (including grace-window suppression). | Troubleshooting pairing/token/offline/discovery/host sections. |
+| `stale-devices` | exempt | Removing the config entry removes the HA device; no dynamic child-device lifecycle exists. | Unload tests. | `quality_scale.yaml`. |
+| `discovery-update-info` | done | Identity-matched Zeroconf can update host/port on an existing entry without creating duplicates. | HA fixture discovery-update and conflict tests. | `docs/troubleshooting.md`. |
+| `docs-examples` | done | Dedicated examples page with YAML automation and dashboard snippets. | Repository docs-link checks. | `docs/examples.md`. |
+| `docs-use-cases` | done | Practical scenario guide for common HA deployments. | Repository docs-link checks. | `docs/use-cases.md`. |
+| `docs-known-limitations` | done | Explicit local-network, mDNS and firmware variability limits are documented. | Repository docs-link checks. | `docs/known_limitations.md`. |
+| `exception-translations` | done | DHE action exceptions are translation-key based for user-facing errors. | Translation tests and service error tests. | Translation files and troubleshooting notes. |
+| `icon-translations` | exempt | Static icon surface; no dynamic translated icon metadata needed. | Entity translation and icon checks in repository validation. | `quality_scale.yaml` exemption comment. |
+
+## Gold Core Live Checks
+
+Before claiming the Repairs/Reconfigure Gold core work on a real HA test
+system, run these live checks:
+
+1. Reconfigure the existing DHE entry without changing host or port; verify the
+   entry reloads, entity IDs stay stable and no DHE pairing prompt appears.
+2. Reconfigure the DHE entry with a changed host or port; verify no DHE pairing
+   prompt appears, the same config entry reloads and entities stay stable.
+3. Force or simulate an invalid stored token; verify Home Assistant creates a
+   single fixable DHE Repairs issue (`DHE token is invalid` or
+   `DHE pairing needs repair`) and starts no duplicate reauth loops.
+4. Simulate reconnecting with `should_mark_unavailable=False`; verify no
+   `DHE device is unreachable` issue appears during reconnect grace.
+5. Simulate reconnecting with `should_mark_unavailable=True`; verify
+   `DHE device is unreachable` appears and clears automatically after recovery.
+6. Complete the Repairs fix flow; confirm pairing on the DHE display, verify
+   the issue disappears and the connection returns to `connected`.
+7. Restart Home Assistant and reload the integration; verify no stale Repairs
+   issues remain and entity unique IDs did not change.
+
+### Manual Repairs Live Checks
+
+Run these six manual checks on the HA test system before treating the Repairs
+work as complete:
+
+1. Trigger an invalid stored-token state and verify that Home Assistant creates
+   exactly one fixable issue (`DHE token is invalid` or
+   `DHE pairing needs repair`) for the affected config entry.
+2. Start the Repairs flow while the DHE is reachable, confirm the pairing
+   request on the DHE display, and verify that the same config entry reloads
+   without creating a second device or changing entity IDs.
+3. Start the Repairs flow while the DHE is unreachable or pairing is not
+   confirmed, and verify that the flow shows the expected error and keeps the
+   issue open.
+4. Power off or isolate the DHE long enough to pass reconnect grace; verify
+   `DHE device is unreachable` appears once and clears after the device is back.
+5. Trigger a host/port mismatch (wrong host or changed subnet) and verify
+   `Configured DHE host is unreachable` appears for that entry.
+6. After a successful repair/recovery, reload the integration and restart Home
+   Assistant; verify that no stale Repairs issues remain, `Connection state`
+   returns to `connected`, and the disabled-by-default `Repair pairing` button
+   is still available as fallback when enabled.
 
 ## Silver Coverage Gate
 
@@ -211,7 +329,7 @@ entry setup paths instead of only isolated stubs:
   through a different hostname/IP target.
 - MAC-based config-entry unique IDs across Zeroconf, scan-prefilled and manual
   setup.
-- Options-flow connection target changes with pairing confirmation.
+- Options-flow connection target changes with existing-token preservation.
 - Reload cleanup and restart behavior.
 - Multiple configured DHE entries.
 - Multi-entry service routing.

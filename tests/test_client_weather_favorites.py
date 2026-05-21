@@ -1776,12 +1776,17 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         DHEClient = client_module.DHEClient
         now = 0.0
 
+        diagnostic_callback = Mock()
         client = DHEClient.__new__(DHEClient)
         client._ctx = None
         client._ready = client_module.asyncio.Event()
         client._stopped = client_module.asyncio.Event()
         client._available = True
         client._availability_callbacks = set()
+        client._diagnostic_callbacks = {diagnostic_callback}
+        client._copy_diagnostic_state = Mock(
+            return_value={"connection_state": "reconnecting"}
+        )
         client._notify_callbacks = Mock()
         client._reconnect_grace_task = object()
         client._connection_supervisor = client_module.DHEConnectionSupervisor(
@@ -1796,6 +1801,12 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(client._available)
         self.assertIsNone(client._reconnect_grace_task)
+        self.assertTrue(
+            any(
+                call.args and call.args[0] == "diagnostic"
+                for call in client._notify_callbacks.call_args_list
+            )
+        )
 
     async def test_stale_reconnect_grace_timer_does_not_clear_new_timer(self) -> None:
         client_module = _load_client()
@@ -1922,6 +1933,120 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
             odb_id=protocol_module.ID_PROTOCOL_VERSION,
         )
         client._request_web_interface_version.assert_awaited_once_with()
+
+    async def test_app_read_source_matches_get_request_to_set_readback(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+
+        client = DHEClient.__new__(DHEClient)
+        client._pending_app_read_deadlines = {}
+
+        DHEClient._mark_app_read_requested(client, "get:ste.app.radio:station")
+
+        self.assertTrue(
+            DHEClient._app_read_source(client, "set:ste.app.radio:station")
+        )
+        self.assertFalse(
+            DHEClient._app_read_source(client, "set:ste.app.radio:station")
+        )
+
+    async def test_runtime_measurement_refresh_tracks_only_radio_app_readbacks(
+        self,
+    ) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        DHESession = client_module.DHESession
+
+        client = DHEClient.__new__(DHEClient)
+        ctx = DHESession(url_token="token", sid="sid")
+        client._pending_app_read_deadlines = {}
+        client._post_packet = AsyncMock()
+        client._message_packet = lambda payload: str(payload)
+
+        await DHEClient._request_app_value(
+            client,
+            ctx,
+            "get:ste.app.weather:location",
+        )
+        await DHEClient._request_app_value(
+            client,
+            ctx,
+            "get:ste.app.radio:station",
+        )
+
+        self.assertNotIn(
+            "get:ste.app.weather:location",
+            client._pending_app_read_deadlines,
+        )
+        self.assertIn(
+            "get:ste.app.radio:station",
+            client._pending_app_read_deadlines,
+        )
+
+    async def test_runtime_radio_station_readback_does_not_infer_playing(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+
+        client = DHEClient.__new__(DHEClient)
+        client._last_app_values = {}
+        client._last_radio_state = {}
+        client._last_radio_favorites = []
+        client._radio_favorites_generation = 0
+        states: list[dict[str, object]] = []
+        client._radio_callbacks = {states.append}
+
+        DHEClient._handle_radio_value(
+            client,
+            "set:ste.app.radio:station",
+            {"Id": 166, "Name": "Radio Test"},
+            requested_readback=True,
+        )
+
+        self.assertEqual(client._last_radio_state["station"]["Id"], 166)
+        self.assertNotIn("play", client._last_radio_state)
+        self.assertEqual(states[-1]["station"]["Id"], 166)
+
+    async def test_runtime_radio_device_station_update_infers_playing(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+
+        client = DHEClient.__new__(DHEClient)
+        client._last_app_values = {}
+        client._last_radio_state = {}
+        client._last_radio_favorites = []
+        client._radio_favorites_generation = 0
+        states: list[dict[str, object]] = []
+        client._radio_callbacks = {states.append}
+
+        DHEClient._handle_radio_value(
+            client,
+            "set:ste.app.radio:station",
+            {"Id": 166, "Name": "Radio Test"},
+        )
+
+        self.assertIs(client._last_radio_state["play"], True)
+        self.assertIs(states[-1]["play"], True)
+
+    async def test_runtime_radio_device_title_update_infers_playing(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+
+        client = DHEClient.__new__(DHEClient)
+        client._last_app_values = {}
+        client._last_radio_state = {"play": False}
+        client._last_radio_favorites = []
+        client._radio_favorites_generation = 0
+        states: list[dict[str, object]] = []
+        client._radio_callbacks = {states.append}
+
+        DHEClient._handle_radio_value(
+            client,
+            "set:ste.app.radio:title",
+            "Now Playing",
+        )
+
+        self.assertIs(client._last_radio_state["play"], True)
+        self.assertIs(states[-1]["play"], True)
 
     def test_invalid_known_odb_readbacks_are_ignored(self) -> None:
         client_module = _load_client()

@@ -31,6 +31,7 @@ class _FakeSession:
         self.response = response
         self.requested_url: str | None = None
         self.requested_timeout: int | None = None
+        self.closed = False
 
     def get(self, url: str, *, timeout: int) -> _FakeResponse:
         self.requested_url = url
@@ -38,6 +39,9 @@ class _FakeSession:
         if isinstance(self.response, BaseException):
             raise self.response
         return self.response
+
+    async def close(self) -> None:
+        self.closed = True
 
 
 @pytest.mark.asyncio
@@ -75,3 +79,29 @@ async def test_async_can_connect_rejects_transport_error(monkeypatch: pytest.Mon
         "dhe.local",
         8443,
     )
+
+
+@pytest.mark.asyncio
+async def test_async_can_connect_falls_back_on_session_runtime_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fallback_session = _FakeSession(_FakeResponse(204))
+
+    def _raise_runtime_error(_hass: object) -> _FakeSession:
+        raise RuntimeError("Frame helper not set up")
+
+    monkeypatch.setattr(
+        connection_probe,
+        "async_get_clientsession",
+        _raise_runtime_error,
+    )
+    monkeypatch.setattr(aiohttp, "ClientSession", lambda: fallback_session)
+
+    assert await connection_probe.async_can_connect(
+        types.SimpleNamespace(),
+        "dhe.local",
+        8443,
+    )
+
+    assert fallback_session.requested_url == "http://dhe.local:8443/"
+    assert fallback_session.closed

@@ -20,6 +20,7 @@ class DHEClientConnectionStateMixin:
         _available: bool
         _connection_supervisor: DHEConnectionSupervisor
         _ctx: DHESession | None
+        _diagnostic_callbacks: set[Callable[..., None]]
         _online: bool
         _online_callbacks: set[OnlineCallback]
         _ready: asyncio.Event
@@ -40,6 +41,8 @@ class DHEClientConnectionStateMixin:
         ) -> None: ...
 
         def _update_diagnostics(self, **updates: Any) -> None: ...
+
+        def _copy_diagnostic_state(self) -> dict[str, Any]: ...
 
     def _set_available(self, available: bool, *, immediate: bool = False) -> None:
         if available or immediate:
@@ -111,6 +114,14 @@ class DHEClientConnectionStateMixin:
                 and self._connection_supervisor.should_mark_unavailable
             ):
                 self._emit_availability(False)
+                diagnostic_callbacks = getattr(self, "_diagnostic_callbacks", None)
+                copy_diagnostic_state = getattr(self, "_copy_diagnostic_state", None)
+                if diagnostic_callbacks and callable(copy_diagnostic_state):
+                    self._notify_callbacks(
+                        "diagnostic",
+                        diagnostic_callbacks,
+                        copy_diagnostic_state(),
+                    )
         except asyncio.CancelledError:
             return
         finally:

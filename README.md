@@ -1,6 +1,7 @@
 # DHE Connect for Home Assistant (Unofficial)
 
 [![Validate](https://github.com/memphi2/ha-dhe-connect/actions/workflows/validate.yml/badge.svg)](https://github.com/memphi2/ha-dhe-connect/actions/workflows/validate.yml)
+[![GitHub Release](https://img.shields.io/github/v/release/memphi2/ha-dhe-connect?display_name=release)](https://github.com/memphi2/ha-dhe-connect/releases)
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://www.hacs.xyz/)
 [![License MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -9,12 +10,16 @@ instantaneous water heaters.
 
 The integration talks directly to the DHE web interface on your local network. It uses the same Socket.IO / Engine.IO v3 protocol shape as the browser UI: polling for session setup and authentication, then a WebSocket upgrade for the persistent runtime connection. No cloud service is used.
 
+<img src="assets/dhe-connect-card.png" alt="DHE Connect Card dashboard screenshot" width="420">
+
 ## Status
 
-- Current version: `1.6.0`
-- Release channel: initial stable release
-- Quality target: Home Assistant Quality Scale Silver-oriented validation for a
-  custom integration; not an official Home Assistant core certification
+- Current version: `1.7.0`
+- Release channel: stable release / Gold-core-oriented release candidate
+- Quality target: Home Assistant Quality Scale Gold-core-oriented validation
+  for a custom integration; not an official Home Assistant Core certification
+- Home Assistant UI integration name: `DHE Connect` (kept short for clean
+  device labels in the HA UI)
 - Home Assistant setup: UI config flow
 - HACS type: custom integration
 - IoT class: local push
@@ -22,9 +27,9 @@ The integration talks directly to the DHE web interface on your local network. I
 - Scope: multiple configured DHE Connect devices per Home Assistant instance
 
 This is a custom integration and should be used on a trusted local network.
-The repository is intentionally published as a clean initial release at
-`v1.6.0`; earlier development history is not required for installation or
-normal operation.
+The `v1.7.0` line is prepared as a Gold-core-oriented custom-integration
+release candidate with Repairs/Reconfigure evidence, not as an official Home
+Assistant Core certification.
 
 Development and protocol mapping for this release were assisted by OpenAI Codex.
 
@@ -72,8 +77,6 @@ discovers the entities created by this integration and presents water heating,
 live consumption, bath fill, timers, temperature memories, weather, radio and
 diagnostics in a compact Mushroom-style layout.
 
-<img src="assets/dhe-connect-card.png" alt="DHE Connect Card dashboard screenshot" width="420">
-
 ## Documentation
 
 | Topic | Document |
@@ -81,7 +84,10 @@ diagnostics in a compact Mushroom-style layout.
 | Installation and normal use | This README |
 | German quick guide | [docs/de.md](docs/de.md) |
 | Entity list, attributes and service examples | [docs/entities.md](docs/entities.md) |
+| Automation examples | [docs/examples.md](docs/examples.md) |
+| Practical Home Assistant scenarios | [docs/use-cases.md](docs/use-cases.md) |
 | Pairing, connectivity and recorder troubleshooting | [docs/troubleshooting.md](docs/troubleshooting.md) |
+| Known network and runtime limitations | [docs/known_limitations.md](docs/known_limitations.md) |
 | Tested device and firmware matrix | [docs/firmware_matrix.md](docs/firmware_matrix.md) |
 | Protocol and ODB mapping notes for maintainers | [docs/protocol.md](docs/protocol.md) |
 | Local tests, HA smoke checks and release-readiness flow | [docs/validation.md](docs/validation.md) |
@@ -101,7 +107,7 @@ diagnostics in a compact Mushroom-style layout.
    ```
 
 5. Select category `Integration`.
-6. Install `DHE Connect (Unofficial)`.
+6. Install `DHE Connect`.
 7. Restart Home Assistant.
 8. Add the integration from `Settings` -> `Devices & services`.
 
@@ -113,12 +119,12 @@ Copy the integration directory to:
 /config/custom_components/stiebel_dhe_connect/
 ```
 
-After copying, restart Home Assistant and add `DHE Connect (Unofficial)` from the UI.
+After copying, restart Home Assistant and add `DHE Connect` from the UI.
 
 ### Removal
 
 1. In Home Assistant, open `Settings` -> `Devices & services`.
-2. Open the `DHE Connect (Unofficial)` integration entry.
+2. Open the `DHE Connect` integration entry.
 3. Use the three-dot menu and choose `Delete`.
 4. Restart Home Assistant if you want to remove the custom integration files.
 5. For manual installations, delete
@@ -213,7 +219,7 @@ uses the paired device MAC address when the DHE reports one.
 
 Add one config entry per DHE device:
 
-1. `Settings` -> `Devices & services` -> `Add integration` -> `DHE Connect (Unofficial)`
+1. `Settings` -> `Devices & services` -> `Add integration` -> `DHE Connect`
 2. Enter host, port, name and physical `Tmax` jumper position for that exact DHE
 3. Complete pairing on the device display (required)
 4. Repeat for the next DHE
@@ -222,7 +228,7 @@ Each config entry keeps its own runtime session, token file and entity set.
 
 ### First pairing flow
 
-1. Add `DHE Connect (Unofficial)` from `Settings` -> `Devices & services`.
+1. Add `DHE Connect` from `Settings` -> `Devices & services`.
 2. Enter the DHE host/IP, port, a provisional device name and the physical `Tmax` jumper position.
 3. Submit the form, then click `OK` on the pairing confirmation step.
 4. Confirm the pairing request on the DHE device display and complete the confirmation there (required).
@@ -239,6 +245,7 @@ After successful pairing the local token is stored per configured DHE target at:
 
 With multiple DHE devices, each host/port pair gets its own token file.
 For very long hostnames, the token filename uses a bounded host component with a hash suffix to avoid filesystem filename-length errors.
+When an existing entry is reconfigured to a new host or port, Home Assistant preserves the current local token for the new target and only asks for repair pairing if the DHE later rejects it.
 During explicit setup pairing, stale legacy-shaped or entry-id based token files that do not belong to an existing DHE config entry are removed before a fresh token is requested.
 
 Use the disabled-by-default `Repair pairing` button if you want to force a new pairing from Home Assistant.

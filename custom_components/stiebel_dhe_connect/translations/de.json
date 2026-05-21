@@ -58,6 +58,16 @@
       "reauth_confirm": {
         "title": "DHE-Pairing reparieren",
         "description": "Jetzt OK klicken, um ein neues lokales Pairing-Token anzufordern. Die Pairing-Anfrage am DHE-Display bestätigen. Die bestehende Integration wird nach erfolgreichem Pairing und Login neu geladen."
+      },
+      "reconfigure": {
+        "title": "DHE Connect neu konfigurieren",
+        "description": "DHE-Host, Port, Gerätenamen und physische Tmax-Jumperposition aktualisieren. Wenn sich Host oder Port ändern, prüft Home Assistant die Erreichbarkeit des neuen Ziels und behält das bestehende lokale Token bei.",
+        "data": {
+          "host": "IP-Adresse oder Hostname",
+          "port": "Port",
+          "name": "Gerätename",
+          "internal_scald_protection": "Interner Verbrühschutz (Tmax-Jumper)"
+        }
       }
     },
     "progress": {
@@ -91,13 +101,66 @@
       "recently_discovered": "Dieser DHE Connect wurde kürzlich gefunden. Starte die Einrichtung manuell, um den zwischengespeicherten Fund zu verwenden.",
       "invalid_discovery_parameters": "Der gefundene DHE Connect hat keinen gültigen Host oder Port geliefert.",
       "invalid_reauth_entry": "Der bestehende DHE-Connect-Eintrag kann nicht erneut authentifiziert werden.",
-      "reauth_successful": "DHE-Pairing wurde erfolgreich repariert."
+      "reauth_successful": "DHE-Pairing wurde erfolgreich repariert.",
+      "reconfigure_successful": "DHE Connect wurde erfolgreich neu konfiguriert."
+    }
+  },
+  "issues": {
+    "pairing_required": {
+      "title": "DHE-Pairing muss repariert werden",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "DHE-Pairing reparieren",
+            "description": "Jetzt OK klicken, um ein neues lokales Pairing-Token für **{name}** unter `{host}:{port}` anzufordern und zu prüfen. Die Pairing-Anfrage am DHE-Display bestätigen."
+          }
+        },
+        "abort": {
+          "entry_not_found": "Der DHE-Connect-Eintrag existiert nicht mehr.",
+          "invalid_entry": "Der DHE-Connect-Eintrag hat keinen gültigen Host oder Port."
+        }
+      }
+    },
+    "token_invalid": {
+      "title": "DHE-Token ist ungültig",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "DHE-Pairing reparieren",
+            "description": "Das gespeicherte Token für **{name}** unter `{host}:{port}` wird vom DHE nicht mehr akzeptiert. Jetzt OK klicken, um ein neues lokales Pairing-Token anzufordern und zu prüfen, dann die Pairing-Anfrage am DHE-Display bestätigen."
+          }
+        },
+        "abort": {
+          "entry_not_found": "Der DHE-Connect-Eintrag existiert nicht mehr.",
+          "invalid_entry": "Der DHE-Connect-Eintrag hat keinen gültigen Host oder Port."
+        }
+      }
+    },
+    "device_unreachable": {
+      "title": "DHE-Gerät ist nicht erreichbar",
+      "description": "Home Assistant kann **{name}** unter `{host}:{port}` nicht erreichen. Stromversorgung, Netzwerk-Routing/Firewall und die Erreichbarkeit der DHE-Weboberfläche vom Home-Assistant-Host prüfen."
+    },
+    "discovery_conflict": {
+      "title": "DHE-Discovery-Konflikt erkannt",
+      "description": "Home Assistant hat widersprüchliche Discovery-Identitätshinweise für **{name}** erkannt. Vorhandenen Eintrag verwenden oder die Einrichtung manuell mit stabilem Host/IP und Port abschließen."
+    },
+    "host_changed_or_unreachable": {
+      "title": "Konfigurierter DHE-Host ist nicht erreichbar",
+      "description": "Das konfigurierte Ziel `{host}:{port}` für **{name}** ist nicht erreichbar. Host/Port und Netzwerkpfad prüfen und bei Bedarf über Neu konfigurieren korrigieren."
+    }
+  },
+  "exceptions": {
+    "dhe_action_failed": {
+      "message": "DHE-Aktion fehlgeschlagen: {error} ({operation})"
+    },
+    "dhe_unavailable_action": {
+      "message": "DHE ist nicht verfügbar: {operation}"
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "DHE Connect (Unofficial) konfigurieren",
+        "title": "DHE Connect konfigurieren",
         "description": "Verbindung, Gerät, Kosten, Wetter-Favoriten oder Radio-Sender verwalten.",
         "menu_options": {
           "connection": "Verbindung/Gerät",
@@ -110,17 +173,13 @@
       },
       "connection": {
         "title": "Verbindung/Gerät konfigurieren",
-        "description": "IP-Adresse, Port, Gerätename und physische Tmax-Jumperposition ändern.",
+        "description": "IP-Adresse, Port, Gerätename und physische Tmax-Jumperposition ändern. Host- oder Port-Änderungen behalten das bestehende lokale Token bei und werden vor dem Speichern auf Erreichbarkeit geprüft.",
         "data": {
           "host": "IP-Adresse oder Hostname",
           "port": "Port",
           "name": "Gerätename",
           "internal_scald_protection": "Interner Verbrühschutz (Tmax-Jumper)"
         }
-      },
-      "connection_pairing_confirm": {
-        "title": "Pairing bestätigen",
-        "description": "Jetzt OK klicken. Da DHE-Host oder Port geändert wurden, prüft die Integration Pairing und Login für das neue Ziel vor dem Speichern. Die Pairing-Anfrage am DHE-Display bestätigen."
       },
       "device_settings": {
         "title": "Kosten & Emissionen",
@@ -567,6 +626,7 @@
         "name": "Verbindungsstatus",
         "state": {
           "starting": "Startet",
+          "initializing": "Initialisiert",
           "connected": "Verbunden",
           "reconnecting": "Verbindet neu",
           "pairing_failed_waiting_manual_retry": "Pairing fehlgeschlagen (manueller Neustart erforderlich)",

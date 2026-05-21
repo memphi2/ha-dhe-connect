@@ -147,6 +147,7 @@ class DHEClientRuntimeMixin(DHEClientRuntimeMediaMixin, DHEClientRuntimeAppMixin
         _nominal_power_kw: float
         _odb_value_handlers: dict[int, Callable[..., None]]
         _pending_expected_setpoint: float | None
+        _pending_app_read_deadlines: dict[str, float]
         _pending_odb_read_deadlines: dict[int, float]
         _pending_setpoint_future: asyncio.Future[float] | None
         _pending_write_expected: ODBValue | None
@@ -222,7 +223,11 @@ class DHEClientRuntimeMixin(DHEClientRuntimeMediaMixin, DHEClientRuntimeAppMixin
             return
         if command in RADIO_SET_COMMANDS:
             self._record_runtime_parser_category("radio_state")
-            self._handle_radio_value(command, value)
+            self._handle_radio_value(
+                command,
+                value,
+                requested_readback=self._app_read_source(command),
+            )
             return
         if command in WEATHER_SET_COMMANDS:
             self._record_runtime_parser_category("weather_state")
@@ -608,6 +613,27 @@ class DHEClientRuntimeMixin(DHEClientRuntimeMediaMixin, DHEClientRuntimeAppMixin
         ):
             return ODB_READ_SOURCE_REQUESTED
         return ODB_READ_SOURCE_RUNTIME
+
+    def _app_read_source(self, command: str) -> bool:
+        """Return whether an app value is the readback for a recent request."""
+        if self._consume_app_read_request(command):
+            return True
+        if command.startswith("set:") and self._consume_app_read_request(
+            command.replace("set:", "get:", 1)
+        ):
+            return True
+        return False
+
+    def _mark_app_read_requested(self, command: str) -> None:
+        """Track explicit app reads until their first readback."""
+        self._pending_app_read_deadlines[str(command)] = (
+            time.monotonic() + ODB_READBACK_REQUEST_WINDOW_SECONDS
+        )
+
+    def _consume_app_read_request(self, command: str) -> bool:
+        """Return whether an app value is the readback for a recent request."""
+        deadline = self._pending_app_read_deadlines.pop(str(command), None)
+        return deadline is not None and deadline >= time.monotonic()
 
     def _mark_odb_read_requested(self, odb_id: int) -> None:
         """Track explicit ODB reads until their first readback."""
