@@ -27,20 +27,17 @@ from .config_flow_mapping import (
 from .config_flow_schemas import (
     ATTR_CO2_EMISSION,
     ATTR_COUNTRY_ID,
-    ATTR_CURRENCY,
     ATTR_ELECTRICITY_PRICE,
     ATTR_RADIO_FILTER_TEXT,
     ATTR_RADIO_SEARCH_TYPE,
     ATTR_RADIO_SELECTION,
     ATTR_RESULT,
     ATTR_WATER_PRICE,
-    CURRENCY_UNCHANGED,
     MAX_RADIO_RESULT_OPTIONS,
     MAX_WEATHER_RESULT_OPTIONS,
     RADIO_CATALOG_SEARCH_TYPES,
     RADIO_FILTER_SEARCH_TYPES,
     RADIO_SEARCH_TYPES,
-    currency_options as _schema_currency_options,
     device_settings_defaults as _device_settings_defaults,
     device_settings_schema as _device_settings_schema,
     internal_scald_protection_options as _internal_scald_protection_options,
@@ -127,7 +124,6 @@ from .repair_issues import DISCOVERY_CONFLICT_ISSUE
 from .protocol import (
     CO2_EMISSION_MAX,
     ELECTRICITY_PRICE_MAX,
-    ID_APP_CURRENCY as _ID_APP_CURRENCY,
     WATER_PRICE_MAX,
 )
 from .setup_scan import (
@@ -143,9 +139,6 @@ from .setup_scan import (
 from .token_file_helpers import token_file_for_target
 
 from .client_types import DHEError
-
-ID_APP_CURRENCY = _ID_APP_CURRENCY
-_currency_options = _schema_currency_options
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -305,8 +298,6 @@ async def _async_preserve_token_for_retarget(
 class _OptionsFlowClient(Protocol):
     """Client surface used by the options flow."""
 
-    async def set_currency(self, currency: str) -> str: ...
-
     async def set_electricity_price(self, euros_per_kwh: float) -> float: ...
 
     async def set_water_price(self, euros_per_m3: float) -> float: ...
@@ -383,6 +374,25 @@ async def _validate_setup_pairing(
     )
 
 
+async def can_connect_for_repair(
+    hass: HomeAssistant,
+    host: str,
+    port: int,
+) -> bool:
+    """Return whether a repair flow can reach the configured DHE target."""
+    return await _can_connect(hass, host, port)
+
+
+async def validate_setup_pairing_for_repair(
+    hass: HomeAssistant,
+    host: str,
+    port: int,
+    token_file: str,
+) -> SetupPairingResult:
+    """Validate repair pairing through the shared setup-pairing path."""
+    return await _validate_setup_pairing(hass, host, port, token_file)
+
+
 async def _async_record_discovery_safely(
     hass: HomeAssistant,
     discovery_record: DiscoveryRecord,
@@ -402,7 +412,7 @@ async def _async_record_discovery_safely(
         _LOGGER.debug("DHE discovery cache update failed: %s", err)
 
 
-class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
+class StiebelDHEConnectConfigFlow(
     config_entries.ConfigFlow,
     domain=DOMAIN,
 ):
@@ -631,9 +641,10 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
         _async_delete_discovery_conflict_issue(self.hass, host, port)
         if _is_target_used_by_other_entry(self.hass, host, port):
             return self.async_abort(reason="already_configured")
-        self.context[FLOW_CONTEXT_DISCOVERED_HOST] = host
-        self.context[FLOW_CONTEXT_DISCOVERED_PORT] = port
-        self.context[FLOW_CONTEXT_DISCOVERY_NAME] = name
+        flow_context = cast(dict[str, Any], self.context)
+        flow_context[FLOW_CONTEXT_DISCOVERED_HOST] = host
+        flow_context[FLOW_CONTEXT_DISCOVERED_PORT] = port
+        flow_context[FLOW_CONTEXT_DISCOVERY_NAME] = name
         if not await _can_connect(self.hass, host, port):
             if discovery_record is not None:
                 await _async_record_discovery_safely(
@@ -1386,9 +1397,6 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
         defaults = _device_settings_defaults(client) if client is not None else {}
         if user_input is not None and not errors and client is not None:
             try:
-                currency = str(
-                    user_input.get(ATTR_CURRENCY) or CURRENCY_UNCHANGED
-                ).strip()
                 electricity_price = _optional_float(
                     user_input.get(ATTR_ELECTRICITY_PRICE),
                     0.0,
@@ -1405,8 +1413,6 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
                     CO2_EMISSION_MAX,
                 )
 
-                if currency and currency != CURRENCY_UNCHANGED:
-                    await client.set_currency(currency)
                 if electricity_price is not None:
                     await client.set_electricity_price(electricity_price)
                 if water_price is not None:

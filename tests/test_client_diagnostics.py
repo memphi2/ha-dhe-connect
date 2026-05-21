@@ -172,6 +172,28 @@ class TestClientDiagnostics(unittest.TestCase):
         self.assertNotIn("example", message)
         self.assertNotIn("abc123", message)
 
+    def test_redaction_removes_websocket_url_hosts_and_userinfo(self) -> None:
+        private_host = ".".join(("172", "16", "2", "124"))
+        message = self.diagnostics.redact_diagnostic_text(
+            "WS "
+            "wss://bob:secret@dhe-ja06.local:8443/socket.io/?token=abc123 "
+            f"fallback=ws://alice@{private_host}:8443/socket.io/?code=def456"
+        )
+
+        self.assertEqual(
+            message,
+            "WS "
+            "wss://<host>/socket.io/?token=<redacted> "
+            "fallback=ws://<host>/socket.io/?code=<redacted>",
+        )
+        self.assertNotIn("bob", message)
+        self.assertNotIn("alice", message)
+        self.assertNotIn("secret", message)
+        self.assertNotIn(private_host, message)
+        self.assertNotIn("dhe-ja06", message)
+        self.assertNotIn("abc123", message)
+        self.assertNotIn("def456", message)
+
     def test_diagnostic_summary_preserves_colliding_redacted_keys(self) -> None:
         summary = self.diagnostics.summarize_diagnostic_value({
             "token=abc123": "first",

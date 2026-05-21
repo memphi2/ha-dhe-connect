@@ -30,10 +30,10 @@ class _FakeSession:
     def __init__(self, response: _FakeResponse | BaseException) -> None:
         self.response = response
         self.requested_url: str | None = None
-        self.requested_timeout: int | None = None
+        self.requested_timeout: aiohttp.ClientTimeout | None = None
         self.closed = False
 
-    def get(self, url: str, *, timeout: int) -> _FakeResponse:
+    def get(self, url: str, *, timeout: aiohttp.ClientTimeout) -> _FakeResponse:
         self.requested_url = url
         self.requested_timeout = timeout
         if isinstance(self.response, BaseException):
@@ -61,7 +61,8 @@ async def test_async_can_connect_accepts_dhe_web_response(monkeypatch: pytest.Mo
         timeout_seconds=3,
     )
     assert session.requested_url == "http://dhe.local:8443/"
-    assert session.requested_timeout == 3
+    assert session.requested_timeout is not None
+    assert session.requested_timeout.total == 3
     assert response.read_called
 
 

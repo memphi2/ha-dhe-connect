@@ -21,7 +21,6 @@ from .client_value_helpers import (
 )
 from .protocol import (
     CO2_EMISSION_MAX,
-    CURRENCY_GET_COMMAND,
     ELECTRICITY_PRICE_MAX,
     ID_BATH_FILL_ACTIVE,
     ID_BATH_FILL_TARGET_VOLUME,
@@ -193,25 +192,6 @@ class DHEClientCommandsMixin(
         raw_value = client._co2_emission_to_raw(value)
         await client.write_odb_value(ID_CO2_EMISSION_RAW, raw_value)
         return value
-
-    async def set_currency(self, currency: str) -> str:
-        requested = str(currency).strip().lower()
-        if not requested:
-            raise DHEError("Currency must not be empty")
-        client = _command_context(self)
-
-        async def _operation(ctx: DHESession) -> str:
-            await client._post_packet(ctx, client._message_packet({
-                "command": CURRENCY_GET_COMMAND,
-                "value": requested,
-            }))
-            client._handle_currency_value(requested, source_command=CURRENCY_GET_COMMAND)
-            return requested.upper()
-
-        return await client._run_command_with_reconnect_retry(
-            "Could not set DHE currency",
-            _operation,
-        )
 
     async def _set_price(
         self,

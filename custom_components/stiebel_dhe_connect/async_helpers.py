@@ -32,7 +32,7 @@ def create_background_task(
             create_task,
         )
         return create_task_fn(coro, name)
-    return cast(asyncio.Task[Any], hass.async_create_task(coro, name=name))
+    return hass.async_create_task(coro, name=name)
 
 
 def task_cancel_callback(task: asyncio.Task[Any]) -> Callable[[], None]:

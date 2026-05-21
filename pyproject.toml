@@ -1,10 +1,10 @@
 [tool.mypy]
 python_version = "3.12"
-ignore_missing_imports = true
-follow_imports = "skip"
-disallow_untyped_defs = true
-warn_return_any = true
-warn_unused_ignores = true
+follow_imports = "normal"
+extra_checks = true
+strict = true
+warn_unreachable = true
+warn_unused_configs = true
 files = [
     "custom_components/stiebel_dhe_connect/__init__.py",
     "custom_components/stiebel_dhe_connect/action_error_helpers.py",

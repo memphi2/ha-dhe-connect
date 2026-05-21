@@ -1741,7 +1741,11 @@ async def test_repairs_flow_success_reloads_existing_entry_without_duplication()
         assert result["type"] is FlowResultType.CREATE_ENTRY
         can_connect.assert_awaited_once_with(hass, client.host, client.port)
         validate_pairing.assert_awaited_once()
-        reload_entry.assert_awaited_once_with(entry.entry_id)
+        assert reload_entry.await_count >= 1
+        assert all(
+            call.args == (entry.entry_id,)
+            for call in reload_entry.await_args_list
+        )
         assert len(hass.config_entries.async_entries(DOMAIN)) == entry_count_before
         assert (
             len(dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id))
@@ -2863,6 +2867,80 @@ async def test_reconfigure_flow_reloads_existing_loaded_entry() -> None:
         )
         assert len(hass.config_entries.async_entries(DOMAIN)) == 1
         assert entry.unique_id == "reconfigure-reload-fixture-dhe"
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
+
+async def test_reconfigure_name_only_during_reconnect_grace_keeps_entry_identity() -> None:
+    """Reconfigure must stay entry-local while the runtime is reconnecting."""
+    _clear_loaded_integration_modules()
+    integration = importlib.import_module(f"custom_components.{DOMAIN}")
+    config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        client = _FixtureDHEClient()
+        entry = _build_mock_entry(
+            host=client.host,
+            port=client.port,
+            name="Reconnect Grace DHE",
+            unique_id="reconfigure-reconnect-grace-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+
+        with (
+            patch.object(integration, "DHEClient", return_value=client),
+            patch.object(integration, "_async_can_connect", AsyncMock(return_value=True)),
+        ):
+            assert await hass.config_entries.async_setup(entry.entry_id)
+            await hass.async_block_till_done()
+
+        client.emit_availability(True)
+        client.emit_diagnostic(
+            {
+                "connection_state": "reconnecting",
+                "should_mark_unavailable": False,
+                "last_reconnect_reason": "ServerDisconnectedError: socket closed",
+            }
+        )
+        await hass.async_block_till_done()
+
+        can_connect = AsyncMock(return_value=True)
+        reload_entry = AsyncMock(return_value=True)
+        with (
+            patch.object(config_flow, "_can_connect", can_connect),
+            patch.object(hass.config_entries, "async_reload", reload_entry),
+        ):
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={
+                    "source": config_entries.SOURCE_RECONFIGURE,
+                    "entry_id": entry.entry_id,
+                },
+            )
+            assert result["type"] is FlowResultType.FORM
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                user_input={
+                    CONF_HOST: client.host,
+                    CONF_PORT: client.port,
+                    CONF_NAME: "Reconnect Grace Renamed DHE",
+                    config_flow.CONF_INTERNAL_SCALD_PROTECTION: "60",
+                },
+            )
+
+        assert result["type"] is FlowResultType.ABORT
+        assert result["reason"] == "reconfigure_successful"
+        assert entry.unique_id == "reconfigure-reconnect-grace-fixture-dhe"
+        assert entry.options[CONF_NAME] == "Reconnect Grace Renamed DHE"
+        assert len(hass.config_entries.async_entries(DOMAIN)) == 1
+        can_connect.assert_not_awaited()
+        assert reload_entry.await_count >= 1
+        assert all(
+            call.args == (entry.entry_id,)
+            for call in reload_entry.await_args_list
+        )
 
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()

@@ -23,7 +23,7 @@ and anonymized diagnostics should only use the first 7 characters.
 
 | Device | Firmware / Web-App Version | Tested | Coverage | Notes |
 |---|---|---|---|---|
-| DHE Connect 18/21/24 | `1.9.00` observed | yes | Pairing, setup flow, runtime connection, climate, live water/power sensors, timers, radio, weather, recorder smoke, diagnostics | Primary live validation target for the current release line; latest full live evidence run: `2026-05-21` |
+| DHE Connect 18/21/24 | `1.9.00` observed | yes | Pairing, setup flow, runtime connection, climate, live water/power sensors, timers, ODB ID `32` wellness runtime, radio, weather, recorder smoke, diagnostics | Primary live validation target for the current release line; latest full live evidence run: `2026-05-21` |
 | DHE Connect 27 | unknown | planned | Not yet validated on a dedicated live device | Expected to share most protocol behavior, but needs confirmation before marking as partial or yes |
 
 ## Required Evidence Fields
@@ -88,6 +88,7 @@ the matrix interpretation conservative:
   - reconnect/offline recovery
   - climate + live water/power
   - timers
+  - ODB ID `32` wellness runtime counter
   - radio/weather runtime behavior
 - Result: pass for release-prep scope on the current integration line.
 

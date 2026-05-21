@@ -43,10 +43,6 @@
     {
       "name": "saving_monitor_real",
       "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.app.savingMonitor:real\",\"value\":{\"water_l\":18.5,\"energy_Wh\":800,\"emission_Co2Kg\":0.21,\"value_E\":0.34}}]"
-    },
-    {
-      "name": "currency",
-      "packet": "42/1.0.0,[\"message\",{\"command\":\"set:ste.common.currency:value\",\"value\":\"EUR\"}]"
     }
   ],
   "expected_runtime_state": {
@@ -64,8 +60,7 @@
       "1069": 18.5,
       "1070": 0.8,
       "1072": 0.21,
-      "1073": 0.34,
-      "1093": "EUR"
+      "1073": 0.34
     },
     "measurement_attributes": {
       "1021": {
@@ -82,8 +77,7 @@
       "timer_reset": 1,
       "last_usage": 1,
       "consumption": 1,
-      "saving_monitor": 1,
-      "currency": 1
+      "saving_monitor": 1
     }
   }
 }

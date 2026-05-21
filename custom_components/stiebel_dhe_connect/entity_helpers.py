@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from homeassistant.helpers.device_registry import DeviceInfo
 
 DOMAIN = "stiebel_dhe_connect"
 
@@ -58,7 +61,7 @@ def build_device_info(
     stable_identifier: str | None = None,
     legacy_identifier: str | None = None,
     legacy_identifiers: set[str] | None = None,
-) -> dict[str, Any]:
+) -> DeviceInfo:
     """Build a consistent Home Assistant device_info payload."""
     identifiers = {(DOMAIN, stable_identifier or f"{host}:{port}")}
     if legacy_identifier:
@@ -76,6 +79,11 @@ def build_device_info(
 
 class StiebelDHEEntityMixin:
     """Small shared initializer for DHE entities."""
+
+    _attr_device_info: DeviceInfo | None
+    _attr_suggested_object_id: str | None
+    _attr_unique_id: str | None
+    _client: Any
 
     def _init_dhe_entity(
         self,

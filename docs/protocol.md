@@ -210,12 +210,6 @@ shows a cold-water phase where the device disables heating, while
 `coldwater=false` displays a reduced cold temperature, usually about `10 C`
 below the hot phase unless explicit `cold`/`hot` fields are present.
 
-Currency changes use the same command as the DHE app:
-
-```json
-{"command": "get:ste.common.currency:value", "value": "eur"}
-```
-
 Temperature memory changes use `assign:ste.common.temperature:memory`. Existing memory slots include the zero-based `id`; adding the next free slot omits `id` and lets the DHE assign it:
 
 ```json
@@ -233,6 +227,16 @@ Radio playback uses `assign:ste.app.radio:*`:
 ```json
 {"command": "assign:ste.app.radio:play", "value": true}
 ```
+
+## Intentionally Ignored App Commands
+
+The web interface exposes a few app commands that are intentionally not mapped
+to Home Assistant entities:
+
+| Command | Reason |
+|---|---|
+| `get/set:ste.app.wellness:progress` | Browser/UI progress helper. Live device tests showed the HA-relevant wellness runtime comes from ODB ID `32` instead. |
+| Vendor web assets | The repository never vendors proprietary JS, HTML, CSS or images. Release checks guard against accidentally adding vendor assets. |
 
 ## ODB Handling
 
@@ -260,7 +264,6 @@ Mapped ODB values are converted before publishing to Home Assistant:
 | `63` | Raw `kWh` ODB possible energy saving |
 | `64` | Raw value divided by `10` as `m3` ODB actual water saving |
 | `67` | Raw ODB protocol marker; observed value `1` is not the DHE web interface version |
-| `68` | Known currency mode enum; ignored because currency is handled through `ste.common.currency:value` |
 | `69` | CO2 emission decoded as `raw / 1000` kg/kWh, raw range `0` to `32767` |
 
 The user-facing protocol-version diagnostic comes from the DHE web interface

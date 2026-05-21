@@ -17,6 +17,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
+    EntityCategory,
     PERCENTAGE,
     UnitOfEnergy,
     UnitOfMass,
@@ -27,7 +28,6 @@ from homeassistant.const import (
     UnitOfVolumeFlowRate,
 )
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .client import DHEClient
@@ -238,7 +238,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         translation_key="device_status",
         icon="mdi:wrench",
         device_class=SensorDeviceClass.ENUM,
-        options=DEVICE_STATUS_OPTIONS,
+        options=list(DEVICE_STATUS_OPTIONS),
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         odb_id=ID_DEVICE_STATUS,
@@ -568,7 +568,6 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         translation_key="wellness_runtime_normalized",
         native_unit_of_measurement=UnitOfTime.SECONDS,
         device_class=SensorDeviceClass.DURATION,
-        state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=0,
         icon="mdi:chart-timeline-variant",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -791,8 +790,6 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
             self._async_refresh_missing_measurement(),
             name=f"stiebel_dhe_connect_refresh_{self.entity_description.key}",
         )
-        if task is None:
-            return
         self._missing_measurement_refresh_task = task
         if not self._missing_measurement_refresh_cancel_registered:
             self.async_on_remove(self._cancel_missing_measurement_refresh)
@@ -985,8 +982,6 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
             self._async_timer_countdown(),
             name=f"stiebel_dhe_connect_timer_countdown_{self.entity_description.key}",
         )
-        if task is None:
-            return
         self._timer_countdown_task = task
         if not self._timer_countdown_cancel_registered:
             self.async_on_remove(self._cancel_timer_countdown)

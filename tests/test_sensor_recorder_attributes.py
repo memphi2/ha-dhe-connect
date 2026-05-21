@@ -155,10 +155,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
             description.device_class,
             sensor_module.SensorDeviceClass.DURATION,
         )
-        self.assertEqual(
-            description.state_class,
-            sensor_module.SensorStateClass.MEASUREMENT,
-        )
+        self.assertIsNone(description.state_class)
         self.assertEqual(
             description.entity_category,
             sensor_module.EntityCategory.DIAGNOSTIC,

@@ -12,9 +12,8 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import UnitOfTime
+from homeassistant.const import UnitOfTime, EntityCategory
 from homeassistant.core import callback
-from homeassistant.helpers.entity import EntityCategory
 
 from .client import DHEClient
 from .client_mapping import DEVICE_STATUS_SERVICE_REQUIRED
@@ -70,7 +69,7 @@ DIAGNOSTIC_SENSOR_DESCRIPTIONS: tuple[StiebelDHEDiagnosticSensorEntityDescriptio
         translation_key="connection_state",
         icon="mdi:lan-connect",
         device_class=SensorDeviceClass.ENUM,
-        options=CONNECTION_STATE_OPTIONS,
+        options=list(CONNECTION_STATE_OPTIONS),
         diagnostic_key="connection_state",
     ),
     StiebelDHEDiagnosticSensorEntityDescription(
@@ -133,7 +132,7 @@ class StiebelDHEErrorStatusSensor(StiebelDHEEntityMixin, SensorEntity):
     _attr_should_poll = False
     _attr_translation_key = "error_status"
     _attr_device_class = SensorDeviceClass.ENUM
-    _attr_options = ERROR_STATUS_OPTIONS
+    _attr_options = list(ERROR_STATUS_OPTIONS)
     _attr_icon = "mdi:alert-octagon-outline"
     _unrecorded_attributes = frozenset({
         "inlet_temperature",

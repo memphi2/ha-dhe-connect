@@ -11,7 +11,7 @@ from typing import Any, cast
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigEntry, SOURCE_REAUTH
+from homeassistant.config_entries import ConfigEntry, ConfigFlowResult, SOURCE_REAUTH
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
@@ -460,10 +460,7 @@ def _start_client_background(
             asyncio.Task[Any],
             create_task(hass, client.start(), "stiebel_dhe_connect_start"),
         )
-    return cast(
-        asyncio.Task[Any],
-        create_background_task(hass, client.start(), "stiebel_dhe_connect_start"),
-    )
+    return create_background_task(hass, client.start(), "stiebel_dhe_connect_start")
 
 
 def _async_register_reauth_trigger(
@@ -648,9 +645,9 @@ def _async_clear_config_entry_reauth(
 def _async_entry_reauth_flows(
     hass: HomeAssistant,
     entry: ConfigEntry,
-) -> tuple[dict[str, Any], ...]:
+) -> tuple[ConfigFlowResult, ...]:
     """Return active reauth flows that belong to a config entry."""
-    flows: list[dict[str, Any]] = []
+    flows: list[ConfigFlowResult] = []
     for flow in hass.config_entries.flow.async_progress_by_handler(entry.domain):
         context = flow.get("context") or {}
         if context.get("source") != SOURCE_REAUTH:

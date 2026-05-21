@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+import sys
+import types
 import unittest
 
 
@@ -12,7 +14,19 @@ PROTOCOL = ROOT / "custom_components" / "stiebel_dhe_connect" / "protocol.py"
 
 
 def _load_protocol():
-    spec = importlib.util.spec_from_file_location("protocol", PROTOCOL)
+    package_root = ROOT / "custom_components"
+    root_module = sys.modules.get("custom_components")
+    if root_module is None:
+        root_module = types.ModuleType("custom_components")
+        root_module.__path__ = [str(package_root)]  # type: ignore[attr-defined]
+        sys.modules["custom_components"] = root_module
+    package_name = "custom_components.stiebel_dhe_connect"
+    package = sys.modules.get(package_name)
+    if package is None:
+        package = types.ModuleType(package_name)
+        package.__path__ = [str(package_root / "stiebel_dhe_connect")]  # type: ignore[attr-defined]
+        sys.modules[package_name] = package
+    spec = importlib.util.spec_from_file_location(f"{package_name}.protocol", PROTOCOL)
     assert spec is not None
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
@@ -32,7 +46,6 @@ class TestODBProtocolConstants(unittest.TestCase):
         self.assertIn(self.protocol.ID_SETPOINT, known_ids)
         self.assertIn(self.protocol.ID_DEVICE_STATUS, known_ids)
         self.assertIn(self.protocol.ID_WELLNESS_TIME_NORMALIZED, known_ids)
-        self.assertIn(self.protocol.ID_CURRENCY_MODE, known_ids)
         self.assertIn(self.protocol.ID_SETPOINT_REQUEST, known_ids)
 
     def test_odb_handler_groups_cover_expected_ids(self) -> None:
@@ -59,7 +72,7 @@ class TestODBProtocolConstants(unittest.TestCase):
         )
         self.assertEqual(
             ignored,
-            {self.protocol.ID_CURRENCY_MODE, self.protocol.ID_SETPOINT_REQUEST},
+            {self.protocol.ID_SETPOINT_REQUEST},
         )
 
         combined = direct | tenths_temperature | nonnegative | deciliters | ignored

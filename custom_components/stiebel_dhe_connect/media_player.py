@@ -2,22 +2,15 @@
 
 from __future__ import annotations
 
+from importlib import import_module
+from typing import TYPE_CHECKING
 from typing import Any
 
-from homeassistant.components.media_player import MediaPlayerEntity
-
-try:
-    from homeassistant.components.media_player import MediaPlayerEntityFeature
-except ImportError:  # pragma: no cover - compatibility with older HA versions
-    from homeassistant.components.media_player.const import MediaPlayerEntityFeature
-
-try:
-    from homeassistant.components.media_player import MediaPlayerState
-except ImportError:  # pragma: no cover - compatibility with older HA versions
-    try:
-        from homeassistant.components.media_player.const import MediaPlayerState
-    except ImportError:  # pragma: no cover - compatibility with much older HA versions
-        MediaPlayerState = None
+from homeassistant.components.media_player import (
+    MediaPlayerEntity,
+)
+if TYPE_CHECKING:
+    from homeassistant.components.media_player.const import MediaPlayerState
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -35,13 +28,29 @@ from .runtime_helpers import get_runtime_data
 
 PARALLEL_UPDATES = 0
 
-STATE_OFF = (
-    MediaPlayerState.OFF
-    if MediaPlayerState is not None and hasattr(MediaPlayerState, "OFF")
-    else "off"
-)
-STATE_PAUSED = MediaPlayerState.PAUSED if MediaPlayerState is not None else "paused"
-STATE_PLAYING = MediaPlayerState.PLAYING if MediaPlayerState is not None else "playing"
+
+def _media_player_attr(class_name: str, attr_name: str, fallback: Any) -> Any:
+    """Return a media-player const value across HA module layouts."""
+    for module_name in (
+        "homeassistant.components.media_player",
+        "homeassistant.components.media_player.const",
+    ):
+        try:
+            cls = getattr(import_module(module_name), class_name)
+        except (AttributeError, ImportError):
+            continue
+        return getattr(cls, attr_name, fallback)
+    return fallback
+
+
+def _media_player_feature(name: str) -> Any:
+    """Return one media-player feature flag when the HA version exposes it."""
+    return _media_player_attr("MediaPlayerEntityFeature", name, 0)
+
+
+STATE_OFF: Any = _media_player_attr("MediaPlayerState", "OFF", "off")
+STATE_PAUSED: Any = _media_player_attr("MediaPlayerState", "PAUSED", "paused")
+STATE_PLAYING: Any = _media_player_attr("MediaPlayerState", "PLAYING", "playing")
 
 
 def _state_key(state: Any) -> str:
@@ -83,14 +92,14 @@ class StiebelDHERadioMediaPlayer(
     _attr_icon = "mdi:radio"
     _attr_should_poll = False
     _attr_supported_features = (
-        MediaPlayerEntityFeature.PLAY
-        | MediaPlayerEntityFeature.PAUSE
-        | MediaPlayerEntityFeature.TURN_ON
-        | MediaPlayerEntityFeature.TURN_OFF
-        | MediaPlayerEntityFeature.VOLUME_SET
-        | MediaPlayerEntityFeature.SELECT_SOURCE
-        | MediaPlayerEntityFeature.NEXT_TRACK
-        | MediaPlayerEntityFeature.PREVIOUS_TRACK
+        _media_player_feature("PLAY")
+        | _media_player_feature("PAUSE")
+        | _media_player_feature("TURN_ON")
+        | _media_player_feature("TURN_OFF")
+        | _media_player_feature("VOLUME_SET")
+        | _media_player_feature("SELECT_SOURCE")
+        | _media_player_feature("NEXT_TRACK")
+        | _media_player_feature("PREVIOUS_TRACK")
     )
     _attr_translation_key = "radio"
     _unrecorded_attributes = frozenset({"favorites"})
@@ -112,7 +121,7 @@ class StiebelDHERadioMediaPlayer(
         self._attr_media_title: str | None = None
         self._attr_source: str | None = None
         self._attr_source_list: list[str] = []
-        self._attr_state: str | None = None
+        self._attr_state: MediaPlayerState | None = None
         self._attr_volume_level: float | None = None
         self._have_radio_state = False
         self._radio_off_requested = False
@@ -199,7 +208,7 @@ class StiebelDHERadioMediaPlayer(
         self,
         playing: bool,
         *,
-        state: str | None = None,
+        state: MediaPlayerState | None = None,
         off_requested: bool = False,
     ) -> None:
         try:

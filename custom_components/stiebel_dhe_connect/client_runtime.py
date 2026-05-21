@@ -57,8 +57,6 @@ from .protocol import (
     APP_TIMER_VALUE_COMMANDS,
     CO2_EMISSION_RAW_MAX,
     CONSUMPTION_COMMAND_IDS,
-    CURRENCY_GET_COMMAND,
-    CURRENCY_SET_COMMAND,
     DEVICE_INFO_COMMAND_IDS,
     ID_BATH_FILL_ACTIVE,
     ID_BATH_FILL_CURRENT_VOLUME,
@@ -256,10 +254,6 @@ class DHEClientRuntimeMixin(DHEClientRuntimeMediaMixin, DHEClientRuntimeAppMixin
         if command in DEVICE_INFO_COMMAND_IDS:
             self._record_runtime_parser_category("device_info")
             self._handle_device_info_value(command, value)
-            return
-        if command in {CURRENCY_GET_COMMAND, CURRENCY_SET_COMMAND}:
-            self._record_runtime_parser_category("currency")
-            self._handle_currency_value(value, source_command=command)
             return
         if command in APP_STARTUP_SET_COMMANDS:
             self._record_runtime_parser_category("app_startup")

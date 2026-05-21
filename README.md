@@ -14,8 +14,9 @@ The integration talks directly to the DHE web interface on your local network. I
 
 ## Status
 
-- Current version: `1.7.0`
-- Release channel: stable release / Gold-core-oriented release candidate
+- Current version: `1.8.0`
+- Release channel: stable development line with Gold-core-oriented evidence and
+  Platinum-preparation engineering hardening
 - Quality target: Home Assistant Quality Scale Gold-core-oriented validation
   for a custom integration; not an official Home Assistant Core certification
 - Home Assistant UI integration name: `DHE Connect` (kept short for clean
@@ -27,9 +28,9 @@ The integration talks directly to the DHE web interface on your local network. I
 - Scope: multiple configured DHE Connect devices per Home Assistant instance
 
 This is a custom integration and should be used on a trusted local network.
-The `v1.7.0` line is prepared as a Gold-core-oriented custom-integration
-release candidate with Repairs/Reconfigure evidence, not as an official Home
-Assistant Core certification.
+The `v1.8.0` line builds on the Gold-core-oriented custom-integration release
+with strict typing, deterministic runtime validation and Platinum-preparation
+evidence. It is not an official Home Assistant Core certification.
 
 Development and protocol mapping for this release were assisted by OpenAI Codex.
 

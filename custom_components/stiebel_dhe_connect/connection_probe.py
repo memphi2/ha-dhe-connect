@@ -34,7 +34,10 @@ async def async_can_connect(
     url = f"http://{host_for_url(host)}:{port}/"
 
     try:
-        async with session.get(url, timeout=timeout_seconds) as resp:
+        async with session.get(
+            url,
+            timeout=aiohttp.ClientTimeout(total=timeout_seconds),
+        ) as resp:
             await resp.read()
             status = int(resp.status)
             return 200 <= status < 500

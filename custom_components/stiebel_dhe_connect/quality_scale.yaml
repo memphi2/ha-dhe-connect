@@ -87,11 +87,15 @@ rules:
     comment: |
       There is no external communication library that accepts a web session.
   strict-typing:
-    status: todo
+    status: done
     comment: |
-      Typing coverage is broad, but the repository has not enabled a full
-      strict mypy profile yet. Remaining work is tracked in
-      docs/platinum_prep.md.
+      The scoped mypy gate covers every top-level integration module with
+      strict = true, normal import following, extra-checks and unreachable-code
+      checks, without broad missing-import suppression. scripts/check_typing.py
+      fails when a module is missing from the gate or when a stale integration
+      path remains configured. Protocol contracts type the client command,
+      transport, runtime, connection-state and diagnostics mixin surfaces, and
+      mypy verifies the concrete DHEClient against those contracts.
 
 evidence:
   # Explicit Silver mapping: rule -> implementation / tests / documentation.
@@ -339,7 +343,7 @@ evidence:
     diagnostics:
       implementation: >
         Diagnostics export redacted runtime, discovery, reconnect, parser and
-        device summaries.
+        device summaries, including sanitized HTTP/WebSocket URL details.
       tests: >
         tests/test_diagnostics.py covers loaded and unloaded clients plus
         redaction.

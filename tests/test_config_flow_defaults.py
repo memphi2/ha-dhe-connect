@@ -97,12 +97,23 @@ def _install_fake_homeassistant() -> None:
 
     fake_helpers = types.ModuleType("homeassistant.helpers")
     fake_aiohttp_client = types.ModuleType("homeassistant.helpers.aiohttp_client")
+    fake_issue_registry = types.ModuleType("homeassistant.helpers.issue_registry")
+
+    def _async_create_issue(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    def _async_delete_issue(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    fake_issue_registry.async_create_issue = _async_create_issue
+    fake_issue_registry.async_delete_issue = _async_delete_issue
 
     async def async_get_clientsession(*args, **kwargs):  # noqa: ANN001
         return None
 
     fake_aiohttp_client.async_get_clientsession = async_get_clientsession
     fake_helpers.aiohttp_client = fake_aiohttp_client
+    fake_helpers.issue_registry = fake_issue_registry
 
     sys.modules["homeassistant"] = fake_homeassistant
     sys.modules["homeassistant.const"] = fake_homeassistant.const
@@ -110,6 +121,7 @@ def _install_fake_homeassistant() -> None:
     sys.modules["homeassistant.core"] = fake_core
     sys.modules["homeassistant.helpers"] = fake_helpers
     sys.modules["homeassistant.helpers.aiohttp_client"] = fake_aiohttp_client
+    sys.modules["homeassistant.helpers.issue_registry"] = fake_issue_registry
 
 
 def _install_fake_voluptuous() -> None:
@@ -205,7 +217,6 @@ def _install_fake_integration_modules() -> None:
     fake_client.CO2_EMISSION_MAX = 999.0
     fake_client.ELECTRICITY_PRICE_MAX = 999.0
     fake_client.WATER_PRICE_MAX = 999.0
-    fake_client.ID_APP_CURRENCY = "app_currency"
     fake_client.ID_CO2_EMISSION = "id_co2"
     fake_client.ID_ELECTRICITY_PRICE = "id_electricity"
     fake_client.ID_WATER_PRICE = "id_water"
@@ -356,70 +367,43 @@ def _load_config_flow():
 
 
 class TestDeviceSettingsDefaults(_RestoresImportModules, unittest.TestCase):
-    """Validate currency fallbacks for device settings defaults."""
+    """Validate cost and emission settings defaults."""
 
     def setUp(self) -> None:
         super().setUp()
         self.config_flow = _load_config_flow()
 
-    def test_device_settings_defaults_uses_device_currency_when_available(self) -> None:
+    def test_device_settings_defaults_use_current_numeric_values(self) -> None:
+        protocol = sys.modules["custom_components.stiebel_dhe_connect.protocol"]
         client = types.SimpleNamespace(
-            last_measurements={self.config_flow.ID_APP_CURRENCY: "gbp"},
+            last_measurements={
+                protocol.ID_ELECTRICITY_PRICE: 0.21,
+                protocol.ID_WATER_PRICE: 3.4,
+                protocol.ID_CO2_EMISSION: 0.567,
+            },
         )
 
         defaults = self.config_flow._device_settings_defaults(client)
 
-        self.assertEqual(defaults[self.config_flow.ATTR_CURRENCY], "GBP")
+        self.assertEqual(defaults[self.config_flow.ATTR_ELECTRICITY_PRICE], "0.21")
+        self.assertEqual(defaults[self.config_flow.ATTR_WATER_PRICE], "3.4")
+        self.assertEqual(defaults[self.config_flow.ATTR_CO2_EMISSION], "0.567")
 
-    def test_device_settings_defaults_uses_unchanged_when_currency_missing(self) -> None:
+    def test_device_settings_defaults_use_blank_when_values_are_missing(self) -> None:
         client = types.SimpleNamespace(last_measurements={})
 
         defaults = self.config_flow._device_settings_defaults(client)
 
-        self.assertEqual(
-            defaults[self.config_flow.ATTR_CURRENCY],
-            self.config_flow.CURRENCY_UNCHANGED,
-        )
-
-    def test_device_settings_defaults_uses_unchanged_when_currency_is_unset(self) -> None:
-        client = types.SimpleNamespace(
-            last_measurements={self.config_flow.ID_APP_CURRENCY: "UNSET"},
-        )
-
-        defaults = self.config_flow._device_settings_defaults(client)
-
-        self.assertEqual(
-            defaults[self.config_flow.ATTR_CURRENCY],
-            self.config_flow.CURRENCY_UNCHANGED,
-        )
-
-    def test_device_settings_defaults_uses_unchanged_when_currency_not_supported(self) -> None:
-        client = types.SimpleNamespace(
-            last_measurements={self.config_flow.ID_APP_CURRENCY: "JPY"},
-        )
-
-        defaults = self.config_flow._device_settings_defaults(client)
-
-        self.assertEqual(
-            defaults[self.config_flow.ATTR_CURRENCY],
-            self.config_flow.CURRENCY_UNCHANGED,
-        )
-
-    def test_currency_options_keep_german_unchanged_label_utf8(self) -> None:
-        hass = types.SimpleNamespace(config=types.SimpleNamespace(language="de"))
-
-        options = self.config_flow._currency_options(hass)
-
-        label = options[self.config_flow.CURRENCY_UNCHANGED]
-        self.assertEqual(label, "Nicht ändern")
-        self.assertNotIn("Ã", label)
+        self.assertEqual(defaults[self.config_flow.ATTR_ELECTRICITY_PRICE], "")
+        self.assertEqual(defaults[self.config_flow.ATTR_WATER_PRICE], "")
+        self.assertEqual(defaults[self.config_flow.ATTR_CO2_EMISSION], "")
 
 
 class TestDeviceSettingsOptionsFlow(
     _RestoresImportModules,
     unittest.IsolatedAsyncioTestCase,
 ):
-    """Validate device settings options flow does not write unchanged currency."""
+    """Validate device settings options flow writes only explicit values."""
 
     def setUp(self) -> None:
         super().setUp()
@@ -427,7 +411,6 @@ class TestDeviceSettingsOptionsFlow(
         self.flow = self.config_flow.StiebelDHEConnectOptionsFlow()
         self.entry_id = "entry-device-settings"
         self.client = types.SimpleNamespace(
-            set_currency=AsyncMock(),
             set_electricity_price=AsyncMock(),
             set_water_price=AsyncMock(),
             set_co2_emission=AsyncMock(),
@@ -451,7 +434,7 @@ class TestDeviceSettingsOptionsFlow(
             self.flow,
         )
 
-    async def test_device_settings_does_not_write_currency_without_explicit_change(
+    async def test_device_settings_writes_only_provided_values(
         self,
     ) -> None:
         user_input = {self.config_flow.ATTR_ELECTRICITY_PRICE: "0.21"}
@@ -459,7 +442,6 @@ class TestDeviceSettingsOptionsFlow(
         result = await self.flow.async_step_device_settings(user_input=user_input)
 
         self.assertEqual(result["data"], {})
-        self.client.set_currency.assert_not_awaited()
         self.client.set_electricity_price.assert_awaited_once_with(0.21)
         self.client.set_water_price.assert_not_awaited()
         self.client.set_co2_emission.assert_not_awaited()

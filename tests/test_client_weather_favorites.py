@@ -144,6 +144,7 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         client._availability_callbacks = set()
         client._diagnostic_callbacks = set()
         client._diagnostic_state = {}
+        client._diagnostic_callbacks = set()
         client._last_message_monotonic = None
         client._notify_callbacks = Mock()
         client._reconnect_grace_task = grace_task
@@ -2048,6 +2049,73 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         self.assertIs(client._last_radio_state["play"], True)
         self.assertIs(states[-1]["play"], True)
 
+    async def test_runtime_ignores_unknown_radio_and_bad_weather_payloads(
+        self,
+    ) -> None:
+        client_module = _load_client()
+        protocol_module = _load_protocol()
+        DHEClient = client_module.DHEClient
+        client_types = sys.modules[f"{PACKAGE_NAME}.client_types"]
+
+        client = DHEClient.__new__(DHEClient)
+        client._diagnostic_state = {}
+        client._diagnostic_callbacks = set()
+        client._last_message_monotonic = None
+        client._message_count = 0
+        client._runtime_parser_stats = {}
+        client._last_runtime_parser_category = None
+        client._last_app_values = {}
+        client._last_radio_state = {}
+        client._last_radio_stations = []
+        client._last_radio_favorites = []
+        client._last_radio_catalogs = {
+            field: [] for field in protocol_module.RADIO_CATALOG_FIELDS
+        }
+        client._last_radio_genres = []
+        client._radio_catalog_generations = {
+            field: 0 for field in protocol_module.RADIO_CATALOG_FIELDS
+        }
+        client._radio_stations_generation = 0
+        client._radio_favorites_generation = 0
+        client._radio_genres_generation = 0
+        client._radio_callbacks = set()
+        client._last_weather_state = {}
+        client._last_weather_countries = []
+        client._weather_callbacks = set()
+        client._weather_search_generation = 0
+        client._weather_favorites_generation = 0
+        client._weather_countries_generation = 0
+
+        await DHEClient._handle_runtime_event(
+            client,
+            client_types.DHEEvent(
+                "message",
+                {
+                    "command": "set:ste.app.radio:unknownRuntimeField",
+                    "value": {"unexpected": "shape"},
+                },
+            ),
+        )
+        await DHEClient._handle_runtime_event(
+            client,
+            client_types.DHEEvent(
+                "message",
+                {
+                    "command": protocol_module.WEATHER_FORECAST_SET_COMMAND,
+                    "value": "not-a-weather-list",
+                },
+            ),
+        )
+
+        self.assertEqual(client._last_radio_state, {})
+        self.assertEqual(client._last_weather_state, {})
+        self.assertEqual(client._runtime_parser_stats["radio_unhandled"], 1)
+        self.assertEqual(client._runtime_parser_stats["weather_state"], 1)
+        self.assertIn(
+            protocol_module.WEATHER_FORECAST_SET_COMMAND,
+            client._last_app_values,
+        )
+
     def test_invalid_known_odb_readbacks_are_ignored(self) -> None:
         client_module = _load_client()
         protocol_module = _load_protocol()
@@ -2150,7 +2218,10 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
                 source=client_types.ODB_READ_SOURCE_RUNTIME,
             )
 
-        self.assertEqual(client._handle_measurement.call_count, 4)
+        self.assertEqual(
+            client._handle_measurement.call_count,
+            len(protocol_module.ODB_ZERO_REQUEST_READBACK_IGNORE_IDS),
+        )
         for call in client._handle_measurement.call_args_list:
             self.assertEqual(call.args[1], 0.0)
 

@@ -221,6 +221,10 @@ class StiebelDHEBaseSwitch(StiebelDHEEntityMixin, SwitchEntity, RestoreEntity):
             self._client.add_availability_callback(self._handle_availability_update)
         )
 
+    def _handle_measurement_update(self, odb_id: int, value: ODBValue) -> None:
+        """Handle a measurement update in concrete switch subclasses."""
+        raise NotImplementedError
+
     async def _restore_state_from_measurement(self, measurement_id: int) -> None:
         """Restore switch state from the latest client value or HA state."""
         last_value = self._client.last_measurements.get(measurement_id)
