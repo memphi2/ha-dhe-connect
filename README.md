@@ -1,7 +1,7 @@
 # DHE Connect for Home Assistant (Unofficial)
 
 [![Validate](https://github.com/memphi2/ha-dhe-connect/actions/workflows/validate.yml/badge.svg)](https://github.com/memphi2/ha-dhe-connect/actions/workflows/validate.yml)
-[![Quality](https://img.shields.io/badge/Quality-HA%20QS%20Platinum-4CAF50?style=flat-square)](custom_components/stiebel_dhe_connect/quality_scale.yaml)
+[![Quality](https://img.shields.io/badge/Quality-HA%20QS%20Platinum-0366d6?style=flat-square)](custom_components/stiebel_dhe_connect/quality_scale.yaml)
 [![GitHub Release](https://img.shields.io/github/v/tag/memphi2/ha-dhe-connect?sort=semver&label=release)](https://github.com/memphi2/ha-dhe-connect/releases)
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://www.hacs.xyz/)
 [![License MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
