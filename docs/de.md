@@ -4,9 +4,10 @@ Diese Seite ist eine deutschsprachige Einstiegshilfe fuer Installation, Pairing,
 Betrieb und Fehlersuche der inoffiziellen DHE Connect Integration. Die detaillierten
 technischen Tabellen bleiben in den englischen Dokumenten:
 
-Version `1.6.0` ist als bereinigtes Initial Release vorbereitet. Die
-Validierung ist an Home Assistant Quality Scale Silver angelehnt, ist aber keine
-offizielle Zertifizierung als Home-Assistant-Core-Integration.
+Version `1.7.0` ist als Gold-core-orientierter Stable-Release-Kandidat
+vorbereitet. Die Validierung orientiert sich an Home Assistant Quality Scale
+Gold-Core fuer Custom Integrations, ist aber keine offizielle Zertifizierung
+als Home-Assistant-Core-Integration.
 
 - [Entitaeten, Attribute und Services](entities.md)
 - [Troubleshooting](troubleshooting.md)
@@ -45,7 +46,7 @@ Typische Funktionen:
    ```
 
 5. Kategorie `Integration` auswaehlen.
-6. `DHE Connect (Unofficial)` installieren.
+6. `DHE Connect` installieren.
 7. Home Assistant neu starten.
 8. Unter `Einstellungen` -> `Geraete & Dienste` die Integration hinzufuegen.
 
@@ -187,7 +188,10 @@ Dashboard-Auswahllisten erscheint.
 
 Wenn ein Wert nach dem Start noch nie vom DHE gesendet wurde, kann er
 zunaechst `unknown` sein. Das ist besser als ein falscher Nullwert. Sobald das
-DHE den Wert real sendet, uebernimmt die Integration den Runtime-Wert.
+DHE den Wert real sendet, uebernimmt die Integration den Runtime-Wert. Bei
+frisch aktivierten ODB-Gesamt- und Sparwerten passiert das typischerweise nach
+der naechsten echten Warmwasser-Nutzung, weil der DHE den Wert dann erneut
+veroeffentlicht.
 
 ## Recorder und Datenbank
 
@@ -234,6 +238,10 @@ Entitaeten koennen verfuegbar bleiben, waehrend der Diagnosewert
 `Verbindungsstatus` bereits `Verbindet neu` zeigt. Erst nach Ablauf dieser
 Schonfrist werden Live-Entitaeten unavailable, bis wieder frische DHE-Daten
 ankommen.
+Normale DHE-Bedienelemente werden in diesem Zustand blockiert, damit Home
+Assistant keine veralteten Schreibbefehle an ein nicht verfuegbares Geraet
+sendet. Die deaktivierte Entitaet `Repair pairing` bleibt als
+Wiederherstellungs-Ausnahme verfuegbar.
 
 ## Pairing reparieren
 

@@ -23,6 +23,21 @@ ZEROCONF_CHOICE_PREFIX = "zeroconf:"
 
 _MAC_RE = re.compile(r"^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$")
 _COMPACT_MAC_RE = re.compile(r"^[0-9a-f]{12}$")
+_MAC_ID_KEYS = (
+    "wlan_mac",
+    "bluetooth_mac",
+    "mac",
+    "mac_address",
+    "macaddress",
+)
+_STABLE_ID_KEYS = (
+    "device_id",
+    "deviceid",
+    "serial",
+    "serial_no",
+    "serial_number",
+    "unique_id",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +79,73 @@ def device_unique_id_from_info(device_info: Mapping[str, Any]) -> str | None:
         if mac := normalize_mac(device_info.get(key)):
             return mac
     return None
+
+
+def discovery_identity_candidates(discovery_info: Any) -> tuple[str, ...]:
+    """Return normalized stable identity candidates from a Zeroconf payload."""
+    candidates: list[str] = []
+    for key in _MAC_ID_KEYS:
+        mac = normalize_mac(_discovery_identity_value(discovery_info, key))
+        if mac:
+            candidates.append(mac)
+    for key in _STABLE_ID_KEYS:
+        stable_id = _normalize_stable_device_id(
+            _discovery_identity_value(discovery_info, key)
+        )
+        if stable_id:
+            candidates.append(stable_id)
+    return tuple(dict.fromkeys(candidates))
+
+
+def _discovery_identity_value(discovery_info: Any, key: str) -> Any:
+    """Return one identity value from direct attributes or Zeroconf properties."""
+    direct = getattr(discovery_info, key, None)
+    if direct not in (None, ""):
+        return direct
+    properties = _discovery_properties(discovery_info)
+    value = properties.get(key)
+    if value not in (None, ""):
+        return value
+    return properties.get(key.replace("_", ""))
+
+
+def _discovery_properties(discovery_info: Any) -> dict[str, str]:
+    """Return normalized Zeroconf properties for one discovery payload."""
+    raw = (
+        getattr(discovery_info, "decoded_properties", None)
+        or getattr(discovery_info, "properties", None)
+        or {}
+    )
+    if not isinstance(raw, Mapping):
+        return {}
+    properties: dict[str, str] = {}
+    for key, value in raw.items():
+        normalized_key = _normalize_property_text(key)
+        normalized_value = _normalize_property_text(value)
+        if not normalized_key or not normalized_value:
+            continue
+        properties[normalized_key] = normalized_value
+    return properties
+
+
+def _normalize_property_text(value: Any) -> str:
+    """Return normalized property text from bytes/str Zeroconf fields."""
+    if isinstance(value, bytes):
+        text = value.decode("utf-8", "ignore")
+    else:
+        text = str(value or "")
+    return text.strip().lower()
+
+
+def _normalize_stable_device_id(value: Any) -> str | None:
+    """Return a normalized non-MAC discovery identity candidate."""
+    text = _normalize_property_text(value)
+    if not text:
+        return None
+    text = text.replace(" ", "")
+    if len(text) < 6:
+        return None
+    return text
 
 
 def coerce_setup_pairing_result(result: Any) -> SetupPairingResult:

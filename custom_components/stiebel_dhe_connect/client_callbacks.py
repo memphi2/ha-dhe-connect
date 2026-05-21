@@ -20,6 +20,7 @@ from .client_types import (
     WeatherCallback,
     WellnessProgramsCallback,
 )
+from .async_helpers import create_background_task
 from .protocol import TEMPERATURE_MEMORY_SLOT_MEASUREMENTS
 
 if TYPE_CHECKING:
@@ -158,7 +159,4 @@ class DHEClientCallbacksMixin:
         _LOGGER.debug("DHE %s callback raised an exception", callback_name, exc_info=True)
 
     def _create_background_task(self, coro: Any, name: str) -> asyncio.Task[Any]:
-        create_background_task = getattr(self.hass, "async_create_background_task", None)
-        if create_background_task is not None:
-            return create_background_task(coro, name)
-        return self.hass.async_create_task(coro, name=name)
+        return create_background_task(self.hass, coro, name)

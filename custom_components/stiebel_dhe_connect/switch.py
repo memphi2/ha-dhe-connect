@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .action_error_helpers import dhe_action_error
+from .action_error_helpers import dhe_action_error, raise_if_dhe_unavailable
 from .client import DHEClient
 from .client_types import DHEError, ODBValue
 from .entity_helpers import StiebelDHEEntityMixin
@@ -306,6 +306,10 @@ class StiebelDHEODBSwitch(StiebelDHEBaseSwitch):
         action: str,
     ) -> None:
         try:
+            raise_if_dhe_unavailable(
+                self._client,
+                f"DHE is unavailable; cannot {action} switch {self.entity_description.key}",
+            )
             setter = getattr(self._client, setter_name)
             self._attr_is_on = bool(await setter(*setter_args))
         except DHEError as err:
@@ -366,6 +370,10 @@ class StiebelDHEAppTimerSwitch(StiebelDHEBaseSwitch):
 
     async def _set_enabled(self, enabled: bool) -> None:
         try:
+            raise_if_dhe_unavailable(
+                self._client,
+                f"DHE is unavailable; cannot set app timer {self.entity_description.key}",
+            )
             setter = getattr(self._client, self.entity_description.setter)
             self._attr_is_on = await setter(enabled)
         except DHEError as err:
@@ -478,6 +486,10 @@ class StiebelDHEWellnessShowerProgramSwitch(
 
     async def async_turn_on(self, **kwargs) -> None:  # noqa: ANN003
         try:
+            raise_if_dhe_unavailable(
+                self._client,
+                f"DHE is unavailable; cannot start wellness program {self.entity_description.key}",
+            )
             await self._client.set_wellness_shower_program(
                 self.entity_description.program_id
             )
@@ -494,6 +506,10 @@ class StiebelDHEWellnessShowerProgramSwitch(
 
     async def async_turn_off(self, **kwargs) -> None:  # noqa: ANN003
         try:
+            raise_if_dhe_unavailable(
+                self._client,
+                f"DHE is unavailable; cannot stop wellness program {self.entity_description.key}",
+            )
             await self._client.stop_wellness_shower_program()
             self._attr_is_on = False
         except DHEError as err:

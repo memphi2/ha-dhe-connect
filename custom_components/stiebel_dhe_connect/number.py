@@ -16,7 +16,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .action_error_helpers import dhe_action_error
+from .action_error_helpers import dhe_action_error, raise_if_dhe_unavailable
 from .client import DHEClient
 from .client_types import DHEError, MeasurementValue
 from .config_entry_helpers import merged_entry_data
@@ -404,6 +404,10 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
             return
 
         try:
+            raise_if_dhe_unavailable(
+                self._client,
+                f"DHE is unavailable; cannot set number {self.entity_description.key}",
+            )
             if self.entity_description.odb_id == ID_BATH_FILL_TARGET_VOLUME:
                 confirmed = await self._client.set_bath_fill_target_volume(client_value)
             elif self.entity_description.odb_id == ID_CHILD_SAFETY_TEMPERATURE_LIMIT:

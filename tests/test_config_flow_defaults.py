@@ -495,10 +495,18 @@ class TestConnectionOptionsConnectivity(
                 return self._entries
 
         self.flow.config_entry = self.config_entry
+
+        async def _async_add_executor_job(func, *args):  # noqa: ANN001
+            return func(*args)
+
         self.flow.hass = types.SimpleNamespace(
-            config=types.SimpleNamespace(language="en"),
+            config=types.SimpleNamespace(
+                language="en",
+                path=lambda path: str(ROOT / ".tmp-test-config" / path),
+            ),
             config_entries=_ConfigEntries([]),
             data={},
+            async_add_executor_job=_async_add_executor_job,
         )
         self.flow.async_show_form = types.MethodType(
             lambda _self, **kwargs: {
@@ -569,7 +577,7 @@ class TestConnectionOptionsConnectivity(
             "50",
         )
 
-    async def test_connection_step_enters_pairing_when_target_changed_and_connects(
+    async def test_connection_step_updates_options_when_target_changed_and_connects(
         self,
     ) -> None:
         self.config_flow._can_connect = AsyncMock(return_value=True)
@@ -588,8 +596,9 @@ class TestConnectionOptionsConnectivity(
             "other.local",
             80,
         )
-        self.assertEqual(result["type"], "form")
-        self.assertEqual(result["step_id"], "connection_pairing_confirm")
+        self.assertEqual(result["type"], "create_entry")
+        self.assertEqual(result["data"][self.config_flow.CONF_HOST], "other.local")
+        self.assertEqual(result["data"][self.config_flow.CONF_NAME], "DHE 2")
 
 
 class TestSetupScanConfigFlow(

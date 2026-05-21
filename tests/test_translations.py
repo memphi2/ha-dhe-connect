@@ -67,6 +67,46 @@ class TestTranslations(unittest.TestCase):
             "Tatsächliche Wassereinsparung",
         )
 
+    def test_required_flow_and_issue_keys_exist_in_en_and_de(self) -> None:
+        required_config_errors = {
+            "cannot_connect",
+            "invalid_internal_scald_protection",
+            "invalid_port",
+            "invalid_setup_mode",
+        }
+        required_config_aborts = {
+            "already_configured",
+            "conflicting_discovery_identity",
+            "invalid_discovery_parameters",
+            "low_confidence_discovery",
+        }
+        required_options_errors = {
+            "device_settings_failed",
+            "not_loaded",
+        }
+        required_issue_fix_flow_aborts = {
+            "entry_not_found",
+            "invalid_entry",
+        }
+
+        for locale in ("en", "de"):
+            data = json.loads((TRANSLATIONS / f"{locale}.json").read_text(encoding="utf-8"))
+            self.assertTrue(required_config_errors <= set(data["config"]["error"]))
+            self.assertTrue(required_config_aborts <= set(data["config"]["abort"]))
+            self.assertTrue(required_options_errors <= set(data["options"]["error"]))
+
+            issue_pairing = data["issues"]["pairing_required"]["fix_flow"]["abort"]
+            issue_token = data["issues"]["token_invalid"]["fix_flow"]["abort"]
+            self.assertTrue(required_issue_fix_flow_aborts <= set(issue_pairing))
+            self.assertTrue(required_issue_fix_flow_aborts <= set(issue_token))
+
+    def test_action_exception_translation_keys_exist_in_en_and_de(self) -> None:
+        for locale in ("en", "de"):
+            data = json.loads((TRANSLATIONS / f"{locale}.json").read_text(encoding="utf-8"))
+            exceptions = data["exceptions"]
+            self.assertIn("dhe_action_failed", exceptions)
+            self.assertIn("dhe_unavailable_action", exceptions)
+
 
 if __name__ == "__main__":
     unittest.main()

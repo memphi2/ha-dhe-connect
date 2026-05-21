@@ -58,6 +58,16 @@
       "reauth_confirm": {
         "title": "Repair DHE pairing",
         "description": "Click OK now to request a new local pairing token. Confirm the pairing request on the DHE display. The existing integration is reloaded after successful pairing and login."
+      },
+      "reconfigure": {
+        "title": "Reconfigure DHE Connect",
+        "description": "Update the DHE host, port, device name and physical Tmax jumper position. If host or port changes, Home Assistant checks that the new target is reachable and preserves the existing local token.",
+        "data": {
+          "host": "IP address or hostname",
+          "port": "Port",
+          "name": "Device name",
+          "internal_scald_protection": "Internal scald protection (Tmax jumper)"
+        }
       }
     },
     "progress": {
@@ -91,13 +101,66 @@
       "recently_discovered": "This DHE Connect was discovered recently. Start setup manually to use the cached discovery.",
       "invalid_discovery_parameters": "The discovered DHE Connect did not provide a valid host or port.",
       "invalid_reauth_entry": "The existing DHE Connect entry cannot be reauthenticated.",
-      "reauth_successful": "DHE pairing was repaired successfully."
+      "reauth_successful": "DHE pairing was repaired successfully.",
+      "reconfigure_successful": "DHE Connect was reconfigured successfully."
+    }
+  },
+  "issues": {
+    "pairing_required": {
+      "title": "DHE pairing needs repair",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Repair DHE pairing",
+            "description": "Click OK now to request and validate a new local pairing token for **{name}** at `{host}:{port}`. Confirm the pairing request on the DHE display."
+          }
+        },
+        "abort": {
+          "entry_not_found": "The DHE Connect entry no longer exists.",
+          "invalid_entry": "The DHE Connect entry has no valid host or port."
+        }
+      }
+    },
+    "token_invalid": {
+      "title": "DHE token is invalid",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Repair DHE pairing",
+            "description": "The stored token for **{name}** at `{host}:{port}` is no longer accepted by the DHE. Click OK to request and validate a new local pairing token, then confirm pairing on the DHE display."
+          }
+        },
+        "abort": {
+          "entry_not_found": "The DHE Connect entry no longer exists.",
+          "invalid_entry": "The DHE Connect entry has no valid host or port."
+        }
+      }
+    },
+    "device_unreachable": {
+      "title": "DHE device is unreachable",
+      "description": "Home Assistant cannot reach **{name}** at `{host}:{port}`. Check power, network routing/firewall and whether the DHE web interface is reachable from the Home Assistant host."
+    },
+    "discovery_conflict": {
+      "title": "DHE discovery conflict detected",
+      "description": "Home Assistant detected conflicting discovery identity hints for **{name}**. Use the existing configured entry or complete setup manually by entering a stable host/IP and port."
+    },
+    "host_changed_or_unreachable": {
+      "title": "Configured DHE host is unreachable",
+      "description": "The configured target `{host}:{port}` for **{name}** is unreachable. Verify host/port and network path, then use Reconfigure to correct the target if needed."
+    }
+  },
+  "exceptions": {
+    "dhe_action_failed": {
+      "message": "{operation}: {error}"
+    },
+    "dhe_unavailable_action": {
+      "message": "{operation}"
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Configure DHE Connect (Unofficial)",
+        "title": "Configure DHE Connect",
         "description": "Manage connection settings, device, costs, weather favorites or radio stations.",
         "menu_options": {
           "connection": "Connection/device",
@@ -110,17 +173,13 @@
       },
       "connection": {
         "title": "Configure connection/device",
-        "description": "Change IP address, port, device name and physical Tmax jumper position.",
+        "description": "Change IP address, port, device name and physical Tmax jumper position. Host or port changes keep the existing local token and are checked for reachability before saving.",
         "data": {
           "host": "IP address or hostname",
           "port": "Port",
           "name": "Device name",
           "internal_scald_protection": "Internal scald protection (Tmax jumper)"
         }
-      },
-      "connection_pairing_confirm": {
-        "title": "Confirm pairing",
-        "description": "Click OK now. Because the DHE host or port changed, the integration validates pairing and login for the new target before saving the options. Confirm the pairing request on the DHE device display."
       },
       "device_settings": {
         "title": "Costs & emissions",
@@ -567,6 +626,7 @@
         "name": "Connection state",
         "state": {
           "starting": "Starting",
+          "initializing": "Initializing",
           "connected": "Connected",
           "reconnecting": "Reconnecting",
           "pairing_failed_waiting_manual_retry": "Pairing failed (manual retry required)",

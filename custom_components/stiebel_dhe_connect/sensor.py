@@ -33,6 +33,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .client import DHEClient
 from .client_types import DHEError, MeasurementValue
 from .client_web_version import WEB_INTERFACE_VERSION_SOURCE
+from .async_helpers import create_background_task
 from .client_mapping import (
     DEVICE_STATUS_OPTIONS,
     DEVICE_STATUS_SERVICE_REQUIRED as _DEVICE_STATUS_SERVICE_REQUIRED,
@@ -321,7 +322,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         translation_key="odb_possible_energy_saving",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
+        state_class=SensorStateClass.TOTAL,
         icon="mdi:lightning-bolt-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
@@ -333,7 +334,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         translation_key="odb_actual_water_saving",
         native_unit_of_measurement=UnitOfVolume.CUBIC_METERS,
         device_class=SensorDeviceClass.WATER,
-        state_class=SensorStateClass.MEASUREMENT,
+        state_class=SensorStateClass.TOTAL,
         icon="mdi:water-percent",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
@@ -763,7 +764,8 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
         if hass is None:
             return
 
-        task = hass.async_create_task(
+        task = create_background_task(
+            hass,
             self._async_refresh_missing_measurement(),
             name=f"stiebel_dhe_connect_refresh_{self.entity_description.key}",
         )
@@ -956,7 +958,8 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
         if hass is None:
             return
 
-        task = hass.async_create_task(
+        task = create_background_task(
+            hass,
             self._async_timer_countdown(),
             name=f"stiebel_dhe_connect_timer_countdown_{self.entity_description.key}",
         )

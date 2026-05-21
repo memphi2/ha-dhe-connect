@@ -27,7 +27,9 @@ def _load_entity_helpers():
 class FakeClient:
     host: str
     port: int
+    device_identifier: str | None = None
     legacy_device_identifier: str | None = None
+    legacy_device_identifiers: set[str] | None = None
 
 
 class TestEntityHelpers(unittest.TestCase):
@@ -88,7 +90,24 @@ class TestEntityHelpers(unittest.TestCase):
             ((66, 1), (70, 2)),
         )
 
-    def test_build_device_info_uses_host_port_identifier(self) -> None:
+    def test_build_device_info_uses_stable_identifier_when_available(self) -> None:
+        self.assertEqual(
+            self.helpers.build_device_info(
+                "192.0.2.5",
+                8443,
+                "Bathroom DHE",
+                "device:aa:bb:cc:dd:ee:ff",
+            ),
+            {
+                "identifiers": {
+                    ("stiebel_dhe_connect", "device:aa:bb:cc:dd:ee:ff")
+                },
+                "model": "DHE Connect",
+                "name": "Bathroom DHE",
+            },
+        )
+
+    def test_build_device_info_falls_back_to_host_port_identifier(self) -> None:
         self.assertEqual(
             self.helpers.build_device_info("192.0.2.5", 8443, "Bathroom DHE"),
             {
@@ -98,19 +117,22 @@ class TestEntityHelpers(unittest.TestCase):
             },
         )
 
-    def test_build_device_info_can_preserve_legacy_identifier(self) -> None:
+    def test_build_device_info_can_preserve_legacy_identifiers(self) -> None:
         device_info = self.helpers.build_device_info(
             "192.0.2.5",
             9443,
             "Bathroom DHE",
+            "entry:abc",
             "192.0.2.5",
+            {"192.0.2.5:8443"},
         )
 
         self.assertEqual(
             device_info["identifiers"],
             {
+                ("stiebel_dhe_connect", "entry:abc"),
                 ("stiebel_dhe_connect", "192.0.2.5"),
-                ("stiebel_dhe_connect", "192.0.2.5:9443"),
+                ("stiebel_dhe_connect", "192.0.2.5:8443"),
             },
         )
 
@@ -121,7 +143,9 @@ class TestEntityHelpers(unittest.TestCase):
         client = FakeClient(
             host="dhe.local",
             port=8443,
+            device_identifier="device:aa:bb:cc:dd:ee:ff",
             legacy_device_identifier="dhe.local",
+            legacy_device_identifiers={"192.0.2.5:8443"},
         )
         entity = DummyEntity()
 
@@ -138,8 +162,9 @@ class TestEntityHelpers(unittest.TestCase):
         self.assertEqual(
             entity._attr_device_info["identifiers"],
             {
+                ("stiebel_dhe_connect", "device:aa:bb:cc:dd:ee:ff"),
                 ("stiebel_dhe_connect", "dhe.local"),
-                ("stiebel_dhe_connect", "dhe.local:8443"),
+                ("stiebel_dhe_connect", "192.0.2.5:8443"),
             },
         )
 

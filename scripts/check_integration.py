@@ -45,6 +45,10 @@ SILVER_RULES = {
     "reauthentication-flow",
     "test-coverage",
 }
+GOLD_CORE_RULES = {
+    "reconfiguration-flow",
+    "repair-issues",
+}
 PINNED_VALIDATION_ACTIONS = {
     "actions/checkout",
     "actions/setup-python",
@@ -103,7 +107,7 @@ def check_manifest() -> str:
     manifest = _load_json(INTEGRATION / "manifest.json")
     required = {
         "domain": "stiebel_dhe_connect",
-        "name": "DHE Connect (Unofficial)",
+        "name": "DHE Connect",
         "config_flow": True,
         "iot_class": "local_push",
         "integration_type": "device",
@@ -121,7 +125,7 @@ def check_manifest() -> str:
 
 def check_hacs() -> None:
     hacs = _load_json(ROOT / "hacs.json")
-    if hacs.get("name") != "DHE Connect (Unofficial)":
+    if hacs.get("name") != "DHE Connect":
         _fail("hacs.json name does not match the integration name")
     if hacs.get("render_readme") is not True:
         _fail("hacs.json render_readme must be true")
@@ -139,6 +143,9 @@ def check_repository_files(version: str) -> None:
         "custom_components/stiebel_dhe_connect/brand/logo.png",
         "docs/troubleshooting.md",
         "docs/validation.md",
+        "docs/examples.md",
+        "docs/use-cases.md",
+        "docs/known_limitations.md",
         "docs/legal.md",
     ):
         if not (ROOT / relative).exists():
@@ -153,6 +160,12 @@ def check_repository_files(version: str) -> None:
         _fail("README troubleshooting reference points to docs/troubleshooting.md")
     if "[docs/validation.md](docs/validation.md)" not in readme:
         _fail("README validation reference points to docs/validation.md")
+    if "[docs/examples.md](docs/examples.md)" not in readme:
+        _fail("README examples reference points to docs/examples.md")
+    if "[docs/use-cases.md](docs/use-cases.md)" not in readme:
+        _fail("README use-cases reference points to docs/use-cases.md")
+    if "[docs/known_limitations.md](docs/known_limitations.md)" not in readme:
+        _fail("README known-limitations reference points to docs/known_limitations.md")
     if "[docs/legal.md](docs/legal.md)" not in readme:
         _fail("README legal reference points to docs/legal.md")
     if "### Removal" not in readme:
@@ -179,12 +192,12 @@ def _quality_scale_done_rules(text: str) -> set[str]:
 
 
 def check_quality_scale() -> None:
-    """Ensure the tracked Home Assistant Silver rules stay marked as done."""
+    """Ensure tracked Home Assistant Silver and Gold-core rules stay done."""
     path = INTEGRATION / "quality_scale.yaml"
     done = _quality_scale_done_rules(path.read_text(encoding="utf-8"))
-    missing = sorted(SILVER_RULES - done)
+    missing = sorted((SILVER_RULES | GOLD_CORE_RULES) - done)
     if missing:
-        _fail(f"quality_scale.yaml is missing Silver done rules: {missing}")
+        _fail(f"quality_scale.yaml is missing required done rules: {missing}")
 
 
 def check_github_actions() -> None:

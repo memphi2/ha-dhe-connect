@@ -72,7 +72,13 @@ class DHEClientRuntimeMediaMixin:
             *args: Any,
         ) -> None: ...
 
-    def _handle_radio_value(self, command: str, raw_value: Any) -> None:
+    def _handle_radio_value(
+        self,
+        command: str,
+        raw_value: Any,
+        *,
+        requested_readback: bool = False,
+    ) -> None:
         field = command.rsplit(":", 1)[-1]
         value: Any
         if field == "volume":
@@ -96,14 +102,45 @@ class DHEClientRuntimeMediaMixin:
             value = "" if raw_value is None else str(raw_value)
 
         self._last_app_values[command] = raw_value
-        if self._last_radio_state.get(field) == value:
+        changed = self._last_radio_state.get(field) != value
+        if changed:
+            self._last_radio_state[field] = value
+        if self._infer_radio_playing_from_device_update(
+            field,
+            value,
+            requested_readback=requested_readback,
+        ):
+            changed = True
+        if not changed:
             return
-        self._last_radio_state[field] = value
         self._notify_callbacks(
             "radio",
             self._radio_callbacks,
             self._copy_radio_state(),
         )
+
+    def _infer_radio_playing_from_device_update(
+        self,
+        field: str,
+        value: Any,
+        *,
+        requested_readback: bool,
+    ) -> bool:
+        """Infer playback when the DHE pushes live radio metadata from the device."""
+        if requested_readback:
+            return False
+        if field == "station":
+            if not isinstance(value, dict) or _radio_station_id(value) is None:
+                return False
+        elif field == "title":
+            if not str(value).strip():
+                return False
+        else:
+            return False
+        if self._last_radio_state.get("play") is True:
+            return False
+        self._last_radio_state["play"] = True
+        return True
 
     def _handle_radio_catalog_value(self, command: str, raw_value: Any) -> None:
         self._last_app_values[command] = _summarize_radio_value(raw_value)

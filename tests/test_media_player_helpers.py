@@ -70,6 +70,16 @@ def _ensure_additional_ha_stubs() -> None:
         exceptions_module.HomeAssistantError = HomeAssistantError
         sys.modules["homeassistant.exceptions"] = exceptions_module
 
+    if "homeassistant.helpers.restore_state" not in sys.modules:
+        restore_state_module = types.ModuleType("homeassistant.helpers.restore_state")
+
+        class RestoreEntity:
+            async def async_get_last_state(self):
+                return None
+
+        restore_state_module.RestoreEntity = RestoreEntity
+        sys.modules["homeassistant.helpers.restore_state"] = restore_state_module
+
 
 def _load_component_module(module_name: str):
     _ensure_aiohttp_stub()
@@ -160,7 +170,10 @@ class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
         player = media_player.StiebelDHERadioMediaPlayer.__new__(
             media_player.StiebelDHERadioMediaPlayer
         )
-        player._client = types.SimpleNamespace(set_radio_play=AsyncMock(return_value=False))
+        player._client = types.SimpleNamespace(
+            available=True,
+            set_radio_play=AsyncMock(return_value=False),
+        )
         player.async_write_ha_state = Mock()
 
         await player.async_turn_off()
@@ -175,7 +188,10 @@ class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
         player = media_player.StiebelDHERadioMediaPlayer.__new__(
             media_player.StiebelDHERadioMediaPlayer
         )
-        player._client = types.SimpleNamespace(set_radio_play=AsyncMock(return_value=False))
+        player._client = types.SimpleNamespace(
+            available=True,
+            set_radio_play=AsyncMock(return_value=False),
+        )
         player.async_write_ha_state = Mock()
 
         await player.async_media_pause()
@@ -191,6 +207,7 @@ class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
             media_player.StiebelDHERadioMediaPlayer
         )
         player._client = types.SimpleNamespace(
+            available=True,
             select_radio_station=AsyncMock(return_value=None)
         )
         player._sources_by_option = {"WDR 2": station}
@@ -202,6 +219,7 @@ class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
 
         player._client.select_radio_station.assert_awaited_once_with(station)
         self.assertEqual(player._attr_source, "WDR 2")
+        self.assertEqual(player._attr_state, media_player.STATE_PLAYING)
         self.assertFalse(player._radio_off_requested)
         player.async_write_ha_state.assert_called_once()
 
@@ -211,6 +229,7 @@ class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
             media_player.StiebelDHERadioMediaPlayer
         )
         player._client = types.SimpleNamespace(
+            available=True,
             set_radio_volume=AsyncMock(
                 side_effect=media_player.DHEError("write failed")
             )
@@ -222,6 +241,26 @@ class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
             "Could not set DHE radio volume",
         ):
             await player.async_set_volume_level(0.5)
+
+    async def test_unavailable_play_action_raises_without_client_call(self) -> None:
+        media_player = _load_media_player_module()
+        player = media_player.StiebelDHERadioMediaPlayer.__new__(
+            media_player.StiebelDHERadioMediaPlayer
+        )
+        set_radio_play = AsyncMock(return_value=True)
+        player._client = types.SimpleNamespace(
+            available=False,
+            set_radio_play=set_radio_play,
+        )
+        player.async_write_ha_state = Mock()
+
+        with self.assertRaisesRegex(
+            media_player.HomeAssistantError,
+            "DHE is unavailable",
+        ):
+            await player.async_media_play()
+
+        set_radio_play.assert_not_awaited()
 
     def test_playback_update_preserves_requested_off_state(self) -> None:
         media_player = _load_media_player_module()
@@ -257,7 +296,45 @@ class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(player._attr_state, media_player.STATE_PAUSED)
 
-    def test_startup_metadata_without_play_uses_off_state(self) -> None:
+    async def test_startup_metadata_without_play_restores_previous_playing_state(
+        self,
+    ) -> None:
+        media_player = _load_media_player_module()
+        player = media_player.StiebelDHERadioMediaPlayer.__new__(
+            media_player.StiebelDHERadioMediaPlayer
+        )
+
+        async def _last_state():
+            return types.SimpleNamespace(state="playing")
+
+        player.async_get_last_state = _last_state
+
+        await player._restore_playback_state()
+        player._apply_playback_state({"favorites": [{"Id": 1, "Name": "Radio Test"}]})
+
+        self.assertEqual(player._attr_state, media_player.STATE_PLAYING)
+        self.assertFalse(player._radio_off_requested)
+
+    async def test_startup_metadata_without_play_restores_previous_off_state(
+        self,
+    ) -> None:
+        media_player = _load_media_player_module()
+        player = media_player.StiebelDHERadioMediaPlayer.__new__(
+            media_player.StiebelDHERadioMediaPlayer
+        )
+
+        async def _last_state():
+            return types.SimpleNamespace(state="off")
+
+        player.async_get_last_state = _last_state
+
+        await player._restore_playback_state()
+        player._apply_playback_state({"favorites": [{"Id": 1, "Name": "Radio Test"}]})
+
+        self.assertEqual(player._attr_state, media_player.STATE_OFF)
+        self.assertTrue(player._radio_off_requested)
+
+    def test_startup_metadata_without_restore_uses_off_state(self) -> None:
         media_player = _load_media_player_module()
         player = media_player.StiebelDHERadioMediaPlayer.__new__(
             media_player.StiebelDHERadioMediaPlayer

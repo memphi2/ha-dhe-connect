@@ -71,4 +71,3 @@ def stale_unconfigured_token_paths(
         if path not in normalized_configured_paths:
             paths.add(path)
     return paths
-

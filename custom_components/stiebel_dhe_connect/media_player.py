@@ -23,8 +23,9 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 
-from .action_error_helpers import dhe_action_error
+from .action_error_helpers import dhe_action_error, raise_if_dhe_unavailable
 from .client import DHEClient
 from .client_types import DHEError
 from .entity_helpers import StiebelDHEEntityMixin
@@ -43,6 +44,18 @@ STATE_PAUSED = MediaPlayerState.PAUSED if MediaPlayerState is not None else "pau
 STATE_PLAYING = MediaPlayerState.PLAYING if MediaPlayerState is not None else "playing"
 
 
+def _state_key(state: Any) -> str:
+    """Return the recorder string for a media-player state constant."""
+    return str(getattr(state, "value", state))
+
+
+RESTORABLE_PLAYBACK_STATES = {
+    _state_key(STATE_OFF): STATE_OFF,
+    _state_key(STATE_PAUSED): STATE_PAUSED,
+    _state_key(STATE_PLAYING): STATE_PLAYING,
+}
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -59,7 +72,11 @@ async def async_setup_entry(
     ])
 
 
-class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
+class StiebelDHERadioMediaPlayer(
+    StiebelDHEEntityMixin,
+    MediaPlayerEntity,
+    RestoreEntity,
+):
     """Radio media player backed by the DHE app radio protocol."""
 
     _attr_has_entity_name = True
@@ -108,7 +125,19 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
         self.async_on_remove(
             self._client.add_availability_callback(self._handle_availability_update)
         )
+        await self._restore_playback_state()
         self._apply_radio_state(self._client.last_radio_state)
+
+    async def _restore_playback_state(self) -> None:
+        """Restore the previous HA playback state until the DHE publishes play."""
+        last_state = await self.async_get_last_state()
+        if last_state is None:
+            return
+        restored_state = RESTORABLE_PLAYBACK_STATES.get(_state_key(last_state.state))
+        if restored_state is None:
+            return
+        self._attr_state = restored_state
+        self._radio_off_requested = restored_state == STATE_OFF
 
     async def async_media_play(self) -> None:
         """Start radio playback."""
@@ -129,6 +158,10 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
     async def async_set_volume_level(self, volume: float) -> None:
         """Set radio volume."""
         try:
+            raise_if_dhe_unavailable(
+                self._client,
+                "DHE is unavailable; cannot set radio volume",
+            )
             self._attr_volume_level = await self._client.set_radio_volume(volume)
         except DHEError as err:
             raise dhe_action_error("Could not set DHE radio volume", err) from err
@@ -137,6 +170,10 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
 
     async def async_select_source(self, source: str) -> None:
         """Select a DHE radio favorite."""
+        raise_if_dhe_unavailable(
+            self._client,
+            "DHE is unavailable; cannot select radio source",
+        )
         station = self._sources_by_option.get(source)
         if station is None:
             raise HomeAssistantError(f"Unknown DHE radio source: {source}")
@@ -146,6 +183,7 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
             raise dhe_action_error("Could not select DHE radio source", err) from err
         self._attr_source = source
         self._radio_off_requested = False
+        self._attr_state = STATE_PLAYING
         self._attr_available = True
         self._write_radio_state(force=True)
 
@@ -165,6 +203,10 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
         off_requested: bool = False,
     ) -> None:
         try:
+            raise_if_dhe_unavailable(
+                self._client,
+                "DHE is unavailable; cannot set radio playback",
+            )
             accepted_playing = await self._client.set_radio_play(playing)
         except DHEError as err:
             raise dhe_action_error("Could not set DHE radio playback", err) from err
@@ -174,6 +216,10 @@ class StiebelDHERadioMediaPlayer(StiebelDHEEntityMixin, MediaPlayerEntity):
         self._write_radio_state(force=True)
 
     async def _select_relative_source(self, offset: int) -> None:
+        raise_if_dhe_unavailable(
+            self._client,
+            "DHE is unavailable; cannot select radio source",
+        )
         sources = list(self._sources_by_option)
         if not sources:
             raise HomeAssistantError("No DHE radio favorites available")
