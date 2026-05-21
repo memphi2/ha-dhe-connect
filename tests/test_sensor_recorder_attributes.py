@@ -922,6 +922,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
                 "odb_hot_water_volume",
                 "odb_possible_energy_saving",
                 "odb_actual_water_saving",
+                "wellness_runtime_normalized",
             },
         )
         self.assertTrue(all(item.available_without_value for item in descriptions))
@@ -954,6 +955,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
                 "odb_hot_water_volume",
                 "odb_possible_energy_saving",
                 "odb_actual_water_saving",
+                "wellness_runtime_normalized",
             }
         )
 
@@ -1002,7 +1004,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
                 await asyncio.gather(*hass.tasks)
             return sensor, writes, client, hass
 
-        self.assertEqual(len(descriptions), 4)
+        self.assertEqual(len(descriptions), 5)
         for description in descriptions:
             with self.subTest(key=description.key):
                 sensor, writes, client, hass = asyncio.run(_run(description))
@@ -1015,6 +1017,36 @@ class TestSensorRecorderAttributes(unittest.TestCase):
                     odb_id=description.odb_id,
                     app_command=None,
                 )
+
+    def test_zero_guarded_sensor_online_transition_sets_unknown_availability(self) -> None:
+        sensor_module = _load_sensor_module()
+        description = next(
+            item
+            for item in sensor_module.SENSOR_DESCRIPTIONS
+            if item.key == "wellness_runtime_normalized"
+        )
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+            online = False
+
+        sensor = sensor_module.StiebelDHESensor(
+            entry_id="test-entry",
+            name="Test DHE",
+            client=_FakeClient(),
+            description=description,
+        )
+        sensor._attr_native_value = None
+        sensor._attr_available = False
+        writes: list[bool] = []
+        sensor.async_write_ha_state = lambda: writes.append(sensor._attr_available)
+
+        sensor._handle_online_update(True)
+        sensor._handle_online_update(False)
+
+        self.assertEqual(writes, [True, False])
 
     def test_missing_sensor_refresh_runs_when_client_comes_online(self) -> None:
         sensor_module = _load_sensor_module()

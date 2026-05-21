@@ -571,6 +571,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         odb_id=ID_WELLNESS_TIME_NORMALIZED,
+        available_without_value=True,
     ),
     StiebelDHESensorEntityDescription(
         key="device_info",
@@ -739,6 +740,9 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
         self.async_on_remove(
             self._client.add_availability_callback(self._handle_availability_update)
         )
+        add_online_callback = getattr(self._client, "add_online_callback", None)
+        if callable(add_online_callback):
+            self.async_on_remove(add_online_callback(self._handle_online_update))
 
         self._sync_timer_activation_from_client()
         last_value = self._client.last_measurements.get(self.entity_description.odb_id)
@@ -1085,6 +1089,19 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
         self._mark_state_written(recorded_attributes=recorded_attributes)
         self.async_write_ha_state()
         self._schedule_timer_countdown()
+
+    @callback
+    def _handle_online_update(self, online: bool) -> None:
+        """Update unknown-capable sensor availability from online transitions."""
+        if not self.entity_description.available_without_value:
+            return
+        if self._attr_native_value is not None:
+            return
+        next_available = bool(online)
+        if self._attr_available == next_available:
+            return
+        self._attr_available = next_available
+        self.async_write_ha_state()
 
     @callback
     def _handle_availability_update(self, available: bool) -> None:

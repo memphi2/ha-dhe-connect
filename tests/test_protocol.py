@@ -54,6 +54,7 @@ class TestODBProtocolConstants(unittest.TestCase):
                 self.protocol.ID_ODB_HOT_WATER_VOLUME,
                 self.protocol.ID_ODB_POSSIBLE_ENERGY_SAVING,
                 self.protocol.ID_ODB_ACTUAL_WATER_SAVING,
+                self.protocol.ID_WELLNESS_TIME_NORMALIZED,
             },
         )
         self.assertEqual(

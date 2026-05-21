@@ -33,6 +33,9 @@
 - Exposed ODB ID `32` (`ODB_Wellness_Zeit_Norm`) as a disabled diagnostic
   sensor (`wellness_runtime_normalized`) with translations and protocol/entity
   documentation updates.
+- Adjusted ODB `32` startup behavior so the new wellness-runtime sensor stays
+  available as `unknown` (instead of `unavailable`) until a real runtime value
+  arrives.
 
 ## v1.7.0 - 2026-05-21
 

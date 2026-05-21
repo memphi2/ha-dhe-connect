@@ -252,7 +252,7 @@ Mapped ODB values are converted before publishing to Home Assistant:
 | `29` | Raw `kWh` ODB heating energy |
 | `30` | Raw value divided by `10` as `m3` ODB hot water volume |
 | `31` | Raw whole liters as current bath fill volume |
-| `32` | Wellness normalized runtime value (`ODB_Wellness_Zeit_Norm`), exposed as disabled diagnostic sensor `wellness_runtime_normalized` |
+| `32` | Wellness normalized runtime value (`ODB_Wellness_Zeit_Norm`), exposed as disabled diagnostic sensor `wellness_runtime_normalized`; startup/entity-enable direct readback `0` placeholders are ignored |
 | `33` | Inverted heating-disabled flag: raw `0` means water heating enabled, raw `1` means off |
 | `34` | Device status enum; raw `1` = normal, raw `2` = water running, raw `3` = service required, raw `4` observed as a water-running transition |
 | `61` and `70` | Combined to the electricity price options value as euros plus cents; euros `0` to `32767`, cents `0` to `99` |
