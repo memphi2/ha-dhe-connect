@@ -134,6 +134,60 @@ class TestSensorRecorderAttributes(unittest.TestCase):
 
         self.assertEqual(description.icon, "mdi:thermometer-alert")
 
+    def test_wellness_runtime_sensor_maps_odb_32(self) -> None:
+        sensor_module = _load_sensor_module()
+        protocol_module = _load_component_module("protocol")
+        description = next(
+            item
+            for item in sensor_module.SENSOR_DESCRIPTIONS
+            if item.key == "wellness_runtime_normalized"
+        )
+
+        self.assertEqual(
+            description.odb_id,
+            protocol_module.ID_WELLNESS_TIME_NORMALIZED,
+        )
+        self.assertEqual(description.native_unit_of_measurement, "%")
+        self.assertEqual(
+            description.entity_category,
+            sensor_module.EntityCategory.DIAGNOSTIC,
+        )
+        self.assertFalse(description.entity_registry_enabled_default)
+
+    def test_wellness_runtime_sensor_writes_live_updates(self) -> None:
+        sensor_module = _load_sensor_module()
+        protocol_module = _load_component_module("protocol")
+        description = next(
+            item
+            for item in sensor_module.SENSOR_DESCRIPTIONS
+            if item.key == "wellness_runtime_normalized"
+        )
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+            online = True
+            last_measurement_attributes = {}
+
+        sensor = sensor_module.StiebelDHESensor(
+            entry_id="test-entry",
+            name="Test DHE",
+            client=_FakeClient(),
+            description=description,
+        )
+        writes: list[float | str | None] = []
+        sensor.async_write_ha_state = lambda: writes.append(sensor._attr_native_value)
+
+        sensor._handle_measurement_update(
+            protocol_module.ID_WELLNESS_TIME_NORMALIZED,
+            57.3,
+        )
+
+        self.assertEqual(sensor._attr_native_value, 57.3)
+        self.assertTrue(sensor._attr_available)
+        self.assertEqual(writes, [57.3])
+
     def test_attribute_key_sensors_do_not_duplicate_device_info_attributes(self) -> None:
         sensor_module = _load_sensor_module()
         description = next(

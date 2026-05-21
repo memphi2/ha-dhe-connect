@@ -252,7 +252,7 @@ Mapped ODB values are converted before publishing to Home Assistant:
 | `29` | Raw `kWh` ODB heating energy |
 | `30` | Raw value divided by `10` as `m3` ODB hot water volume |
 | `31` | Raw whole liters as current bath fill volume |
-| `32` | Known wellness normalized time value; cached when valid but not exposed as an entity |
+| `32` | Wellness normalized runtime value (`ODB_Wellness_Zeit_Norm`), exposed as disabled diagnostic sensor `wellness_runtime_normalized` |
 | `33` | Inverted heating-disabled flag: raw `0` means water heating enabled, raw `1` means off |
 | `34` | Device status enum; raw `1` = normal, raw `2` = water running, raw `3` = service required, raw `4` observed as a water-running transition |
 | `61` and `70` | Combined to the electricity price options value as euros plus cents; euros `0` to `32767`, cents `0` to `99` |
@@ -286,7 +286,7 @@ through the `ODB_DEBUG_NAMES` reverse map before dispatch. Empty ID placeholders
 are ignored, but conflicting non-empty hints such as `id` and `name` resolving to
 different ODB IDs are treated as invalid ODB payloads and are not published.
 
-If a DHE ODB readback is marked with `isValid: false`, it is not published as a normal entity state. Unknown ODB values are logged at debug level for protocol discovery, including the numeric ID, the known Webfrontend ODB name when available, the raw value and the `isValid` flag. Known-but-unexposed values such as ODB IDs `32` and `68` are recognized so they do not pollute debug logs.
+If a DHE ODB readback is marked with `isValid: false`, it is not published as a normal entity state. Unknown ODB values are logged at debug level for protocol discovery, including the numeric ID, the known Webfrontend ODB name when available, the raw value and the `isValid` flag. Known protocol-only values such as ODB ID `68` are recognized so they do not pollute debug logs.
 
 For ODB IDs `29`, `30`, `63` and `64`, a numeric `0` returned as the immediate readback for a `get:ste.common.odb:value` request is also ignored. These diagnostic totals/savings can report `0` when queried at startup even though the DHE has not emitted a fresh operational value yet. A spontaneous DHE runtime update with value `0` is accepted.
 

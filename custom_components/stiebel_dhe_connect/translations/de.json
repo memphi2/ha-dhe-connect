@@ -610,6 +610,9 @@
       "shower_timer_remaining": {
         "name": "Duschtimer Restzeit"
       },
+      "wellness_runtime_normalized": {
+        "name": "Wellness-Laufzeit (normalisiert)"
+      },
       "error_status": {
         "name": "Fehlerstatus",
         "state": {

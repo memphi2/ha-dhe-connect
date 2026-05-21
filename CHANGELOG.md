@@ -30,6 +30,9 @@
   sections.
 - Recorded today's real live device evidence (`2026-05-21`) for
   `DHE Connect 18/21/24` in `docs/firmware_matrix.md` with explicit scope.
+- Exposed ODB ID `32` (`ODB_Wellness_Zeit_Norm`) as a disabled diagnostic
+  sensor (`wellness_runtime_normalized`) with translations and protocol/entity
+  documentation updates.
 
 ## v1.7.0 - 2026-05-21
 

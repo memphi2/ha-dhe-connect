@@ -141,6 +141,7 @@ data:
 | Saving monitor real cost saving | `EUR` | `monetary`, disabled by default | none | `set:ste.app.savingMonitor:real.value_E`, rounded to 2 decimals |
 | Brush timer remaining | `M:SS` | disabled by default | none | `set:ste.app.brushTimer:remainingMilliseconds`; locally counts down once `ste.app.brushTimer:activation` is active and resets to the configured duration after reset/expiry |
 | Shower timer remaining | `M:SS` | disabled by default | none | `set:ste.app.showerTimer:remainingMilliseconds`; locally counts down once `ste.app.showerTimer:activation` is active and resets to the configured duration after reset/expiry |
+| Wellness runtime (normalized) | `%` | diagnostic, disabled by default | none | ODB ID `32` (`ODB_Wellness_Zeit_Norm`) exposed as the raw normalized runtime value |
 | Reconnects | count | diagnostic | `total_increasing` | Successful reconnect count after the initial connection |
 | Connection state | text | diagnostic | none | Client session state such as `starting`, `connected`, `reconnecting` or `stopped` |
 | Next reconnect delay | `s` | diagnostic | none | Current backoff delay before the next reconnect attempt; `0 s` while connected |
