@@ -1,7 +1,7 @@
 # DHE Connect for Home Assistant (Unofficial)
 
 [![Validate](https://github.com/memphi2/ha-dhe-connect/actions/workflows/validate.yml/badge.svg)](https://github.com/memphi2/ha-dhe-connect/actions/workflows/validate.yml)
-[![Quality](https://img.shields.io/badge/Quality-Hass%20Gold%20Core%20oriented-4CAF50?style=flat-square)](custom_components/stiebel_dhe_connect/quality_scale.yaml)
+[![Quality](https://img.shields.io/badge/Quality-Home%20Assistant%20Quality%20Scale%20Platinum%20Track-4CAF50?style=flat-square)](custom_components/stiebel_dhe_connect/quality_scale.yaml)
 [![GitHub Release](https://img.shields.io/github/v/tag/memphi2/ha-dhe-connect?sort=semver&label=release)](https://github.com/memphi2/ha-dhe-connect/releases)
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://www.hacs.xyz/)
 [![License MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -16,9 +16,9 @@ The integration talks directly to the DHE web interface on your local network. I
 ## Status
 
 - Current version: `1.8.0`
-- Release channel: stable development line with Gold-core-oriented evidence and
+- Release channel: stable development line with Platinum-track evidence and
   Platinum-preparation engineering hardening
-- Quality target: Home Assistant Quality Scale Gold-core-oriented validation
+- Quality target: Home Assistant Quality Scale Platinum-track validation
   for a custom integration; not an official Home Assistant Core certification
 - Home Assistant UI integration name: `DHE Connect` (kept short for clean
   device labels in the HA UI)
@@ -29,8 +29,8 @@ The integration talks directly to the DHE web interface on your local network. I
 - Scope: multiple configured DHE Connect devices per Home Assistant instance
 
 This is a custom integration and should be used on a trusted local network.
-The `v1.8.0` line builds on the Gold-core-oriented custom-integration release
-with strict typing, deterministic runtime validation and Platinum-preparation
+The `v1.8.0` line builds on a Platinum-track custom-integration release with
+strict typing, deterministic runtime validation and Platinum preparation
 evidence. It is not an official Home Assistant Core certification.
 
 Development and protocol mapping for this release were assisted by OpenAI Codex.
