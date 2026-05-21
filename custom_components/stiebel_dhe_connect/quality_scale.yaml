@@ -86,7 +86,12 @@ rules:
     status: exempt
     comment: |
       There is no external communication library that accepts a web session.
-  strict-typing: todo
+  strict-typing:
+    status: todo
+    comment: |
+      Typing coverage is broad, but the repository has not enabled a full
+      strict mypy profile yet. Remaining work is tracked in
+      docs/platinum_prep.md.
 
 evidence:
   # Explicit Silver mapping: rule -> implementation / tests / documentation.

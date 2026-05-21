@@ -55,6 +55,12 @@ should run without `--allow-dirty`.
 The GitHub `Validate` workflow runs HACS, Hassfest, pytest, repository checks,
 type checks and Ruff. Keep local results and CI results aligned before merging.
 
+## Platinum Preparation
+
+For the active `v1.8.0` hardening branch, the remaining Platinum-oriented gap
+and validation sequence are tracked in
+[docs/platinum_prep.md](docs/platinum_prep.md).
+
 ## Quality Scale Evidence Matrix
 
 `custom_components/stiebel_dhe_connect/quality_scale.yaml` is the

@@ -91,6 +91,7 @@ diagnostics in a compact Mushroom-style layout.
 | Tested device and firmware matrix | [docs/firmware_matrix.md](docs/firmware_matrix.md) |
 | Protocol and ODB mapping notes for maintainers | [docs/protocol.md](docs/protocol.md) |
 | Local tests, HA smoke checks and release-readiness flow | [docs/validation.md](docs/validation.md) |
+| Platinum preparation checklist | [docs/platinum_prep.md](docs/platinum_prep.md) |
 | Security and token-handling notes | [SECURITY.md](SECURITY.md) |
 
 ## Installation

@@ -6,7 +6,7 @@ import copy
 import logging
 import os
 import shutil
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any, Protocol, cast
 
 import aiohttp
@@ -983,36 +983,45 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
         user_input: dict[str, Any] | None = None,
     ):
         """Collect a network address and subnet mask before scanning."""
-        if user_input is None:
-            return self._show_subnet_scan_network_mask_form(
-                suggested_values=await self._async_subnet_scan_form_defaults()
-            )
-        scan_input = _scan_subnet_network_mask_input(user_input)
-        try:
-            scan_subnet = _required_scan_subnet(scan_input)
-        except ValueError as err:
-            return self._show_subnet_scan_network_mask_form(
-                {_scan_subnet_network_mask_error_field(scan_input): str(err)},
-                suggested_values=user_input,
-            )
-        self._setup_scan.networks = [scan_subnet]
-        return await self.async_step_network_scan()
+        return await self._async_step_subnet_scan_value(
+            user_input,
+            parse_input=_scan_subnet_network_mask_input,
+            error_field=_scan_subnet_network_mask_error_field,
+            show_form=self._show_subnet_scan_network_mask_form,
+        )
 
     async def async_step_subnet_scan_cidr(
         self,
         user_input: dict[str, Any] | None = None,
     ):
         """Collect a CIDR subnet before scanning."""
+        return await self._async_step_subnet_scan_value(
+            user_input,
+            parse_input=_scan_subnet_cidr_input,
+            error_field=lambda _scan_input: CONF_SCAN_CIDR,
+            show_form=self._show_subnet_scan_cidr_form,
+        )
+
+    async def _async_step_subnet_scan_value(
+        self,
+        user_input: dict[str, Any] | None,
+        *,
+        parse_input: Callable[[dict[str, Any]], Any],
+        error_field: Callable[[Any], str],
+        show_form: Callable[
+            ...,
+            config_entries.ConfigFlowResult,
+        ],
+    ) -> config_entries.ConfigFlowResult:
+        """Handle one subnet-value form (CIDR or network-mask) before scanning."""
         if user_input is None:
-            return self._show_subnet_scan_cidr_form(
-                suggested_values=await self._async_subnet_scan_form_defaults()
-            )
-        scan_input = _scan_subnet_cidr_input(user_input)
+            return show_form(suggested_values=await self._async_subnet_scan_form_defaults())
+        scan_input = parse_input(user_input)
         try:
             scan_subnet = _required_scan_subnet(scan_input)
         except ValueError as err:
-            return self._show_subnet_scan_cidr_form(
-                {CONF_SCAN_CIDR: str(err)},
+            return show_form(
+                {error_field(scan_input): str(err)},
                 suggested_values=user_input,
             )
         self._setup_scan.networks = [scan_subnet]

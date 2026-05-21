@@ -2,7 +2,18 @@
 
 ## Unreleased
 
-- No changes yet.
+- Switched the README release badge to tag-based semver sorting so the shown
+  release no longer sticks to an outdated older version.
+- Refactored Zeroconf discovery conflict abort handling in `config_flow.py`
+  into a shared helper to reduce duplicated conflict-path logic.
+- Refactored weather service handlers in `__init__.py` to use one shared
+  location-resolution helper for add/toggle/remove/select actions.
+- Refactored subnet-scan value steps in `config_flow.py` to use one shared
+  CIDR/network-mask input helper while keeping behavior unchanged.
+- Added a compatibility fallback test for translated Home Assistant action
+  errors when translation kwargs are not supported by the exception signature.
+- Added `docs/platinum_prep.md` and linked it from README/validation docs to
+  track the remaining strict-typing path toward Platinum readiness.
 
 ## v1.7.0 - 2026-05-21
 
