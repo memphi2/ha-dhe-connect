@@ -285,14 +285,14 @@ class StiebelDHEODBSwitch(StiebelDHEBaseSwitch):
             self.entity_description.measurement_id
         )
 
-    async def async_turn_on(self, **kwargs) -> None:  # noqa: ANN003
+    async def async_turn_on(self, **kwargs: Any) -> None:
         await self._set_enabled(
             self.entity_description.turn_on_setter,
             self.entity_description.turn_on_args,
             "turn on",
         )
 
-    async def async_turn_off(self, **kwargs) -> None:  # noqa: ANN003
+    async def async_turn_off(self, **kwargs: Any) -> None:
         await self._set_enabled(
             self.entity_description.turn_off_setter,
             self.entity_description.turn_off_args,
@@ -362,10 +362,10 @@ class StiebelDHEAppTimerSwitch(StiebelDHEBaseSwitch):
             self.entity_description.measurement_id
         )
 
-    async def async_turn_on(self, **kwargs) -> None:  # noqa: ANN003
+    async def async_turn_on(self, **kwargs: Any) -> None:
         await self._set_enabled(True)
 
-    async def async_turn_off(self, **kwargs) -> None:  # noqa: ANN003
+    async def async_turn_off(self, **kwargs: Any) -> None:
         await self._set_enabled(False)
 
     async def _set_enabled(self, enabled: bool) -> None:
@@ -484,7 +484,7 @@ class StiebelDHEWellnessShowerProgramSwitch(
         )
         self._attr_extra_state_attributes = self._program_attributes()
 
-    async def async_turn_on(self, **kwargs) -> None:  # noqa: ANN003
+    async def async_turn_on(self, **kwargs: Any) -> None:
         try:
             raise_if_dhe_unavailable(
                 self._client,
@@ -504,7 +504,7 @@ class StiebelDHEWellnessShowerProgramSwitch(
         self._attr_available = True
         self.async_write_ha_state()
 
-    async def async_turn_off(self, **kwargs) -> None:  # noqa: ANN003
+    async def async_turn_off(self, **kwargs: Any) -> None:
         try:
             raise_if_dhe_unavailable(
                 self._client,

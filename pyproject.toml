@@ -79,10 +79,12 @@ files = [
 [[tool.mypy.overrides]]
 module = [
     "custom_components.stiebel_dhe_connect.async_helpers",
+    "custom_components.stiebel_dhe_connect.config_flow",
     "custom_components.stiebel_dhe_connect.connection_helpers",
     "custom_components.stiebel_dhe_connect.connection_probe",
     "custom_components.stiebel_dhe_connect.diagnostics",
     "custom_components.stiebel_dhe_connect.pairing_validation",
+    "custom_components.stiebel_dhe_connect.switch",
 ]
 disallow_untyped_defs = true
 

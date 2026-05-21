@@ -20,6 +20,9 @@
 - Added the first `disallow_untyped_defs` module group gate (helpers,
   connectivity, diagnostics and pairing-validation utilities) as a controlled
   step toward Platinum strict typing.
+- Expanded the same `disallow_untyped_defs` gate to `config_flow` and `switch`
+  by adding full step-method return annotations and explicit switch action
+  argument typing.
 
 ## v1.7.0 - 2026-05-21
 

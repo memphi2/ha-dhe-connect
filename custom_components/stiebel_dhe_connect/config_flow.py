@@ -783,7 +783,10 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
         self._setup_scan.task = None
         return self.async_show_progress_done(next_step_id="manual")
 
-    async def async_step_user(self, user_input: dict[str, Any] | None = None):
+    async def async_step_user(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> config_entries.ConfigFlowResult:
         """Handle the initial setup choice."""
         if not user_input:
             try:
@@ -817,7 +820,7 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
 
         return self._show_setup_choice_form({CONF_SETUP_MODE: "invalid_setup_mode"})
 
-    async def async_step_zeroconf(self, discovery_info: Any):
+    async def async_step_zeroconf(self, discovery_info: Any) -> config_entries.ConfigFlowResult:
         """Handle a DHE discovered by Zeroconf/mDNS."""
         try:
             host_value = (
@@ -931,7 +934,7 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
     async def async_step_zeroconf_confirm(
         self,
         user_input: dict[str, Any] | None = None,
-    ):
+    ) -> config_entries.ConfigFlowResult:
         """Collect physical Tmax jumper setting for a Zeroconf setup flow."""
         if self._pending_setup_data is None:
             return await self.async_step_user()
@@ -956,7 +959,7 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
     async def async_step_subnet_scan(
         self,
         user_input: dict[str, Any] | None = None,
-    ):
+    ) -> config_entries.ConfigFlowResult:
         """Choose how the setup scan subnet should be selected."""
         if user_input is None:
             return self._show_subnet_scan_form()
@@ -982,7 +985,7 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
     async def async_step_subnet_scan_network_mask(
         self,
         user_input: dict[str, Any] | None = None,
-    ):
+    ) -> config_entries.ConfigFlowResult:
         """Collect a network address and subnet mask before scanning."""
         return await self._async_step_subnet_scan_value(
             user_input,
@@ -994,7 +997,7 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
     async def async_step_subnet_scan_cidr(
         self,
         user_input: dict[str, Any] | None = None,
-    ):
+    ) -> config_entries.ConfigFlowResult:
         """Collect a CIDR subnet before scanning."""
         return await self._async_step_subnet_scan_value(
             user_input,
@@ -1031,14 +1034,17 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
     async def async_step_network_scan(
         self,
         user_input: dict[str, Any] | None = None,
-    ):
+    ) -> config_entries.ConfigFlowResult:
         """Scan the current local subnet when the user explicitly requests it."""
         scan_result = await self._async_handle_setup_scan()
         if scan_result is not None:
             return scan_result
         return await self.async_step_manual()
 
-    async def async_step_manual(self, user_input: dict[str, Any] | None = None):
+    async def async_step_manual(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> config_entries.ConfigFlowResult:
         """Handle manual setup, optionally prefilled by a completed scan."""
         errors: dict[str, str] = {}
 
@@ -1082,7 +1088,7 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
 
     async def async_step_pairing_confirm(
         self, user_input: dict[str, Any] | None = None
-    ):
+    ) -> config_entries.ConfigFlowResult:
         """Validate pairing/authentication before creating the entry."""
         if self._pending_setup_data is None:
             return await self.async_step_user()
@@ -1259,7 +1265,9 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
 
     @staticmethod
     @callback
-    def async_get_options_flow(_config_entry: config_entries.ConfigEntry):
+    def async_get_options_flow(
+        _config_entry: config_entries.ConfigEntry,
+    ) -> config_entries.OptionsFlow:
         """Return the options flow handler."""
         return StiebelDHEConnectOptionsFlow()
 
@@ -1301,14 +1309,20 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
             errors["base"] = "not_loaded"
         return client
 
-    async def async_step_init(self, user_input: dict[str, Any] | None = None):
+    async def async_step_init(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> config_entries.ConfigFlowResult:
         """Show the options menu."""
         return self.async_show_menu(
             step_id="init",
             menu_options=self._menu_options,
         )
 
-    async def async_step_connection(self, user_input: dict[str, Any] | None = None):
+    async def async_step_connection(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> config_entries.ConfigFlowResult:
         """Manage connection options."""
         current = merged_entry_data(self.config_entry)
         errors: dict[str, str] = {}
@@ -1364,7 +1378,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
     async def async_step_device_settings(
         self,
         user_input: dict[str, Any] | None = None,
-    ):
+    ) -> config_entries.ConfigFlowResult:
         """Manage DHE cost and emission settings."""
         errors: dict[str, str] = {}
         client = self._client_or_mark_not_loaded(errors)
@@ -1415,7 +1429,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
     async def async_step_weather_favorite(
         self,
         user_input: dict[str, Any] | None = None,
-    ):
+    ) -> config_entries.ConfigFlowResult:
         """Search DHE weather locations to add a favorite."""
         errors: dict[str, str] = {}
         client = self._client_or_mark_not_loaded(errors)
@@ -1461,7 +1475,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
     async def async_step_weather_favorite_result(
         self,
         user_input: dict[str, Any] | None = None,
-    ):
+    ) -> config_entries.ConfigFlowResult:
         """Select one weather search result and save it as favorite."""
         errors: dict[str, str] = {}
         client = self._client_or_mark_not_loaded(errors)
@@ -1494,7 +1508,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
     async def async_step_remove_weather_favorite(
         self,
         user_input: dict[str, Any] | None = None,
-    ):
+    ) -> config_entries.ConfigFlowResult:
         """Remove a DHE weather favorite."""
         errors: dict[str, str] = {}
         client = self._client_or_mark_not_loaded(errors)
@@ -1532,7 +1546,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
     async def async_step_radio_favorite(
         self,
         user_input: dict[str, Any] | None = None,
-    ):
+    ) -> config_entries.ConfigFlowResult:
         """Select how DHE radio stations should be searched."""
         errors: dict[str, str] = {}
         defaults = user_input or {}
@@ -1555,7 +1569,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
     async def async_step_radio_favorite_catalog(
         self,
         user_input: dict[str, Any] | None = None,
-    ):
+    ) -> config_entries.ConfigFlowResult:
         """Search DHE radio stations by a selected catalog value."""
         errors: dict[str, str] = {}
         client = self._client_or_mark_not_loaded(errors)
@@ -1641,7 +1655,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
     async def async_step_radio_favorite_result(
         self,
         user_input: dict[str, Any] | None = None,
-    ):
+    ) -> config_entries.ConfigFlowResult:
         """Select one radio station search result and save it as favorite."""
         errors: dict[str, str] = {}
         client = self._client_or_mark_not_loaded(errors)
@@ -1674,7 +1688,7 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
     async def async_step_remove_radio_favorite(
         self,
         user_input: dict[str, Any] | None = None,
-    ):
+    ) -> config_entries.ConfigFlowResult:
         """Remove a DHE radio favorite."""
         errors: dict[str, str] = {}
         client = self._client_or_mark_not_loaded(errors)

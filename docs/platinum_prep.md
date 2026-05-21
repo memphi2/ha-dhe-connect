@@ -31,7 +31,9 @@ So the only active Platinum gap in this repository is strict typing depth.
    - Done on `v1.8.0` for first module set:
      `async_helpers`, `connection_helpers`, `connection_probe`,
      `diagnostics`, `pairing_validation`
-   - Next: expand `disallow_untyped_defs = true` to additional module groups
+   - Expanded on `v1.8.0`: `config_flow`, `switch`
+   - Next: expand `disallow_untyped_defs = true` to additional runtime/platform
+     module groups
 2. Resolve runtime mixin `self` contracts with explicit Protocols:
    - command context
    - runtime parser context
