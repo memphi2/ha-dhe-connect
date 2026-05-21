@@ -16,10 +16,8 @@ The integration talks directly to the DHE web interface on your local network. I
 ## Status
 
 - Current version: `1.8.0`
-- Release channel: stable development line with Platinum-track evidence and
-  Platinum-preparation engineering hardening
-- Quality target: Home Assistant Quality Scale Platinum-track validation
-  for a custom integration; not an official Home Assistant Core certification
+- Release: stable custom integration, Platinum-track quality evidence
+- Quality: Home Assistant Quality Scale (custom integration, not HA Core certified)
 - Home Assistant UI integration name: `DHE Connect` (kept short for clean
   device labels in the HA UI)
 - Home Assistant setup: UI config flow
@@ -29,9 +27,8 @@ The integration talks directly to the DHE web interface on your local network. I
 - Scope: multiple configured DHE Connect devices per Home Assistant instance
 
 This is a custom integration and should be used on a trusted local network.
-The `v1.8.0` line builds on a Platinum-track custom-integration release with
-strict typing, deterministic runtime validation and Platinum preparation
-evidence. It is not an official Home Assistant Core certification.
+v1.8.0 adds strict typing, deterministic runtime validation and Platinum-track
+hardening. Not an official Home Assistant Core certification.
 
 Development and protocol mapping for this release were assisted by OpenAI Codex.
 
