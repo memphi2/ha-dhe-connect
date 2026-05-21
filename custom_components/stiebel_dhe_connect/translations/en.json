@@ -611,7 +611,7 @@
         "name": "Shower timer remaining"
       },
       "wellness_runtime_normalized": {
-        "name": "Wellness runtime (normalized)"
+        "name": "Wellness runtime"
       },
       "error_status": {
         "name": "Error status",

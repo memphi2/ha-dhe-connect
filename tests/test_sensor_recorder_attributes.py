@@ -147,7 +147,18 @@ class TestSensorRecorderAttributes(unittest.TestCase):
             description.odb_id,
             protocol_module.ID_WELLNESS_TIME_NORMALIZED,
         )
-        self.assertEqual(description.native_unit_of_measurement, "%")
+        self.assertEqual(
+            description.native_unit_of_measurement,
+            sensor_module.UnitOfTime.SECONDS,
+        )
+        self.assertEqual(
+            description.device_class,
+            sensor_module.SensorDeviceClass.DURATION,
+        )
+        self.assertEqual(
+            description.state_class,
+            sensor_module.SensorStateClass.MEASUREMENT,
+        )
         self.assertEqual(
             description.entity_category,
             sensor_module.EntityCategory.DIAGNOSTIC,
@@ -955,7 +966,6 @@ class TestSensorRecorderAttributes(unittest.TestCase):
                 "odb_hot_water_volume",
                 "odb_possible_energy_saving",
                 "odb_actual_water_saving",
-                "wellness_runtime_normalized",
             }
         )
 
@@ -1004,7 +1014,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
                 await asyncio.gather(*hass.tasks)
             return sensor, writes, client, hass
 
-        self.assertEqual(len(descriptions), 5)
+        self.assertEqual(len(descriptions), 4)
         for description in descriptions:
             with self.subTest(key=description.key):
                 sensor, writes, client, hass = asyncio.run(_run(description))
@@ -1018,7 +1028,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
                     app_command=None,
                 )
 
-    def test_zero_guarded_sensor_online_transition_sets_unknown_availability(self) -> None:
+    def test_wellness_runtime_sensor_starts_from_zero_when_online_without_value(self) -> None:
         sensor_module = _load_sensor_module()
         description = next(
             item
@@ -1030,7 +1040,70 @@ class TestSensorRecorderAttributes(unittest.TestCase):
             host = "127.0.0.1"
             port = 8443
             legacy_device_identifier = None
+            online = True
+            last_measurements: dict[int, object] = {}
+            last_measurement_attributes: dict[int, dict[str, object]] = {}
+
+            def __init__(self) -> None:
+                self.request_measurement_refresh = AsyncMock()
+
+            def add_measurement_callback(self, _callback):
+                return lambda: None
+
+            def add_availability_callback(self, _callback):
+                return lambda: None
+
+            def add_online_callback(self, _callback):
+                return lambda: None
+
+        class _FakeHass:
+            def __init__(self) -> None:
+                self.tasks = []
+
+            def async_create_task(self, coro, *, name: str | None = None):
+                task = asyncio.create_task(coro, name=name)
+                self.tasks.append(task)
+                return task
+
+        async def _run() -> tuple[object, list[object], _FakeClient]:
+            client = _FakeClient()
+            hass = _FakeHass()
+            sensor = sensor_module.StiebelDHESensor(
+                entry_id="test-entry",
+                name="Test DHE",
+                client=client,
+                description=description,
+            )
+            writes: list[object] = []
+            sensor.hass = hass
+            sensor.async_on_remove = lambda _remove: None
+            sensor.async_write_ha_state = lambda: writes.append(sensor._attr_native_value)
+
+            await sensor.async_added_to_hass()
+            if hass.tasks:
+                await asyncio.gather(*hass.tasks)
+            return sensor, writes, client
+
+        sensor, writes, client = asyncio.run(_run())
+        self.assertTrue(sensor._attr_available)
+        self.assertEqual(sensor._attr_native_value, 0.0)
+        self.assertEqual(writes, [0.0])
+        client.request_measurement_refresh.assert_not_awaited()
+
+    def test_zero_guarded_sensor_online_transition_sets_unknown_availability(self) -> None:
+        sensor_module = _load_sensor_module()
+        description = next(
+            item
+            for item in sensor_module.SENSOR_DESCRIPTIONS
+            if item.key == "odb_heating_energy"
+        )
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
             online = False
+            last_measurement_attributes: dict[int, dict[str, object]] = {}
 
         sensor = sensor_module.StiebelDHESensor(
             entry_id="test-entry",
@@ -1047,6 +1120,40 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         sensor._handle_online_update(False)
 
         self.assertEqual(writes, [True, False])
+
+    def test_wellness_runtime_online_transition_sets_zero_when_missing(self) -> None:
+        sensor_module = _load_sensor_module()
+        description = next(
+            item
+            for item in sensor_module.SENSOR_DESCRIPTIONS
+            if item.key == "wellness_runtime_normalized"
+        )
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+            online = False
+            last_measurement_attributes: dict[int, dict[str, object]] = {}
+
+        sensor = sensor_module.StiebelDHESensor(
+            entry_id="test-entry",
+            name="Test DHE",
+            client=_FakeClient(),
+            description=description,
+        )
+        sensor._attr_native_value = None
+        sensor._attr_available = False
+        writes: list[tuple[object, bool]] = []
+        sensor.async_write_ha_state = lambda: writes.append(
+            (sensor._attr_native_value, sensor._attr_available)
+        )
+
+        sensor._handle_online_update(True)
+
+        self.assertEqual(sensor._attr_native_value, 0.0)
+        self.assertTrue(sensor._attr_available)
+        self.assertEqual(writes[-1], (0.0, True))
 
     def test_missing_sensor_refresh_runs_when_client_comes_online(self) -> None:
         sensor_module = _load_sensor_module()

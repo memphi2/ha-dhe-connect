@@ -126,6 +126,7 @@ class StiebelDHESensorEntityDescription(SensorEntityDescription):
     source_command: str | None = None
     period: str | None = None
     available_without_value: bool = False
+    online_default_value: MeasurementValue = None
 
 
 DEFAULT_ENABLED_SENSOR_KEYS = {
@@ -565,13 +566,16 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
     StiebelDHESensorEntityDescription(
         key="wellness_runtime_normalized",
         translation_key="wellness_runtime_normalized",
-        native_unit_of_measurement=PERCENTAGE,
-        suggested_display_precision=1,
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
         icon="mdi:chart-timeline-variant",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         odb_id=ID_WELLNESS_TIME_NORMALIZED,
         available_without_value=True,
+        online_default_value=0.0,
     ),
     StiebelDHESensorEntityDescription(
         key="device_info",
@@ -758,6 +762,9 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
             self._schedule_timer_countdown()
         elif self._client.online:
             if self.entity_description.available_without_value:
+                default_value = self.entity_description.online_default_value
+                if default_value is not None:
+                    self._attr_native_value = self._convert_value(default_value)
                 self._update_extra_state_attributes()
                 self._attr_available = True
                 self._mark_state_written(update_value=False)
@@ -1095,8 +1102,12 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
         """Update unknown-capable sensor availability from online transitions."""
         if not self.entity_description.available_without_value:
             return
-        if self._attr_native_value is not None:
-            return
+        if online and self._attr_native_value is None:
+            default_value = self.entity_description.online_default_value
+            if default_value is not None:
+                self._attr_native_value = self._convert_value(default_value)
+                self._update_extra_state_attributes()
+                self._mark_state_written()
         next_available = bool(online)
         if self._attr_available == next_available:
             return

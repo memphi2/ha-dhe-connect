@@ -611,7 +611,7 @@
         "name": "Duschtimer Restzeit"
       },
       "wellness_runtime_normalized": {
-        "name": "Wellness-Laufzeit (normalisiert)"
+        "name": "Wellness-Laufzeit"
       },
       "error_status": {
         "name": "Fehlerstatus",
