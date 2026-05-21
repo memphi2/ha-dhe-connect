@@ -134,6 +134,68 @@ class TestSensorRecorderAttributes(unittest.TestCase):
 
         self.assertEqual(description.icon, "mdi:thermometer-alert")
 
+    def test_wellness_runtime_sensor_maps_odb_32(self) -> None:
+        sensor_module = _load_sensor_module()
+        protocol_module = _load_component_module("protocol")
+        description = next(
+            item
+            for item in sensor_module.SENSOR_DESCRIPTIONS
+            if item.key == "wellness_runtime_normalized"
+        )
+
+        self.assertEqual(
+            description.odb_id,
+            protocol_module.ID_WELLNESS_TIME_NORMALIZED,
+        )
+        self.assertEqual(
+            description.native_unit_of_measurement,
+            sensor_module.UnitOfTime.SECONDS,
+        )
+        self.assertEqual(
+            description.device_class,
+            sensor_module.SensorDeviceClass.DURATION,
+        )
+        self.assertIsNone(description.state_class)
+        self.assertEqual(
+            description.entity_category,
+            sensor_module.EntityCategory.DIAGNOSTIC,
+        )
+        self.assertFalse(description.entity_registry_enabled_default)
+
+    def test_wellness_runtime_sensor_writes_live_updates(self) -> None:
+        sensor_module = _load_sensor_module()
+        protocol_module = _load_component_module("protocol")
+        description = next(
+            item
+            for item in sensor_module.SENSOR_DESCRIPTIONS
+            if item.key == "wellness_runtime_normalized"
+        )
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+            online = True
+            last_measurement_attributes = {}
+
+        sensor = sensor_module.StiebelDHESensor(
+            entry_id="test-entry",
+            name="Test DHE",
+            client=_FakeClient(),
+            description=description,
+        )
+        writes: list[float | str | None] = []
+        sensor.async_write_ha_state = lambda: writes.append(sensor._attr_native_value)
+
+        sensor._handle_measurement_update(
+            protocol_module.ID_WELLNESS_TIME_NORMALIZED,
+            57.3,
+        )
+
+        self.assertEqual(sensor._attr_native_value, 57.3)
+        self.assertTrue(sensor._attr_available)
+        self.assertEqual(writes, [57.3])
+
     def test_attribute_key_sensors_do_not_duplicate_device_info_attributes(self) -> None:
         sensor_module = _load_sensor_module()
         description = next(
@@ -868,6 +930,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
                 "odb_hot_water_volume",
                 "odb_possible_energy_saving",
                 "odb_actual_water_saving",
+                "wellness_runtime_normalized",
             },
         )
         self.assertTrue(all(item.available_without_value for item in descriptions))
@@ -961,6 +1024,133 @@ class TestSensorRecorderAttributes(unittest.TestCase):
                     odb_id=description.odb_id,
                     app_command=None,
                 )
+
+    def test_wellness_runtime_sensor_starts_from_zero_when_online_without_value(self) -> None:
+        sensor_module = _load_sensor_module()
+        description = next(
+            item
+            for item in sensor_module.SENSOR_DESCRIPTIONS
+            if item.key == "wellness_runtime_normalized"
+        )
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+            online = True
+            last_measurements: dict[int, object] = {}
+            last_measurement_attributes: dict[int, dict[str, object]] = {}
+
+            def __init__(self) -> None:
+                self.request_measurement_refresh = AsyncMock()
+
+            def add_measurement_callback(self, _callback):
+                return lambda: None
+
+            def add_availability_callback(self, _callback):
+                return lambda: None
+
+            def add_online_callback(self, _callback):
+                return lambda: None
+
+        class _FakeHass:
+            def __init__(self) -> None:
+                self.tasks = []
+
+            def async_create_task(self, coro, *, name: str | None = None):
+                task = asyncio.create_task(coro, name=name)
+                self.tasks.append(task)
+                return task
+
+        async def _run() -> tuple[object, list[object], _FakeClient]:
+            client = _FakeClient()
+            hass = _FakeHass()
+            sensor = sensor_module.StiebelDHESensor(
+                entry_id="test-entry",
+                name="Test DHE",
+                client=client,
+                description=description,
+            )
+            writes: list[object] = []
+            sensor.hass = hass
+            sensor.async_on_remove = lambda _remove: None
+            sensor.async_write_ha_state = lambda: writes.append(sensor._attr_native_value)
+
+            await sensor.async_added_to_hass()
+            if hass.tasks:
+                await asyncio.gather(*hass.tasks)
+            return sensor, writes, client
+
+        sensor, writes, client = asyncio.run(_run())
+        self.assertTrue(sensor._attr_available)
+        self.assertEqual(sensor._attr_native_value, 0.0)
+        self.assertEqual(writes, [0.0])
+        client.request_measurement_refresh.assert_not_awaited()
+
+    def test_zero_guarded_sensor_online_transition_sets_unknown_availability(self) -> None:
+        sensor_module = _load_sensor_module()
+        description = next(
+            item
+            for item in sensor_module.SENSOR_DESCRIPTIONS
+            if item.key == "odb_heating_energy"
+        )
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+            online = False
+            last_measurement_attributes: dict[int, dict[str, object]] = {}
+
+        sensor = sensor_module.StiebelDHESensor(
+            entry_id="test-entry",
+            name="Test DHE",
+            client=_FakeClient(),
+            description=description,
+        )
+        sensor._attr_native_value = None
+        sensor._attr_available = False
+        writes: list[bool] = []
+        sensor.async_write_ha_state = lambda: writes.append(sensor._attr_available)
+
+        sensor._handle_online_update(True)
+        sensor._handle_online_update(False)
+
+        self.assertEqual(writes, [True, False])
+
+    def test_wellness_runtime_online_transition_sets_zero_when_missing(self) -> None:
+        sensor_module = _load_sensor_module()
+        description = next(
+            item
+            for item in sensor_module.SENSOR_DESCRIPTIONS
+            if item.key == "wellness_runtime_normalized"
+        )
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            legacy_device_identifier = None
+            online = False
+            last_measurement_attributes: dict[int, dict[str, object]] = {}
+
+        sensor = sensor_module.StiebelDHESensor(
+            entry_id="test-entry",
+            name="Test DHE",
+            client=_FakeClient(),
+            description=description,
+        )
+        sensor._attr_native_value = None
+        sensor._attr_available = False
+        writes: list[tuple[object, bool]] = []
+        sensor.async_write_ha_state = lambda: writes.append(
+            (sensor._attr_native_value, sensor._attr_available)
+        )
+
+        sensor._handle_online_update(True)
+
+        self.assertEqual(sensor._attr_native_value, 0.0)
+        self.assertTrue(sensor._attr_available)
+        self.assertEqual(writes[-1], (0.0, True))
 
     def test_missing_sensor_refresh_runs_when_client_comes_online(self) -> None:
         sensor_module = _load_sensor_module()

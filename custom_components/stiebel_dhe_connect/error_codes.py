@@ -1,0 +1,18 @@
+from __future__ import annotations
+
+EMPTY_HOST = "empty_host"
+INVALID_HOST = "invalid_host"
+INVALID_SCHEME = "invalid_scheme"
+EMBEDDED_PORT_NOT_SUPPORTED = "embedded_port_not_supported"
+INVALID_PORT = "invalid_port"
+INVALID_SCAN_SUBNET = "invalid_scan_subnet"
+SCAN_SUBNET_TOO_LARGE = "scan_subnet_too_large"
+INVALID_RANGE = "invalid_range"
+INVALID_INTERNAL_SCALD_PROTECTION = "invalid_internal_scald_protection"
+INVALID_SETUP_MODE = "invalid_setup_mode"
+INVALID_DISCOVERY_PARAMETERS = "invalid_discovery_parameters"
+INVALID_SCAN_SUBNET_MODE = "invalid_scan_subnet_mode"
+LOW_CONFIDENCE_DISCOVERY = "low_confidence_discovery"
+ALREADY_CONFIGURED = "already_configured"
+ALREADY_IN_PROGRESS = "already_in_progress"
+RECENTLY_DISCOVERED = "recently_discovered"

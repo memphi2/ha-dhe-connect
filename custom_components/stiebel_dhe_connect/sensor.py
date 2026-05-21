@@ -7,7 +7,7 @@ from contextlib import suppress
 from copy import deepcopy
 from dataclasses import dataclass
 import time
-from typing import Any
+from typing import Any, cast
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -17,6 +17,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
+    EntityCategory,
     PERCENTAGE,
     UnitOfEnergy,
     UnitOfMass,
@@ -27,7 +28,6 @@ from homeassistant.const import (
     UnitOfVolumeFlowRate,
 )
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .client import DHEClient
@@ -90,6 +90,7 @@ from .protocol import (
     ID_SHOWER_TIMER_ACTIVATION,
     ID_SHOWER_TIMER_DURATION,
     ID_SHOWER_TIMER_REMAINING,
+    ID_WELLNESS_TIME_NORMALIZED,
     ID_WATER_CONSUMPTION_WEEK,
     ID_WATER_CONSUMPTION_YEAR,
     ID_WATER_CONSUMPTION_YEARS,
@@ -125,6 +126,7 @@ class StiebelDHESensorEntityDescription(SensorEntityDescription):
     source_command: str | None = None
     period: str | None = None
     available_without_value: bool = False
+    online_default_value: MeasurementValue = None
 
 
 DEFAULT_ENABLED_SENSOR_KEYS = {
@@ -236,7 +238,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         translation_key="device_status",
         icon="mdi:wrench",
         device_class=SensorDeviceClass.ENUM,
-        options=DEVICE_STATUS_OPTIONS,
+        options=list(DEVICE_STATUS_OPTIONS),
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         odb_id=ID_DEVICE_STATUS,
@@ -562,6 +564,19 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         timer_property="remainingMilliseconds",
     ),
     StiebelDHESensorEntityDescription(
+        key="wellness_runtime_normalized",
+        translation_key="wellness_runtime_normalized",
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        device_class=SensorDeviceClass.DURATION,
+        suggested_display_precision=0,
+        icon="mdi:chart-timeline-variant",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        odb_id=ID_WELLNESS_TIME_NORMALIZED,
+        available_without_value=True,
+        online_default_value=0.0,
+    ),
+    StiebelDHESensorEntityDescription(
         key="device_info",
         translation_key="device_info",
         icon="mdi:information-outline",
@@ -728,6 +743,9 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
         self.async_on_remove(
             self._client.add_availability_callback(self._handle_availability_update)
         )
+        add_online_callback = getattr(self._client, "add_online_callback", None)
+        if callable(add_online_callback):
+            self.async_on_remove(add_online_callback(self._handle_online_update))
 
         self._sync_timer_activation_from_client()
         last_value = self._client.last_measurements.get(self.entity_description.odb_id)
@@ -743,6 +761,9 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
             self._schedule_timer_countdown()
         elif self._client.online:
             if self.entity_description.available_without_value:
+                default_value = self.entity_description.online_default_value
+                if default_value is not None:
+                    self._attr_native_value = self._convert_value(default_value)
                 self._update_extra_state_attributes()
                 self._attr_available = True
                 self._mark_state_written(update_value=False)
@@ -769,8 +790,6 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
             self._async_refresh_missing_measurement(),
             name=f"stiebel_dhe_connect_refresh_{self.entity_description.key}",
         )
-        if task is None:
-            return
         self._missing_measurement_refresh_task = task
         if not self._missing_measurement_refresh_cancel_registered:
             self.async_on_remove(self._cancel_missing_measurement_refresh)
@@ -813,10 +832,20 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
             return None
         return source_command.replace("set:", "get:", 1)
 
+    def _measurement_attributes(self) -> dict[int, dict[str, Any]]:
+        """Return cached per-ODB attributes for this client with test compatibility."""
+        if hasattr(self._client, "_last_measurement_attributes"):
+            attributes = getattr(self._client, "_last_measurement_attributes")
+        else:
+            attributes = getattr(self._client, "last_measurement_attributes")
+        if isinstance(attributes, dict):
+            return cast(dict[int, dict[str, Any]], attributes)
+        return {}
+
     def _convert_value(self, value: MeasurementValue) -> MeasurementValue:
         """Convert the raw client value for display."""
         if self.entity_description.attribute_key is not None:
-            attributes = self._client.last_measurement_attributes.get(
+            attributes = self._measurement_attributes().get(
                 self.entity_description.odb_id,
                 {},
             )
@@ -963,8 +992,6 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
             self._async_timer_countdown(),
             name=f"stiebel_dhe_connect_timer_countdown_{self.entity_description.key}",
         )
-        if task is None:
-            return
         self._timer_countdown_task = task
         if not self._timer_countdown_cancel_registered:
             self.async_on_remove(self._cancel_timer_countdown)
@@ -1029,15 +1056,20 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
     def _dynamic_state_attributes(self) -> dict[str, Any]:
         if self.entity_description.attribute_key is not None:
             return {}
-        return self._client.last_measurement_attributes.get(
+        attributes = self._measurement_attributes().get(
             self.entity_description.odb_id,
             {},
         )
+        return {str(key): value for key, value in attributes.items()}
 
     def _recorded_state_attributes(self) -> dict[str, Any]:
         """Return state attributes that are visible to the recorder."""
         return {
-            key: deepcopy(value)
+            key: (
+                deepcopy(value)
+                if isinstance(value, (dict, list, tuple, set))
+                else value
+            )
             for key, value in (self._attr_extra_state_attributes or {}).items()
             if key not in self._unrecorded_attributes
         }
@@ -1053,24 +1085,45 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
 
         self._update_extra_state_attributes()
         self._update_timer_remaining_base(value)
-        recorded_attributes = self._recorded_state_attributes()
-        recorded_attributes_changed = (
-            recorded_attributes != self._last_written_recorded_attributes
-        )
         self._attr_native_value = self._convert_value(value)
         self._attr_available = self._available_from_value(
             self._client_online(),
             self._attr_native_value,
         )
-        if not self._should_write_measurement_state(
-            self._attr_native_value,
-            recorded_attributes_changed=recorded_attributes_changed,
-        ):
+        should_write = self._should_write_measurement_state(self._attr_native_value)
+        if should_write:
+            self._mark_state_written()
+            self.async_write_ha_state()
             self._schedule_timer_countdown()
             return
-        self._mark_state_written(recorded_attributes=recorded_attributes)
+
+        recorded_attributes = self._recorded_state_attributes()
+        if recorded_attributes == self._last_written_recorded_attributes:
+            self._schedule_timer_countdown()
+            return
+
+        self._mark_state_written(
+            recorded_attributes=recorded_attributes,
+        )
         self.async_write_ha_state()
         self._schedule_timer_countdown()
+
+    @callback
+    def _handle_online_update(self, online: bool) -> None:
+        """Update unknown-capable sensor availability from online transitions."""
+        if not self.entity_description.available_without_value:
+            return
+        if online and self._attr_native_value is None:
+            default_value = self.entity_description.online_default_value
+            if default_value is not None:
+                self._attr_native_value = self._convert_value(default_value)
+                self._update_extra_state_attributes()
+                self._mark_state_written()
+        next_available = bool(online)
+        if self._attr_available == next_available:
+            return
+        self._attr_available = next_available
+        self.async_write_ha_state()
 
     @callback
     def _handle_availability_update(self, available: bool) -> None:

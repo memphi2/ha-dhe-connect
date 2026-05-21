@@ -4,6 +4,100 @@
 
 - No changes yet.
 
+## v1.8.0 - 2026-05-21
+
+Platinum-preparation update for the custom integration. This release keeps the
+public Home Assistant entity IDs, unique IDs and DHE protocol behavior stable.
+It is not an official Home Assistant Core certification.
+
+### Release Hygiene
+
+- Switched the README release badge to tag-based semver sorting so the shown
+  release no longer sticks to an outdated older version.
+
+### Maintainability
+
+- Refactored Zeroconf discovery conflict abort handling in `config_flow.py`
+  into a shared helper to reduce duplicated conflict-path logic.
+- Refactored weather service handlers in `__init__.py` to use one shared
+  location-resolution helper for add/toggle/remove/select actions.
+- Refactored subnet-scan value steps in `config_flow.py` to use one shared
+  CIDR/network-mask input helper while keeping behavior unchanged.
+- Added a compatibility fallback test for translated Home Assistant action
+  errors when translation kwargs are not supported by the exception signature.
+
+### Platinum Typing Preparation
+
+- Added `docs/platinum_prep.md` and linked it from README/validation docs to
+  document the strict-typing and runtime-hardening path toward Platinum
+  readiness.
+- Hardened the typing gate by enabling mypy `warn_return_any` and
+  `warn_unused_ignores`, and fixed the resulting no-any-return issues across
+  setup, diagnostics, transport and service helper paths.
+- Hardened the typing gate further with mypy unreachable-code,
+  redundant-cast, strict-equality, no-implicit-optional, no-untyped-generics
+  no-untyped-calls, no-incomplete-defs, extra-checks and untyped-body checks,
+  and made `scripts/check_typing.py` fail if any integration module is skipped
+  by the scoped mypy file list.
+- Switched the typing gate to `strict = true` with normal import following and
+  no broad missing-import suppression, and cleaned up HA typing mismatches
+  without changing runtime protocol behavior.
+- Aligned the mypy target with the Python 3.14 CI runtime so current Home
+  Assistant dependency syntax is parsed consistently while every integration
+  module stays in the strict file gate.
+- Added the first `disallow_untyped_defs` module group gate (helpers,
+  connectivity, diagnostics and pairing-validation utilities) as a controlled
+  step toward Platinum strict typing.
+- Expanded the same `disallow_untyped_defs` gate to `config_flow` and `switch`
+  by adding full step-method return annotations and explicit switch action
+  argument typing.
+- Finalized this typing round by enabling `disallow_untyped_defs` globally in
+  the mypy profile for the integration module set.
+- Added explicit Protocol-based mixin contracts for command, transport,
+  runtime, connection-state and diagnostics client surfaces, with type-only
+  structural assertions against the concrete `DHEClient`.
+
+### Quality Evidence
+
+- Expanded Gold evidence documentation with a firmware/user evidence template,
+  icon-translation status notes and a repository check that enforces these
+  sections.
+- Recorded today's real live device evidence (`2026-05-21`) for
+  `DHE Connect 18/21/24` in `docs/firmware_matrix.md` with explicit scope.
+
+### Runtime And Protocol Notes
+
+- Exposed ODB ID `32` (`ODB_Wellness_Zeit_Norm`) as a disabled diagnostic
+  sensor (`wellness_runtime_normalized`) with translations and protocol/entity
+  documentation updates.
+- Recorded the real live check for ODB ID `32`: it counts wellness runtime in
+  seconds while active and returns to `0` when stopped.
+- Adjusted ODB `32` startup behavior so the new wellness-runtime sensor is
+  available with `0` when connected without a cached runtime value (instead of
+  `unavailable`).
+- Removed the wellness-runtime sensor `state_class` to avoid long-term
+  statistics writes for this high-churn diagnostic runtime value.
+- Documented the intentionally ignored DHE web-interface wellness progress
+  command.
+- Removed the non-working DHE currency option and app-level currency handling
+  from the options flow while keeping price and CO2 settings.
+- Added deterministic runtime guards for unknown radio payloads, malformed
+  weather payloads and reconfigure behavior during reconnect grace.
+- Extended diagnostics redaction to WebSocket URLs so `ws://` and `wss://`
+  transport details are sanitized like HTTP URLs.
+
+### Validation
+
+- `python scripts/check_typing.py`: `Success: no issues found in 70 source files`.
+- `python -m ruff check custom_components/stiebel_dhe_connect tests scripts`:
+  `All checks passed!`
+- `python scripts/check_integration.py`: `556` tests ran (`OK`);
+  `integration checks ok`.
+- `python scripts/check_coverage.py`: `633 passed`; scoped integration coverage
+  gate `96%`.
+- `python scripts/release_check.py --run-local-checks --expect-tag absent --expect-github-release absent`:
+  `release check ok`; tag and GitHub release for `v1.8.0` are absent.
+
 ## v1.7.0 - 2026-05-21
 
 Gold-core-oriented release-preparation update for the custom integration.

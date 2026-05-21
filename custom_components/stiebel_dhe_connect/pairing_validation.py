@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 from collections.abc import Awaitable, Callable, Sequence
+from typing import cast
 
 from homeassistant.core import HomeAssistant
 
@@ -32,7 +33,8 @@ def _validation_path_getter(hass: HomeAssistant, path: str) -> str:
     config = getattr(hass, "config", None)
     if config is None or not hasattr(config, "path"):
         return os.path.normcase(os.path.abspath(path))
-    return os.path.normcase(os.path.abspath(config.path(path)))
+    config_path = cast(str, config.path(path))
+    return os.path.normcase(os.path.abspath(config_path))
 
 
 def _abs_config_path(hass: HomeAssistant, path: str) -> str:

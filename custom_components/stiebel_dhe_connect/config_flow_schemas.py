@@ -20,12 +20,13 @@ from .entity_state_helpers import (
     normalize_internal_scald_protection,
 )
 from .protocol import (
-    ID_APP_CURRENCY,
     ID_CO2_EMISSION,
     ID_ELECTRICITY_PRICE,
     ID_WATER_PRICE,
 )
 from .service_helpers import WEATHER_RESULT_NUMBER_MAX
+
+from .error_codes import INVALID_RANGE
 
 ATTR_COUNTRY_ID = "country_id"
 ATTR_RADIO_SELECTION = "selection"
@@ -33,11 +34,8 @@ ATTR_RADIO_SEARCH_TYPE = "search_type"
 ATTR_RADIO_FILTER_TEXT = "filter_text"
 ATTR_RESULT = "result"
 ATTR_CO2_EMISSION = "co2_emission"
-ATTR_CURRENCY = "currency"
 ATTR_ELECTRICITY_PRICE = "electricity_price"
 ATTR_WATER_PRICE = "water_price"
-CURRENCY_UNCHANGED = "__unchanged__"
-CURRENCY_OPTIONS = ("EUR", "GBP", "CZK", "PLN", "CNY", "USD", "AUD", "HKD")
 DEFAULT_RADIO_GENRE = "Dekaden/Dekade 1980s"
 DEFAULT_WEATHER_COUNTRY_ID = 34
 MAX_RADIO_RESULT_OPTIONS = 50
@@ -96,24 +94,8 @@ def optional_float(value: Any, min_value: float, max_value: float) -> float | No
         return None
     parsed = float(text)
     if parsed < min_value or parsed > max_value:
-        raise ValueError("invalid_range")
+        raise ValueError(INVALID_RANGE)
     return parsed
-
-
-def currency_options(hass: HomeAssistant, current: str = "") -> dict[str, str]:
-    language = str(getattr(hass.config, "language", "") or "").lower()
-    options = {
-        CURRENCY_UNCHANGED: (
-            "Nicht ändern" if language.startswith("de") else "Do not change"
-        )
-    }
-    options.update({currency: currency for currency in CURRENCY_OPTIONS})
-    current_value = str(current or "").strip()
-    if current_value and current_value != CURRENCY_UNCHANGED:
-        current_value = current_value.upper()
-    if current_value and current_value not in options:
-        options[current_value] = current_value
-    return options
 
 
 def format_number_default(value: Any, *, precision: int = 2) -> str:
@@ -148,18 +130,7 @@ def internal_scald_protection_options(hass: HomeAssistant) -> dict[str, str]:
 
 def device_settings_defaults(client: Any) -> dict[str, Any]:
     measurements = getattr(client, "last_measurements", {})
-    raw_currency = measurements.get(ID_APP_CURRENCY)
-    currency = CURRENCY_UNCHANGED
-    if raw_currency not in (None, ""):
-        normalized_currency = str(raw_currency).strip().upper()
-        if (
-            normalized_currency
-            and normalized_currency != "UNSET"
-            and normalized_currency in CURRENCY_OPTIONS
-        ):
-            currency = normalized_currency
     return {
-        ATTR_CURRENCY: currency,
         ATTR_ELECTRICITY_PRICE: format_number_default(
             measurements.get(ID_ELECTRICITY_PRICE)
         ),
@@ -172,18 +143,12 @@ def device_settings_defaults(client: Any) -> dict[str, Any]:
 
 
 def device_settings_schema(
-    hass: HomeAssistant,
+    _hass: HomeAssistant,
     defaults: dict[str, Any] | None = None,
 ) -> vol.Schema:
     defaults = defaults or {}
-    currency = str(defaults.get(ATTR_CURRENCY) or CURRENCY_UNCHANGED).strip()
-    if currency != CURRENCY_UNCHANGED:
-        currency = currency.upper()
     return vol.Schema(
         {
-            vol.Optional(ATTR_CURRENCY, default=currency): vol.In(
-                currency_options(hass, currency)
-            ),
             vol.Optional(
                 ATTR_ELECTRICITY_PRICE,
                 default=string_default(defaults.get(ATTR_ELECTRICITY_PRICE, "")),

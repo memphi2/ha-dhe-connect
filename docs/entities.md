@@ -141,6 +141,7 @@ data:
 | Saving monitor real cost saving | `EUR` | `monetary`, disabled by default | none | `set:ste.app.savingMonitor:real.value_E`, rounded to 2 decimals |
 | Brush timer remaining | `M:SS` | disabled by default | none | `set:ste.app.brushTimer:remainingMilliseconds`; locally counts down once `ste.app.brushTimer:activation` is active and resets to the configured duration after reset/expiry |
 | Shower timer remaining | `M:SS` | disabled by default | none | `set:ste.app.showerTimer:remainingMilliseconds`; locally counts down once `ste.app.showerTimer:activation` is active and resets to the configured duration after reset/expiry |
+| Wellness runtime | `s` | `duration`, diagnostic, disabled by default | none | ODB ID `32` (`ODB_Wellness_Zeit_Norm`) observed as a runtime seconds counter while the program/water flow is active and reset to `0` when it stops; when connected without a cached runtime value it starts at `0` |
 | Reconnects | count | diagnostic | `total_increasing` | Successful reconnect count after the initial connection |
 | Connection state | text | diagnostic | none | Client session state such as `starting`, `connected`, `reconnecting` or `stopped` |
 | Next reconnect delay | `s` | diagnostic | none | Current backoff delay before the next reconnect attempt; `0 s` while connected |
@@ -170,7 +171,7 @@ Temperature memory writes keep the existing memory name and send `operation: add
 
 Internal scald protection is configured during initial setup and from the integration options under `Connection/device`. The option is local to Home Assistant and should match the physical `Tmax` jumper position.
 
-Currency, electricity price, water price and CO2 emission are configured from the integration options under `Costs & emissions` instead of being exposed as entities. The DHE writes use the same protocol values as the browser UI: currency via `get:ste.common.currency:value`, electricity price via ODB IDs `61`/`70`, water price via ODB IDs `62`/`71` and CO2 emission via ODB ID `69`. Price euro components accept the browser ODB range `0` to `32767`, cent components accept `0` to `99`, and CO2 emission accepts raw `0` to `32767` (`0.000` to `32.767 kg/kWh`).
+Electricity price, water price and CO2 emission are configured from the integration options under `Costs & emissions` instead of being exposed as entities. The DHE writes use the same protocol values as the browser UI: electricity price via ODB IDs `61`/`70`, water price via ODB IDs `62`/`71` and CO2 emission via ODB ID `69`. Price euro components accept the browser ODB range `0` to `32767`, cent components accept `0` to `99`, and CO2 emission accepts raw `0` to `32767` (`0.000` to `32.767 kg/kWh`).
 
 ## Selects
 

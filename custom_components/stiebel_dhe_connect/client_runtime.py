@@ -57,8 +57,6 @@ from .protocol import (
     APP_TIMER_VALUE_COMMANDS,
     CO2_EMISSION_RAW_MAX,
     CONSUMPTION_COMMAND_IDS,
-    CURRENCY_GET_COMMAND,
-    CURRENCY_SET_COMMAND,
     DEVICE_INFO_COMMAND_IDS,
     ID_BATH_FILL_ACTIVE,
     ID_BATH_FILL_CURRENT_VOLUME,
@@ -257,10 +255,6 @@ class DHEClientRuntimeMixin(DHEClientRuntimeMediaMixin, DHEClientRuntimeAppMixin
             self._record_runtime_parser_category("device_info")
             self._handle_device_info_value(command, value)
             return
-        if command in {CURRENCY_GET_COMMAND, CURRENCY_SET_COMMAND}:
-            self._record_runtime_parser_category("currency")
-            self._handle_currency_value(value, source_command=command)
-            return
         if command in APP_STARTUP_SET_COMMANDS:
             self._record_runtime_parser_category("app_startup")
             self._handle_app_startup_value(command, value)
@@ -307,9 +301,12 @@ class DHEClientRuntimeMixin(DHEClientRuntimeMediaMixin, DHEClientRuntimeAppMixin
         )
 
     def _copy_diagnostic_state(self) -> dict[str, Any]:
+        diagnostic_state = getattr(self, "_diagnostic_state", None)
+        if not isinstance(diagnostic_state, dict):
+            return {}
         state = {
             key: _copy_json_like_value(value)
-            for key, value in self._diagnostic_state.items()
+            for key, value in diagnostic_state.items()
         }
         if self._last_message_monotonic is not None:
             state["last_message_age_seconds"] = max(
@@ -320,14 +317,17 @@ class DHEClientRuntimeMixin(DHEClientRuntimeMediaMixin, DHEClientRuntimeAppMixin
 
     def _update_diagnostics(self, **updates: Any) -> None:
         changed = False
+        diagnostic_state = getattr(self, "_diagnostic_state", None)
+        if not isinstance(diagnostic_state, dict):
+            return
         for key, value in updates.items():
             if value is None:
-                if key in self._diagnostic_state:
-                    self._diagnostic_state.pop(key)
+                if key in diagnostic_state:
+                    diagnostic_state.pop(key)
                     changed = True
                 continue
-            if self._diagnostic_state.get(key) != value:
-                self._diagnostic_state[key] = value
+            if diagnostic_state.get(key) != value:
+                diagnostic_state[key] = value
                 changed = True
         if not changed:
             return
@@ -348,11 +348,13 @@ class DHEClientRuntimeMixin(DHEClientRuntimeMediaMixin, DHEClientRuntimeAppMixin
 
     def _record_runtime_parser_category(self, category: str) -> None:
         self._last_runtime_parser_category = category
-        if not isinstance(getattr(self, "_runtime_parser_stats", None), dict):
-            self._runtime_parser_stats = {}
-        self._runtime_parser_stats[category] = (
-            self._runtime_parser_stats.get(category, 0) + 1
-        )
+        # Keep one fast-path for normal operation, while tolerating unit-test
+        # clients that instantiate the runtime mixin directly for targeted calls.
+        stats = getattr(self, "_runtime_parser_stats", None)
+        if not isinstance(stats, dict):
+            stats = {}
+            self._runtime_parser_stats = stats
+        stats[category] = stats.get(category, 0) + 1
 
     def _handle_odb_setpoint_value(
         self,
@@ -586,8 +588,6 @@ class DHEClientRuntimeMixin(DHEClientRuntimeMediaMixin, DHEClientRuntimeAppMixin
             error_code,
             error_name,
         )
-        if not isinstance(getattr(self, "_diagnostic_state", None), dict):
-            return
         details: dict[str, Any] = {
             "id": odb_id,
             "name": self._odb_debug_name(odb_id),

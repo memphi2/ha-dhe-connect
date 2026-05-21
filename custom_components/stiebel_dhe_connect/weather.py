@@ -3,14 +3,10 @@
 from __future__ import annotations
 
 import inspect
-from typing import Any
+from importlib import import_module
+from typing import TYPE_CHECKING, Any, cast
 
 from homeassistant.components.weather import WeatherEntity
-
-try:
-    from homeassistant.components.weather import WeatherEntityFeature
-except ImportError:  # pragma: no cover - compatibility with older HA versions
-    WeatherEntityFeature = None
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature
@@ -25,10 +21,27 @@ from .entity_state_helpers import connected_and_ready
 from . import weather_mapping as weather_model
 from .runtime_helpers import get_runtime_data
 
+if TYPE_CHECKING:
+    from homeassistant.components.weather import Forecast
+
 PARALLEL_UPDATES = 0
-SUPPORT_FORECAST_DAILY = (
-    WeatherEntityFeature.FORECAST_DAILY if WeatherEntityFeature is not None else 0
-)
+
+
+def _weather_feature_value(name: str, fallback: int = 0) -> Any:
+    """Return a weather feature value across HA module layouts."""
+    for module_name in (
+        "homeassistant.components.weather",
+        "homeassistant.components.weather.const",
+    ):
+        try:
+            feature_cls = getattr(import_module(module_name), "WeatherEntityFeature")
+        except (AttributeError, ImportError):
+            continue
+        return getattr(feature_cls, name, fallback)
+    return fallback
+
+
+SUPPORT_FORECAST_DAILY = _weather_feature_value("FORECAST_DAILY")
 
 
 async def async_setup_entry(
@@ -75,7 +88,7 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
         self._attr_extra_state_attributes = {"weather_path": "ste.app.weather"}
         self._attr_native_temperature: float | None = None
         self._client_available = client.available
-        self._forecast: list[dict[str, Any]] = []
+        self._forecast: list[Forecast] = []
         self._have_weather_state = False
         self._last_written_weather_signature: tuple[Any, ...] | None = None
 
@@ -89,7 +102,7 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
         )
         self._apply_weather_state(self._client.last_weather_state)
 
-    async def async_forecast_daily(self) -> list[dict[str, Any]] | None:
+    async def async_forecast_daily(self) -> list[Forecast] | None:
         """Return daily weather forecast."""
         return list(self._forecast) if self._forecast else None
 
@@ -170,7 +183,7 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
         self._attr_condition = weather_model.current_condition_from_day(today, now=now)
         self._attr_native_temperature = weather_model.current_temperature(today, now=now)
         self._forecast = [
-            forecast
+                cast("Forecast", forecast)
             for day in days
             if (
                 forecast := weather_model.forecast_from_day(
@@ -184,7 +197,7 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
         self._attr_extra_state_attributes = weather_model.weather_attributes(
             state,
             today,
-            self._forecast,
+            [dict(forecast) for forecast in self._forecast],
             now=now,
         )
         self._have_weather_state = (

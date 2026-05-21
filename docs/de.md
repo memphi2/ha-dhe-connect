@@ -4,10 +4,10 @@ Diese Seite ist eine deutschsprachige Einstiegshilfe fuer Installation, Pairing,
 Betrieb und Fehlersuche der inoffiziellen DHE Connect Integration. Die detaillierten
 technischen Tabellen bleiben in den englischen Dokumenten:
 
-Version `1.7.0` ist als Gold-core-orientierter Stable-Release-Kandidat
-vorbereitet. Die Validierung orientiert sich an Home Assistant Quality Scale
-Gold-Core fuer Custom Integrations, ist aber keine offizielle Zertifizierung
-als Home-Assistant-Core-Integration.
+Version `1.8.0` baut auf dem Gold-core-orientierten Stand auf und bereitet die
+Integration technisch weiter in Richtung Platinum vor. Die Validierung
+orientiert sich an Home Assistant Quality Scale fuer Custom Integrations, ist
+aber keine offizielle Zertifizierung als Home-Assistant-Core-Integration.
 
 - [Entitaeten, Attribute und Services](entities.md)
 - [Troubleshooting](troubleshooting.md)

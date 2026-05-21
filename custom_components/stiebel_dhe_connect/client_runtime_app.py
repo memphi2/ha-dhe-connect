@@ -19,7 +19,6 @@ from .protocol import (
     CONSUMPTION_COMMAND_IDS,
     DEFAULT_TEMPERATURE_MEMORY_NAMES,
     DEVICE_INFO_SET_COMMANDS,
-    ID_APP_CURRENCY,
     ID_BRUSH_TIMER_ACTIVATION,
     ID_BRUSH_TIMER_DURATION,
     ID_BRUSH_TIMER_REMAINING,
@@ -324,26 +323,6 @@ class DHEClientRuntimeAppMixin:
         self._handle_measurement(
             measurement_id,
             self._format_app_setting_value(raw_value),
-            force_update=previous_attributes != attributes,
-        )
-
-    def _handle_currency_value(self, raw_value: Any, *, source_command: str) -> None:
-        if raw_value in (None, ""):
-            return
-        value = str(raw_value).strip().upper()
-        if not value or value == "UNSET":
-            return
-
-        self._last_app_values[source_command] = raw_value
-        attributes = {
-            "source_command": source_command,
-            "raw_value": raw_value,
-        }
-        previous_attributes = self._last_measurement_attributes.get(ID_APP_CURRENCY)
-        self._last_measurement_attributes[ID_APP_CURRENCY] = attributes
-        self._handle_measurement(
-            ID_APP_CURRENCY,
-            value,
             force_update=previous_attributes != attributes,
         )
 

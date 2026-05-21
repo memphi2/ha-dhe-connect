@@ -213,7 +213,7 @@ class StiebelDHEButton(StiebelDHEEntityMixin, ButtonEntity):
             extra_state_attributes["timer_path"] = description.timer_path
         if description.timer_property is not None:
             extra_state_attributes["timer_property"] = description.timer_property
-        self._attr_extra_state_attributes = extra_state_attributes or None
+        self._attr_extra_state_attributes = extra_state_attributes
         self._attr_available = False
         self._has_seen_availability_state = False
 

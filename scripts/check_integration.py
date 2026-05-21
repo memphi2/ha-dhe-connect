@@ -174,6 +174,29 @@ def check_repository_files(version: str) -> None:
         _fail("legacy info.md release notes must not be restored; use CHANGELOG.md")
 
 
+def check_gold_evidence_docs() -> None:
+    """Ensure Gold evidence docs keep required structure."""
+    firmware_matrix = (ROOT / "docs" / "firmware_matrix.md").read_text(encoding="utf-8")
+    validation = (ROOT / "docs" / "validation.md").read_text(encoding="utf-8")
+
+    firmware_required_sections = (
+        "## Required Evidence Fields",
+        "## Evidence Entry Template",
+        "## Current Evidence Snapshot",
+    )
+    for section in firmware_required_sections:
+        if section not in firmware_matrix:
+            _fail(f"docs/firmware_matrix.md is missing section: {section}")
+
+    validation_required_sections = (
+        "## Gold Evidence Log Template",
+        "## Icon Translation Status",
+    )
+    for section in validation_required_sections:
+        if section not in validation:
+            _fail(f"docs/validation.md is missing section: {section}")
+
+
 def _quality_scale_done_rules(text: str) -> set[str]:
     """Return rule IDs whose quality-scale status is done."""
     done: set[str] = set()
@@ -321,6 +344,7 @@ def main() -> None:
     version = check_manifest()
     check_hacs()
     check_repository_files(version)
+    check_gold_evidence_docs()
     check_quality_scale()
     check_github_actions()
     check_client_module_size()

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections import deque
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from ipaddress import IPv4Address, IPv4Network, ip_address, ip_network
@@ -16,6 +17,7 @@ from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
+from .error_codes import INVALID_SCAN_SUBNET, SCAN_SUBNET_TOO_LARGE
 from .const import DEFAULT_PORT
 from .connection_helpers import host_for_url
 
@@ -39,6 +41,7 @@ DHE_MARKERS = (
     "manifest-1.9.00.appcache",
     "assets/ste-dhe",
 )
+DHE_MARKERS_NORMALIZED = tuple((marker.lower().encode(), marker) for marker in DHE_MARKERS)
 SCAN_SUBNET_PART_NETWORK_ADDRESS = "network_address"
 SCAN_SUBNET_PART_NETMASK = "netmask"
 SCAN_SUBNET_PART_CIDR = "cidr"
@@ -84,11 +87,11 @@ class SetupScanSubnetInput:
         """Return the selected subnet or None when the scan should use local nets."""
         if self.cidr:
             if self.network_address or self.netmask:
-                raise ValueError("invalid_scan_subnet")
+                raise ValueError(INVALID_SCAN_SUBNET)
             return parse_scan_subnet(self.cidr)
         if self.network_address or self.netmask:
             if not self.network_address or not self.netmask:
-                raise ValueError("invalid_scan_subnet")
+                raise ValueError(INVALID_SCAN_SUBNET)
             return parse_scan_subnet(f"{self.network_address} {self.netmask}")
         return None
 
@@ -118,11 +121,11 @@ def _netmask_prefix_length(mask_text: str) -> int:
     try:
         mask = IPv4Address(mask_text)
     except ValueError as err:
-        raise ValueError("invalid_scan_subnet") from err
+        raise ValueError(INVALID_SCAN_SUBNET) from err
 
     inverted = (~int(mask)) & 0xFFFFFFFF
     if inverted & (inverted + 1):
-        raise ValueError("invalid_scan_subnet")
+        raise ValueError(INVALID_SCAN_SUBNET)
     return 32 - inverted.bit_length()
 
 
@@ -131,8 +134,11 @@ def _parse_ipv4_network(text: str) -> IPv4Network:
     if "/" not in text:
         parsed_address = ip_address(text)
         if not isinstance(parsed_address, IPv4Address):
-            raise ValueError("invalid_scan_subnet")
-        parsed_network = ip_network(f"{parsed_address}/24", strict=False)
+            raise ValueError(INVALID_SCAN_SUBNET)
+        parsed_network = ip_network(
+            (int(parsed_address), DHE_SCAN_MIN_PREFIX_LENGTH),
+            strict=False,
+        )
     else:
         address_text, mask_text = text.split("/", maxsplit=1)
         if "." in mask_text:
@@ -144,17 +150,24 @@ def _parse_ipv4_network(text: str) -> IPv4Network:
         else:
             parsed_network = ip_network(text, strict=False)
     if not isinstance(parsed_network, IPv4Network):
-        raise ValueError("invalid_scan_subnet")
+        raise ValueError(INVALID_SCAN_SUBNET)
     return parsed_network
 
 
-def dhe_response_evidence(body: bytes, headers: Any) -> tuple[str, ...]:
+def dhe_response_evidence(
+    body: bytes | bytearray | memoryview | str,
+    headers: Any,
+) -> tuple[str, ...]:
     """Return evidence markers that make a response look like the DHE web UI."""
-    text = body.decode("utf-8", errors="ignore").lower()
+    lowered = (
+        bytes(body).lower()
+        if not isinstance(body, str)
+        else body.lower().encode()
+    )
     evidence = [
-        marker
-        for marker in DHE_MARKERS
-        if marker.lower() in text
+        display
+        for normalized, display in DHE_MARKERS_NORMALIZED
+        if normalized in lowered
     ]
     try:
         powered_by = str(headers.get("X-Powered-By", ""))
@@ -184,9 +197,8 @@ def ipv4_scan_networks(addresses: Iterable[str]) -> list[IPv4Network]:
             or parsed.is_unspecified
         ):
             continue
-        octets = [int(part) for part in str(parsed).split(".")]
-        network = ip_network(
-            f"{octets[0]}.{octets[1]}.{octets[2]}.0/24",
+        network = IPv4Network(
+            (int(parsed) & 0xFFFFFF00, DHE_SCAN_MIN_PREFIX_LENGTH),
             strict=False,
         )
         if isinstance(network, IPv4Network) and network not in seen:
@@ -206,23 +218,23 @@ def parse_scan_subnet(value: Any) -> IPv4Network | None:
             prefix_length = _netmask_prefix_length(parts[1])
             parsed_network = ip_network(f"{parts[0]}/{prefix_length}", strict=False)
         elif len(parts) > 2:
-            raise ValueError("invalid_scan_subnet")
+            raise ValueError(INVALID_SCAN_SUBNET)
         else:
             parsed_network = _parse_ipv4_network(text)
     except ValueError as err:
-        raise ValueError("invalid_scan_subnet") from err
+        raise ValueError(INVALID_SCAN_SUBNET) from err
 
     if not isinstance(parsed_network, IPv4Network):
-        raise ValueError("invalid_scan_subnet")
+        raise ValueError(INVALID_SCAN_SUBNET)
     if (
         not _is_rfc1918_network(parsed_network)
         or parsed_network.is_loopback
         or parsed_network.is_link_local
         or parsed_network.network_address.is_unspecified
     ):
-        raise ValueError("invalid_scan_subnet")
+        raise ValueError(INVALID_SCAN_SUBNET)
     if parsed_network.prefixlen < DHE_SCAN_MIN_PREFIX_LENGTH:
-        raise ValueError("scan_subnet_too_large")
+        raise ValueError(SCAN_SUBNET_TOO_LARGE)
     return parsed_network
 
 
@@ -287,22 +299,27 @@ def setup_scan_status_text(
 def scan_hosts(networks: Sequence[IPv4Network], *, max_hosts: int) -> list[str]:
     """Expand networks into host addresses, capped for setup responsiveness."""
     hosts: list[str] = []
-    iterators: list[Iterator[IPv4Address]] = []
-    for network in networks:
-        iterators.append(iter(network.hosts()))
-    while iterators and len(hosts) < max_hosts:
-        next_round: list[Iterator[IPv4Address]] = []
-        for iterator in iterators:
-            try:
-                host = next(iterator)
-            except StopIteration:
-                continue
-            hosts.append(str(host))
-            if len(hosts) >= max_hosts:
-                break
-            next_round.append(iterator)
-        iterators = next_round
+    if max_hosts <= 0:
+        return hosts
+
+    queue: deque[Iterator[IPv4Address]] = deque(
+        iter(network.hosts()) for network in networks
+    )
+    while queue and len(hosts) < max_hosts:
+        iterator = queue.popleft()
+        try:
+            hosts.append(str(next(iterator)))
+        except StopIteration:
+            continue
+        queue.append(iterator)
     return hosts
+
+
+def scan_concurrency_for_host_count(host_count: int) -> int:
+    """Return bounded concurrency for the currently queued scan jobs."""
+    if host_count <= 0:
+        return 1
+    return max(1, min(DHE_SCAN_CONCURRENCY, host_count))
 
 
 def local_ipv4_addresses_from_hass(hass: HomeAssistant) -> list[str]:
@@ -389,7 +406,7 @@ async def async_scan_dhe_hosts(
         sock_connect=DHE_SCAN_CONNECT_TIMEOUT_SECONDS,
         sock_read=DHE_SCAN_CONNECT_TIMEOUT_SECONDS,
     )
-    semaphore = asyncio.Semaphore(DHE_SCAN_CONCURRENCY)
+    semaphore = asyncio.Semaphore(scan_concurrency_for_host_count(len(hosts)))
 
     async def _bounded_probe(host: str) -> DHEHostCandidate | None:
         async with semaphore:

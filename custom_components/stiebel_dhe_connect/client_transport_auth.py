@@ -412,8 +412,6 @@ class DHEClientTransportAuthMixin:
                                 "Token received, waiting for DHE pairing confirmation."
                             )
                             continue
-                        await self._save_token(candidate_token)
-                        return candidate_token
                     if require_confirmation and candidate_token and pairing_confirmed:
                         _LOGGER.debug(
                             "Pairing confirmed after token_response; proceeding "
