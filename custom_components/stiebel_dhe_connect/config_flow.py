@@ -719,6 +719,28 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
         )
         await self.hass.config_entries.async_reload(entry.entry_id)
 
+    async def _async_abort_discovery_conflict(
+        self,
+        *,
+        host: str,
+        port: int,
+        name: str,
+        discovery_record: DiscoveryRecord,
+    ) -> config_entries.ConfigFlowResult:
+        """Record one discovery conflict and abort with the conflict reason."""
+        await _async_record_discovery_safely(
+            self.hass,
+            discovery_record,
+            result="conflicting_identity",
+        )
+        _async_create_discovery_conflict_issue(
+            self.hass,
+            host,
+            port,
+            name,
+        )
+        return self.async_abort(reason="conflicting_discovery_identity")
+
     async def _async_handle_setup_scan(self) -> config_entries.ConfigFlowResult | None:
         """Start or finish the optional setup scan."""
         if self._setup_scan.done:
@@ -824,18 +846,12 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
             discovery_info=discovery_info,
         )
         if discovery_record.hard_conflict:
-            await _async_record_discovery_safely(
-                self.hass,
-                discovery_record,
-                result="conflicting_identity",
+            return await self._async_abort_discovery_conflict(
+                host=host,
+                port=port,
+                name=name,
+                discovery_record=discovery_record,
             )
-            _async_create_discovery_conflict_issue(
-                self.hass,
-                host,
-                port,
-                name,
-            )
-            return self.async_abort(reason="conflicting_discovery_identity")
         if discovery_record.confidence < DISCOVERY_MIN_PROMPT_CONFIDENCE:
             await _async_record_discovery_safely(
                 self.hass,
@@ -846,18 +862,12 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
 
         matched_entries = self._entries_for_discovery_identity(discovery_info)
         if len(matched_entries) > 1:
-            await _async_record_discovery_safely(
-                self.hass,
-                discovery_record,
-                result="conflicting_identity",
+            return await self._async_abort_discovery_conflict(
+                host=host,
+                port=port,
+                name=name,
+                discovery_record=discovery_record,
             )
-            _async_create_discovery_conflict_issue(
-                self.hass,
-                host,
-                port,
-                name,
-            )
-            return self.async_abort(reason="conflicting_discovery_identity")
         if len(matched_entries) == 1:
             matched_entry = matched_entries[0]
             if _is_target_used_by_other_entry(
@@ -866,18 +876,12 @@ class StiebelDHEConnectConfigFlow(  # type: ignore[call-arg]
                 port,
                 exclude_entry_id=matched_entry.entry_id,
             ):
-                await _async_record_discovery_safely(
-                    self.hass,
-                    discovery_record,
-                    result="conflicting_identity",
+                return await self._async_abort_discovery_conflict(
+                    host=host,
+                    port=port,
+                    name=name,
+                    discovery_record=discovery_record,
                 )
-                _async_create_discovery_conflict_issue(
-                    self.hass,
-                    host,
-                    port,
-                    name,
-                )
-                return self.async_abort(reason="conflicting_discovery_identity")
             current_target = _entry_target(matched_entry)
             if current_target is None:
                 return self.async_abort(reason="invalid_discovery_parameters")
