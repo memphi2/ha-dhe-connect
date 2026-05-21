@@ -17,6 +17,53 @@ python -m ruff check custom_components/stiebel_dhe_connect tests scripts
 python scripts/release_check.py --run-local-checks --expect-tag absent --expect-github-release absent
 ```
 
+### README Badge Visibility Check
+
+Before finalizing the release-prep branch, verify that README badges resolve to the
+expected versions and links:
+
+```bash
+python3 - <<'PY'
+import json
+from pathlib import Path
+import urllib.request
+
+headers = {"User-Agent": "ha-dhe-connect-validation/1.0"}
+
+
+def fetch(url: str):
+    req = urllib.request.Request(url, headers=headers)
+    return urllib.request.urlopen(req, timeout=20)
+
+
+with Path("custom_components/stiebel_dhe_connect/manifest.json").open("r", encoding="utf-8") as f:
+    manifest = json.load(f)
+expected_release = manifest["version"]
+
+
+with fetch("https://github.com/memphi2/ha-dhe-connect/actions/workflows/validate.yml/badge.svg") as r:
+    assert r.status == 200
+
+with fetch("https://img.shields.io/github/v/tag/memphi2/ha-dhe-connect?sort=semver&label=release") as r:
+    badge = r.read().decode()
+    assert r.status == 200
+    assert f"release: v{expected_release}" in badge
+
+with fetch("https://api.github.com/repos/memphi2/ha-dhe-connect/releases/latest") as r:
+    payload = json.loads(r.read().decode())
+    assert payload.get("tag_name") == f"v{expected_release}"
+    assert payload.get("html_url", "").endswith(f"/releases/tag/v{expected_release}")
+
+print("README badge sightcheck: pass")
+PY
+```
+
+This check confirms:
+
+- the validate badge is reachable;
+- the release badge resolves with `v{expected_release}`;
+- the Releases page resolves to `https://github.com/memphi2/ha-dhe-connect/releases/tag/v{expected_release}`.
+
 What those checks cover:
 
 - Unit and behavior tests with pytest-cov line coverage for

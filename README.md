@@ -92,6 +92,7 @@ diagnostics in a compact Mushroom-style layout.
 | Local tests, HA smoke checks and release-readiness flow | [docs/validation.md](docs/validation.md) |
 | Platinum preparation checklist | [docs/platinum_prep.md](docs/platinum_prep.md) |
 | Security and token-handling notes | [SECURITY.md](SECURITY.md) |
+| Short release archive summary | [docs/release_archive_memento.md](docs/release_archive_memento.md) |
 
 ## Installation
 
