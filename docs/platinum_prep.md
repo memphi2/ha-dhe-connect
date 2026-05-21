@@ -46,6 +46,8 @@ reviewable:
    - Done on `v1.8.0`: `extra_checks = true`
    - Done on `v1.8.0`: `warn_unused_configs = true`
    - Done on `v1.8.0`: `follow_imports = "normal"`
+   - Done on `v1.8.0`: `python_version = "3.14"` to match the repository CI
+     runtime and parse current Home Assistant dependency syntax consistently
    - Done on `v1.8.0`: `strict = true`
    - Done on `v1.8.0`: removed broad `ignore_missing_imports`
 2. Kept the gate scoped to every top-level integration module.
@@ -66,7 +68,8 @@ reviewable:
   redundant-cast, unreachable-code, strict-equality, no-untyped-generics,
   no-untyped-calls, no-incomplete-defs, extra-checks and implicit-optional
   checks enabled.
-- The active mypy profile now uses `strict = true` and follows imports normally.
+- The active mypy profile now uses `strict = true`, follows imports normally,
+  and targets Python 3.14 to match the GitHub Actions validation runtime.
 - The gate no longer uses broad missing-import suppression.
 - `disallow_untyped_defs` is now enforced globally for the typed module set.
 - `scripts/check_typing.py` now fails before mypy if a top-level integration

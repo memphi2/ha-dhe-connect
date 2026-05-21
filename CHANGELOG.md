@@ -42,6 +42,9 @@ It is not an official Home Assistant Core certification.
 - Switched the typing gate to `strict = true` with normal import following and
   no broad missing-import suppression, and cleaned up HA typing mismatches
   without changing runtime protocol behavior.
+- Aligned the mypy target with the Python 3.14 CI runtime so current Home
+  Assistant dependency syntax is parsed consistently while every integration
+  module stays in the strict file gate.
 - Added the first `disallow_untyped_defs` module group gate (helpers,
   connectivity, diagnostics and pairing-validation utilities) as a controlled
   step toward Platinum strict typing.
