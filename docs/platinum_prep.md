@@ -96,6 +96,14 @@ reviewable:
   diagnostics where appropriate. Timer and runtime-detail entities that can
   change frequently are kept out of long-term-statistics shapes unless Home
   Assistant has a matching semantic class.
+- Internal entity read paths avoid full snapshotting of runtime attributes:
+  sensor, binary-sensor and text entities read from the client's internal
+  measurement-attribute cache map in update-critical paths to reduce per-update
+  allocations.
+- Sensor entities were optimized to avoid always cloning recorder attributes:
+  recorded attribute dictionaries are snapshot only if value/state thresholds
+  indicate a state write is likely, which keeps high-frequency updates lighter
+  under bursty runtime streams.
 - Repeated weather, radio, consumption and saving-monitor payloads are kept as
   bounded summaries or attributes only when needed for services, options flows
   or visible entity state. Stable internal ODB values are recognized and
@@ -132,3 +140,8 @@ python scripts/release_check.py --run-local-checks --expect-tag skip --expect-gi
 - `strict-typing` is switched from `todo` to `done` in `quality_scale.yaml`.
 - Typing gate remains green without relaxing mypy scope.
 - No regressions in Repairs, Reconfigure, Discovery or diagnostics tests.
+- Runtime performance remains bounded by design:
+  - Setup scan is capped by `DHE_SCAN_MAX_HOSTS` and bounded by `scan_concurrency_for_host_count()`.
+  - Runtime parser high-frequency paths avoid unnecessary type-branch work in repeated message loops.
+  - Runtime-category counters and invalid-read diagnostics skip repeated defensive runtime checks in steady-state paths.
+  - Recorder writes stay event-driven and state-delta based; derived/wide payload entities stay attribute-light unless state changes.

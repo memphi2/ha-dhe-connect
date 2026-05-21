@@ -832,10 +832,20 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
             return None
         return source_command.replace("set:", "get:", 1)
 
+    def _measurement_attributes(self) -> dict[int, dict[str, Any]]:
+        """Return cached per-ODB attributes for this client with test compatibility."""
+        if hasattr(self._client, "_last_measurement_attributes"):
+            attributes = getattr(self._client, "_last_measurement_attributes")
+        else:
+            attributes = getattr(self._client, "last_measurement_attributes")
+        if isinstance(attributes, dict):
+            return cast(dict[int, dict[str, Any]], attributes)
+        return {}
+
     def _convert_value(self, value: MeasurementValue) -> MeasurementValue:
         """Convert the raw client value for display."""
         if self.entity_description.attribute_key is not None:
-            attributes = self._client.last_measurement_attributes.get(
+            attributes = self._measurement_attributes().get(
                 self.entity_description.odb_id,
                 {},
             )
@@ -1046,18 +1056,20 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
     def _dynamic_state_attributes(self) -> dict[str, Any]:
         if self.entity_description.attribute_key is not None:
             return {}
-        attributes = self._client.last_measurement_attributes.get(
+        attributes = self._measurement_attributes().get(
             self.entity_description.odb_id,
             {},
         )
-        if not isinstance(attributes, dict):
-            return {}
-        return cast(dict[str, Any], attributes)
+        return {str(key): value for key, value in attributes.items()}
 
     def _recorded_state_attributes(self) -> dict[str, Any]:
         """Return state attributes that are visible to the recorder."""
         return {
-            key: deepcopy(value)
+            key: (
+                deepcopy(value)
+                if isinstance(value, (dict, list, tuple, set))
+                else value
+            )
             for key, value in (self._attr_extra_state_attributes or {}).items()
             if key not in self._unrecorded_attributes
         }
@@ -1073,22 +1085,26 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
 
         self._update_extra_state_attributes()
         self._update_timer_remaining_base(value)
-        recorded_attributes = self._recorded_state_attributes()
-        recorded_attributes_changed = (
-            recorded_attributes != self._last_written_recorded_attributes
-        )
         self._attr_native_value = self._convert_value(value)
         self._attr_available = self._available_from_value(
             self._client_online(),
             self._attr_native_value,
         )
-        if not self._should_write_measurement_state(
-            self._attr_native_value,
-            recorded_attributes_changed=recorded_attributes_changed,
-        ):
+        should_write = self._should_write_measurement_state(self._attr_native_value)
+        if should_write:
+            self._mark_state_written()
+            self.async_write_ha_state()
             self._schedule_timer_countdown()
             return
-        self._mark_state_written(recorded_attributes=recorded_attributes)
+
+        recorded_attributes = self._recorded_state_attributes()
+        if recorded_attributes == self._last_written_recorded_attributes:
+            self._schedule_timer_countdown()
+            return
+
+        self._mark_state_written(
+            recorded_attributes=recorded_attributes,
+        )
         self.async_write_ha_state()
         self._schedule_timer_countdown()
 

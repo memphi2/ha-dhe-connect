@@ -10,6 +10,13 @@ from homeassistant.core import HomeAssistant
 
 from .config_flow_discovery import SETUP_MODE_MANUAL, SETUP_MODE_SCAN
 from .entity_state_helpers import CONF_INTERNAL_SCALD_PROTECTION
+from .error_codes import (
+    EMBEDDED_PORT_NOT_SUPPORTED,
+    INVALID_HOST,
+    INVALID_INTERNAL_SCALD_PROTECTION,
+    INVALID_PORT,
+    INVALID_SCAN_SUBNET,
+)
 from .setup_scan import (
     SCAN_SUBNET_PART_CIDR,
     SCAN_SUBNET_PART_NETMASK,
@@ -30,15 +37,15 @@ SETUP_SCAN_PROGRESS_ACTION = "scan_dhe"
 
 def apply_validation_error(errors: dict[str, str], err: ValueError) -> None:
     """Map validation exceptions to visible config-flow fields."""
-    code = str(err) or "invalid_host"
-    if code == "invalid_port":
+    code = str(err) or INVALID_HOST
+    if code == INVALID_PORT:
         errors[CONF_PORT] = code
-    elif code == "invalid_internal_scald_protection":
+    elif code == INVALID_INTERNAL_SCALD_PROTECTION:
         errors[CONF_INTERNAL_SCALD_PROTECTION] = code
-    elif code == "embedded_port_not_supported":
+    elif code == EMBEDDED_PORT_NOT_SUPPORTED:
         errors[CONF_HOST] = code
     else:
-        errors[CONF_HOST] = "invalid_host"
+        errors[CONF_HOST] = INVALID_HOST
 
 
 def scan_subnet_network_mask_input(
@@ -67,7 +74,7 @@ def required_scan_subnet(scan_input: SetupScanSubnetInput) -> IPv4Network:
     """Return the selected subnet from a mode-specific required subnet form."""
     scan_subnet = scan_input.parse()
     if scan_subnet is None:
-        raise ValueError("invalid_scan_subnet")
+        raise ValueError(INVALID_SCAN_SUBNET)
     return scan_subnet
 
 

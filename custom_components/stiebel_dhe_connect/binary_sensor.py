@@ -120,7 +120,7 @@ class StiebelDHEBinarySensor(StiebelDHEEntityMixin, BinarySensorEntity):
     def _update_extra_state_attributes(self) -> None:
         self._attr_extra_state_attributes = merge_state_attributes(
             self._base_extra_state_attributes,
-            self._client.last_measurement_attributes.get(
+            self._client._last_measurement_attributes.get(
                 self.entity_description.odb_id,
                 {},
             ),

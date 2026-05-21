@@ -121,6 +121,17 @@ from .pairing_validation import (
 )
 from .pairing_helpers import map_pairing_error
 from .repair_issues import DISCOVERY_CONFLICT_ISSUE
+from .error_codes import (
+    ALREADY_CONFIGURED,
+    ALREADY_IN_PROGRESS,
+    INVALID_DISCOVERY_PARAMETERS,
+    INVALID_INTERNAL_SCALD_PROTECTION,
+    INVALID_PORT,
+    INVALID_SCAN_SUBNET_MODE,
+    INVALID_SETUP_MODE,
+    LOW_CONFIDENCE_DISCOVERY,
+    RECENTLY_DISCOVERED,
+)
 from .protocol import (
     CO2_EMISSION_MAX,
     ELECTRICITY_PRICE_MAX,
@@ -225,7 +236,7 @@ def _connection_data_from_user_input(user_input: Mapping[str, Any]) -> dict[str,
         user_input.get(CONF_INTERNAL_SCALD_PROTECTION) or ""
     ).strip()
     if internal_scald_protection not in INTERNAL_SCALD_PROTECTION_OPTIONS:
-        raise ValueError("invalid_internal_scald_protection")
+        raise ValueError(INVALID_INTERNAL_SCALD_PROTECTION)
     name = str(user_input.get(CONF_NAME, DEFAULT_NAME)).strip() or DEFAULT_NAME
     return {
         CONF_HOST: host,
@@ -640,7 +651,7 @@ class StiebelDHEConnectConfigFlow(
         """Start the setup path for a discovered DHE target."""
         _async_delete_discovery_conflict_issue(self.hass, host, port)
         if _is_target_used_by_other_entry(self.hass, host, port):
-            return self.async_abort(reason="already_configured")
+            return self.async_abort(reason=ALREADY_CONFIGURED)
         flow_context = cast(dict[str, Any], self.context)
         flow_context[FLOW_CONTEXT_DISCOVERED_HOST] = host
         flow_context[FLOW_CONTEXT_DISCOVERED_PORT] = port
@@ -829,7 +840,7 @@ class StiebelDHEConnectConfigFlow(
                     source_flow_id=choice.flow_id,
                 )
 
-        return self._show_setup_choice_form({CONF_SETUP_MODE: "invalid_setup_mode"})
+        return self._show_setup_choice_form({CONF_SETUP_MODE: INVALID_SETUP_MODE})
 
     async def async_step_zeroconf(self, discovery_info: Any) -> config_entries.ConfigFlowResult:
         """Handle a DHE discovered by Zeroconf/mDNS."""
@@ -843,7 +854,7 @@ class StiebelDHEConnectConfigFlow(
             raw_port = getattr(discovery_info, "port", None)
             port = DEFAULT_PORT if raw_port is None else validate_port(raw_port)
         except (TypeError, ValueError):
-            return self.async_abort(reason="invalid_discovery_parameters")
+            return self.async_abort(reason=INVALID_DISCOVERY_PARAMETERS)
 
         if _is_matching_flow_in_progress(
             self.hass,
@@ -851,7 +862,7 @@ class StiebelDHEConnectConfigFlow(
             port,
             current_flow_id=getattr(self, "flow_id", None),
         ):
-            return self.async_abort(reason="already_in_progress")
+            return self.async_abort(reason=ALREADY_IN_PROGRESS)
 
         name = _discovery_info_name(discovery_info)
         discovery_record = _zeroconf_discovery_record(
@@ -873,7 +884,7 @@ class StiebelDHEConnectConfigFlow(
                 discovery_record,
                 result="low_confidence",
             )
-            return self.async_abort(reason="low_confidence_discovery")
+            return self.async_abort(reason=LOW_CONFIDENCE_DISCOVERY)
 
         matched_entries = self._entries_for_discovery_identity(discovery_info)
         if len(matched_entries) > 1:
@@ -899,10 +910,10 @@ class StiebelDHEConnectConfigFlow(
                 )
             current_target = _entry_target(matched_entry)
             if current_target is None:
-                return self.async_abort(reason="invalid_discovery_parameters")
+                return self.async_abort(reason=INVALID_DISCOVERY_PARAMETERS)
             existing_host, existing_port = current_target
             if existing_host == host and existing_port == port:
-                return self.async_abort(reason="already_configured")
+                return self.async_abort(reason=ALREADY_CONFIGURED)
             await self._async_update_discovered_existing_entry(
                 matched_entry,
                 host=host,
@@ -914,10 +925,10 @@ class StiebelDHEConnectConfigFlow(
                 result="updated_existing",
             )
             _async_delete_discovery_conflict_issue(self.hass, host, port)
-            return self.async_abort(reason="already_configured")
+            return self.async_abort(reason=ALREADY_CONFIGURED)
 
         if _is_target_used_by_other_entry(self.hass, host, port):
-            return self.async_abort(reason="already_configured")
+            return self.async_abort(reason=ALREADY_CONFIGURED)
         try:
             recent_prompt_seen = await _async_recent_discovery_prompt_seen(
                 self.hass,
@@ -932,7 +943,7 @@ class StiebelDHEConnectConfigFlow(
                 discovery_record,
                 result="recently_discovered",
             )
-            return self.async_abort(reason="recently_discovered")
+            return self.async_abort(reason=RECENTLY_DISCOVERED)
 
         return await self._async_start_discovered_setup(
             host,
@@ -957,7 +968,7 @@ class StiebelDHEConnectConfigFlow(
             ).strip()
             if internal_scald_protection not in INTERNAL_SCALD_PROTECTION_OPTIONS:
                 errors[CONF_INTERNAL_SCALD_PROTECTION] = (
-                    "invalid_internal_scald_protection"
+                    INVALID_INTERNAL_SCALD_PROTECTION
                 )
             else:
                 self._pending_setup_data[CONF_INTERNAL_SCALD_PROTECTION] = (
@@ -979,7 +990,7 @@ class StiebelDHEConnectConfigFlow(
                 user_input.get(CONF_SCAN_PORT, DEFAULT_PORT)
             )
         except (TypeError, ValueError):
-            return self._show_subnet_scan_form({CONF_SCAN_PORT: "invalid_port"})
+            return self._show_subnet_scan_form({CONF_SCAN_PORT: INVALID_PORT})
 
         mode = user_input.get(CONF_SCAN_SUBNET_MODE)
         if mode == SCAN_SUBNET_MODE_CURRENT:
@@ -990,7 +1001,7 @@ class StiebelDHEConnectConfigFlow(
         if mode == SCAN_SUBNET_MODE_CIDR:
             return await self.async_step_subnet_scan_cidr()
         return self._show_subnet_scan_form(
-            {CONF_SCAN_SUBNET_MODE: "invalid_scan_subnet_mode"}
+            {CONF_SCAN_SUBNET_MODE: INVALID_SCAN_SUBNET_MODE}
         )
 
     async def async_step_subnet_scan_network_mask(
@@ -1070,12 +1081,12 @@ class StiebelDHEConnectConfigFlow(
                     user_input.get(CONF_INTERNAL_SCALD_PROTECTION) or ""
                 ).strip()
                 if internal_scald_protection not in INTERNAL_SCALD_PROTECTION_OPTIONS:
-                    raise ValueError("invalid_internal_scald_protection")
+                    raise ValueError(INVALID_INTERNAL_SCALD_PROTECTION)
             except ValueError as err:
                 _apply_validation_error(errors, err)
             else:
                 if _is_target_used_by_other_entry(self.hass, host, port):
-                    return self.async_abort(reason="already_configured")
+                    return self.async_abort(reason=ALREADY_CONFIGURED)
                 name = str(user_input.get(CONF_NAME, DEFAULT_NAME)).strip() or DEFAULT_NAME
 
                 if not await _can_connect(self.hass, host, port):

@@ -26,6 +26,8 @@ from .protocol import (
 )
 from .service_helpers import WEATHER_RESULT_NUMBER_MAX
 
+from .error_codes import INVALID_RANGE
+
 ATTR_COUNTRY_ID = "country_id"
 ATTR_RADIO_SELECTION = "selection"
 ATTR_RADIO_SEARCH_TYPE = "search_type"
@@ -92,7 +94,7 @@ def optional_float(value: Any, min_value: float, max_value: float) -> float | No
         return None
     parsed = float(text)
     if parsed < min_value or parsed > max_value:
-        raise ValueError("invalid_range")
+        raise ValueError(INVALID_RANGE)
     return parsed
 
 

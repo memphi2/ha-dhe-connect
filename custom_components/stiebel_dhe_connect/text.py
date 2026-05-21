@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from homeassistant.components.text import TextEntity, TextEntityDescription, TextMode
 from homeassistant.config_entries import ConfigEntry
@@ -101,6 +101,16 @@ class StiebelDHEBaseText(StiebelDHEEntityMixin, TextEntity, RestoreEntity):
     _attr_has_entity_name = True
     _attr_should_poll = False
     _last_written_text_signature: tuple[object, ...] | None
+
+    def _measurement_attributes(self) -> dict[int, dict[str, object]]:
+        """Return per-ODB attributes for this client with test compatibility."""
+        if hasattr(self._client, "_last_measurement_attributes"):
+            attributes = getattr(self._client, "_last_measurement_attributes")
+        else:
+            attributes = getattr(self._client, "last_measurement_attributes")
+        if isinstance(attributes, dict):
+            return cast(dict[int, dict[str, object]], attributes)
+        return {}
 
     @callback
     def _handle_availability_update(self, available: bool) -> None:
@@ -221,7 +231,7 @@ class StiebelDHEText(StiebelDHEBaseText):
         self._write_text_state()
 
     def _set_value_from_client(self) -> bool:
-        attributes = self._client.last_measurement_attributes.get(
+        attributes = self._measurement_attributes().get(
             self.entity_description.measurement_id,
             {},
         )
@@ -237,7 +247,7 @@ class StiebelDHEText(StiebelDHEBaseText):
             base_attributes["name"] = self._attr_native_value
         self._attr_extra_state_attributes = merge_state_attributes(
             base_attributes,
-            self._client.last_measurement_attributes.get(
+            self._measurement_attributes().get(
                 self.entity_description.measurement_id,
                 {},
             ),
@@ -321,7 +331,7 @@ class StiebelDHEControlUnitNameText(StiebelDHEBaseText):
     def _set_value_from_client(self) -> bool:
         name = self._client.last_device_info.get("controlunit_name")
         if name in (None, ""):
-            attributes = self._client.last_measurement_attributes.get(ID_DEVICE_INFO, {})
+            attributes = self._measurement_attributes().get(ID_DEVICE_INFO, {})
             name = attributes.get("controlunit_name")
         text = str(name).strip() if name is not None else ""
         if not text:

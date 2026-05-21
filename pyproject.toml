@@ -1,5 +1,6 @@
 [tool.mypy]
 python_version = "3.14"
+explicit_package_bases = true
 follow_imports = "normal"
 extra_checks = true
 strict = true
@@ -54,6 +55,7 @@ files = [
     "custom_components/stiebel_dhe_connect/engineio_helpers.py",
     "custom_components/stiebel_dhe_connect/entity_helpers.py",
     "custom_components/stiebel_dhe_connect/entity_state_helpers.py",
+    "custom_components/stiebel_dhe_connect/error_codes.py",
     "custom_components/stiebel_dhe_connect/flow_helpers.py",
     "custom_components/stiebel_dhe_connect/media_player.py",
     "custom_components/stiebel_dhe_connect/number.py",
