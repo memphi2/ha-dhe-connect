@@ -23,6 +23,8 @@
 - Expanded the same `disallow_untyped_defs` gate to `config_flow` and `switch`
   by adding full step-method return annotations and explicit switch action
   argument typing.
+- Finalized this typing round by enabling `disallow_untyped_defs` globally in
+  the mypy profile for the integration module set.
 
 ## v1.7.0 - 2026-05-21
 

@@ -2,6 +2,7 @@
 python_version = "3.12"
 ignore_missing_imports = true
 follow_imports = "skip"
+disallow_untyped_defs = true
 warn_return_any = true
 warn_unused_ignores = true
 files = [
@@ -75,18 +76,6 @@ files = [
     "custom_components/stiebel_dhe_connect/weather.py",
     "custom_components/stiebel_dhe_connect/weather_mapping.py",
 ]
-
-[[tool.mypy.overrides]]
-module = [
-    "custom_components.stiebel_dhe_connect.async_helpers",
-    "custom_components.stiebel_dhe_connect.config_flow",
-    "custom_components.stiebel_dhe_connect.connection_helpers",
-    "custom_components.stiebel_dhe_connect.connection_probe",
-    "custom_components.stiebel_dhe_connect.diagnostics",
-    "custom_components.stiebel_dhe_connect.pairing_validation",
-    "custom_components.stiebel_dhe_connect.switch",
-]
-disallow_untyped_defs = true
 
 [tool.pytest.ini_options]
 addopts = "-p no:homeassistant"
