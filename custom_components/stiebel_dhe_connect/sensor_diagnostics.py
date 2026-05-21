@@ -162,7 +162,10 @@ class StiebelDHEErrorStatusSensor(StiebelDHEEntityMixin, SensorEntity):
             self._client.add_setpoint_callback(self._handle_setpoint_update)
         )
         self.async_on_remove(
-            self._client.add_measurement_callback(self._handle_measurement_update)
+            self._client.add_measurement_callback(
+                self._handle_measurement_update,
+                replay=False,
+            )
         )
         self.async_on_remove(
             self._client.add_availability_callback(self._handle_availability_update)

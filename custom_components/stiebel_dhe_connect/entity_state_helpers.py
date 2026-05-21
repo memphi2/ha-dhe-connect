@@ -221,7 +221,11 @@ def filtered_state_attributes(
     """Return state attributes after removing keys that should not hit recorder."""
     if not isinstance(attributes, Mapping):
         return {}
-    hidden = set(hidden_keys)
+    hidden = (
+        hidden_keys
+        if isinstance(hidden_keys, (set, frozenset))
+        else frozenset(hidden_keys)
+    )
     return {
         key: (
             deepcopy(value)

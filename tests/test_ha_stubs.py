@@ -220,6 +220,48 @@ def ensure_homeassistant_stubs() -> None:
             switch.SwitchEntityDescription = SwitchEntityDescription
             components.switch = switch
 
+        if not hasattr(components, "binary_sensor"):
+            from dataclasses import dataclass
+
+            binary_sensor = _module("homeassistant.components.binary_sensor")
+
+            class BinarySensorEntity:
+                pass
+
+            @dataclass(frozen=True, kw_only=True)
+            class BinarySensorEntityDescription:
+                key: str | None = None
+                name: str | None = None
+                translation_key: str | None = None
+                icon: str | None = None
+                device_class: str | None = None
+                entity_category: str | None = None
+                entity_registry_enabled_default: bool = True
+
+            binary_sensor.BinarySensorEntity = BinarySensorEntity
+            binary_sensor.BinarySensorEntityDescription = BinarySensorEntityDescription
+            components.binary_sensor = binary_sensor
+
+        if not hasattr(components, "button"):
+            from dataclasses import dataclass
+
+            button = _module("homeassistant.components.button")
+
+            class ButtonEntity:
+                pass
+
+            @dataclass(frozen=True, kw_only=True)
+            class ButtonEntityDescription:
+                key: str | None = None
+                name: str | None = None
+                translation_key: str | None = None
+                icon: str | None = None
+                entity_registry_enabled_default: bool = True
+
+            button.ButtonEntity = ButtonEntity
+            button.ButtonEntityDescription = ButtonEntityDescription
+            components.button = button
+
         helpers = sys.modules.get("homeassistant.helpers")
         if helpers is None:
             helpers = _module("homeassistant.helpers")
@@ -436,6 +478,42 @@ def ensure_homeassistant_stubs() -> None:
     switch.SwitchEntity = SwitchEntity
     switch.SwitchEntityDescription = SwitchEntityDescription
     components.switch = switch
+
+    binary_sensor = _module("homeassistant.components.binary_sensor")
+
+    class BinarySensorEntity:
+        pass
+
+    @dataclass(frozen=True, kw_only=True)
+    class BinarySensorEntityDescription:
+        key: str | None = None
+        name: str | None = None
+        translation_key: str | None = None
+        icon: str | None = None
+        device_class: str | None = None
+        entity_category: str | None = None
+        entity_registry_enabled_default: bool = True
+
+    binary_sensor.BinarySensorEntity = BinarySensorEntity
+    binary_sensor.BinarySensorEntityDescription = BinarySensorEntityDescription
+    components.binary_sensor = binary_sensor
+
+    button = _module("homeassistant.components.button")
+
+    class ButtonEntity:
+        pass
+
+    @dataclass(frozen=True, kw_only=True)
+    class ButtonEntityDescription:
+        key: str | None = None
+        name: str | None = None
+        translation_key: str | None = None
+        icon: str | None = None
+        entity_registry_enabled_default: bool = True
+
+    button.ButtonEntity = ButtonEntity
+    button.ButtonEntityDescription = ButtonEntityDescription
+    components.button = button
 
     # constants
     const = _module("homeassistant.const")

@@ -301,8 +301,16 @@ class _FixtureDHEClient:
         return lambda: self.callbacks["diagnostic"].remove(callback_fn)
 
     @callback
-    def add_measurement_callback(self, callback_fn: Callable[[int, Any], None]):
+    def add_measurement_callback(
+        self,
+        callback_fn: Callable[[int, Any], None],
+        *,
+        replay: bool = True,
+    ):
         self.callbacks["measurement"].append(callback_fn)
+        if replay:
+            for odb_id, value in self.last_measurements.items():
+                callback_fn(odb_id, value)
         return lambda: self.callbacks["measurement"].remove(callback_fn)
 
     @callback
@@ -3562,11 +3570,15 @@ async def test_unavailable_runtime_blocks_controls_except_repair_button() -> Non
 
         client.emit_availability(False)
         await hass.async_block_till_done()
+        offline_states = {
+            key: (state.state if (state := hass.states.get(entity_id)) else None)
+            for key, entity_id in entity_ids.items()
+        }
         assert all(
             (state := hass.states.get(entity_id)) is not None
             and state.state == "unavailable"
             for entity_id in entity_ids.values()
-        )
+        ), offline_states
 
         blocked_calls = (
             ("button", "press", {"entity_id": entity_ids["button"]}),

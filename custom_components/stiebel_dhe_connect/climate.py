@@ -154,7 +154,10 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
             self._client.add_availability_callback(self._handle_availability_update)
         )
         self.async_on_remove(
-            self._client.add_measurement_callback(self._handle_measurement_update)
+            self._client.add_measurement_callback(
+                self._handle_measurement_update,
+                replay=False,
+            )
         )
         self._sync_temperatures_from_measurements()
         self._sync_hvac_mode_from_measurements()
