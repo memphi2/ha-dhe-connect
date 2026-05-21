@@ -1,6 +1,7 @@
 # DHE Connect for Home Assistant (Unofficial)
 
 [![Validate](https://github.com/memphi2/ha-dhe-connect/actions/workflows/validate.yml/badge.svg)](https://github.com/memphi2/ha-dhe-connect/actions/workflows/validate.yml)
+[![GitHub Release](https://img.shields.io/github/v/release/memphi2/ha-dhe-connect?display_name=release)](https://github.com/memphi2/ha-dhe-connect/releases)
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://www.hacs.xyz/)
 [![License MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -8,6 +9,8 @@ Unofficial local Home Assistant integration for compatible DHE Connect
 instantaneous water heaters.
 
 The integration talks directly to the DHE web interface on your local network. It uses the same Socket.IO / Engine.IO v3 protocol shape as the browser UI: polling for session setup and authentication, then a WebSocket upgrade for the persistent runtime connection. No cloud service is used.
+
+<img src="assets/dhe-connect-card.png" alt="DHE Connect Card dashboard screenshot" width="420">
 
 ## Status
 
@@ -73,8 +76,6 @@ For a richer Lovelace dashboard, use the companion
 discovers the entities created by this integration and presents water heating,
 live consumption, bath fill, timers, temperature memories, weather, radio and
 diagnostics in a compact Mushroom-style layout.
-
-<img src="assets/dhe-connect-card.png" alt="DHE Connect Card dashboard screenshot" width="420">
 
 ## Documentation
 
