@@ -2543,6 +2543,7 @@ async def test_zeroconf_updates_existing_entry_for_identity_matched_host_change(
         assert updated_entry is not None
         assert updated_entry.data[CONF_HOST] == "192.0.2.124"
         assert updated_entry.data[CONF_PORT] == 9443
+        assert updated_entry.unique_id == "aa:bb:cc:dd:ee:ff"
         assert len(hass.config_entries.async_entries(DOMAIN)) == 1
         preserve_token.assert_awaited_once()
         reload_entry.assert_awaited_once_with(entry.entry_id)

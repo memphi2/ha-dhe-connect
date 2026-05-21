@@ -15,6 +15,8 @@ The integration talks directly to the DHE web interface on your local network. I
 - Release channel: stable release / Gold-core-oriented release candidate
 - Quality target: Home Assistant Quality Scale Gold-core-oriented validation
   for a custom integration; not an official Home Assistant Core certification
+- Home Assistant UI integration name: `DHE Connect` (kept short for clean
+  device labels in the HA UI)
 - Home Assistant setup: UI config flow
 - HACS type: custom integration
 - IoT class: local push

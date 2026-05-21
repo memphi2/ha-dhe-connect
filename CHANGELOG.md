@@ -2,16 +2,7 @@
 
 ## Unreleased
 
-- Zeroconf discovery-update-info path updates an existing config entry host/port
-  when stable discovery identity matches exactly.
-- Conflicting identity-vs-target discovery cases abort cleanly and create a
-  discovery-conflict issue without creating duplicate entries.
-- User-facing DHE action errors now use translation-backed Home Assistant
-  exceptions.
-- Added `docs/examples.md`, `docs/use-cases.md` and
-  `docs/known_limitations.md`, with README links.
-- Added translation and discovery-update fixture coverage for the new Gold-core
-  evidence paths.
+- No changes yet.
 
 ## v1.7.0 - 2026-05-21
 
@@ -45,8 +36,18 @@ This is not an official Home Assistant Core certification.
   Bronze/Silver/Gold-core rules with explicit rule-to-evidence mapping.
 - Silver rules are tracked as `done` or documented `exempt` where applicable.
 - Gold-core-oriented evidence is documented for diagnostics, discovery,
-  reconfiguration-flow and repair-issues without claiming official HA-Core
-  certification.
+  discovery-update-info, reconfiguration-flow and repair-issues without claiming
+  official HA-Core certification.
+- User-facing DHE action errors are translation-key based in English and German.
+- Added dedicated Gold support docs:
+  `docs/examples.md`, `docs/use-cases.md`, `docs/known_limitations.md`.
+
+### Branding
+
+- The Home Assistant UI integration name remains `DHE Connect` for concise
+  device labels.
+- Repository/legal documentation remains explicitly unofficial and
+  non-vendor-endorsed.
 
 ### Tests And Validation Scope
 
@@ -59,17 +60,14 @@ This is not an official Home Assistant Core certification.
 
 ### Validation
 
-- `python scripts/check_coverage.py`: `614 passed`; scoped integration coverage
+- `python scripts/check_coverage.py`: `621 passed`; scoped integration coverage
   gate `95%`.
-- `python scripts/check_integration.py`: `545` tests ran (`OK`);
+- `python scripts/check_integration.py`: `550` tests ran (`OK`);
   `integration checks ok`.
 - `python scripts/check_typing.py`: `Success: no issues found in 69 source files`.
 - `python -m ruff check custom_components/stiebel_dhe_connect tests scripts`:
   `All checks passed!`
 - `python scripts/release_check.py --run-local-checks --expect-tag absent --expect-github-release absent`:
-  passed all content checks, failed only on the expected dirty worktree state
-  during release-prep editing.
-- `python scripts/release_check.py --run-local-checks --allow-dirty --expect-tag absent --expect-github-release absent`:
   `release check ok`.
 
 ## v1.6.0 - 2026-05-20
