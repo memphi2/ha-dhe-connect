@@ -12,7 +12,7 @@ import sys
 import tempfile
 from typing import Any
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import aiohttp
 from aiohttp import web
@@ -293,6 +293,24 @@ class _ClosedWebSocket:
         return None
 
 
+class _TransportClosingWebSocket:
+    """Minimal websocket that raises a transport shutdown error during close."""
+
+    closed = False
+
+    async def close(self) -> None:
+        raise RuntimeError("websocket connection is closed")
+
+
+class _ProgrammingErrorClosingWebSocket:
+    """Minimal websocket that raises a programming error during close."""
+
+    closed = False
+
+    async def close(self) -> None:
+        raise RuntimeError("programming error")
+
+
 @asynccontextmanager
 async def _connected_fake_client(
     client_module: Any,
@@ -361,6 +379,38 @@ class TestFakeDHEEngineIOServer(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(transport_module._websocket_receive_timeout(ctx), 54.0)
+
+    async def test_close_session_suppresses_websocket_transport_shutdown(self) -> None:
+        client_module = _load_client()
+        client_types_module = _load_component_module("client_types")
+        DHEClient = client_module.DHEClient
+        client = DHEClient.__new__(DHEClient)
+        client._post_packet = AsyncMock()
+        ctx = client_types_module.DHESession(
+            url_token="token",
+            sid="sid",
+            websocket=_TransportClosingWebSocket(),
+        )
+
+        await DHEClient._close_session(client, ctx)
+
+        self.assertIsNone(ctx.websocket)
+        client._post_packet.assert_awaited_once()
+
+    async def test_close_session_keeps_programming_runtime_errors_visible(self) -> None:
+        client_module = _load_client()
+        client_types_module = _load_component_module("client_types")
+        DHEClient = client_module.DHEClient
+        client = DHEClient.__new__(DHEClient)
+        client._post_packet = AsyncMock()
+        ctx = client_types_module.DHESession(
+            url_token="token",
+            sid="sid",
+            websocket=_ProgrammingErrorClosingWebSocket(),
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "programming error"):
+            await DHEClient._close_session(client, ctx)
 
     async def test_client_polling_session_reads_fake_dhe_events(self) -> None:
         client_module = _load_client()

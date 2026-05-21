@@ -692,12 +692,13 @@ class StiebelDHEConnectConfigFlow(
         identity_candidates = _discovery_identity_candidates(discovery_info)
         if not identity_candidates:
             return ()
+        identity_candidate_set = set(identity_candidates)
         entries: dict[str, config_entries.ConfigEntry] = {}
         for entry in self.hass.config_entries.async_entries(DOMAIN):
             normalized_unique_id = _normalized_entry_unique_id(entry)
             if (
                 normalized_unique_id is None
-                or normalized_unique_id not in identity_candidates
+                or normalized_unique_id not in identity_candidate_set
             ):
                 continue
             entries[entry.entry_id] = entry
@@ -915,6 +916,13 @@ class StiebelDHEConnectConfigFlow(
             existing_host, existing_port = current_target
             if existing_host == host and existing_port == port:
                 return self.async_abort(reason=ALREADY_CONFIGURED)
+            if not await _can_connect(self.hass, host, port):
+                await _async_record_discovery_safely(
+                    self.hass,
+                    discovery_record,
+                    result="cannot_connect",
+                )
+                return self.async_abort(reason="cannot_connect")
             await self._async_update_discovered_existing_entry(
                 matched_entry,
                 host=host,

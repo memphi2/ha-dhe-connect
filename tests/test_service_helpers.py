@@ -1,68 +1,80 @@
-"""Tests for service metadata helpers and static service declarations."""
+"""Tests for shared service helper behavior."""
 
 from __future__ import annotations
 
-import importlib.util
+import asyncio
 from pathlib import Path
+import sys
 import unittest
 
+from homeassistant.exceptions import HomeAssistantError
 
 ROOT = Path(__file__).resolve().parents[1]
-SERVICE_HELPERS = (
-    ROOT / "custom_components" / "stiebel_dhe_connect" / "service_helpers.py"
-)
-SERVICES_YAML = ROOT / "custom_components" / "stiebel_dhe_connect" / "services.yaml"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from custom_components.stiebel_dhe_connect import service_helpers  # noqa: E402
 
 
-def _load_service_helpers():
-    spec = importlib.util.spec_from_file_location("service_helpers", SERVICE_HELPERS)
-    assert spec is not None
-    module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(module)
-    return module
-
-
-def _result_number_max_values(text: str) -> list[int]:
-    values: list[int] = []
-    in_result_number = False
-    result_indent = 0
-
-    for line in text.splitlines():
-        stripped = line.strip()
-        indent = len(line) - len(line.lstrip(" "))
-        if stripped == "result_number:":
-            in_result_number = True
-            result_indent = indent
-            continue
-        if in_result_number and stripped and indent <= result_indent:
-            in_result_number = False
-        if in_result_number and stripped.startswith("max:"):
-            values.append(int(stripped.split(":", 1)[1].strip()))
-
-    return values
+class _WeatherClient:
+    last_weather_state = {"forecast_results": []}
 
 
 class TestServiceHelpers(unittest.TestCase):
-    """Validate service constants stay aligned with services.yaml."""
+    """Validate pure weather service selection and error mapping."""
 
-    def setUp(self) -> None:
-        self.helpers = _load_service_helpers()
+    def test_weather_locations_keeps_only_dict_items(self) -> None:
+        self.assertEqual(
+            service_helpers.weather_locations([{"LocationId": "one"}, "bad", None]),
+            [{"LocationId": "one"}],
+        )
 
-    def test_weather_result_number_max_allows_all_options_flow_results(self) -> None:
-        self.assertEqual(self.helpers.WEATHER_RESULT_NUMBER_MAX, 50)
+    def test_select_weather_location_accepts_cached_favorite(self) -> None:
+        location = service_helpers.select_weather_location(
+            {"favorites": [{"LocationId": "favorite", "Name": "Favorite"}]},
+            [],
+            "favorite",
+            1,
+        )
 
-    def test_services_yaml_uses_weather_result_number_max(self) -> None:
-        text = SERVICES_YAML.read_text(encoding="utf-8")
+        self.assertEqual(location, {"LocationId": "favorite", "Name": "Favorite"})
+
+    def test_weather_location_payload_rejects_empty_raw_id(self) -> None:
+        with self.assertRaises(HomeAssistantError) as ctx:
+            service_helpers.weather_location_payload("")
 
         self.assertEqual(
-            _result_number_max_values(text),
-            [
-                self.helpers.WEATHER_RESULT_NUMBER_MAX,
-                self.helpers.WEATHER_RESULT_NUMBER_MAX,
-                self.helpers.WEATHER_RESULT_NUMBER_MAX,
-                self.helpers.WEATHER_RESULT_NUMBER_MAX,
-            ],
+            getattr(ctx.exception, "translation_key", None),
+            "dhe_weather_location_id_empty",
+        )
+
+    def test_select_weather_location_rejects_zero_result_number(self) -> None:
+        with self.assertRaises(HomeAssistantError) as ctx:
+            service_helpers.select_weather_location(
+                {},
+                [{"LocationId": "one"}],
+                None,
+                0,
+            )
+
+        self.assertEqual(
+            getattr(ctx.exception, "translation_key", None),
+            "dhe_weather_result_unavailable",
+        )
+
+    def test_weather_result_lookup_requires_country_for_search_name(self) -> None:
+        with self.assertRaises(HomeAssistantError) as ctx:
+            asyncio.run(
+                service_helpers.weather_results_from_service_input(
+                    _WeatherClient(),
+                    {service_helpers.ATTR_NAME: "Berlin"},
+                    missing_country_error="country_id is required",
+                )
+            )
+
+        self.assertEqual(
+            getattr(ctx.exception, "translation_key", None),
+            "dhe_weather_country_required",
         )
 
 

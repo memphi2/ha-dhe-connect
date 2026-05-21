@@ -225,6 +225,8 @@ class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
 
     async def test_failed_volume_action_raises_homeassistant_error(self) -> None:
         media_player = _load_media_player_module()
+        from homeassistant.exceptions import HomeAssistantError
+
         player = media_player.StiebelDHERadioMediaPlayer.__new__(
             media_player.StiebelDHERadioMediaPlayer
         )
@@ -237,13 +239,15 @@ class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
         player.async_write_ha_state = Mock()
 
         with self.assertRaisesRegex(
-            media_player.HomeAssistantError,
+            HomeAssistantError,
             "Could not set DHE radio volume",
         ):
             await player.async_set_volume_level(0.5)
 
     async def test_unavailable_play_action_raises_without_client_call(self) -> None:
         media_player = _load_media_player_module()
+        from homeassistant.exceptions import HomeAssistantError
+
         player = media_player.StiebelDHERadioMediaPlayer.__new__(
             media_player.StiebelDHERadioMediaPlayer
         )
@@ -255,7 +259,7 @@ class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
         player.async_write_ha_state = Mock()
 
         with self.assertRaisesRegex(
-            media_player.HomeAssistantError,
+            HomeAssistantError,
             "DHE is unavailable",
         ):
             await player.async_media_play()

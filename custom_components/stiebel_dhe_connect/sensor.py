@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import suppress
-from copy import deepcopy
 from dataclasses import dataclass
 import time
 from typing import Any, cast
@@ -41,6 +40,7 @@ from .client_mapping import (
 from .entity_helpers import StiebelDHEEntityMixin
 from .entity_state_helpers import (
     coerce_float,
+    filtered_state_attributes,
     format_minutes_duration,
     measurement_attribute_text,
     merge_state_attributes,
@@ -1064,15 +1064,11 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
 
     def _recorded_state_attributes(self) -> dict[str, Any]:
         """Return state attributes that are visible to the recorder."""
-        return {
-            key: (
-                deepcopy(value)
-                if isinstance(value, (dict, list, tuple, set))
-                else value
-            )
-            for key, value in (self._attr_extra_state_attributes or {}).items()
-            if key not in self._unrecorded_attributes
-        }
+        return filtered_state_attributes(
+            self._attr_extra_state_attributes,
+            self._unrecorded_attributes,
+            copy_collections=True,
+        )
 
     @callback
     def _handle_measurement_update(self, odb_id: int, value: MeasurementValue) -> None:

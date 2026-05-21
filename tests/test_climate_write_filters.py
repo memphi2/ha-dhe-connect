@@ -301,13 +301,15 @@ class TestClimateHvacControls(unittest.IsolatedAsyncioTestCase):
 
     async def test_set_temperature_unavailable_raises_without_client_call(self) -> None:
         climate_module = _load_climate_module()
+        from homeassistant.exceptions import HomeAssistantError
+
         client = _FakeClimateClient()
         client.available = False
         entity = _build_entity(climate_module, client)
         entity.async_write_ha_state = Mock()
 
         with self.assertRaisesRegex(
-            climate_module.HomeAssistantError,
+            HomeAssistantError,
             "DHE is unavailable",
         ):
             await entity.async_set_temperature(temperature=39.0)

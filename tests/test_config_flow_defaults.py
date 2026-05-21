@@ -442,6 +442,51 @@ class TestDiscoveryDisplayNames(_RestoresImportModules, unittest.TestCase):
             f"{self.config_flow.DEFAULT_NAME} 192.0.2.124",
         )
 
+    def test_discovery_name_uses_server_after_technical_name(self) -> None:
+        info = types.SimpleNamespace(
+            name="_ste-dhe._tcp.local.",
+            server="Bathroom DHE._STE-DHE._TCP.local.",
+            hostname="dhe-ja06.local.",
+            host="192.0.2.124",
+            ip_address="192.0.2.124",
+            properties={},
+        )
+
+        self.assertEqual(self.config_flow._discovery_info_name(info), "Bathroom DHE")
+
+    def test_discovery_name_decodes_bytes_host_fallback(self) -> None:
+        info = types.SimpleNamespace(
+            name="stiebel_dhe_connect",
+            hostname=None,
+            host=b"dhe-ja06.local.",
+            ip_address="192.0.2.124",
+            properties={},
+        )
+
+        self.assertEqual(self.config_flow._discovery_info_name(info), "dhe-ja06")
+
+    def test_discovery_name_collapses_whitespace(self) -> None:
+        info = types.SimpleNamespace(
+            name="_ste-dhe._tcp.local.",
+            hostname=None,
+            host="192.0.2.124",
+            ip_address="192.0.2.124",
+            properties={b"name": b"Bathroom\n\tDHE"},
+        )
+
+        self.assertEqual(self.config_flow._discovery_info_name(info), "Bathroom DHE")
+
+    def test_discovery_name_limits_overlong_labels(self) -> None:
+        info = types.SimpleNamespace(
+            name="_ste-dhe._tcp.local.",
+            hostname=None,
+            host="192.0.2.124",
+            ip_address="192.0.2.124",
+            properties={b"name": b"DHE " + b"x" * 120},
+        )
+
+        self.assertEqual(len(self.config_flow._discovery_info_name(info)), 80)
+
 
 class TestDeviceSettingsOptionsFlow(
     _RestoresImportModules,

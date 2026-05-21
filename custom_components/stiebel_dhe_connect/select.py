@@ -9,10 +9,13 @@ from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .action_error_helpers import dhe_action_error, raise_if_dhe_unavailable
+from .action_error_helpers import (
+    dhe_action_error,
+    raise_if_dhe_unavailable,
+    translated_homeassistant_error,
+)
 from .client import DHEClient
 from .client_types import DHEError
 from .entity_helpers import StiebelDHEEntityMixin
@@ -82,7 +85,11 @@ class StiebelDHEWeatherLocationSelect(StiebelDHEEntityMixin, SelectEntity):
         )
         location = self._locations_by_option.get(option)
         if location is None:
-            raise HomeAssistantError(f"Unknown weather location option: {option}")
+            raise translated_homeassistant_error(
+                f"Unknown weather location option: {option}",
+                translation_key="dhe_unknown_weather_location_option",
+                translation_placeholders={"option": str(option)},
+            )
 
         try:
             await self._client.select_weather_location(location)

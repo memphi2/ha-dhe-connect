@@ -68,6 +68,13 @@ def ensure_homeassistant_stubs() -> None:
             "UnitOfVolumeFlowRate",
             {"LITERS_PER_MINUTE": "L/min", "CUBIC_METERS_PER_HOUR": "m3/h"},
         )
+        if not hasattr(const, "EntityCategory"):
+
+            class EntityCategory:
+                CONFIG = "config"
+                DIAGNOSTIC = "diagnostic"
+
+            const.EntityCategory = EntityCategory
 
         if not hasattr(const, "Platform"):
 
@@ -469,6 +476,12 @@ def ensure_homeassistant_stubs() -> None:
     const.UnitOfTime = _Time
     const.UnitOfVolume = _Volume
     const.UnitOfVolumeFlowRate = _VolumeFlowRate
+    class EntityCategory:
+        CONFIG = "config"
+        DIAGNOSTIC = "diagnostic"
+
+    const.EntityCategory = EntityCategory
+
     class Platform(str):
         BINARY_SENSOR = "binary_sensor"
         CLIMATE = "climate"

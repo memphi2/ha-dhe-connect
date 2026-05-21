@@ -318,6 +318,28 @@ class TestMeasurementAttributeHelpers(unittest.TestCase):
             {"odb_id": 1},
         )
 
+    def test_filtered_state_attributes_hides_unrecorded_keys(self) -> None:
+        self.assertEqual(
+            self.helpers.filtered_state_attributes(
+                {"odb_id": 1, "chart": {"live": [1]}, "unit": "l"},
+                {"chart"},
+            ),
+            {"odb_id": 1, "unit": "l"},
+        )
+
+    def test_filtered_state_attributes_can_copy_collections(self) -> None:
+        attributes = {"odb_id": 1, "visible": {"nested": [1]}, "hidden": [2]}
+
+        filtered = self.helpers.filtered_state_attributes(
+            attributes,
+            {"hidden"},
+            copy_collections=True,
+        )
+        filtered["visible"]["nested"].append(2)
+
+        self.assertEqual(attributes["visible"], {"nested": [1]})
+        self.assertEqual(filtered["visible"], {"nested": [1, 2]})
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -17,7 +17,7 @@ from homeassistant.util import dt as dt_util
 from .async_helpers import create_background_task
 from .client import DHEClient
 from .entity_helpers import StiebelDHEEntityMixin
-from .entity_state_helpers import connected_and_ready
+from .entity_state_helpers import connected_and_ready, filtered_state_attributes
 from . import weather_mapping as weather_model
 from .runtime_helpers import get_runtime_data
 
@@ -145,11 +145,10 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
 
     def _recorded_weather_attributes(self) -> dict[str, Any]:
         """Return weather attributes that should participate in recorder writes."""
-        return {
-            key: value
-            for key, value in (self._attr_extra_state_attributes or {}).items()
-            if key not in self._unrecorded_attributes
-        }
+        return filtered_state_attributes(
+            self._attr_extra_state_attributes,
+            self._unrecorded_attributes,
+        )
 
     def _schedule_forecast_listener_update(self) -> None:
         update_listeners = getattr(self, "async_update_listeners", None)

@@ -11,10 +11,13 @@ from homeassistant.components.climate.const import ClimateEntityFeature, HVACMod
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .action_error_helpers import dhe_action_error, raise_if_dhe_unavailable
+from .action_error_helpers import (
+    dhe_action_error,
+    raise_if_dhe_unavailable,
+    translated_homeassistant_error,
+)
 from .client import DHEClient
 from .client_types import DHEError, MeasurementValue
 from .config_entry_helpers import merged_entry_data
@@ -455,7 +458,11 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
             self._write_climate_state(force=True)
             return
 
-        raise HomeAssistantError(f"Unsupported HVAC mode: {hvac_mode}")
+        raise translated_homeassistant_error(
+            f"Unsupported HVAC mode: {hvac_mode}",
+            translation_key="dhe_unsupported_hvac_mode",
+            translation_placeholders={"hvac_mode": str(hvac_mode)},
+        )
 
     async def async_turn_on(self) -> None:
         """Turn water heating on."""
