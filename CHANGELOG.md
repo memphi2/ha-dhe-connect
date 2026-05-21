@@ -25,6 +25,11 @@
   argument typing.
 - Finalized this typing round by enabling `disallow_untyped_defs` globally in
   the mypy profile for the integration module set.
+- Expanded Gold evidence documentation with a firmware/user evidence template,
+  icon-translation status notes and a repository check that enforces these
+  sections.
+- Recorded today's real live device evidence (`2026-05-21`) for
+  `DHE Connect 18/21/24` in `docs/firmware_matrix.md` with explicit scope.
 
 ## v1.7.0 - 2026-05-21
 

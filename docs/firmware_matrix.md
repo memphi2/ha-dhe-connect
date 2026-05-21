@@ -23,8 +23,73 @@ and anonymized diagnostics should only use the first 7 characters.
 
 | Device | Firmware / Web-App Version | Tested | Coverage | Notes |
 |---|---|---|---|---|
-| DHE Connect 18/21/24 | `1.9.00` observed | yes | Pairing, setup flow, runtime connection, climate, live water/power sensors, timers, radio, weather, recorder smoke, diagnostics | Primary live validation target for the current release line |
+| DHE Connect 18/21/24 | `1.9.00` observed | yes | Pairing, setup flow, runtime connection, climate, live water/power sensors, timers, radio, weather, recorder smoke, diagnostics | Primary live validation target for the current release line; latest full live evidence run: `2026-05-21` |
 | DHE Connect 27 | unknown | planned | Not yet validated on a dedicated live device | Expected to share most protocol behavior, but needs confirmation before marking as partial or yes |
+
+## Required Evidence Fields
+
+For every new or changed matrix row, capture at least:
+
+1. Device family (for example `DHE Connect 18/21/24`).
+2. Firmware or web-app version reported by the device.
+3. Validation date (`YYYY-MM-DD`).
+4. Integration branch/tag that was tested.
+5. Result status (`yes`, `partial`, `planned`, `unknown`).
+6. Coverage scope:
+   - setup/pairing
+   - reconnect/offline recovery
+   - climate and live water/power
+   - at least one timer path
+   - optional feature groups (radio/weather/savings) when relevant
+7. Non-private notes on limitations or deviations.
+
+Do not include private infrastructure data (IPs, hostnames, MACs, tokens,
+serial numbers, full product IDs).
+
+## Evidence Entry Template
+
+Use this template for reproducible evidence entries in issue comments, PR notes
+or release prep notes:
+
+```text
+Device family: DHE Connect 18/21/24
+Firmware/web-app: 1.9.00
+Validation date: 2026-05-21
+Branch/tag: v1.8.0
+Result: yes
+Coverage:
+- setup/pairing: pass
+- reconnect/offline recovery: pass
+- climate + live water/power: pass
+- timer path: pass
+- optional features: radio pass, weather pass, savings n/a
+Notes:
+- No private host/token data included
+```
+
+## Current Evidence Snapshot
+
+This section summarizes the currently documented live evidence level and keeps
+the matrix interpretation conservative:
+
+- `DHE Connect 18/21/24` has repeated live validation evidence with
+  `1.9.00`-observed web interface behavior.
+- Additional families (for example `DHE Connect 27`) remain `planned` until
+  direct evidence is recorded using the template above.
+
+### Latest Recorded Live Evidence
+
+- Date: `2026-05-21`
+- Device family: `DHE Connect 18/21/24`
+- Firmware/web-app: `1.9.00` observed
+- Scope:
+  - setup/pairing
+  - repairs/reauth recovery
+  - reconnect/offline recovery
+  - climate + live water/power
+  - timers
+  - radio/weather runtime behavior
+- Result: pass for release-prep scope on the current integration line.
 
 ## How To Add A Result
 

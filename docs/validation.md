@@ -61,6 +61,40 @@ For the active `v1.8.0` hardening branch, the remaining Platinum-oriented gap
 and validation sequence are tracked in
 [docs/platinum_prep.md](docs/platinum_prep.md).
 
+## Gold Evidence Log Template
+
+Use this template when recording manual live validation for release notes or
+firmware matrix updates:
+
+```text
+Date: YYYY-MM-DD
+Branch/tag: vX.Y.Z
+Device family: ...
+Firmware/web-app version: ...
+Test scope:
+- Setup/pairing
+- Reconfigure
+- Repairs
+- Reconnect/offline recovery
+- Live sensors (water/power)
+- Timers
+- Optional features (radio/weather/savings)
+Result summary:
+- Pass/partial with concise notes
+Open deviations:
+- ...
+Privacy check:
+- No private host/token/MAC/serial data recorded
+```
+
+## Icon Translation Status
+
+`icon-translations` remains `exempt` for this integration because the entity
+surface uses static icon assignments without translated dynamic icon metadata.
+
+If the integration introduces dynamic icon variants in the future, this status
+must be revisited and moved from `exempt` to implemented coverage with tests.
+
 ## Quality Scale Evidence Matrix
 
 `custom_components/stiebel_dhe_connect/quality_scale.yaml` is the
