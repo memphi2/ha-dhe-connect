@@ -720,6 +720,34 @@ async def _async_clear_issues_when_connected(
 def _async_register_services(hass: HomeAssistant) -> None:
     """Register integration services once."""
 
+    async def _resolve_weather_location_for_service(
+        call: ServiceCall,
+        *,
+        unavailable_message: str,
+        missing_country_error: str,
+    ) -> tuple[DHEClient, dict[str, Any] | str]:
+        """Resolve one weather location payload from a service call."""
+        runtime = _resolve_runtime(hass, call.data.get(ATTR_ENTRY_ID))
+        client = runtime.client
+        raise_if_dhe_unavailable(
+            client,
+            unavailable_message,
+        )
+        data = call.data
+        results = await _weather_results_from_service_input(
+            client,
+            data,
+            missing_country_error=missing_country_error,
+        )
+        location = _select_weather_location(
+            client.last_weather_state,
+            results,
+            data.get(ATTR_LOCATION_ID),
+            data[ATTR_RESULT_NUMBER],
+            allow_raw_location_id=True,
+        )
+        return client, location
+
     async def async_search_weather_location(call: ServiceCall) -> None:
         runtime = _resolve_runtime(hass, call.data.get(ATTR_ENTRY_ID))
         raise_if_dhe_unavailable(
@@ -735,27 +763,12 @@ def _async_register_services(hass: HomeAssistant) -> None:
         )
 
     async def async_toggle_weather_favorite(call: ServiceCall) -> None:
-        runtime = _resolve_runtime(hass, call.data.get(ATTR_ENTRY_ID))
-        client = runtime.client
-        raise_if_dhe_unavailable(
-            client,
-            "DHE is unavailable; cannot toggle weather favorite",
-        )
-        data = call.data
-        results = await _weather_results_from_service_input(
-            client,
-            data,
+        client, location = await _resolve_weather_location_for_service(
+            call,
+            unavailable_message="DHE is unavailable; cannot toggle weather favorite",
             missing_country_error=(
                 "country_id is required when toggling a weather favorite by name"
             ),
-        )
-
-        location = _select_weather_location(
-            client.last_weather_state,
-            results,
-            data.get(ATTR_LOCATION_ID),
-            data[ATTR_RESULT_NUMBER],
-            allow_raw_location_id=True,
         )
         await _run_dhe_service_action(
             client.toggle_weather_favorite(_weather_location_payload(location)),
@@ -763,27 +776,12 @@ def _async_register_services(hass: HomeAssistant) -> None:
         )
 
     async def async_add_weather_favorite(call: ServiceCall) -> None:
-        runtime = _resolve_runtime(hass, call.data.get(ATTR_ENTRY_ID))
-        client = runtime.client
-        raise_if_dhe_unavailable(
-            client,
-            "DHE is unavailable; cannot add weather favorite",
-        )
-        data = call.data
-        results = await _weather_results_from_service_input(
-            client,
-            data,
+        client, location = await _resolve_weather_location_for_service(
+            call,
+            unavailable_message="DHE is unavailable; cannot add weather favorite",
             missing_country_error=(
                 "country_id is required when adding a weather favorite by name"
             ),
-        )
-
-        location = _select_weather_location(
-            client.last_weather_state,
-            results,
-            data.get(ATTR_LOCATION_ID),
-            data[ATTR_RESULT_NUMBER],
-            allow_raw_location_id=True,
         )
         await _run_dhe_service_action(
             client.add_weather_favorite(_weather_location_payload(location)),
@@ -791,27 +789,12 @@ def _async_register_services(hass: HomeAssistant) -> None:
         )
 
     async def async_remove_weather_favorite(call: ServiceCall) -> None:
-        runtime = _resolve_runtime(hass, call.data.get(ATTR_ENTRY_ID))
-        client = runtime.client
-        raise_if_dhe_unavailable(
-            client,
-            "DHE is unavailable; cannot remove weather favorite",
-        )
-        data = call.data
-        results = await _weather_results_from_service_input(
-            client,
-            data,
+        client, location = await _resolve_weather_location_for_service(
+            call,
+            unavailable_message="DHE is unavailable; cannot remove weather favorite",
             missing_country_error=(
                 "country_id is required when removing a weather favorite by name"
             ),
-        )
-
-        location = _select_weather_location(
-            client.last_weather_state,
-            results,
-            data.get(ATTR_LOCATION_ID),
-            data[ATTR_RESULT_NUMBER],
-            allow_raw_location_id=True,
         )
         await _run_dhe_service_action(
             client.remove_weather_favorite(_weather_location_payload(location)),
@@ -819,27 +802,12 @@ def _async_register_services(hass: HomeAssistant) -> None:
         )
 
     async def async_select_weather_location(call: ServiceCall) -> None:
-        runtime = _resolve_runtime(hass, call.data.get(ATTR_ENTRY_ID))
-        client = runtime.client
-        raise_if_dhe_unavailable(
-            client,
-            "DHE is unavailable; cannot select weather location",
-        )
-        data = call.data
-        results = await _weather_results_from_service_input(
-            client,
-            data,
+        client, location = await _resolve_weather_location_for_service(
+            call,
+            unavailable_message="DHE is unavailable; cannot select weather location",
             missing_country_error=(
                 "country_id is required when selecting a weather location by name"
             ),
-        )
-
-        location = _select_weather_location(
-            client.last_weather_state,
-            results,
-            data.get(ATTR_LOCATION_ID),
-            data[ATTR_RESULT_NUMBER],
-            allow_raw_location_id=True,
         )
         await _run_dhe_service_action(
             client.select_weather_location(location),
