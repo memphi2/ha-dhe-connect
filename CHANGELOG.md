@@ -17,6 +17,9 @@
 - Hardened the typing gate by enabling mypy `warn_return_any` and
   `warn_unused_ignores`, and fixed the resulting no-any-return issues across
   setup, diagnostics, transport and service helper paths.
+- Added the first `disallow_untyped_defs` module group gate (helpers,
+  connectivity, diagnostics and pairing-validation utilities) as a controlled
+  step toward Platinum strict typing.
 
 ## v1.7.0 - 2026-05-21
 

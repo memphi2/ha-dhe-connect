@@ -28,7 +28,10 @@ So the only active Platinum gap in this repository is strict typing depth.
 1. Tighten mypy profile incrementally:
    - Done on `v1.8.0`: `warn_return_any = true`
    - Done on `v1.8.0`: `warn_unused_ignores = true`
-   - Next: evaluate `disallow_untyped_defs = true` per module group
+   - Done on `v1.8.0` for first module set:
+     `async_helpers`, `connection_helpers`, `connection_probe`,
+     `diagnostics`, `pairing_validation`
+   - Next: expand `disallow_untyped_defs = true` to additional module groups
 2. Resolve runtime mixin `self` contracts with explicit Protocols:
    - command context
    - runtime parser context
@@ -47,6 +50,7 @@ So the only active Platinum gap in this repository is strict typing depth.
 
 - Current typing gate stays green with `warn_return_any` and
   `warn_unused_ignores` enabled.
+- `disallow_untyped_defs` is now enforced for a first low-risk module group.
 - No runtime behavior changes were introduced for this typing hardening step.
 
 ## Recommended Validation Gate For Each Typing Round
