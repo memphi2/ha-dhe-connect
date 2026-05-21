@@ -4,6 +4,44 @@
 
 - No changes yet.
 
+## v1.8.1 - 2026-05-21
+
+Patch release preparation for the v1.8 line. This release keeps public entity
+IDs, unique IDs and DHE protocol behavior stable.
+
+### Discovery
+
+- Improved Zeroconf/auto-discovery display names so Home Assistant can show a
+  per-device title instead of falling back to the integration domain name.
+- Preferred device-provided discovery properties for the setup name and ignored
+  technical service/domain placeholders such as `stiebel_dhe_connect`.
+- Added config-flow title placeholders for discovered setup flows.
+
+### Diagnostics
+
+- Removed the redundant `web_app_version` field from the diagnostics export.
+  The same user-facing version remains available as `protocol_version`.
+- Filtered `web_app_version` from diagnostic device-info key summaries to avoid
+  reintroducing the duplicate field indirectly.
+- Updated the firmware-matrix instructions to refer to the protocol version in
+  diagnostics.
+
+### Validation
+
+- `python3 -m pytest tests/test_config_flow_defaults.py -q`: `30 passed`.
+- `.venv/bin/python -m pytest tests/test_00_ha_fixture_runtime.py -q -k "zeroconf_flow_accepts_realistic_discovery_payload_variants or user_flow_can_select_in_progress_zeroconf_discovery"`:
+  `7 passed`.
+- `.venv/bin/python -m pytest tests/test_diagnostics.py -q`: `4 passed`.
+- `.venv/bin/python -m pytest tests/test_translations.py tests/test_check_integration.py -q`:
+  `11 passed`.
+- `.venv/bin/python -m ruff check custom_components/stiebel_dhe_connect/config_flow.py custom_components/stiebel_dhe_connect/config_flow_discovery.py custom_components/stiebel_dhe_connect/diagnostics.py tests/test_config_flow_defaults.py tests/test_diagnostics.py`:
+  `All checks passed!`.
+- `.venv/bin/python scripts/check_typing.py`:
+  `Success: no issues found in 70 source files`.
+- `.venv/bin/python scripts/check_integration.py`: `integration checks ok`.
+- `.venv/bin/python scripts/release_check.py --run-local-checks --expect-tag absent --expect-github-release absent`:
+  `release check ok`; tag and GitHub release for `v1.8.1` are absent.
+
 ## v1.8.0 - 2026-05-21
 
 Platinum-preparation update for the custom integration. This release keeps the

@@ -1,4 +1,4 @@
-# Platinum Preparation (v1.8.0 branch)
+# Platinum Preparation (v1.8.1 branch)
 
 This document tracks the hardening work used to move this custom integration
 from a Gold-track baseline toward Home Assistant Quality Scale

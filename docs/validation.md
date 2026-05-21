@@ -4,9 +4,9 @@ This document collects the checks used before merging release-prep or hardening
 work. The commands below do not publish a Git tag or GitHub release by
 themselves.
 
-## Release Validation Command Set (v1.8.0)
+## Release Validation Command Set (v1.8.1)
 
-Run this release gate before opening or finalizing a v1.8.0 release-prep pull
+Run this release gate before opening or finalizing a v1.8.1 release-prep pull
 request:
 
 ```bash
@@ -104,7 +104,7 @@ type checks and Ruff. Keep local results and CI results aligned before merging.
 
 ## Platinum Preparation
 
-For the active `v1.8.0` hardening branch, the local Platinum-oriented evidence
+For the active `v1.8.1` hardening branch, the local Platinum-oriented evidence
 and validation sequence are tracked in
 [docs/platinum_prep.md](docs/platinum_prep.md).
 
