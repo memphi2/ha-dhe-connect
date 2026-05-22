@@ -85,6 +85,9 @@ What those checks cover:
 - Deprecation hygiene for repository-owned Python and CI files. This fails on
   deprecated APIs and warning-suppression configuration instead of hiding
   warnings.
+- Pytest warning output remains visible in logs, but the GitHub annotation
+  plugin is disabled so third-party deprecations are not duplicated as
+  repository annotations.
 - Static type checks for the scoped integration, config/options flow, platform,
   command, runtime, transport and helper modules.
 - Ruff linting for integration code, tests and repository scripts.

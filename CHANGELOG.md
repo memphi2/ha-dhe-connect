@@ -7,6 +7,9 @@
   instead of filtering warnings away.
 - Raised CI dependency floors for the Home Assistant fixture stack to current
   Python 3.14-compatible versions.
+- Disabled the pytest GitHub-annotation plugin while keeping pytest warning
+  output visible in logs, so third-party deprecations are not duplicated as
+  repository annotations.
 
 ## v1.8.1 - 2026-05-21
 

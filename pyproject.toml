@@ -84,6 +84,6 @@ files = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "-p no:homeassistant"
+addopts = "-p no:homeassistant -p no:pytest_github_actions_annotate_failures"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"

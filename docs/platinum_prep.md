@@ -127,6 +127,9 @@ reviewable:
   APIs and warning-suppression settings in this repo; current third-party
   dependency warnings are left visible and must be resolved by dependency
   upgrades or upstream fixes.
+- The GitHub pytest annotation plugin is disabled. This does not filter pytest
+  warnings from logs; it prevents external dependency deprecations from being
+  duplicated as repository annotations.
 - Mounted HA smoke can emit sanitized JSON evidence with `--evidence-json`.
   That artifact keeps pass/fail checks, entity counts, monitor settings and
   recorder top writers without storing local paths, hosts, IPs, token paths or
