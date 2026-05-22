@@ -1,4 +1,4 @@
-"""Tests for climate telemetry write filtering."""
+"""Tests for climate recorder write filtering."""
 
 from __future__ import annotations
 
@@ -103,77 +103,63 @@ def _build_entity(climate_module, client: _FakeClimateClient | None = None):
 
 
 class TestClimateWriteFilters(unittest.TestCase):
-    """Validate climate write throttling for high-churn telemetry."""
+    """Validate climate recorder filtering for high-churn telemetry."""
 
-    def test_inlet_jitter_is_throttled_but_periodic_write_kept(self) -> None:
+    def test_inlet_updates_do_not_write_climate_state_without_threshold_change(
+        self,
+    ) -> None:
+        climate_module = _load_climate_module()
+        entity = _build_entity(climate_module)
+        entity._attr_target_temperature = 60.0
+
+        calls: list[str] = []
+        entity.async_write_ha_state = lambda: calls.append("write")
+
+        entity._handle_measurement_update(climate_module.ID_INLET_TEMPERATURE, 10.0)
+        entity._handle_measurement_update(climate_module.ID_INLET_TEMPERATURE, 10.2)
+        entity._handle_measurement_update(climate_module.ID_INLET_TEMPERATURE, 10.7)
+
+        self.assertEqual(calls, [])
+        self.assertEqual(entity._inlet_temperature, 10.7)
+        self.assertNotIn("inlet_temperature", entity._attr_extra_state_attributes)
+
+    def test_outlet_updates_do_not_write_climate_state(self) -> None:
         climate_module = _load_climate_module()
         entity = _build_entity(climate_module)
 
         calls: list[str] = []
         entity.async_write_ha_state = lambda: calls.append("write")
 
-        monotonic_value = 0.0
-        original_monotonic = climate_module.time.monotonic
-        climate_module.time.monotonic = lambda: monotonic_value
-        try:
-            entity._handle_measurement_update(climate_module.ID_INLET_TEMPERATURE, 10.0)
-            self.assertEqual(len(calls), 1)
+        entity._handle_measurement_update(climate_module.ID_OUTLET_TEMPERATURE, 35.0)
+        entity._handle_measurement_update(climate_module.ID_OUTLET_TEMPERATURE, 35.1)
+        entity._handle_measurement_update(climate_module.ID_OUTLET_TEMPERATURE, 35.8)
 
-            monotonic_value = 10.0
-            entity._handle_measurement_update(climate_module.ID_INLET_TEMPERATURE, 10.2)
-            self.assertEqual(len(calls), 1)
+        self.assertEqual(calls, [])
+        self.assertEqual(entity._outlet_temperature, 35.8)
+        self.assertNotIn("outlet_temperature", entity._attr_extra_state_attributes)
 
-            monotonic_value = 140.0
-            entity._handle_measurement_update(climate_module.ID_INLET_TEMPERATURE, 10.3)
-            self.assertEqual(len(calls), 2)
-        finally:
-            climate_module.time.monotonic = original_monotonic
-
-    def test_outlet_large_delta_writes_immediately(self) -> None:
+    def test_initial_temperature_sync_does_not_expose_high_churn_attributes(
+        self,
+    ) -> None:
         climate_module = _load_climate_module()
-        entity = _build_entity(climate_module)
+        client = _FakeClimateClient()
+        client.last_measurements = {
+            climate_module.ID_INLET_TEMPERATURE: 10.0,
+            climate_module.ID_OUTLET_TEMPERATURE: 35.0,
+        }
+        entity = _build_entity(climate_module, client)
 
-        calls: list[str] = []
-        entity.async_write_ha_state = lambda: calls.append("write")
+        entity._sync_temperatures_from_measurements()
+        entity._update_extra_state_attributes()
 
-        monotonic_value = 0.0
-        original_monotonic = climate_module.time.monotonic
-        climate_module.time.monotonic = lambda: monotonic_value
-        try:
-            entity._handle_measurement_update(climate_module.ID_OUTLET_TEMPERATURE, 35.0)
-            self.assertEqual(len(calls), 1)
+        self.assertEqual(entity._inlet_temperature, 10.0)
+        self.assertEqual(entity._outlet_temperature, 35.0)
+        self.assertNotIn("inlet_temperature", entity._attr_extra_state_attributes)
+        self.assertNotIn("outlet_temperature", entity._attr_extra_state_attributes)
 
-            monotonic_value = 5.0
-            entity._handle_measurement_update(climate_module.ID_OUTLET_TEMPERATURE, 35.1)
-            self.assertEqual(len(calls), 1)
-
-            monotonic_value = 7.0
-            entity._handle_measurement_update(climate_module.ID_OUTLET_TEMPERATURE, 35.8)
-            self.assertEqual(len(calls), 2)
-        finally:
-            climate_module.time.monotonic = original_monotonic
-
-    def test_flat_temperature_still_gets_periodic_write(self) -> None:
-        climate_module = _load_climate_module()
-        entity = _build_entity(climate_module)
-
-        calls: list[str] = []
-        entity.async_write_ha_state = lambda: calls.append("write")
-
-        monotonic_value = 0.0
-        original_monotonic = climate_module.time.monotonic
-        climate_module.time.monotonic = lambda: monotonic_value
-        try:
-            entity._handle_measurement_update(climate_module.ID_INLET_TEMPERATURE, 10.0)
-            self.assertEqual(len(calls), 1)
-
-            monotonic_value = 140.0
-            entity._handle_measurement_update(climate_module.ID_INLET_TEMPERATURE, 10.0)
-            self.assertEqual(len(calls), 2)
-        finally:
-            climate_module.time.monotonic = original_monotonic
-
-    def test_target_below_inlet_entry_writes_despite_temperature_throttle(self) -> None:
+    def test_target_below_inlet_entry_writes_despite_telemetry_suppression(
+        self,
+    ) -> None:
         climate_module = _load_climate_module()
         entity = _build_entity(climate_module)
         entity._attr_target_temperature = 38.0
@@ -181,25 +167,18 @@ class TestClimateWriteFilters(unittest.TestCase):
         calls: list[str] = []
         entity.async_write_ha_state = lambda: calls.append("write")
 
-        monotonic_value = 0.0
-        original_monotonic = climate_module.time.monotonic
-        climate_module.time.monotonic = lambda: monotonic_value
-        try:
-            entity._handle_measurement_update(climate_module.ID_INLET_TEMPERATURE, 37.9)
-            self.assertEqual(len(calls), 1)
+        entity._handle_measurement_update(climate_module.ID_INLET_TEMPERATURE, 37.9)
+        self.assertEqual(calls, [])
 
-            monotonic_value = 5.0
-            entity._handle_measurement_update(climate_module.ID_INLET_TEMPERATURE, 38.1)
-            self.assertEqual(len(calls), 2)
-            self.assertTrue(
-                entity._attr_extra_state_attributes[
-                    "setpoint_below_inlet_temperature"
-                ]
-            )
-        finally:
-            climate_module.time.monotonic = original_monotonic
+        entity._handle_measurement_update(climate_module.ID_INLET_TEMPERATURE, 38.1)
+        self.assertEqual(calls, ["write"])
+        self.assertTrue(
+            entity._attr_extra_state_attributes["setpoint_below_inlet_temperature"]
+        )
 
-    def test_target_below_inlet_exit_writes_despite_temperature_throttle(self) -> None:
+    def test_target_below_inlet_exit_writes_despite_telemetry_suppression(
+        self,
+    ) -> None:
         climate_module = _load_climate_module()
         entity = _build_entity(climate_module)
         entity._attr_target_temperature = 38.0
@@ -207,23 +186,14 @@ class TestClimateWriteFilters(unittest.TestCase):
         calls: list[str] = []
         entity.async_write_ha_state = lambda: calls.append("write")
 
-        monotonic_value = 0.0
-        original_monotonic = climate_module.time.monotonic
-        climate_module.time.monotonic = lambda: monotonic_value
-        try:
-            entity._handle_measurement_update(climate_module.ID_INLET_TEMPERATURE, 38.1)
-            self.assertEqual(len(calls), 1)
+        entity._handle_measurement_update(climate_module.ID_INLET_TEMPERATURE, 38.1)
+        self.assertEqual(calls, ["write"])
 
-            monotonic_value = 5.0
-            entity._handle_measurement_update(climate_module.ID_INLET_TEMPERATURE, 37.9)
-            self.assertEqual(len(calls), 2)
-            self.assertFalse(
-                entity._attr_extra_state_attributes[
-                    "setpoint_below_inlet_temperature"
-                ]
-            )
-        finally:
-            climate_module.time.monotonic = original_monotonic
+        entity._handle_measurement_update(climate_module.ID_INLET_TEMPERATURE, 37.9)
+        self.assertEqual(calls, ["write", "write"])
+        self.assertFalse(
+            entity._attr_extra_state_attributes["setpoint_below_inlet_temperature"]
+        )
 
     def test_repeated_heating_state_measurement_is_not_rewritten(self) -> None:
         climate_module = _load_climate_module()

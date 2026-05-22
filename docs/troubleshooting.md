@@ -345,7 +345,7 @@ python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log
 For release or performance evidence, prefer a longer idle window:
 
 ```bash
-python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log --monitor-seconds 600
+python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log --monitor-seconds 600 --require-idle --print-operational-signals
 ```
 
 Run the monitor while the DHE is idle when validating database churn. If the
@@ -354,11 +354,20 @@ transition state `status_4`), if the error-status diagnostic attributes carry
 that device status, or if `Last usage duration` changes during the monitor
 window, the smoke check treats the window as operational and skips idle write
 thresholds. It still checks logs and reconnect stability.
+Use `--require-idle` when you explicitly want a clean idle database-growth
+measurement. In that mode, any detected water use or completed-usage signal
+fails the run and prints the responsible entity or `device_status` attribute
+when `--print-operational-signals` is set.
 
 Expected operational writers during water use include current flow, current
 power, live temperature, consumption and saving-monitor entities. Unexpected idle
 writers should be investigated from the top-writer list printed by the smoke
 check.
+
+The climate entity intentionally no longer exposes inlet/outlet temperatures as
+normal attributes. Those high-churn values have dedicated temperature sensors;
+the climate entity only writes control-state changes such as target temperature,
+HVAC mode, availability and the target-below-inlet transition.
 
 Numeric sensor write filters suppress small jitter, but current flow and current
 power still publish visible runtime changes of at least `0.2` and every

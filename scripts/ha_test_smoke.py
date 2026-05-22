@@ -61,6 +61,21 @@ class CheckResult:
     message: str
 
 
+@dataclass(frozen=True)
+class OperationalSignal:
+    """One signal that the monitored DHE window was not idle."""
+
+    reason: str
+    details: tuple[str, ...] = ()
+
+    @property
+    def message(self) -> str:
+        """Return a compact human-readable signal message."""
+        if not self.details:
+            return self.reason
+        return f"{self.reason}: {', '.join(self.details[:5])}"
+
+
 def _load_json(path: Path) -> Any:
     with path.open("r", encoding="utf-8") as file:
         return json.load(file)
@@ -463,39 +478,85 @@ def last_usage_duration_entity_ids(
     return sorted(entity_ids)
 
 
+def recorder_window_water_running_signal(
+    baseline_states: dict[str, LatestState],
+    state_history: dict[str, list[str]],
+) -> OperationalSignal | None:
+    """Return the water-running signal for a recorder window, if present."""
+    baseline_details = {
+        detail
+        for state in baseline_states.values()
+        for detail in _device_status_details_from_state(state)
+        if _detail_value(detail) in WATER_RUNNING_DEVICE_STATES
+    }
+    history_details = {
+        f"{entity_id}={value}"
+        for entity_id, states in state_history.items()
+        for value in states
+        if value in WATER_RUNNING_DEVICE_STATES
+    }
+    details = tuple(sorted(baseline_details | history_details))
+    if not details:
+        return None
+    return OperationalSignal("water running detected via device status", details)
+
+
 def recorder_window_has_water_running(
     baseline_states: dict[str, LatestState],
     state_history: dict[str, list[str]],
 ) -> bool:
     """Return true when device status shows water flow during a recorder window."""
-    baseline_values = {
-        value
-        for state in baseline_states.values()
-        for value in _device_status_values_from_state(state)
-    }
-    history_values = {
-        state
-        for states in state_history.values()
-        for state in states
-    }
-    return bool((baseline_values | history_values) & WATER_RUNNING_DEVICE_STATES)
+    return recorder_window_water_running_signal(baseline_states, state_history) is not None
 
 
-def _device_status_values_from_state(state: LatestState) -> set[str]:
-    values: set[str] = set()
+def _device_status_details_from_state(state: LatestState) -> set[str]:
+    details: set[str] = set()
     if _is_device_status_entity_id(state.entity_id):
-        values.add(state.state)
+        details.add(f"{state.entity_id}.state={state.state}")
     device_status = state.attributes.get("device_status")
     if isinstance(device_status, str) and device_status:
-        values.add(device_status)
-    return values
+        details.add(f"{state.entity_id}.attributes.device_status={device_status}")
+    return details
 
 
-def recorder_window_has_completed_usage(
+def _detail_value(detail: str) -> str:
+    return detail.rsplit("=", 1)[-1]
+
+
+def recorder_window_completed_usage_signal(
     state_history: dict[str, list[str]],
-) -> bool:
+) -> OperationalSignal | None:
+    """Return the completed-usage signal for a recorder window, if present."""
+    details = tuple(
+        f"{entity_id}={value}"
+        for entity_id, states in sorted(state_history.items())
+        for value in states[:3]
+    )
+    if not details:
+        return None
+    return OperationalSignal("completed usage detected via last usage duration", details)
+
+
+def recorder_window_has_completed_usage(state_history: dict[str, list[str]]) -> bool:
     """Return true when last-usage duration changes during a recorder window."""
-    return any(states for states in state_history.values())
+    return recorder_window_completed_usage_signal(state_history) is not None
+
+
+def recorder_operational_signal(
+    *,
+    baseline_status_states: dict[str, LatestState],
+    status_history: dict[str, list[str]],
+    last_usage_duration_history: dict[str, list[str]],
+) -> OperationalSignal | None:
+    """Return why the recorder window should be treated as operational."""
+    if signal := recorder_window_water_running_signal(
+        baseline_status_states,
+        status_history,
+    ):
+        return signal
+    if signal := recorder_window_completed_usage_signal(last_usage_duration_history):
+        return signal
+    return None
 
 
 def recorder_operational_reason(
@@ -505,11 +566,12 @@ def recorder_operational_reason(
     last_usage_duration_history: dict[str, list[str]],
 ) -> str | None:
     """Return why the recorder window should be treated as operational."""
-    if recorder_window_has_water_running(baseline_status_states, status_history):
-        return "water running detected via device status"
-    if recorder_window_has_completed_usage(last_usage_duration_history):
-        return "completed usage detected via last usage duration"
-    return None
+    signal = recorder_operational_signal(
+        baseline_status_states=baseline_status_states,
+        status_history=status_history,
+        last_usage_duration_history=last_usage_duration_history,
+    )
+    return signal.message if signal is not None else None
 
 
 def _parse_reconnect_count(state: LatestState) -> float | None:
@@ -898,6 +960,16 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         action="store_true",
         help="Also scan home-assistant.log.fault.",
     )
+    parser.add_argument(
+        "--require-idle",
+        action="store_true",
+        help="Fail when the recorder monitor detects water use or completed usage.",
+    )
+    parser.add_argument(
+        "--print-operational-signals",
+        action="store_true",
+        help="Print the entity or attribute signal used to classify the window.",
+    )
     return parser.parse_args(argv)
 
 
@@ -965,6 +1037,9 @@ def main(argv: list[str] | None = None) -> int:
         )
     )
 
+    baseline_operational_signal: OperationalSignal | None = None
+    monitor_was_run = False
+
     if args.monitor_seconds > 0 and latest_states:
         start_state_id = max_state_id(db_path)
         status_entity_ids = device_status_entity_ids(entries, latest_states)
@@ -974,56 +1049,129 @@ def main(argv: list[str] | None = None) -> int:
             for entity_id in status_entity_ids
             if entity_id in latest_states
         }
-        print(
-            f"INFO: monitoring recorder writes for {args.monitor_seconds}s "
-            f"from state_id {start_state_id}"
+        baseline_operational_signal = recorder_window_water_running_signal(
+            baseline_status_states,
+            {},
         )
-        time.sleep(args.monitor_seconds)
-        try:
-            writes = count_recorder_writes(
-                db_path,
-                latest_states,
-                after_state_id=start_state_id,
+        if args.require_idle and baseline_operational_signal is not None:
+            results.append(
+                CheckResult(
+                    False,
+                    f"idle required but {baseline_operational_signal.message}",
+                )
             )
-        except sqlite3.Error as err:
-            results.append(CheckResult(False, f"recorder write query failed: {err}"))
+            print("INFO: skipping recorder monitor because baseline is not idle")
+        elif args.print_operational_signals and baseline_operational_signal is not None:
+            results.append(
+                CheckResult(
+                    True,
+                    f"operational signal before monitor: {baseline_operational_signal.message}",
+                )
+            )
+        if not (args.require_idle and baseline_operational_signal is not None):
+            print(
+                f"INFO: monitoring recorder writes for {args.monitor_seconds}s "
+                f"from state_id {start_state_id}"
+            )
+            time.sleep(args.monitor_seconds)
+            monitor_was_run = True
+            try:
+                writes = count_recorder_writes(
+                    db_path,
+                    latest_states,
+                    after_state_id=start_state_id,
+                )
+            except sqlite3.Error as err:
+                results.append(CheckResult(False, f"recorder write query failed: {err}"))
+            else:
+                status_history: dict[str, list[str]] = {}
+                last_usage_duration_history: dict[str, list[str]] = {}
+                try:
+                    status_history = load_recorder_device_status_values(
+                        db_path,
+                        status_entity_ids,
+                        after_state_id=start_state_id,
+                    )
+                except sqlite3.Error as err:
+                    status_history = {}
+                    results.append(
+                        CheckResult(False, f"device-status query failed: {err}")
+                    )
+                try:
+                    last_usage_duration_history = load_recorder_state_values(
+                        db_path,
+                        last_usage_duration_ids,
+                        after_state_id=start_state_id,
+                    )
+                except sqlite3.Error as err:
+                    results.append(
+                        CheckResult(False, f"last-usage-duration query failed: {err}")
+                    )
+                operational_signal = recorder_operational_signal(
+                    baseline_status_states=baseline_status_states,
+                    status_history=status_history,
+                    last_usage_duration_history=last_usage_duration_history,
+                )
+                if (
+                    args.require_idle
+                    and operational_signal is not None
+                    and operational_signal != baseline_operational_signal
+                ):
+                    results.append(
+                        CheckResult(
+                            False,
+                            f"idle required but {operational_signal.message}",
+                        )
+                    )
+                elif args.print_operational_signals and operational_signal is not None:
+                    results.append(
+                        CheckResult(
+                            True,
+                            f"operational signal: {operational_signal.message}",
+                        )
+                    )
+                elif args.print_operational_signals:
+                    results.append(CheckResult(True, "operational signal: none"))
+                results.extend(
+                    evaluate_recorder_writes(
+                        writes,
+                        max_total_writes=args.max_total_writes,
+                        max_entity_writes=args.max_entity_writes,
+                        operational_reason=(
+                            None
+                            if args.require_idle
+                            else operational_signal.message
+                            if operational_signal is not None
+                            else None
+                        ),
+                    )
+                )
+    elif args.print_operational_signals and latest_states:
+        status_entity_ids = device_status_entity_ids(entries, latest_states)
+        baseline_status_states = {
+            entity_id: latest_states[entity_id]
+            for entity_id in status_entity_ids
+            if entity_id in latest_states
+        }
+        baseline_operational_signal = recorder_window_water_running_signal(
+            baseline_status_states,
+            {},
+        )
+        if baseline_operational_signal is None:
+            results.append(CheckResult(True, "operational signal: none"))
         else:
-            status_history: dict[str, list[str]] = {}
-            last_usage_duration_history: dict[str, list[str]] = {}
-            try:
-                status_history = load_recorder_device_status_values(
-                    db_path,
-                    status_entity_ids,
-                    after_state_id=start_state_id,
-                )
-            except sqlite3.Error as err:
-                status_history = {}
-                results.append(
-                    CheckResult(False, f"device-status query failed: {err}")
-                )
-            try:
-                last_usage_duration_history = load_recorder_state_values(
-                    db_path,
-                    last_usage_duration_ids,
-                    after_state_id=start_state_id,
-                )
-            except sqlite3.Error as err:
-                results.append(
-                    CheckResult(False, f"last-usage-duration query failed: {err}")
-                )
-            results.extend(
-                evaluate_recorder_writes(
-                    writes,
-                    max_total_writes=args.max_total_writes,
-                    max_entity_writes=args.max_entity_writes,
-                    operational_reason=recorder_operational_reason(
-                        baseline_status_states=baseline_status_states,
-                        status_history=status_history,
-                        last_usage_duration_history=last_usage_duration_history,
+            results.append(
+                CheckResult(
+                    not args.require_idle,
+                    (
+                        f"idle required but {baseline_operational_signal.message}"
+                        if args.require_idle
+                        else f"operational signal: {baseline_operational_signal.message}"
                     ),
                 )
             )
 
+    if monitor_was_run and latest_states:
         try:
             monitor_states = load_latest_states(db_path, latest_states)
         except sqlite3.Error as err:

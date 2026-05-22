@@ -18,13 +18,17 @@ Its maximum settable target temperature is capped by the `Internal scald protect
 | `connection_state` | `starting`, `connected` or `unavailable`; the separate `Connection state` diagnostic sensor reports `reconnecting` during reconnect grace |
 | `readback_id` | ODB ID used for target temperature readback |
 | `write_id` | ODB ID used for setpoint commands |
-| `inlet_temperature` | Latest inlet/cold-water temperature from ODB ID `13` |
-| `outlet_temperature` | Latest outlet/hot-water temperature from ODB ID `14` |
+| `setpoint_below_inlet_temperature` | True when the configured setpoint is below the current inlet temperature |
 | `water_heating_enabled` | Decoded heating state from inverted ODB ID `33` |
 | `child_safety_active` | Child-safety state from ODB ID `4` |
 | `child_safety_temperature_limit` | Effective child-safety limit from ODB ID `5`, capped by the configured internal scald-protection jumper |
 | `child_safety_temperature_limit_raw` | Raw child-safety limit read from ODB ID `5` before the local jumper cap |
 | `internal_scald_protection` | Locally configured physical jumper position |
+
+Inlet and outlet temperatures are exposed through their dedicated temperature
+sensors instead of climate attributes. That keeps the climate entity focused on
+the water-heating control state and avoids recorder churn from high-frequency
+temperature telemetry.
 
 ## Binary Sensors
 

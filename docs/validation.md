@@ -486,7 +486,7 @@ python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log
 For release or performance evidence, use a longer idle window:
 
 ```bash
-python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log --monitor-seconds 600
+python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log --monitor-seconds 600 --require-idle --print-operational-signals
 ```
 
 Run the recorder monitor while the DHE is idle when validating database churn.
@@ -495,6 +495,9 @@ transition state `status_4`), if the error-status diagnostic attributes carry
 that device status, or if `Last usage duration` changes during the window, the
 smoke check treats the window as operational and skips idle recorder-write
 limits while still checking logs and reconnect stability.
+Use `--require-idle` for a strict idle recorder gate. If water use or completed
+usage is detected, the run fails and `--print-operational-signals` reports the
+entity state or `device_status` attribute that made the window operational.
 If the entity registry contains DHE entries but none are enabled, the smoke
 fails instead of using recorder fallback data. That catches stale/unloaded
 integration states that otherwise look like a noisy recorder-only problem.

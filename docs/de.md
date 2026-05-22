@@ -200,6 +200,9 @@ Home-Assistant-Datenbank nicht unnoetig waechst. Besonders wichtig:
 
 - Grosse Radio-, Wetter- und Suchlisten werden nicht dauerhaft als
   recorder-relevante Attribute geschrieben.
+- Die Climate-Entitaet schreibt Zulauf- und Auslauftemperatur nicht als
+  Attribute; dafuer gibt es eigene Temperatursensoren. Climate schreibt nur
+  Steuerzustand, Verfuegbarkeit und den Wechsel bei `setpoint_below_inlet`.
 - Aktueller Wasserfluss und aktuelle Leistung bleiben live sichtbar: Aenderungen
   ab `0.2` sowie Wechsel zwischen `0` und einem aktiven Wert werden geschrieben.
 - Timer-Restzeiten und Wannenfuellmengen werden nicht gedrosselt, damit sie in
@@ -232,6 +235,19 @@ recorder:
 Wenn die Datenbank trotzdem stark waechst, zuerst die Diagnose-Entitaeten,
 Reconnect-Zaehler und Home-Assistant-Logs pruefen. Details stehen in
 [docs/troubleshooting.md](troubleshooting.md).
+
+Fuer eine echte Idle-Messung sollte der gemountete HA-Smoke mit striktem
+Idle-Gate laufen:
+
+```bash
+python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log --monitor-seconds 600 --require-idle --print-operational-signals
+```
+
+Wenn waehrenddessen Wasser laeuft oder eine abgeschlossene Nutzung erkannt
+wird, bricht der Smoke als nicht-idle ab und nennt den ausloesenden Entity-
+oder `device_status`-Attributwert. Ohne `--require-idle` wird solch ein Fenster
+als operational gewertet; dann werden Idle-Schwellwerte uebersprungen, Logs und
+Reconnect-Stabilitaet aber weiter geprueft.
 
 Kurze Verbindungsabbrueche bleiben in einer Reconnect-Schonfrist: gecachte
 Entitaeten koennen verfuegbar bleiben, waehrend der Diagnosewert

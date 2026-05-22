@@ -766,6 +766,14 @@ class TestHaTestSmoke(unittest.TestCase):
             ha_test_smoke.recorder_window_has_water_running(states, {})
         )
 
+        signal = ha_test_smoke.recorder_window_water_running_signal(states, {})
+        self.assertIsNotNone(signal)
+        assert signal is not None
+        self.assertIn(
+            "sensor.dhe_connect_error_status.attributes.device_status=status_2",
+            signal.message,
+        )
+
     def test_recorder_window_detects_water_from_status_history(self) -> None:
         self.assertTrue(
             ha_test_smoke.recorder_window_has_water_running(
@@ -785,7 +793,27 @@ class TestHaTestSmoke(unittest.TestCase):
 
         self.assertEqual(
             reason,
-            "completed usage detected via last usage duration",
+            (
+                "completed usage detected via last usage duration: "
+                "sensor.dhe_connect_letzte_nutzungsdauer=2:34"
+            ),
+        )
+
+    def test_recorder_operational_reason_includes_signal_details(self) -> None:
+        reason = ha_test_smoke.recorder_operational_reason(
+            baseline_status_states={},
+            status_history={
+                "sensor.dhe_connect_error_status": ["ok", "status_2"],
+            },
+            last_usage_duration_history={},
+        )
+
+        self.assertEqual(
+            reason,
+            (
+                "water running detected via device status: "
+                "sensor.dhe_connect_error_status=status_2"
+            ),
         )
 
     def test_recorder_window_prefers_running_status_over_usage_duration(self) -> None:
@@ -797,7 +825,11 @@ class TestHaTestSmoke(unittest.TestCase):
             },
         )
 
-        self.assertEqual(reason, "water running detected via device status")
+        self.assertEqual(
+            reason,
+            "water running detected via device status: "
+            "sensor.dhe_connect_geratestatus=status_2",
+        )
 
     def test_recorder_write_limits_are_skipped_while_water_runs(self) -> None:
         results = ha_test_smoke.evaluate_recorder_writes(
@@ -1053,6 +1085,83 @@ class TestHaTestSmoke(unittest.TestCase):
 
         self.assertEqual(result, 1, output.getvalue())
         self.assertIn("no enabled DHE registry entities", output.getvalue())
+
+    def test_main_require_idle_fails_on_baseline_device_status_attribute(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = Path(temp_dir)
+            db_path = config / "home-assistant_v2.db"
+            _create_recorder_db(db_path)
+            _write_entity_registry(
+                config,
+                [
+                    {
+                        "entity_id": "climate.dhe_connect",
+                        "platform": "stiebel_dhe_connect",
+                        "disabled_by": None,
+                    },
+                    {
+                        "entity_id": "sensor.dhe_connect_error_status",
+                        "platform": "stiebel_dhe_connect",
+                        "disabled_by": None,
+                        "translation_key": "error_status",
+                    },
+                    {
+                        "entity_id": "sensor.dhe_connect_reconnect_count",
+                        "platform": "stiebel_dhe_connect",
+                        "disabled_by": None,
+                    },
+                ],
+            )
+            _insert_state(
+                db_path,
+                state_id=1,
+                metadata_id=1,
+                entity_id="climate.dhe_connect",
+                state="heat",
+                attributes={"connection_state": "connected"},
+            )
+            _insert_state(
+                db_path,
+                state_id=2,
+                metadata_id=2,
+                entity_id="sensor.dhe_connect_error_status",
+                state="ok",
+                attributes={"device_status": "status_2"},
+            )
+            _insert_state(
+                db_path,
+                state_id=3,
+                metadata_id=3,
+                entity_id="sensor.dhe_connect_reconnect_count",
+                state="0",
+            )
+            (config / "home-assistant.log").write_text(
+                "2026-05-17 INFO custom_components.stiebel_dhe_connect ready\n",
+                encoding="utf-8",
+            )
+
+            output = io.StringIO()
+            with (
+                redirect_stdout(output),
+                patch.object(ha_test_smoke.time, "sleep"),
+            ):
+                result = ha_test_smoke.main([
+                    "--config",
+                    str(config),
+                    "--db",
+                    str(db_path),
+                    "--monitor-seconds",
+                    "1",
+                    "--require-idle",
+                    "--print-operational-signals",
+                ])
+
+        self.assertEqual(result, 1, output.getvalue())
+        self.assertIn("idle required but water running detected", output.getvalue())
+        self.assertIn(
+            "sensor.dhe_connect_error_status.attributes.device_status=status_2",
+            output.getvalue(),
+        )
 
 
 if __name__ == "__main__":
