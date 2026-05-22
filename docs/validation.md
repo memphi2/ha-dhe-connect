@@ -12,6 +12,7 @@ request:
 ```bash
 python scripts/check_coverage.py
 python scripts/check_integration.py
+python scripts/check_deprecations.py
 python scripts/check_typing.py
 python -m ruff check custom_components/stiebel_dhe_connect tests scripts
 python scripts/release_check.py --run-local-checks --expect-tag absent --expect-github-release absent
@@ -81,6 +82,9 @@ What those checks cover:
   behavior.
 - Repository consistency, required files, translations, pinned validation
   actions, Python syntax and `client.py` size.
+- Deprecation hygiene for repository-owned Python and CI files. This fails on
+  deprecated APIs and warning-suppression configuration instead of hiding
+  warnings.
 - Static type checks for the scoped integration, config/options flow, platform,
   command, runtime, transport and helper modules.
 - Ruff linting for integration code, tests and repository scripts.

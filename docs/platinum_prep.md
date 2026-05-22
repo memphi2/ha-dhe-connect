@@ -123,6 +123,10 @@ reviewable:
   live transport orchestration are deliberately excluded from the 95% line
   metric when their behavior is better covered by HA fixture tests, Fake-DHE
   tests, release checks and optional live smoke gates.
+- CI runs a repository-owned deprecation guard. It rejects deprecated Python
+  APIs and warning-suppression settings in this repo; current third-party
+  dependency warnings are left visible and must be resolved by dependency
+  upgrades or upstream fixes.
 - Mounted HA smoke can emit sanitized JSON evidence with `--evidence-json`.
   That artifact keeps pass/fail checks, entity counts, monitor settings and
   recorder top writers without storing local paths, hosts, IPs, token paths or
@@ -132,6 +136,7 @@ reviewable:
 
 ```bash
 python scripts/check_typing.py
+python scripts/check_deprecations.py
 python -m ruff check custom_components/stiebel_dhe_connect tests scripts
 python scripts/check_integration.py
 python scripts/check_coverage.py

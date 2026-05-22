@@ -49,10 +49,32 @@ class TestCheckIntegration(unittest.TestCase):
                   - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
                   - uses: hacs/action@dcb30e72781db3f207d5236b861172774ab0b485
                   - uses: home-assistant/actions/hassfest@f6f29a7ee3fa0eccadf3620a7b9ee00ab54ec03b
+                  - run: python -m pip install "aiohttp>=3.13.5,<4" "pytest-homeassistant-custom-component>=0.13.332,<0.14"
+                  - run: python scripts/check_deprecations.py
                 """,
             )
 
             with patch.object(check_integration, "ROOT", root):
+                check_integration.check_github_actions()
+
+    def test_github_actions_requires_deprecation_guard(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            _write_validate_workflow(
+                root,
+                """
+                steps:
+                  - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+                  - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+                  - uses: hacs/action@dcb30e72781db3f207d5236b861172774ab0b485
+                  - uses: home-assistant/actions/hassfest@f6f29a7ee3fa0eccadf3620a7b9ee00ab54ec03b
+                  - run: python -m pip install "aiohttp>=3.13.5,<4" "pytest-homeassistant-custom-component>=0.13.332,<0.14"
+                """,
+            )
+
+            with patch.object(check_integration, "ROOT", root), redirect_stderr(
+                StringIO()
+            ), self.assertRaises(SystemExit):
                 check_integration.check_github_actions()
 
     def test_github_actions_rejects_node20_action_refs(self) -> None:

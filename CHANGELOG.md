@@ -2,7 +2,11 @@
 
 ## Unreleased
 
-- No changes yet.
+- Added a repository-owned deprecation guard to CI and release validation. The
+  guard fails on deprecated APIs or warning-suppression settings in this repo
+  instead of filtering warnings away.
+- Raised CI dependency floors for the Home Assistant fixture stack to current
+  Python 3.14-compatible versions.
 
 ## v1.8.1 - 2026-05-21
 
