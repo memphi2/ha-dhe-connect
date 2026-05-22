@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import argparse
-from collections import deque
+from collections import Counter, deque
 from collections.abc import Iterable
 from contextlib import closing
 from dataclasses import dataclass
@@ -28,6 +28,7 @@ LOG_ERROR_MARKERS = ("ERROR", "CRITICAL", "Traceback", "Exception")
 LOG_WARNING_MARKERS = ("WARNING",)
 WATER_RUNNING_DEVICE_STATES = {"status_2", "status_4"}
 LAST_USAGE_DURATION_TRANSLATION_KEY = "last_usage_time"
+DEVICE_STATUS_CARRIER_TRANSLATION_KEYS = {"device_status", "error_status"}
 
 
 @dataclass(frozen=True)
@@ -107,6 +108,28 @@ def load_entity_registry(config: Path) -> list[EntityRegistryEntry]:
 def enabled_entity_ids(entries: Iterable[EntityRegistryEntry]) -> list[str]:
     """Return enabled entity IDs from registry entries."""
     return [entry.entity_id for entry in entries if entry.disabled_by is None]
+
+
+def entity_registry_summary(entries: Iterable[EntityRegistryEntry]) -> str:
+    """Return a compact DHE entity-registry summary for smoke output."""
+    entry_list = list(entries)
+    enabled_count = sum(1 for entry in entry_list if entry.disabled_by is None)
+    disabled_counts = Counter(
+        str(entry.disabled_by)
+        for entry in entry_list
+        if entry.disabled_by is not None
+    )
+
+    details = [
+        f"loaded {enabled_count} enabled DHE entities from registry",
+        f"total={len(entry_list)}",
+    ]
+    if disabled_counts:
+        disabled_summary = ", ".join(
+            f"{reason}:{count}" for reason, count in sorted(disabled_counts.items())
+        )
+        details.append(f"disabled_by={disabled_summary}")
+    return "; ".join(details)
 
 
 def count_localhost_refresh_tokens(config: Path) -> int:
@@ -310,6 +333,53 @@ def load_recorder_state_values(
     return values
 
 
+def load_recorder_device_status_values(
+    db_path: Path,
+    entity_ids: Iterable[str],
+    *,
+    after_state_id: int,
+) -> dict[str, list[str]]:
+    """Load recorder state and device_status attribute values after a marker."""
+    entity_id_list = sorted(set(entity_ids))
+    if not entity_id_list:
+        return {}
+
+    with closing(_connect_db(db_path)) as conn:
+        placeholders = ",".join("?" for _ in entity_id_list)
+        attributes_expression = _state_attributes_expression(conn)
+        rows = conn.execute(
+            f"""
+            SELECT sm.entity_id, s.state, {attributes_expression} AS shared_attrs
+            FROM states s
+            JOIN states_meta sm ON sm.metadata_id = s.metadata_id
+            LEFT JOIN state_attributes sa ON sa.attributes_id = s.attributes_id
+            WHERE s.state_id > ?
+              AND sm.entity_id IN ({placeholders})
+            ORDER BY s.state_id
+            """,  # nosec B608
+            [after_state_id, *entity_id_list],
+        ).fetchall()
+
+    values: dict[str, list[str]] = {}
+    for row in rows:
+        entity_id = str(row["entity_id"])
+        entity_values = values.setdefault(entity_id, [])
+        entity_values.append(str(row["state"]))
+        raw_attrs = row["shared_attrs"]
+        if not isinstance(raw_attrs, str) or not raw_attrs:
+            continue
+        try:
+            parsed_attrs = json.loads(raw_attrs)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(parsed_attrs, dict):
+            continue
+        device_status = parsed_attrs.get("device_status")
+        if isinstance(device_status, str) and device_status:
+            entity_values.append(device_status)
+    return values
+
+
 def max_state_id(db_path: Path) -> int:
     """Return the newest recorder state_id."""
     with closing(_connect_db(db_path)) as conn:
@@ -333,7 +403,10 @@ def _is_reconnect_count_entity_id(entity_id: str) -> bool:
 
 def _is_device_status_entity_id(entity_id: str) -> bool:
     return entity_id.startswith("sensor.") and (
-        "device_status" in entity_id or "geratestatus" in entity_id
+        "device_status" in entity_id
+        or "geratestatus" in entity_id
+        or "error_status" in entity_id
+        or "fehlerstatus" in entity_id
     )
 
 
@@ -355,7 +428,7 @@ def device_status_entity_ids(
         for entry in entries
         if entry.disabled_by is None
         and (
-            entry.translation_key == "device_status"
+            entry.translation_key in DEVICE_STATUS_CARRIER_TRANSLATION_KEYS
             or _is_device_status_entity_id(entry.entity_id)
         )
     }
@@ -363,6 +436,7 @@ def device_status_entity_ids(
         state.entity_id
         for state in states.values()
         if _is_device_status_entity_id(state.entity_id)
+        or "device_status" in state.attributes
     )
     return sorted(entity_ids)
 
@@ -395,9 +469,9 @@ def recorder_window_has_water_running(
 ) -> bool:
     """Return true when device status shows water flow during a recorder window."""
     baseline_values = {
-        state.state
+        value
         for state in baseline_states.values()
-        if _is_device_status_entity_id(state.entity_id)
+        for value in _device_status_values_from_state(state)
     }
     history_values = {
         state
@@ -405,6 +479,16 @@ def recorder_window_has_water_running(
         for state in states
     }
     return bool((baseline_values | history_values) & WATER_RUNNING_DEVICE_STATES)
+
+
+def _device_status_values_from_state(state: LatestState) -> set[str]:
+    values: set[str] = set()
+    if _is_device_status_entity_id(state.entity_id):
+        values.add(state.state)
+    device_status = state.attributes.get("device_status")
+    if isinstance(device_status, str) and device_status:
+        values.add(device_status)
+    return values
 
 
 def recorder_window_has_completed_usage(
@@ -839,16 +923,24 @@ def main(argv: list[str] | None = None) -> int:
         entries = []
         results.append(CheckResult(False, f"entity registry cannot be read: {err}"))
     enabled_ids = enabled_entity_ids(entries)
-    results.append(
-        CheckResult(
-            True,
-            (
-                f"loaded {len(enabled_ids)} enabled DHE entities from registry"
-                if entries
-                else "DHE registry entries not found; using recorder fallback"
-            ),
+    if entries:
+        results.append(
+            CheckResult(
+                bool(enabled_ids),
+                (
+                    entity_registry_summary(entries)
+                    if enabled_ids
+                    else f"{entity_registry_summary(entries)}; no enabled DHE registry entities"
+                ),
+            )
         )
-    )
+    else:
+        results.append(
+            CheckResult(
+                True,
+                "DHE registry entries not found; using recorder fallback",
+            )
+        )
 
     results.append(
         check_localhost_refresh_tokens(
@@ -899,7 +991,7 @@ def main(argv: list[str] | None = None) -> int:
             status_history: dict[str, list[str]] = {}
             last_usage_duration_history: dict[str, list[str]] = {}
             try:
-                status_history = load_recorder_state_values(
+                status_history = load_recorder_device_status_values(
                     db_path,
                     status_entity_ids,
                     after_state_id=start_state_id,

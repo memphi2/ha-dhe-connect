@@ -483,11 +483,21 @@ To monitor recorder churn, add a time window:
 python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log --monitor-seconds 90
 ```
 
+For release or performance evidence, use a longer idle window:
+
+```bash
+python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log --monitor-seconds 600
+```
+
 Run the recorder monitor while the DHE is idle when validating database churn.
 If the device-status sensor reports water running (`status_2` or the observed
-transition state `status_4`), or if `Last usage duration` changes during the
-window, the smoke check treats the window as operational and skips idle
-recorder-write limits while still checking logs and reconnect stability.
+transition state `status_4`), if the error-status diagnostic attributes carry
+that device status, or if `Last usage duration` changes during the window, the
+smoke check treats the window as operational and skips idle recorder-write
+limits while still checking logs and reconnect stability.
+If the entity registry contains DHE entries but none are enabled, the smoke
+fails instead of using recorder fallback data. That catches stale/unloaded
+integration states that otherwise look like a noisy recorder-only problem.
 
 ## Live HA API Smoke
 

@@ -342,11 +342,18 @@ operational windows:
 python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log --monitor-seconds 90
 ```
 
+For release or performance evidence, prefer a longer idle window:
+
+```bash
+python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log --monitor-seconds 600
+```
+
 Run the monitor while the DHE is idle when validating database churn. If the
 device-status sensor reports water running (`status_2` or the observed
-transition state `status_4`), or if `Last usage duration` changes during the
-monitor window, the smoke check treats the window as operational and skips idle
-write thresholds. It still checks logs and reconnect stability.
+transition state `status_4`), if the error-status diagnostic attributes carry
+that device status, or if `Last usage duration` changes during the monitor
+window, the smoke check treats the window as operational and skips idle write
+thresholds. It still checks logs and reconnect stability.
 
 Expected operational writers during water use include current flow, current
 power, live temperature, consumption and saving-monitor entities. Unexpected idle
@@ -476,6 +483,11 @@ For a mounted Home Assistant test configuration:
 ```bash
 python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log
 ```
+
+If the mounted entity registry contains DHE entries but none are enabled, the
+smoke fails instead of silently trusting stale recorder fallback data. That
+usually means Home Assistant has not loaded the integration correctly, or the
+registry state is not representative for a live validation run.
 
 For live service smoke against a test instance:
 
