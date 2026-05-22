@@ -82,9 +82,9 @@ What those checks cover:
   behavior.
 - Repository consistency, required files, translations, pinned validation
   actions, Python syntax and `client.py` size.
-- Deprecation hygiene for repository-owned Python and CI files. This fails on
-  deprecated APIs and warning-suppression configuration instead of hiding
-  warnings.
+- Deprecation hygiene for repository-owned Python, CI, README, changelog and
+  documentation files. This fails on deprecated APIs and warning-suppression
+  configuration instead of hiding warnings.
 - Pytest warning output remains visible in logs, but the GitHub annotation
   plugin is disabled so third-party deprecations are not duplicated as
   repository annotations.
@@ -108,6 +108,23 @@ should run without `--allow-dirty`.
 
 The GitHub `Validate` workflow runs HACS, Hassfest, pytest, repository checks,
 type checks and Ruff. Keep local results and CI results aligned before merging.
+
+### Latest v1.8.1 Local Gate Snapshot
+
+The current v1.8.1 release-prep documentation reflects this local gate:
+
+```text
+scripts/check_coverage.py: 681 passed, 96%
+scripts/check_integration.py: 601 tests, OK
+scripts/check_deprecations.py: deprecation guard ok
+scripts/check_typing.py: Success, 74 source files
+ruff: All checks passed
+release_check.py --run-local-checks --allow-dirty --expect-tag skip --expect-github-release skip: release check ok
+```
+
+The local warning summary currently comes from third-party dependencies. The
+repository guard is intended to prevent new owned deprecations or warning
+suppression from entering the project.
 
 ## Platinum Preparation
 

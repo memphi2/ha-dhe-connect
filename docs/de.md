@@ -5,9 +5,10 @@ Betrieb und Fehlersuche der inoffiziellen DHE Connect Integration. Die detaillie
 technischen Tabellen bleiben in den englischen Dokumenten:
 
 Version `1.8.1` baut auf dem Platinum-Track-Stand auf und korrigiert
-Zeroconf-Geraetenamen sowie die Diagnose-Ausgabe. Die Validierung orientiert
-sich an Home Assistant Quality Scale fuer Custom Integrations, ist aber keine
-offizielle Zertifizierung als Home-Assistant-Core-Integration.
+Zeroconf-Geraetenamen, Diagnose-Ausgabe, Deprecation-Validierung und
+Privacy-Haertung. Die Validierung orientiert sich an Home Assistant Quality
+Scale fuer Custom Integrations, ist aber keine offizielle Zertifizierung als
+Home-Assistant-Core-Integration.
 
 - [Entitaeten, Attribute und Services](entities.md)
 - [Troubleshooting](troubleshooting.md)
@@ -104,8 +105,9 @@ auszugeben.
 Support-Diagnosen enthalten zusaetzlich eine kompakte Geraete-Zusammenfassung
 mit DHE-Geraetetyp, Weboberflaechen-/Protokollversion und den ersten 7 Zeichen
 der Produkt-ID sowie Reconnect-Supervisor-Status und Runtime-Parser-Zaehler.
-Vollstaendige Produkt-IDs, MAC-Adressen, Hosts und Tokens werden redigiert oder
-nur als vorhanden/nicht vorhanden zusammengefasst.
+Vollstaendige Produkt-IDs, MAC-Adressen, Hosts, rohe IP-Adressen inklusive
+IPv6-Werte, Tokens und lokale Session-Details werden redigiert oder nur als
+vorhanden/nicht vorhanden zusammengefasst.
 
 In der Home-Assistant-Oberflaeche wird die vollstaendige Produkt-ID als
 deaktivierter Diagnose-Sensor angeboten. Der DHE-Geraetename kann ueber ein

@@ -2,6 +2,15 @@
 
 Kurzfassung der aktuellen Release-Notizen in kompaktem Changelog-Format.
 
+## v1.8.1 - 2026-05-21
+- Patch-Release-Vorbereitung fuer die v1.8-Linie mit stabilen Entity-IDs,
+  Unique-IDs und unveraenderter DHE-Protokollsemantik.
+- Zeroconf-Geraetenamen, Diagnostics-Export und Firmware-Matrix-Hinweise
+  bereinigt.
+- Security-/Privacy-Hygiene ergaenzt: IPv6-Redaction, hostfreie
+  Pairing-Notification-IDs und breiterer Deprecation-Guard fuer Code, CI und
+  Doku.
+
 ## v1.8.0 - 2026-05-21
 - Gold-/Platinum-nahes Finalisierungslauf: striktere Typ-Härtung,
   Diagnostics-/Error-Handling-Stabilisierung und weitere Quality-Scale-Anpassungen.

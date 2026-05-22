@@ -116,6 +116,8 @@ reviewable:
   state. Raw token values, token paths, private hosts, local URLs, IP
   addresses, MAC addresses, session IDs, WebSocket URLs and raw WebSocket
   payloads are redacted or reduced to presence flags.
+- v1.8.1 extends that redaction to raw IPv6 strings and keeps pairing
+  notification identifiers scoped without embedding raw host or port details.
 - Stable hashed identifiers are not emitted today. If they are added later,
   they must be opt-in and must not be reversible to private host, MAC, token or
   product identifiers.
@@ -124,9 +126,10 @@ reviewable:
   metric when their behavior is better covered by HA fixture tests, Fake-DHE
   tests, release checks and optional live smoke gates.
 - CI runs a repository-owned deprecation guard. It rejects deprecated Python
-  APIs and warning-suppression settings in this repo; current third-party
-  dependency warnings are left visible and must be resolved by dependency
-  upgrades or upstream fixes.
+  APIs and warning-suppression settings in owned Python, workflow, README,
+  changelog and documentation files; current third-party dependency warnings
+  are left visible and must be resolved by dependency upgrades or upstream
+  fixes.
 - The GitHub pytest annotation plugin is disabled. This does not filter pytest
   warnings from logs; it prevents external dependency deprecations from being
   duplicated as repository annotations.

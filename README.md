@@ -27,9 +27,9 @@ The integration talks directly to the DHE web interface on your local network. I
 - Scope: multiple configured DHE Connect devices per Home Assistant instance
 
 This is a custom integration and should be used on a trusted local network.
-v1.8.1 refines Zeroconf device naming and diagnostics export hygiene on top of
-the v1.8.0 Platinum-track hardening. Not an official Home Assistant Core
-certification.
+v1.8.1 refines Zeroconf device naming, diagnostics export hygiene, deprecation
+validation and privacy hardening on top of the v1.8.0 Platinum-track work. Not
+an official Home Assistant Core certification.
 
 Development and protocol mapping for this release were assisted by OpenAI Codex.
 
@@ -194,8 +194,8 @@ prompt-suppression status without exposing hosts, IP addresses or service names.
 Support diagnostics also include a compact device summary with the DHE-reported
 device type, web-interface protocol version and the first 7 characters of the
 product ID, plus reconnect-supervisor state and runtime parser category counts.
-Full product IDs, MAC addresses, hosts and tokens are redacted or reduced to
-presence flags.
+Full product IDs, MAC addresses, hosts, raw IP addresses including IPv6 values,
+tokens and local session details are redacted or reduced to presence flags.
 
 The local Home Assistant device page can still expose the full product ID as a
 disabled diagnostic sensor for the owner, and the DHE device name can be changed
@@ -325,7 +325,9 @@ can fail in VLAN or firewall setups even when the integration code is correct.
 - Do not expose the DHE web interface or port `8443` to the internet.
 - The pairing token is stored under Home Assistant's configuration directory.
 - Tokens are not intentionally written to normal logs.
-- Diagnostic and validation helpers redact private host, token and credential context before printing command or smoke-test failures.
+- Diagnostic and validation helpers redact private host, IPv4/IPv6, token,
+  credential and session context before printing command or smoke-test failures.
+- Pairing notification identifiers do not include raw host or port details.
 - Treat Home Assistant backups and mounted config directories as sensitive because they can contain integration tokens.
 - See [SECURITY.md](SECURITY.md) for token storage, redaction and reporting details.
 

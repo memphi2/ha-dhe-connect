@@ -13,10 +13,16 @@ ROOT = Path(__file__).resolve().parents[1]
 SCAN_PREFIXES = (
     ".github/workflows/",
     "custom_components/stiebel_dhe_connect/",
+    "docs/",
     "scripts/",
     "tests/",
 )
-SCAN_FILES = {"pyproject.toml"}
+SCAN_FILES = {
+    "CHANGELOG.md",
+    "README.md",
+    "hacs.json",
+    "pyproject.toml",
+}
 TEXT_SUFFIXES = {
     ".json",
     ".md",

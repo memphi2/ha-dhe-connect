@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
+_SOCKETIO_EVENT_FRAME_RE = re.compile(r"42(?:/1\.0\.0,)?\d*")
 
 
 class DHEClientTransportHelpersMixin:
@@ -130,10 +131,10 @@ class DHEClientTransportHelpersMixin:
                 continue
             pos = 0
             while pos < len(packet):
-                match = re.search(r"42(?:/1\.0\.0,)?\d*", packet[pos:])
+                match = _SOCKETIO_EVENT_FRAME_RE.search(packet, pos)
                 if not match:
                     break
-                frame_start = pos + match.start()
+                frame_start = match.start()
                 json_text, next_pos = _balanced_json_array(packet, frame_start)
                 if not json_text:
                     break
@@ -163,7 +164,7 @@ class DHEClientTransportHelpersMixin:
 
         token = await self.hass.async_add_executor_job(_read)
         if token and (len(token) < 20 or any(ch.isspace() for ch in token)):
-            _LOGGER.warning("Ignoring malformed stored DHE token at %s", self.token_path)
+            _LOGGER.warning("Ignoring malformed stored DHE token")
             token = ""
         self._token = token
         return self._token or ""

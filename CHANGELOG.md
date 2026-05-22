@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- No changes yet.
+
+## v1.8.1 - 2026-05-21
+
+Patch release preparation for the v1.8 line. This release keeps public entity
+IDs, unique IDs and DHE protocol behavior stable.
+
+### Security and Privacy
+
+- Extended diagnostic redaction to raw IPv6 addresses and removed raw target
+  details from pairing notification identifiers.
+- Reduced private-context exposure in debug/warning paths.
+
+### Validation Hygiene
+
 - Added a repository-owned deprecation guard to CI and release validation. The
   guard fails on deprecated APIs or warning-suppression settings in this repo
   instead of filtering warnings away.
@@ -10,11 +25,11 @@
 - Disabled the pytest GitHub-annotation plugin while keeping pytest warning
   output visible in logs, so third-party deprecations are not duplicated as
   repository annotations.
+- Extended the deprecation guard to README, changelog and documentation files.
 
-## v1.8.1 - 2026-05-21
+### Performance
 
-Patch release preparation for the v1.8 line. This release keeps public entity
-IDs, unique IDs and DHE protocol behavior stable.
+- Reused a compiled Socket.IO frame matcher in the client transport parser.
 
 ### Discovery
 

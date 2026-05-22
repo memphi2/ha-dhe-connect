@@ -271,7 +271,8 @@ If reconnects keep increasing:
 
 Support diagnostics include the anonymized reconnect-supervisor state: attempts,
 delay configuration, grace-window state and whether entities should already be
-marked unavailable. This does not expose host, token or credential data.
+marked unavailable. This does not expose host, IPv4/IPv6, token, credential or
+session data.
 
 ## Live Sensors Are Empty
 
@@ -356,7 +357,7 @@ python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log
 
 The JSON evidence contains summarized checks, entity counts, monitor settings
 and recorder top writers only. It does not persist local config paths, tokens,
-token paths, hosts or IP addresses.
+token paths, hosts, IPv4/IPv6 addresses or session identifiers.
 
 Run the monitor while the DHE is idle when validating database churn. If the
 device-status sensor reports water running (`status_2` or the observed
@@ -488,9 +489,9 @@ logger:
 Then restart Home Assistant or reload logging. Disable debug logging again after
 capturing the problem so large protocol payloads do not fill logs.
 
-Validation helpers redact private host, token and credential context from their
-own output, but Home Assistant backups and raw `.storage` files can still contain
-sensitive data. Treat them as private.
+Validation helpers redact private host, IPv4/IPv6, token, credential and
+session context from their own output, but Home Assistant backups and raw
+`.storage` files can still contain sensitive data. Treat them as private.
 
 ## Development Smoke Checks
 

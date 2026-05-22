@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import re
 import time
 from typing import Any
@@ -53,6 +54,9 @@ MAC_ADDRESS_RE = re.compile(
     r"(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}"
     r"(?![0-9a-f])"
 )
+IPV6_ADDRESS_CANDIDATE_RE = re.compile(
+    r"(?i)(?<![0-9a-f:])\[?[0-9a-f]{0,4}:[0-9a-f:.%]{2,}\]?(?![0-9a-f:])"
+)
 _DIAGNOSTIC_SENSITIVE_KEYS = {
     "access_token",
     "authorization",
@@ -84,8 +88,28 @@ def redact_diagnostic_text(value: object) -> str:
     text = AUTHORIZATION_FIELD_RE.sub(r"\1\2<redacted>", text)
     text = TOKEN_FIELD_RE.sub(r"\1\2<redacted>", text)
     text = MAC_ADDRESS_RE.sub("<mac-address>", text)
+    text = _redact_ipv6_text(text)
     text = PRIVATE_HOST_RE.sub("<private-host>", text)
     return LOCAL_HOST_RE.sub("<local-host>", text)
+
+
+def _redact_ipv6_text(text: str) -> str:
+    """Redact raw IPv6 addresses that are not already hidden as URL hosts."""
+
+    def _replace(match: re.Match[str]) -> str:
+        candidate = match.group(0)
+        normalized = candidate.strip("[]")
+        if "%" in normalized:
+            normalized = normalized.split("%", 1)[0]
+        try:
+            ip = ipaddress.ip_address(normalized)
+        except ValueError:
+            return candidate
+        if ip.version != 6:
+            return candidate
+        return "<ip-address>"
+
+    return IPV6_ADDRESS_CANDIDATE_RE.sub(_replace, text)
 
 
 def _redacted_leaf(value: Any) -> Any:

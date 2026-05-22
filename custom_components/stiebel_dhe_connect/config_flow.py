@@ -49,6 +49,7 @@ from .config_entry_helpers import entry_target as _entry_target
 from .config_entry_helpers import (
     is_target_used_by_other_entry as _is_target_used_by_other_entry,
 )
+from .client_diagnostics import diagnostic_error as _diagnostic_error
 from .config_flow_discovery import (
     FLOW_CONTEXT_DISCOVERED_HOST,
     FLOW_CONTEXT_DISCOVERED_PORT,
@@ -370,7 +371,7 @@ async def _async_record_discovery_safely(
             prompted=prompted,
         )
     except (OSError, RuntimeError, TypeError, ValueError) as err:
-        _LOGGER.debug("DHE discovery cache update failed: %s", err)
+        _LOGGER.debug("DHE discovery cache update failed: %s", _diagnostic_error(err))
 
 
 class StiebelDHEConnectConfigFlow(
@@ -744,7 +745,7 @@ class StiebelDHEConnectConfigFlow(
         except (aiohttp.ClientError, OSError, RuntimeError, TimeoutError) as err:
             self._setup_scan.candidates = []
             self._setup_scan.failed = True
-            _LOGGER.debug("DHE setup scan failed: %s", err)
+            _LOGGER.debug("DHE setup scan failed: %s", _diagnostic_error(err))
         else:
             try:
                 await _async_record_scan_discoveries(
@@ -752,7 +753,10 @@ class StiebelDHEConnectConfigFlow(
                     self._setup_scan.candidates,
                 )
             except (OSError, RuntimeError, TypeError, ValueError) as err:
-                _LOGGER.debug("DHE setup scan cache update failed: %s", err)
+                _LOGGER.debug(
+                    "DHE setup scan cache update failed: %s",
+                    _diagnostic_error(err),
+                )
         self._setup_scan.done = True
         self._setup_scan.task = None
         return self.async_show_progress_done(next_step_id="manual")
@@ -766,7 +770,10 @@ class StiebelDHEConnectConfigFlow(
             try:
                 await _async_load_discovery_cache(self.hass)
             except (OSError, RuntimeError, TypeError, ValueError) as err:
-                _LOGGER.debug("DHE discovery cache load failed: %s", err)
+                _LOGGER.debug(
+                    "DHE discovery cache load failed: %s",
+                    _diagnostic_error(err),
+                )
             return self._show_setup_choice_form()
 
         if CONF_HOST in user_input:
@@ -895,7 +902,10 @@ class StiebelDHEConnectConfigFlow(
             )
         except (OSError, RuntimeError, TypeError, ValueError) as err:
             recent_prompt_seen = False
-            _LOGGER.debug("DHE discovery prompt-cache check failed: %s", err)
+            _LOGGER.debug(
+                "DHE discovery prompt-cache check failed: %s",
+                _diagnostic_error(err),
+            )
         if recent_prompt_seen:
             await _async_record_discovery_safely(
                 self.hass,
