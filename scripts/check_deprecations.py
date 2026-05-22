@@ -74,6 +74,14 @@ PATTERNS = (
         re.compile(r"--disable-warnings\b"),
         "Do not hide pytest warnings in CI or validation commands.",
     ),
+    DeprecatedPattern(
+        re.compile(r"\basync_forward_entry_setup\s*[(]"),
+        "Use async_forward_entry_setups() instead of async_forward_entry_setup().",
+    ),
+    DeprecatedPattern(
+        re.compile(r"\basync_forward_entry_unload\s*[(]"),
+        "Use async_unload_platforms() instead of async_forward_entry_unload().",
+    ),
 )
 
 

@@ -77,6 +77,31 @@ class TestServiceHelpers(unittest.TestCase):
             "dhe_weather_country_required",
         )
 
+    def test_service_result_number_defaults_to_one(self) -> None:
+        self.assertEqual(service_helpers.service_result_number({}), 1)
+
+    def test_service_result_number_rejects_non_numeric_values(self) -> None:
+        with self.assertRaises(HomeAssistantError) as ctx:
+            service_helpers.service_result_number(
+                {service_helpers.ATTR_RESULT_NUMBER: "NaN"}
+            )
+
+        self.assertEqual(
+            getattr(ctx.exception, "translation_key", None),
+            "dhe_weather_result_unavailable",
+        )
+
+    def test_service_result_number_rejects_out_of_range_values(self) -> None:
+        with self.assertRaises(HomeAssistantError) as ctx:
+            service_helpers.service_result_number(
+                {service_helpers.ATTR_RESULT_NUMBER: 999}
+            )
+
+        self.assertEqual(
+            getattr(ctx.exception, "translation_key", None),
+            "dhe_weather_result_unavailable",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

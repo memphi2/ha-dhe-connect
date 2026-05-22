@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import redirect_stderr
+import json
 from io import StringIO
 from pathlib import Path
 import sys
@@ -31,6 +32,25 @@ def _write_type_gate_fixture(root: Path, files: list[str]) -> None:
     quoted_files = "\n".join(f'    "{file}",' for file in files)
     (root / "pyproject.toml").write_text(
         "[tool.mypy]\nfiles = [\n" + quoted_files + "\n]\n",
+        encoding="utf-8",
+    )
+
+
+def _write_replay_fixture(root: Path, profile: str, *, version: int = 2) -> None:
+    fixture_path = (
+        root / "tests" / "fixtures" / profile / "dhe_protocol_replay_sanitized.json"
+    )
+    fixture_path.parent.mkdir(parents=True, exist_ok=True)
+    fixture_path.write_text(
+        json.dumps(
+            {
+                "version": version,
+                "firmware_profile": profile,
+                "engineio_open": "0{\"sid\":\"fixture\"}",
+                "socketio_packets": [{"packet": "42[\"message\",{}]"}],
+                "expected_runtime_state": {},
+            }
+        ),
         encoding="utf-8",
     )
 
@@ -195,6 +215,63 @@ class TestCheckIntegration(unittest.TestCase):
                 self.assertRaises(SystemExit),
             ):
                 check_integration.check_type_gate_coverage()
+
+    def test_replay_fixture_inventory_accepts_valid_layout(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            _write_replay_fixture(root, "firmware_a")
+            _write_replay_fixture(root, "firmware_b")
+
+            with (
+                patch.object(check_integration, "ROOT", root),
+                patch.object(check_integration, "FIXTURE_ROOT", root / "tests" / "fixtures"),
+            ):
+                check_integration.check_replay_fixtures()
+
+    def test_replay_fixture_inventory_rejects_stale_firmware_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            _write_replay_fixture(root, "firmware_a")
+            (root / "tests" / "fixtures" / "firmware_b").mkdir(parents=True, exist_ok=True)
+
+            with (
+                patch.object(check_integration, "ROOT", root),
+                patch.object(check_integration, "FIXTURE_ROOT", root / "tests" / "fixtures"),
+                redirect_stderr(StringIO()),
+                self.assertRaises(SystemExit),
+            ):
+                check_integration.check_replay_fixtures()
+
+    def test_check_translations_rejects_structure_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            integration = root / "custom_components" / "stiebel_dhe_connect" / "translations"
+            integration.mkdir(parents=True, exist_ok=True)
+            (integration / "en.json").write_text(
+                json.dumps(
+                    {
+                        "entity": {"sensor": {"one": {"name": "One"}}},
+                        "config": {"error": {"cannot_connect": "x"}},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (integration / "de.json").write_text(
+                json.dumps(
+                    {
+                        "entity": {"sensor": {"one": {"name": "Eins"}}},
+                        "config": {"error": {"cannot_connect": "x", "invalid_host": "y"}},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with (
+                patch.object(check_integration, "TRANSLATIONS", integration),
+                redirect_stderr(StringIO()),
+                self.assertRaises(SystemExit),
+            ):
+                check_integration.check_translations()
 
 
 if __name__ == "__main__":

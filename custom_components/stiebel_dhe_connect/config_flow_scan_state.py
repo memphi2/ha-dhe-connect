@@ -59,3 +59,12 @@ class SetupScanState:
         if self.task is not None and not self.task.done():
             self.task.cancel()
         self.task = None
+
+    def reset(self) -> None:
+        """Reset scan state so the flow can safely start a fresh scan round."""
+        self.cancel()
+        self.candidates = []
+        self.done = False
+        self.failed = False
+        self.networks = None
+        self.port = DEFAULT_PORT

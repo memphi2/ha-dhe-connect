@@ -1633,6 +1633,24 @@ async def test_repairs_flow_rejects_mismatched_issue_data() -> None:
             )
 
 
+async def test_repairs_flow_rejects_mismatched_issue_type_data() -> None:
+    """Reject stale issue payloads that point to a different repair type."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    repairs = importlib.import_module(f"custom_components.{DOMAIN}.repairs")
+    repair_issues = importlib.import_module(
+        f"custom_components.{DOMAIN}.repair_issues"
+    )
+    async with async_test_home_assistant() as hass:
+        issue_id = repair_issues.pairing_required_issue_id("entry-a")
+        with pytest.raises(ValueError, match="type does not match"):
+            await repairs.async_create_fix_flow(
+                hass,
+                issue_id,
+                {"entry_id": "entry-a", "issue_type": repair_issues.TOKEN_INVALID_ISSUE},
+            )
+
+
 async def test_reauth_flow_repairs_pairing_with_real_hass_fixture() -> None:
     """Run HA reauth flow and verify it validates a fresh DHE pairing."""
     _clear_loaded_integration_modules()
@@ -1737,6 +1755,45 @@ async def test_repairs_flow_validates_fresh_pairing_with_real_hass_fixture() -> 
         )
         validate_pairing.assert_awaited_once()
         assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id) is None
+
+
+async def test_repairs_flow_aborts_when_entry_is_removed_before_confirm() -> None:
+    """Abort repair confirm when the config entry disappears mid-flow."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    repairs = importlib.import_module(f"custom_components.{DOMAIN}.repairs")
+    repair_issues = importlib.import_module(
+        f"custom_components.{DOMAIN}.repair_issues"
+    )
+    async with async_test_home_assistant() as hass:
+        entry = _build_mock_entry(
+            host="repair-remove-dhe.local",
+            port=DEFAULT_PORT,
+            name="Repair Remove Fixture DHE",
+            unique_id="repair-remove-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+        repair_issues.async_create_pairing_issue(hass, entry.entry_id, entry.title)
+        issue_id = repair_issues.pairing_required_issue_id(entry.entry_id)
+        issue = ir.async_get(hass).async_get_issue(DOMAIN, issue_id)
+        assert issue is not None
+
+        repair_flow = await repairs.async_create_fix_flow(
+            hass,
+            issue_id,
+            issue.data,
+        )
+        repair_flow.hass = hass
+        repair_flow.handler = DOMAIN
+        repair_flow.flow_id = "repair-missing-after-open"
+        repair_flow.context = {}
+        repair_flow.init_data = {"issue_id": issue_id}
+
+        hass.config_entries._entries.pop(entry.entry_id, None)
+        result = await repair_flow.async_step_confirm({})
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "entry_not_found"
 
 
 async def test_repairs_flow_success_reloads_existing_entry_without_duplication() -> None:

@@ -138,6 +138,24 @@ reviewable:
   recorder top writers without storing local paths, hosts, IPs, token paths or
   credentials.
 
+## Why These Guards Exist
+
+- Replay fixtures and edge-case runtime tests:
+  They catch protocol/runtime regressions deterministically before live-device
+  smoke and reduce firmware-drift risk in parser paths.
+- Strict typing and Protocol contracts:
+  They make mixin boundaries explicit, reduce accidental runtime assumptions and
+  keep long-term refactors reviewable without behavior changes.
+- Recorder deduplication and high-churn protections:
+  They keep Home Assistant database growth bounded while preserving visible
+  runtime behavior for live entities.
+- Diagnostics redaction:
+  Support exports remain actionable without exposing host, MAC, token or local
+  transport details.
+- Config-flow and service split:
+  Smaller modules reduce regression blast radius and make validation failures
+  easier to localize.
+
 ## Recommended Validation Gate For Each Typing Round
 
 ```bash

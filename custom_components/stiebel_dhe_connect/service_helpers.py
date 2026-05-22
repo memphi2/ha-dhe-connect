@@ -110,3 +110,23 @@ def weather_locations(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, dict)]
+
+
+def service_result_number(data: Mapping[str, Any]) -> int:
+    """Return one validated 1-based weather result number from service data."""
+    raw_result_number = data.get(ATTR_RESULT_NUMBER, 1)
+    try:
+        result_number = int(raw_result_number)
+    except (TypeError, ValueError) as err:
+        raise translated_homeassistant_error(
+            f"Weather search result {raw_result_number!r} is invalid",
+            translation_key="dhe_weather_result_unavailable",
+            translation_placeholders={"result_number": str(raw_result_number)},
+        ) from err
+    if result_number < 1 or result_number > WEATHER_RESULT_NUMBER_MAX:
+        raise translated_homeassistant_error(
+            f"Weather search result {result_number} is not available",
+            translation_key="dhe_weather_result_unavailable",
+            translation_placeholders={"result_number": str(result_number)},
+        )
+    return result_number

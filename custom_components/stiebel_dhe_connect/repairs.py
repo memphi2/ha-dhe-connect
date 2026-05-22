@@ -49,7 +49,12 @@ class PairingRequiredRepairFlow(RepairsFlow):
         user_input: dict[str, str] | None = None,
     ) -> data_entry_flow.FlowResult:
         """Request pairing and validate the new token when submitted."""
-        target = entry_target(self._entry)
+        current_entry = self.hass.config_entries.async_get_entry(self._entry.entry_id)
+        if current_entry is None or current_entry.domain != DOMAIN:
+            return self.async_abort(reason="entry_not_found")
+        self._entry = current_entry
+
+        target = entry_target(current_entry)
         if target is None:
             return self.async_abort(reason="invalid_entry")
 
@@ -68,13 +73,13 @@ class PairingRequiredRepairFlow(RepairsFlow):
                     )
                 )
                 if pairing_result.error_key is None:
-                    async_delete_repair_issues(self.hass, self._entry.entry_id)
-                    if self._entry.state in (
+                    async_delete_repair_issues(self.hass, current_entry.entry_id)
+                    if current_entry.state in (
                         ConfigEntryState.LOADED,
                         ConfigEntryState.SETUP_RETRY,
                     ):
                         await self.hass.config_entries.async_reload(
-                            self._entry.entry_id
+                            current_entry.entry_id
                         )
                     return self.async_create_entry(data={})
                 errors["base"] = pairing_result.error_key
@@ -86,7 +91,7 @@ class PairingRequiredRepairFlow(RepairsFlow):
             description_placeholders={
                 CONF_HOST: host,
                 CONF_PORT: str(port),
-                "name": self._entry.title,
+                "name": current_entry.title,
             },
         )
 
@@ -117,6 +122,8 @@ async def async_create_fix_flow(
     entry_id = str(raw_entry_id or issue_id.removeprefix(f"{issue_type}_"))
     if issue_id != repair_issue_id(issue_type, entry_id):
         raise ValueError(f"repair issue does not match entry {entry_id}")
+    if data and str(data.get("issue_type") or issue_type) != issue_type:
+        raise ValueError(f"repair issue type does not match issue id: {issue_id}")
 
     entry = hass.config_entries.async_get_entry(entry_id)
     if entry is None or entry.domain != DOMAIN:

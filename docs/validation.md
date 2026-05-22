@@ -82,6 +82,12 @@ What those checks cover:
   behavior.
 - Repository consistency, required files, translations, pinned validation
   actions, Python syntax and `client.py` size.
+- Replay-fixture hygiene:
+  fixture inventory, firmware-profile consistency and required replay payload
+  sections are validated in `scripts/check_integration.py`.
+- Translation structure hygiene:
+  `en.json` and `de.json` must keep matching nested key structures to prevent
+  stale or untranslated flow/repair paths.
 - Deprecation hygiene for repository-owned Python, CI, README, changelog and
   documentation files. This fails on deprecated APIs and warning-suppression
   configuration instead of hiding warnings.

@@ -1272,6 +1272,67 @@ class TestSetupScanConfigFlow(
         self.assertEqual(result["type"], "form")
         self.assertEqual(result["errors"], {})
 
+    async def test_async_remove_cancels_scan_and_resets_setup_state(self) -> None:
+        self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
+        result = await self.flow.async_step_network_scan()
+        self.assertEqual(result["type"], "progress")
+        task = self._tasks[0]
+        self.assertFalse(task.done())
+
+        self.flow._pending_setup_data = {
+            self.config_flow.CONF_HOST: "192.0.2.124",
+            self.config_flow.CONF_PORT: 8443,
+            "token_file": "token.txt",
+        }
+        self.flow._setup_scan.candidates = [
+            types.SimpleNamespace(host="192.0.2.124", port=8443, evidence=("scan",))
+        ]
+        self.flow._setup_scan.done = True
+        self.flow._setup_scan.failed = True
+        self.flow._setup_scan.port = 9000
+
+        self.flow.async_remove()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+
+        self.assertIsNone(self.flow._pending_setup_data)
+        self.assertIsNone(self.flow._setup_scan.task)
+        self.assertEqual(self.flow._setup_scan.candidates, [])
+        self.assertFalse(self.flow._setup_scan.done)
+        self.assertFalse(self.flow._setup_scan.failed)
+        self.assertIsNone(self.flow._setup_scan.networks)
+        self.assertEqual(self.flow._setup_scan.port, self.config_flow.DEFAULT_PORT)
+
+    async def test_network_scan_recovers_after_cancelled_scan_task(self) -> None:
+        started = asyncio.Event()
+
+        async def _never_finishes(*_args, **_kwargs):
+            started.set()
+            await asyncio.Future()
+            return []
+
+        self.config_flow.async_scan_dhe_hosts = AsyncMock(side_effect=_never_finishes)
+        first = await self.flow.async_step_network_scan()
+        self.assertEqual(first["type"], "progress")
+        first_task = self._tasks[0]
+        await started.wait()
+        first_task.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await first_task
+
+        progressed = await self.flow.async_step_network_scan()
+        self.assertEqual(progressed["type"], "progress_done")
+        self.assertTrue(self.flow._setup_scan.failed)
+        self.assertTrue(self.flow._setup_scan.done)
+
+        self.flow._setup_scan.reset()
+        self.config_flow.async_scan_dhe_hosts = AsyncMock(return_value=[])
+        second = await self.flow.async_step_network_scan()
+        self.assertEqual(second["type"], "progress")
+        await self._tasks[-1]
+        done = await self.flow.async_step_network_scan()
+        self.assertEqual(done["type"], "progress_done")
+
 
 class TestSetupPairingValidation(
     _RestoresImportModules,
@@ -1344,6 +1405,23 @@ class TestSetupPairingValidation(
 
         self.assertIsNone(result.error_key)
         self.assertEqual(result.unique_id, "aa:bb:cc:dd:ee:ff")
+
+    async def test_validate_setup_pairing_rejects_stale_pending_data(self) -> None:
+        module = self.config_flow
+        flow = module.StiebelDHEConnectConfigFlow()
+        flow.hass = object()
+        module._validate_setup_pairing = AsyncMock()
+        module._can_connect = AsyncMock(return_value=True)
+
+        result = await flow._async_validate_setup_pairing_data(
+            {module.CONF_HOST: "dhe.local"},
+            require_connectivity_check=True,
+        )
+
+        self.assertEqual(result.error_key, "pairing_failed")
+        self.assertIsNone(result.unique_id)
+        module._can_connect.assert_not_awaited()
+        module._validate_setup_pairing.assert_not_awaited()
 
 
 class TestManifestZeroconf(_RestoresImportModules, unittest.TestCase):

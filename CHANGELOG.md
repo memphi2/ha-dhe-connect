@@ -2,7 +2,15 @@
 
 ## Unreleased
 
-- No changes yet.
+- Config-flow/setup hardening for stale scan and pairing state cleanup paths.
+- Repairs flow hardening for stale or mismatched issue payloads and missing-entry reuse.
+- Service-layer hardening for malformed weather result selection payloads.
+- Deterministic runtime edge-case replay tests for malformed payloads, invalid ODB shapes and closed-session handling.
+- Diagnostics redaction hardening for additional URL/URI-origin key variants.
+- Repository validation hardening:
+  - replay fixture inventory/schema checks in `scripts/check_integration.py`
+  - stricter translation-structure parity checks between `en.json` and `de.json`
+  - additional deprecated HA API guards in `scripts/check_deprecations.py`
 
 ## v1.8.1 - 2026-05-21
 
