@@ -505,7 +505,6 @@ async def test_setup_merges_empty_host_devices_into_stable_entry_device() -> Non
         old_ip_device = device_registry.async_get_or_create(
             config_entry_id=entry.entry_id,
             identifiers={(DOMAIN, "192.0.2.124:8443")},
-            manufacturer="STIEBEL ELTRON",
             model="DHE Connect",
             name="Old IP DHE",
         )
@@ -519,7 +518,6 @@ async def test_setup_merges_empty_host_devices_into_stable_entry_device() -> Non
         device_registry.async_get_or_create(
             config_entry_id=entry.entry_id,
             identifiers={(DOMAIN, "dhe-ja06.local:8443")},
-            manufacturer="STIEBEL ELTRON",
             model="DHE Connect",
             name="Old Host DHE",
         )
@@ -551,6 +549,54 @@ async def test_setup_merges_empty_host_devices_into_stable_entry_device() -> Non
             entity.unique_id == "legacy_entity_on_ip_device"
             for entity in migrated_entities
         )
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
+
+async def test_runtime_device_info_updates_ha_device_model_and_firmware() -> None:
+    """Expose DHE device type and firmware version in HA's device registry."""
+    _clear_loaded_integration_modules()
+    integration = importlib.import_module(f"custom_components.{DOMAIN}")
+    protocol = importlib.import_module(f"custom_components.{DOMAIN}.protocol")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        client = _FixtureDHEClient(host="dhe-ja06.local", port=DEFAULT_PORT)
+        entry = _build_mock_entry(
+            host=client.host,
+            port=client.port,
+            name="Device Info Fixture DHE",
+            unique_id="device-info-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+
+        with (
+            patch.object(integration, "DHEClient", return_value=client),
+            patch.object(integration, "_async_can_connect", AsyncMock(return_value=True)),
+        ):
+            assert await hass.config_entries.async_setup(entry.entry_id)
+            await hass.async_block_till_done()
+
+        device_registry = dr.async_get(hass)
+        devices = dr.async_entries_for_config_entry(device_registry, entry.entry_id)
+        assert len(devices) == 1
+        assert devices[0].model == "DHE Connect"
+        assert devices[0].manufacturer is None
+        assert devices[0].sw_version is None
+
+        client.last_device_info = {
+            "device_type": "DHE Connect 18/21/24",
+            "protocol_version": "1.9.00",
+            "raw_odb_protocol_version": 1,
+        }
+        client.emit_measurement(protocol.ID_DEVICE_INFO, "DHE Connect 18/21/24")
+        await hass.async_block_till_done()
+
+        devices = dr.async_entries_for_config_entry(device_registry, entry.entry_id)
+        assert len(devices) == 1
+        assert devices[0].model == "DHE Connect 18/21/24"
+        assert devices[0].manufacturer is None
+        assert devices[0].sw_version == "1.9.00"
 
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()

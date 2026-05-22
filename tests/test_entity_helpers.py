@@ -117,6 +117,31 @@ class TestEntityHelpers(unittest.TestCase):
             },
         )
 
+    def test_build_device_info_uses_runtime_model_and_firmware(self) -> None:
+        self.assertEqual(
+            self.helpers.build_device_info(
+                "192.0.2.5",
+                8443,
+                "Bathroom DHE",
+                runtime_device_info={
+                    "device_type": "DHE Connect 18/21/24",
+                    "protocol_version": "1.9.00",
+                    "raw_odb_protocol_version": 1,
+                },
+            ),
+            {
+                "identifiers": {("stiebel_dhe_connect", "192.0.2.5:8443")},
+                "model": "DHE Connect 18/21/24",
+                "name": "Bathroom DHE",
+                "sw_version": "1.9.00",
+            },
+        )
+
+    def test_device_info_ignores_raw_odb_protocol_version_as_firmware(self) -> None:
+        self.assertIsNone(
+            self.helpers.device_registry_sw_version({"raw_odb_protocol_version": 1})
+        )
+
     def test_build_device_info_can_preserve_legacy_identifiers(self) -> None:
         device_info = self.helpers.build_device_info(
             "192.0.2.5",

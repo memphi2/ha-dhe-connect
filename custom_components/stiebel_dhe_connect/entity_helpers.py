@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from homeassistant.helpers.device_registry import DeviceInfo
 
 DOMAIN = "stiebel_dhe_connect"
+DEFAULT_DEVICE_MODEL = "DHE Connect"
 
 
 def build_entity_unique_id(entry_id: str, key: str) -> str:
@@ -54,6 +55,30 @@ def temperature_memory_measurement_slot_items(
     )
 
 
+def device_registry_model(device_info: Mapping[str, Any] | None = None) -> str:
+    """Return the HA device-registry model from DHE runtime metadata."""
+    if device_info is None:
+        return DEFAULT_DEVICE_MODEL
+    return _clean_device_info_text(device_info.get("device_type")) or DEFAULT_DEVICE_MODEL
+
+
+def device_registry_sw_version(
+    device_info: Mapping[str, Any] | None = None,
+) -> str | None:
+    """Return the HA device-registry firmware version from DHE runtime metadata."""
+    if device_info is None:
+        return None
+    return _clean_device_info_text(device_info.get("protocol_version"))
+
+
+def _clean_device_info_text(value: Any) -> str | None:
+    """Return a non-empty DeviceInfo text value."""
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    return text or None
+
+
 def build_device_info(
     host: str,
     port: int,
@@ -61,6 +86,7 @@ def build_device_info(
     stable_identifier: str | None = None,
     legacy_identifier: str | None = None,
     legacy_identifiers: set[str] | None = None,
+    runtime_device_info: Mapping[str, Any] | None = None,
 ) -> DeviceInfo:
     """Build a consistent Home Assistant device_info payload."""
     identifiers = {(DOMAIN, stable_identifier or f"{host}:{port}")}
@@ -70,11 +96,14 @@ def build_device_info(
         if identifier:
             identifiers.add((DOMAIN, identifier))
 
-    return {
+    device_info: DeviceInfo = {
         "identifiers": identifiers,
-        "model": "DHE Connect",
+        "model": device_registry_model(runtime_device_info),
         "name": name,
     }
+    if sw_version := device_registry_sw_version(runtime_device_info):
+        device_info["sw_version"] = sw_version
+    return device_info
 
 
 class StiebelDHEEntityMixin:
@@ -104,4 +133,5 @@ class StiebelDHEEntityMixin:
             getattr(client, "device_identifier", None) or f"entry:{entry_id}",
             client.legacy_device_identifier,
             getattr(client, "legacy_device_identifiers", None),
+            getattr(client, "last_device_info", None),
         )
