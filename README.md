@@ -15,7 +15,7 @@ The integration talks directly to the DHE web interface on your local network. I
 
 ## Status
 
-- Current version: `1.8.1`
+- Current version: `1.8.2`
 - Release: stable custom integration, Platinum-track quality evidence
 - Quality: Home Assistant Quality Scale (custom integration, not HA Core certified)
 - Home Assistant UI integration name: `DHE Connect` (kept short for clean
@@ -27,9 +27,9 @@ The integration talks directly to the DHE web interface on your local network. I
 - Scope: multiple configured DHE Connect devices per Home Assistant instance
 
 This is a custom integration and should be used on a trusted local network.
-v1.8.1 refines Zeroconf device naming, diagnostics export hygiene, deprecation
-validation and privacy hardening on top of the v1.8.0 Platinum-track work. Not
-an official Home Assistant Core certification.
+v1.8.2 focuses on robustness hardening for setup/repair/service paths, replay
+regression safety and stricter repository validation gates. Not an official
+Home Assistant Core certification.
 
 Development and protocol mapping for this release were assisted by OpenAI Codex.
 
