@@ -483,6 +483,62 @@ class TestHATestApi(unittest.TestCase):
         self.assertIn("skipped", results[-1].message)
         self.assertEqual(api.calls, [])
 
+    def test_timer_smoke_skips_when_timer_entity_is_disabled(self) -> None:
+        api = _FakeMissingEntityApi(missing_entity="sensor.timer_remaining")
+
+        results = ha_test_api.run_timer_smoke(
+            api,
+            "access",
+            switch_entity="switch.timer",
+            remaining_entity="sensor.timer_remaining",
+            duration_entity="number.duration",
+        )
+
+        self.assertTrue(all(result.ok for result in results))
+        self.assertEqual(results[0].level, "INFO")
+        self.assertIn("TIMER skipped because entity is unavailable", results[-1].message)
+        self.assertEqual(api.calls, [])
+
+    def test_timer_smoke_reraises_non_missing_api_errors(self) -> None:
+        class _Api:
+            def __init__(self, _access_token: str) -> None:
+                self.gets: list[str] = []
+
+            def get_state(
+                self,
+                _access_token: str,
+                entity_id: str,
+            ) -> dict[str, object]:
+                self.gets.append(entity_id)
+                raise urllib.error.HTTPError(
+                    url="http://test/api/states",
+                    code=503,
+                    msg="Service unavailable",
+                    hdrs=None,
+                    fp=None,
+                )
+
+            def call_service(
+                self,
+                _access_token: str,
+                domain: str,
+                service: str,
+                payload: dict[str, object],
+            ) -> list[dict[str, object]]:
+                del domain, service, payload
+                return []
+
+        api = _Api("access")
+        with self.assertRaises(urllib.error.HTTPError):
+            ha_test_api.run_timer_smoke(
+                api,
+                "access",
+                switch_entity="switch.timer",
+                remaining_entity="sensor.timer_remaining",
+                duration_entity="number.duration",
+            )
+        self.assertEqual(api.gets[0], "sensor.dhe_connect_device_status")
+
     def test_wait_online_returns_immediately_without_restart_stability(self) -> None:
         api = ha_test_api.HomeAssistantApi("http://ha.test")
 
@@ -903,6 +959,37 @@ class _FakeServiceApi:
         if entity_id == "sensor.dhe_connect_device_status":
             return {"entity_id": entity_id, "state": self._device_status}
         return self._states.pop(0)
+
+    def call_service(
+        self,
+        _access_token: str,
+        domain: str,
+        service: str,
+        payload: dict[str, object],
+    ) -> list[dict[str, object]]:
+        self.calls.append((domain, service, payload))
+        return [{"entity_id": payload["entity_id"]}]
+
+
+class _FakeMissingEntityApi:
+    def __init__(self, *, missing_entity: str) -> None:
+        self._missing_entity = missing_entity
+        self.calls: list[tuple[str, str, dict[str, object]]] = []
+
+    def get_state(self, _access_token: str, entity_id: str) -> dict[str, object]:
+        if entity_id == self._missing_entity:
+            raise urllib.error.HTTPError(
+                url="http://test/api/states",
+                code=404,
+                msg="Not Found",
+                hdrs=None,
+                fp=None,
+            )
+        if entity_id == "number.duration":
+            return {"entity_id": entity_id, "state": "180", "attributes": {}}
+        if entity_id == "switch.timer":
+            return {"entity_id": entity_id, "state": "off", "attributes": {}}
+        return {"entity_id": entity_id, "state": "0:00", "attributes": {}}
 
     def call_service(
         self,

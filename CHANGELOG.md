@@ -26,6 +26,8 @@ IDs, unique IDs and DHE protocol behavior stable.
   output visible in logs, so third-party deprecations are not duplicated as
   repository annotations.
 - Extended the deprecation guard to README, changelog and documentation files.
+- Made the HA live timer smoke skip missing or disabled timer entities with a
+  clear info result instead of aborting the complete smoke round on a 404.
 
 ### Performance
 
@@ -58,6 +60,7 @@ IDs, unique IDs and DHE protocol behavior stable.
 
 ### Validation
 
+- `.venv/bin/python -m pytest -q`: `686 passed`.
 - `python3 -m pytest tests/test_config_flow_defaults.py -q`: `30 passed`.
 - `.venv/bin/python -m pytest tests/test_00_ha_fixture_runtime.py -q -k "zeroconf_flow_accepts_realistic_discovery_payload_variants or user_flow_can_select_in_progress_zeroconf_discovery"`:
   `7 passed`.
@@ -71,6 +74,9 @@ IDs, unique IDs and DHE protocol behavior stable.
 - `.venv/bin/python scripts/check_integration.py`: `integration checks ok`.
 - `.venv/bin/python scripts/release_check.py --run-local-checks --expect-tag absent --expect-github-release absent`:
   `release check ok`; tag and GitHub release for `v1.8.1` are absent.
+- `.venv/bin/python scripts/ha_test_api.py --url http://HA-TEST:8123 --username ollitest --service-smoke --entity-smoke --timer-smoke`:
+  service smoke passed, entity smoke passed, timer smoke skipped disabled timer
+  remaining entities cleanly.
 
 ## v1.8.0 - 2026-05-21
 
