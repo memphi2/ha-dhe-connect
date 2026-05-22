@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import time
 from typing import Any
 
 from homeassistant.components.climate import ClimateEntity
@@ -11,10 +10,13 @@ from homeassistant.components.climate.const import ClimateEntityFeature, HVACMod
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .action_error_helpers import dhe_action_error, raise_if_dhe_unavailable
+from .action_error_helpers import (
+    dhe_action_error,
+    raise_if_dhe_unavailable,
+    translated_homeassistant_error,
+)
 from .client import DHEClient
 from .client_types import DHEError, MeasurementValue
 from .config_entry_helpers import merged_entry_data
@@ -39,8 +41,6 @@ _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 0
 _CLIMATE_FEATURE_TURN_ON = getattr(ClimateEntityFeature, "TURN_ON", 0)
 _CLIMATE_FEATURE_TURN_OFF = getattr(ClimateEntityFeature, "TURN_OFF", 0)
-_TELEMETRY_MIN_WRITE_DELTA = 0.5
-_TELEMETRY_MAX_WRITE_INTERVAL_SECONDS = 120.0
 
 
 async def async_setup_entry(
@@ -108,8 +108,6 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
         self._child_safety_temperature_limit: float | None = None
         self._child_safety_temperature_limit_raw: float | None = None
         self._target_before_heating_off: float | None = None
-        self._last_written_temperatures: dict[int, float | None] = {}
-        self._last_written_temperature_monotonic: dict[int, float] = {}
         self._last_written_state_signature: tuple[Any, ...] | None = None
         self._update_extra_state_attributes()
 
@@ -122,8 +120,6 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
             "connection_state": self._connection_state,
             "readback_id": 0,
             "write_id": 66,
-            "inlet_temperature": self._inlet_temperature,
-            "outlet_temperature": self._outlet_temperature,
             "setpoint_below_inlet_temperature": target_below_inlet,
             "water_heating_enabled": self._water_heating_enabled,
             "child_safety_active": self._child_safety_active,
@@ -151,7 +147,10 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
             self._client.add_availability_callback(self._handle_availability_update)
         )
         self.async_on_remove(
-            self._client.add_measurement_callback(self._handle_measurement_update)
+            self._client.add_measurement_callback(
+                self._handle_measurement_update,
+                replay=False,
+            )
         )
         self._sync_temperatures_from_measurements()
         self._sync_hvac_mode_from_measurements()
@@ -182,16 +181,8 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
         write_update = True
         if odb_id == ID_INLET_TEMPERATURE:
             self._inlet_temperature = self._coerce_temperature(value)
-            write_update = self._should_write_temperature_state(
-                odb_id,
-                self._inlet_temperature,
-            )
         elif odb_id == ID_OUTLET_TEMPERATURE:
             self._outlet_temperature = self._coerce_temperature(value)
-            write_update = self._should_write_temperature_state(
-                odb_id,
-                self._outlet_temperature,
-            )
         elif odb_id == ID_WATER_HEATING_ENABLED:
             self._water_heating_enabled = bool(value)
             self._attr_hvac_mode = (
@@ -206,22 +197,17 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
         else:
             return
 
-        if temperature_update and self._target_below_inlet() != target_below_inlet_before:
-            write_update = True
+        if temperature_update:
+            target_below_inlet_after = self._target_below_inlet()
+            write_update = (
+                target_below_inlet_after
+                or target_below_inlet_after != target_below_inlet_before
+            )
 
         if not write_update:
             return
 
-        if odb_id in (ID_INLET_TEMPERATURE, ID_OUTLET_TEMPERATURE):
-            current = (
-                self._inlet_temperature
-                if odb_id == ID_INLET_TEMPERATURE
-                else self._outlet_temperature
-            )
-            self._last_written_temperatures[odb_id] = current
-            self._last_written_temperature_monotonic[odb_id] = time.monotonic()
-
-        self._write_climate_state(force=temperature_update)
+        self._write_climate_state()
 
     @callback
     def _handle_availability_update(self, available: bool) -> None:
@@ -258,8 +244,6 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
             self._attr_target_temperature,
             self._attr_current_temperature,
             self._attr_max_temp,
-            self._inlet_temperature,
-            self._outlet_temperature,
             self._water_heating_enabled,
             self._child_safety_active,
             self._child_safety_temperature_limit,
@@ -336,22 +320,6 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
             return float(value)
         except (TypeError, ValueError):
             return None
-
-    def _should_write_temperature_state(
-        self,
-        odb_id: int,
-        new_value: float | None,
-    ) -> bool:
-        """Return whether a temperature update should write a new climate state."""
-        previous_value = self._last_written_temperatures.get(odb_id)
-        if previous_value is None or new_value is None:
-            return previous_value != new_value
-        if abs(new_value - previous_value) >= _TELEMETRY_MIN_WRITE_DELTA:
-            return True
-        last_written = self._last_written_temperature_monotonic.get(odb_id)
-        if last_written is None:
-            return True
-        return (time.monotonic() - last_written) >= _TELEMETRY_MAX_WRITE_INTERVAL_SECONDS
 
     def _target_below_inlet(self) -> bool:
         """Return True when the configured target is below current inlet temperature."""
@@ -455,7 +423,11 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
             self._write_climate_state(force=True)
             return
 
-        raise HomeAssistantError(f"Unsupported HVAC mode: {hvac_mode}")
+        raise translated_homeassistant_error(
+            f"Unsupported HVAC mode: {hvac_mode}",
+            translation_key="dhe_unsupported_hvac_mode",
+            translation_placeholders={"hvac_mode": str(hvac_mode)},
+        )
 
     async def async_turn_on(self) -> None:
         """Turn water heating on."""

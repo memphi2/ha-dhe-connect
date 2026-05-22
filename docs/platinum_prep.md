@@ -1,4 +1,4 @@
-# Platinum Preparation (v1.8.0 branch)
+# Platinum Preparation (v1.8.1 branch)
 
 This document tracks the hardening work used to move this custom integration
 from a Gold-track baseline toward Home Assistant Quality Scale
@@ -104,6 +104,10 @@ reviewable:
   recorded attribute dictionaries are snapshot only if value/state thresholds
   indicate a state write is likely, which keeps high-frequency updates lighter
   under bursty runtime streams.
+- Static sensor descriptions, options-flow handling and Home Assistant service
+  registration are split into dedicated modules. The runtime-facing modules stay
+  smaller while preserving existing entity IDs, service names and config-entry
+  behavior.
 - Repeated weather, radio, consumption and saving-monitor payloads are kept as
   bounded summaries or attributes only when needed for services, options flows
   or visible entity state. Stable internal ODB values are recognized and
@@ -112,6 +116,8 @@ reviewable:
   state. Raw token values, token paths, private hosts, local URLs, IP
   addresses, MAC addresses, session IDs, WebSocket URLs and raw WebSocket
   payloads are redacted or reduced to presence flags.
+- v1.8.1 extends that redaction to raw IPv6 strings and keeps pairing
+  notification identifiers scoped without embedding raw host or port details.
 - Stable hashed identifiers are not emitted today. If they are added later,
   they must be opt-in and must not be reversible to private host, MAC, token or
   product identifiers.
@@ -119,11 +125,24 @@ reviewable:
   live transport orchestration are deliberately excluded from the 95% line
   metric when their behavior is better covered by HA fixture tests, Fake-DHE
   tests, release checks and optional live smoke gates.
+- CI runs a repository-owned deprecation guard. It rejects deprecated Python
+  APIs and warning-suppression settings in owned Python, workflow, README,
+  changelog and documentation files; current third-party dependency warnings
+  are left visible and must be resolved by dependency upgrades or upstream
+  fixes.
+- The GitHub pytest annotation plugin is disabled. This does not filter pytest
+  warnings from logs; it prevents external dependency deprecations from being
+  duplicated as repository annotations.
+- Mounted HA smoke can emit sanitized JSON evidence with `--evidence-json`.
+  That artifact keeps pass/fail checks, entity counts, monitor settings and
+  recorder top writers without storing local paths, hosts, IPs, token paths or
+  credentials.
 
 ## Recommended Validation Gate For Each Typing Round
 
 ```bash
 python scripts/check_typing.py
+python scripts/check_deprecations.py
 python -m ruff check custom_components/stiebel_dhe_connect tests scripts
 python scripts/check_integration.py
 python scripts/check_coverage.py

@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 from dataclasses import dataclass
 import time
+import urllib.error
 from typing import Any, Protocol
 
 DEFAULT_CLIMATE_ENTITY = "climate.dhe_connect_water_heating"
@@ -416,29 +417,40 @@ def run_timer_smoke(
     results: list[ServiceSmokeResult] = [
         _info("TIMER smoke: reading original duration and checking water status")
     ]
-    duration_before = api.get_state(access_token, duration_entity)
+    device_status = _dhe_device_status(api, access_token)
+    if device_status in WATER_RUNNING_DEVICE_STATES:
+        results.append(
+            ServiceSmokeResult(
+                True,
+                "TIMER skipped because water is running "
+                f"device_status={device_status!r}",
+            )
+        )
+        return results
+
+    duration_before = _get_timer_entity_state(api, access_token, duration_entity, results)
+    if duration_before is None:
+        return results
+    remaining_state = _get_timer_entity_state(
+        api,
+        access_token,
+        remaining_entity,
+        results,
+    )
+    if remaining_state is None:
+        return results
+    if _get_timer_entity_state(api, access_token, switch_entity, results) is None:
+        return results
+
     original_duration = _state_float(duration_before.get("state"))
-    changed_timer = False
     results.append(
         ServiceSmokeResult(
             original_duration is not None,
             f"TIMER duration before state={duration_before.get('state')!r}",
         )
     )
-
+    changed_timer = True
     try:
-        device_status = _dhe_device_status(api, access_token)
-        if device_status in WATER_RUNNING_DEVICE_STATES:
-            results.append(
-                ServiceSmokeResult(
-                    True,
-                    "TIMER skipped because water is running "
-                    f"device_status={device_status!r}",
-                )
-            )
-            return results
-
-        changed_timer = True
         results.extend(
             _exercise_timer(
                 api,
@@ -730,6 +742,32 @@ def _restore_timer(
                     "value": original_duration,
                 },
             )
+
+
+def _get_timer_entity_state(
+    api: HomeAssistantApiLike,
+    access_token: str,
+    entity_id: str,
+    results: list[ServiceSmokeResult],
+) -> dict[str, Any] | None:
+    try:
+        return api.get_state(access_token, entity_id)
+    except urllib.error.HTTPError as err:
+        if err.code != 404:
+            raise
+        # Entity is missing (often disabled-by-integration). Skip timer checks
+        # rather than fail the full smoke run.
+        results.append(
+            ServiceSmokeResult(
+                True,
+                (
+                    f"TIMER skipped because entity is unavailable: "
+                    f"{entity_id!r}"
+                ),
+                level="INFO",
+            )
+        )
+        return None
 
 
 def _info(message: str) -> ServiceSmokeResult:

@@ -96,6 +96,8 @@ def values_equal(a: ODBValue | None, b: ODBValue | None) -> bool:
     """Compare confirmed ODB values with the tolerance used by the DHE."""
     if a is None or b is None:
         return a is b
+    if a == b:
+        return True
     if isinstance(a, bool) or isinstance(b, bool):
         return bool(a) is bool(b)
     return abs(float(a) - float(b)) < 0.001

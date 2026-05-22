@@ -18,5 +18,7 @@ vendor documentation or vendor specification.
 
 Release validation scans tracked files for common secret material, generated
 artifacts, proprietary DHE web assets and known proprietary license/copyright
-markers. If a future change needs additional third-party material, document the
-license before committing it.
+markers. It also runs a repository-owned deprecation guard across code,
+workflow and documentation files so warning suppression is not used as a
+substitute for fixing owned deprecated APIs. If a future change needs
+additional third-party material, document the license before committing it.

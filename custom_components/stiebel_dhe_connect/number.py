@@ -383,7 +383,10 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE updates and start the persistent session."""
         self.async_on_remove(
-            self._client.add_measurement_callback(self._handle_measurement_update)
+            self._client.add_measurement_callback(
+                self._handle_measurement_update,
+                replay=False,
+            )
         )
         self.async_on_remove(
             self._client.add_availability_callback(self._handle_availability_update)

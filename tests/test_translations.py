@@ -104,8 +104,25 @@ class TestTranslations(unittest.TestCase):
         for locale in ("en", "de"):
             data = json.loads((TRANSLATIONS / f"{locale}.json").read_text(encoding="utf-8"))
             exceptions = data["exceptions"]
-            self.assertIn("dhe_action_failed", exceptions)
-            self.assertIn("dhe_unavailable_action", exceptions)
+            self.assertTrue(
+                {
+                    "dhe_action_failed",
+                    "dhe_unavailable_action",
+                    "dhe_not_loaded",
+                    "dhe_entry_not_loaded",
+                    "dhe_entry_id_required",
+                    "dhe_invalid_config_entry",
+                    "dhe_weather_country_required",
+                    "dhe_weather_location_not_found",
+                    "dhe_weather_result_unavailable",
+                    "dhe_weather_location_id_empty",
+                    "dhe_unknown_weather_location_option",
+                    "dhe_unknown_radio_source",
+                    "dhe_no_radio_favorites",
+                    "dhe_unsupported_hvac_mode",
+                }
+                <= set(exceptions)
+            )
 
 
 if __name__ == "__main__":

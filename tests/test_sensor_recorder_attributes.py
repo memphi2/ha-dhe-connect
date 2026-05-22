@@ -977,7 +977,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
             def __init__(self) -> None:
                 self.request_measurement_refresh = AsyncMock()
 
-            def add_measurement_callback(self, _callback):
+            def add_measurement_callback(self, _callback, *, replay=True):
                 return lambda: None
 
             def add_availability_callback(self, _callback):
@@ -1044,7 +1044,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
             def __init__(self) -> None:
                 self.request_measurement_refresh = AsyncMock()
 
-            def add_measurement_callback(self, _callback):
+            def add_measurement_callback(self, _callback, *, replay=True):
                 return lambda: None
 
             def add_availability_callback(self, _callback):
@@ -1178,7 +1178,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
             async def _request_measurement_refresh(self, **_kwargs) -> None:
                 await self.release_refresh.wait()
 
-            def add_measurement_callback(self, _callback):
+            def add_measurement_callback(self, _callback, *, replay=True):
                 return lambda: None
 
             def add_availability_callback(self, _callback):

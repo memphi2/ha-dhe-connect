@@ -1,0 +1,22 @@
+# Runtime and validation dependencies for local development and release checks.
+
+# Runtime dependency used by the integration.
+# Keep this compatible with Home Assistant fixture environments.
+aiohttp>=3.11.11,<4
+
+# Home Assistant integration test/runtime plugin (brings Home Assistant dependency).
+# Different CI image versions require different floor versions.
+pytest-homeassistant-custom-component>=0.13.205,<0.14
+
+# Test tooling.
+# Keep the lower bound compatible with the pinned HA fixture helper package.
+pytest>=8.3.4,<9
+pytest-cov>=6.0,<7
+
+# Quality gates.
+mypy>=1.13,<2
+ruff>=0.15,<0.16
+
+# Test/runtime helpers.
+voluptuous>=0.14,<1
+zeroconf>=0.144,<0.145

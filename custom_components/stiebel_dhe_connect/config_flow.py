@@ -7,7 +7,7 @@ import logging
 import os
 import shutil
 from collections.abc import Callable, Mapping
-from typing import Any, Protocol, cast
+from typing import Any, cast
 
 import aiohttp
 import voluptuous as vol
@@ -17,35 +17,13 @@ from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import issue_registry as ir
 
-from .config_flow_mapping import (
-    filter_radio_results_by_text as _filter_radio_results_by_text,
-    radio_catalog_options as _radio_catalog_options,
-    radio_result_options as _radio_result_options,
-    weather_country_options as _weather_country_options,
-    weather_result_options as _weather_result_options,
-)
 from .config_flow_schemas import (
     ATTR_CO2_EMISSION,
-    ATTR_COUNTRY_ID,
     ATTR_ELECTRICITY_PRICE,
-    ATTR_RADIO_FILTER_TEXT,
-    ATTR_RADIO_SEARCH_TYPE,
-    ATTR_RADIO_SELECTION,
-    ATTR_RESULT,
     ATTR_WATER_PRICE,
-    MAX_RADIO_RESULT_OPTIONS,
-    MAX_WEATHER_RESULT_OPTIONS,
-    RADIO_CATALOG_SEARCH_TYPES,
-    RADIO_FILTER_SEARCH_TYPES,
-    RADIO_SEARCH_TYPES,
     device_settings_defaults as _device_settings_defaults,
-    device_settings_schema as _device_settings_schema,
     internal_scald_protection_options as _internal_scald_protection_options,
-    optional_float as _optional_float,
-    radio_catalog_schema as _radio_catalog_schema,
-    radio_search_type_schema as _radio_search_type_schema,
     schema as _schema,
-    weather_search_schema as _weather_search_schema,
 )
 from .config_flow_scan_state import SetupScanState
 from .config_flow_setup import (
@@ -71,6 +49,7 @@ from .config_entry_helpers import entry_target as _entry_target
 from .config_entry_helpers import (
     is_target_used_by_other_entry as _is_target_used_by_other_entry,
 )
+from .client_diagnostics import diagnostic_error as _diagnostic_error
 from .config_flow_discovery import (
     FLOW_CONTEXT_DISCOVERED_HOST,
     FLOW_CONTEXT_DISCOVERED_PORT,
@@ -132,11 +111,6 @@ from .error_codes import (
     LOW_CONFIDENCE_DISCOVERY,
     RECENTLY_DISCOVERED,
 )
-from .protocol import (
-    CO2_EMISSION_MAX,
-    ELECTRICITY_PRICE_MAX,
-    WATER_PRICE_MAX,
-)
 from .setup_scan import (
     SCAN_SUBNET_MODE_CIDR,
     SCAN_SUBNET_MODE_CURRENT,
@@ -149,9 +123,31 @@ from .setup_scan import (
 )
 from .token_file_helpers import token_file_for_target
 
-from .client_types import DHEError
 
 _LOGGER = logging.getLogger(__name__)
+
+__all__ = [
+    "ATTR_CO2_EMISSION",
+    "ATTR_ELECTRICITY_PRICE",
+    "ATTR_WATER_PRICE",
+    "StiebelDHEConnectConfigFlow",
+    "_apply_validation_error",
+    "_can_connect",
+    "_connection_data_from_user_input",
+    "_connection_options_for_entry",
+    "_device_settings_defaults",
+    "_async_preserve_token_for_retarget",
+    "_is_target_used_by_other_entry",
+]
+
+
+def __getattr__(name: str) -> object:
+    """Lazily expose the options flow while avoiding a module import cycle."""
+    if name == "StiebelDHEConnectOptionsFlow":
+        from .config_flow_options import StiebelDHEConnectOptionsFlow
+
+        return StiebelDHEConnectOptionsFlow
+    raise AttributeError(name)
 
 
 def _discovery_conflict_issue_id(host: str, port: int) -> str:
@@ -306,51 +302,6 @@ async def _async_preserve_token_for_retarget(
         )
 
 
-class _OptionsFlowClient(Protocol):
-    """Client surface used by the options flow."""
-
-    async def set_electricity_price(self, euros_per_kwh: float) -> float: ...
-
-    async def set_water_price(self, euros_per_m3: float) -> float: ...
-
-    async def set_co2_emission(self, kg_per_kwh: float) -> float: ...
-
-    async def list_weather_countries(self) -> list[dict[str, Any]]: ...
-
-    async def search_weather_locations(
-        self,
-        name: str,
-        country_id: int | float | str,
-    ) -> list[dict[str, Any]]: ...
-
-    async def list_weather_favorites(self) -> list[dict[str, Any]]: ...
-
-    async def add_weather_favorite(self, location: dict[str, Any]) -> bool: ...
-
-    async def remove_weather_favorite(self, location: dict[str, Any]) -> bool: ...
-
-    async def list_radio_catalog(self, attribute: str) -> list[str]: ...
-
-    async def search_radio_stations(
-        self,
-        attribute: str,
-        value: str,
-        *,
-        search_text: str | None = None,
-    ) -> list[dict[str, Any]]: ...
-
-    async def list_radio_favorites(self) -> list[dict[str, Any]]: ...
-
-    async def add_radio_favorite(
-        self,
-        station: dict[str, Any] | int | str,
-        *,
-        select: bool = True,
-    ) -> bool: ...
-
-    async def remove_radio_favorite(self, station: dict[str, Any] | int | str) -> bool:
-        ...
-
 
 async def _async_clear_setup_token_files(
     hass: HomeAssistant,
@@ -420,7 +371,7 @@ async def _async_record_discovery_safely(
             prompted=prompted,
         )
     except (OSError, RuntimeError, TypeError, ValueError) as err:
-        _LOGGER.debug("DHE discovery cache update failed: %s", err)
+        _LOGGER.debug("DHE discovery cache update failed: %s", _diagnostic_error(err))
 
 
 class StiebelDHEConnectConfigFlow(
@@ -656,6 +607,7 @@ class StiebelDHEConnectConfigFlow(
         flow_context[FLOW_CONTEXT_DISCOVERED_HOST] = host
         flow_context[FLOW_CONTEXT_DISCOVERED_PORT] = port
         flow_context[FLOW_CONTEXT_DISCOVERY_NAME] = name
+        flow_context["title_placeholders"] = {"name": name}
         if not await _can_connect(self.hass, host, port):
             if discovery_record is not None:
                 await _async_record_discovery_safely(
@@ -691,12 +643,13 @@ class StiebelDHEConnectConfigFlow(
         identity_candidates = _discovery_identity_candidates(discovery_info)
         if not identity_candidates:
             return ()
+        identity_candidate_set = set(identity_candidates)
         entries: dict[str, config_entries.ConfigEntry] = {}
         for entry in self.hass.config_entries.async_entries(DOMAIN):
             normalized_unique_id = _normalized_entry_unique_id(entry)
             if (
                 normalized_unique_id is None
-                or normalized_unique_id not in identity_candidates
+                or normalized_unique_id not in identity_candidate_set
             ):
                 continue
             entries[entry.entry_id] = entry
@@ -792,7 +745,7 @@ class StiebelDHEConnectConfigFlow(
         except (aiohttp.ClientError, OSError, RuntimeError, TimeoutError) as err:
             self._setup_scan.candidates = []
             self._setup_scan.failed = True
-            _LOGGER.debug("DHE setup scan failed: %s", err)
+            _LOGGER.debug("DHE setup scan failed: %s", _diagnostic_error(err))
         else:
             try:
                 await _async_record_scan_discoveries(
@@ -800,7 +753,10 @@ class StiebelDHEConnectConfigFlow(
                     self._setup_scan.candidates,
                 )
             except (OSError, RuntimeError, TypeError, ValueError) as err:
-                _LOGGER.debug("DHE setup scan cache update failed: %s", err)
+                _LOGGER.debug(
+                    "DHE setup scan cache update failed: %s",
+                    _diagnostic_error(err),
+                )
         self._setup_scan.done = True
         self._setup_scan.task = None
         return self.async_show_progress_done(next_step_id="manual")
@@ -814,7 +770,10 @@ class StiebelDHEConnectConfigFlow(
             try:
                 await _async_load_discovery_cache(self.hass)
             except (OSError, RuntimeError, TypeError, ValueError) as err:
-                _LOGGER.debug("DHE discovery cache load failed: %s", err)
+                _LOGGER.debug(
+                    "DHE discovery cache load failed: %s",
+                    _diagnostic_error(err),
+                )
             return self._show_setup_choice_form()
 
         if CONF_HOST in user_input:
@@ -914,6 +873,13 @@ class StiebelDHEConnectConfigFlow(
             existing_host, existing_port = current_target
             if existing_host == host and existing_port == port:
                 return self.async_abort(reason=ALREADY_CONFIGURED)
+            if not await _can_connect(self.hass, host, port):
+                await _async_record_discovery_safely(
+                    self.hass,
+                    discovery_record,
+                    result="cannot_connect",
+                )
+                return self.async_abort(reason="cannot_connect")
             await self._async_update_discovered_existing_entry(
                 matched_entry,
                 host=host,
@@ -936,7 +902,10 @@ class StiebelDHEConnectConfigFlow(
             )
         except (OSError, RuntimeError, TypeError, ValueError) as err:
             recent_prompt_seen = False
-            _LOGGER.debug("DHE discovery prompt-cache check failed: %s", err)
+            _LOGGER.debug(
+                "DHE discovery prompt-cache check failed: %s",
+                _diagnostic_error(err),
+            )
         if recent_prompt_seen:
             await _async_record_discovery_safely(
                 self.hass,
@@ -1291,456 +1260,6 @@ class StiebelDHEConnectConfigFlow(
         _config_entry: config_entries.ConfigEntry,
     ) -> config_entries.OptionsFlow:
         """Return the options flow handler."""
+        from .config_flow_options import StiebelDHEConnectOptionsFlow
+
         return StiebelDHEConnectOptionsFlow()
-
-
-class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
-    """Options flow for DHE Connect."""
-
-    def __init__(self) -> None:
-        self._radio_catalogs: dict[str, list[str]] = {}
-        self._radio_favorites: list[dict[str, Any]] = []
-        self._radio_results: list[dict[str, Any]] = []
-        self._radio_search_type = "text"
-        self._weather_countries: list[dict[str, Any]] = []
-        self._weather_favorites: list[dict[str, Any]] = []
-        self._weather_results: list[dict[str, Any]] = []
-        self._menu_options: list[str] = [
-            "connection",
-            "device_settings",
-            "weather_favorite",
-            "remove_weather_favorite",
-            "radio_favorite",
-            "remove_radio_favorite",
-        ]
-
-    def _finish_options(self) -> config_entries.ConfigFlowResult:
-        """Return success result without changing options payload."""
-        return self.async_create_entry(
-            title="",
-            data=dict(self.config_entry.options),
-        )
-
-    def _client_or_mark_not_loaded(
-        self,
-        errors: dict[str, str],
-    ) -> _OptionsFlowClient | None:
-        """Return runtime client or mark the step as not loaded."""
-        client = self._client()
-        if client is None:
-            errors["base"] = "not_loaded"
-        return client
-
-    async def async_step_init(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> config_entries.ConfigFlowResult:
-        """Show the options menu."""
-        return self.async_show_menu(
-            step_id="init",
-            menu_options=self._menu_options,
-        )
-
-    async def async_step_connection(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> config_entries.ConfigFlowResult:
-        """Manage connection options."""
-        current = merged_entry_data(self.config_entry)
-        errors: dict[str, str] = {}
-
-        if user_input is not None:
-            try:
-                data = _connection_data_from_user_input(user_input)
-            except ValueError as err:
-                _apply_validation_error(errors, err)
-            else:
-                host = data[CONF_HOST]
-                port = data[CONF_PORT]
-
-                if _is_target_used_by_other_entry(
-                    self.hass,
-                    host,
-                    port,
-                    exclude_entry_id=self.config_entry.entry_id,
-                ):
-                    errors["base"] = "already_configured"
-                else:
-                    changed = target_changed(
-                        current,
-                        host,
-                        port,
-                        default_port=DEFAULT_PORT,
-                    )
-                    if changed and not await _can_connect(self.hass, host, port):
-                        errors["base"] = "cannot_connect"
-                        return self.async_show_form(
-                            step_id="connection",
-                            data_schema=_schema(self.hass, data),
-                            errors=errors,
-                        )
-
-                    if changed:
-                        await _async_preserve_token_for_retarget(
-                            self.hass,
-                            self.config_entry,
-                            data,
-                        )
-                    return self.async_create_entry(
-                        title="",
-                        data=_connection_options_for_entry(self.config_entry, data),
-                    )
-
-        return self.async_show_form(
-            step_id="connection",
-            data_schema=_schema(self.hass, current),
-            errors=errors,
-        )
-
-    async def async_step_device_settings(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> config_entries.ConfigFlowResult:
-        """Manage DHE cost and emission settings."""
-        errors: dict[str, str] = {}
-        client = self._client_or_mark_not_loaded(errors)
-
-        defaults = _device_settings_defaults(client) if client is not None else {}
-        if user_input is not None and not errors and client is not None:
-            try:
-                electricity_price = _optional_float(
-                    user_input.get(ATTR_ELECTRICITY_PRICE),
-                    0.0,
-                    ELECTRICITY_PRICE_MAX,
-                )
-                water_price = _optional_float(
-                    user_input.get(ATTR_WATER_PRICE),
-                    0.0,
-                    WATER_PRICE_MAX,
-                )
-                co2_emission = _optional_float(
-                    user_input.get(ATTR_CO2_EMISSION),
-                    0.0,
-                    CO2_EMISSION_MAX,
-                )
-
-                if electricity_price is not None:
-                    await client.set_electricity_price(electricity_price)
-                if water_price is not None:
-                    await client.set_water_price(water_price)
-                if co2_emission is not None:
-                    await client.set_co2_emission(co2_emission)
-            except (TypeError, ValueError):
-                errors["base"] = "invalid_device_setting"
-            except DHEError:
-                errors["base"] = "device_settings_failed"
-            else:
-                return self._finish_options()
-
-        return self.async_show_form(
-            step_id="device_settings",
-            data_schema=_device_settings_schema(self.hass, user_input or defaults),
-            errors=errors,
-        )
-
-    async def async_step_weather_favorite(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> config_entries.ConfigFlowResult:
-        """Search DHE weather locations to add a favorite."""
-        errors: dict[str, str] = {}
-        client = self._client_or_mark_not_loaded(errors)
-        if client is not None and not self._weather_countries:
-            try:
-                self._weather_countries = await client.list_weather_countries()
-            except DHEError:
-                errors["base"] = "cannot_connect"
-
-        country_options = _weather_country_options(self._weather_countries)
-        defaults = user_input or {}
-
-        if user_input is not None and not errors and client is not None:
-            search_name = str(user_input.get(CONF_NAME, "")).strip()
-            if not search_name:
-                errors[CONF_NAME] = "required"
-            else:
-                try:
-                    country_id = int(user_input[ATTR_COUNTRY_ID])
-                    self._weather_results = await client.search_weather_locations(
-                        search_name,
-                        country_id,
-                    )
-                except (TypeError, ValueError):
-                    errors[ATTR_COUNTRY_ID] = "invalid_country"
-                except DHEError:
-                    errors["base"] = "search_failed"
-                else:
-                    if not self._weather_results:
-                        errors["base"] = "no_results"
-                    else:
-                        return await self.async_step_weather_favorite_result()
-
-        if not country_options and not errors:
-            errors["base"] = "no_countries"
-
-        return self.async_show_form(
-            step_id="weather_favorite",
-            data_schema=_weather_search_schema(country_options, defaults),
-            errors=errors,
-        )
-
-    async def async_step_weather_favorite_result(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> config_entries.ConfigFlowResult:
-        """Select one weather search result and save it as favorite."""
-        errors: dict[str, str] = {}
-        client = self._client_or_mark_not_loaded(errors)
-        result_options = _weather_result_options(
-            self._weather_results,
-            max_options=MAX_WEATHER_RESULT_OPTIONS,
-        )
-
-        if not result_options and "base" not in errors:
-            errors["base"] = "no_results"
-
-        if user_input is not None and not errors and client is not None:
-            try:
-                selected = int(user_input[ATTR_RESULT])
-                location = self._weather_results[selected]
-                await client.add_weather_favorite(location)
-            except (IndexError, TypeError, ValueError):
-                errors[ATTR_RESULT] = "invalid_result"
-            except DHEError:
-                errors["base"] = "favorite_failed"
-            else:
-                return self._finish_options()
-
-        return self.async_show_form(
-            step_id="weather_favorite_result",
-            data_schema=vol.Schema({vol.Required(ATTR_RESULT): vol.In(result_options)}),
-            errors=errors,
-        )
-
-    async def async_step_remove_weather_favorite(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> config_entries.ConfigFlowResult:
-        """Remove a DHE weather favorite."""
-        errors: dict[str, str] = {}
-        client = self._client_or_mark_not_loaded(errors)
-        if client is not None and user_input is None:
-            try:
-                self._weather_favorites = await client.list_weather_favorites()
-            except DHEError:
-                errors["base"] = "cannot_connect"
-
-        favorite_options = _weather_result_options(
-            self._weather_favorites,
-            max_options=MAX_WEATHER_RESULT_OPTIONS,
-        )
-        if not favorite_options and not errors:
-            errors["base"] = "no_favorites"
-
-        if user_input is not None and not errors and client is not None:
-            try:
-                selected = int(user_input[ATTR_RESULT])
-                location = self._weather_favorites[selected]
-                await client.remove_weather_favorite(location)
-            except (IndexError, TypeError, ValueError):
-                errors[ATTR_RESULT] = "invalid_result"
-            except DHEError:
-                errors["base"] = "remove_favorite_failed"
-            else:
-                return self._finish_options()
-
-        return self.async_show_form(
-            step_id="remove_weather_favorite",
-            data_schema=vol.Schema({vol.Required(ATTR_RESULT): vol.In(favorite_options)}),
-            errors=errors,
-        )
-
-    async def async_step_radio_favorite(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> config_entries.ConfigFlowResult:
-        """Select how DHE radio stations should be searched."""
-        errors: dict[str, str] = {}
-        defaults = user_input or {}
-
-        if user_input is not None:
-            search_type = str(user_input.get(ATTR_RADIO_SEARCH_TYPE, "")).strip()
-            if search_type not in RADIO_SEARCH_TYPES:
-                errors[ATTR_RADIO_SEARCH_TYPE] = "invalid_radio_search_type"
-            else:
-                self._radio_search_type = search_type
-                self._radio_results = []
-                return await self.async_step_radio_favorite_catalog()
-
-        return self.async_show_form(
-            step_id="radio_favorite",
-            data_schema=_radio_search_type_schema(self.hass, defaults),
-            errors=errors,
-        )
-
-    async def async_step_radio_favorite_catalog(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> config_entries.ConfigFlowResult:
-        """Search DHE radio stations by a selected catalog value."""
-        errors: dict[str, str] = {}
-        client = self._client_or_mark_not_loaded(errors)
-        defaults = user_input or {}
-        search_type = (
-            self._radio_search_type
-            if self._radio_search_type in RADIO_SEARCH_TYPES
-            else "text"
-        )
-
-        if (
-            client is not None
-            and
-            search_type in RADIO_CATALOG_SEARCH_TYPES
-            and search_type not in self._radio_catalogs
-        ):
-            try:
-                self._radio_catalogs[search_type] = await client.list_radio_catalog(
-                    search_type
-                )
-            except DHEError:
-                errors["base"] = "radio_catalog_failed"
-
-        catalog_options = (
-            _radio_catalog_options(self._radio_catalogs.get(search_type, []))
-            if search_type in RADIO_CATALOG_SEARCH_TYPES
-            else {}
-        )
-        if (
-            search_type in RADIO_CATALOG_SEARCH_TYPES
-            and not catalog_options
-            and not errors
-        ):
-            errors["base"] = "no_radio_catalog"
-
-        if user_input is not None and not errors and client is not None:
-            catalog_value = str(user_input.get(ATTR_RADIO_SELECTION, "")).strip()
-            search_text = str(user_input.get(ATTR_RADIO_FILTER_TEXT, "")).strip()
-            if search_type in RADIO_CATALOG_SEARCH_TYPES and not catalog_value:
-                errors[ATTR_RADIO_SELECTION] = "required"
-            elif (
-                search_type in RADIO_CATALOG_SEARCH_TYPES
-                and catalog_options
-                and catalog_value not in catalog_options
-            ):
-                errors[ATTR_RADIO_SELECTION] = "invalid_radio_catalog_value"
-            elif (
-                search_type == "text" or search_type in RADIO_FILTER_SEARCH_TYPES
-            ) and not search_text:
-                errors[ATTR_RADIO_FILTER_TEXT] = "required"
-            else:
-                station_search_value = (
-                    search_text if search_type == "text" else catalog_value
-                )
-                station_search_text = (
-                    search_text if search_type in RADIO_FILTER_SEARCH_TYPES else None
-                )
-                try:
-                    self._radio_results = await client.search_radio_stations(
-                        search_type,
-                        station_search_value,
-                        search_text=station_search_text,
-                    )
-                    if station_search_text:
-                        self._radio_results = _filter_radio_results_by_text(
-                            self._radio_results,
-                            station_search_text,
-                        )
-                except DHEError:
-                    errors["base"] = "radio_search_failed"
-                else:
-                    if not self._radio_results:
-                        errors["base"] = "no_results"
-                    else:
-                        return await self.async_step_radio_favorite_result()
-
-        return self.async_show_form(
-            step_id="radio_favorite_catalog",
-            data_schema=_radio_catalog_schema(search_type, catalog_options, defaults),
-            errors=errors,
-        )
-
-    async def async_step_radio_favorite_result(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> config_entries.ConfigFlowResult:
-        """Select one radio station search result and save it as favorite."""
-        errors: dict[str, str] = {}
-        client = self._client_or_mark_not_loaded(errors)
-        result_options = _radio_result_options(
-            self._radio_results,
-            max_options=MAX_RADIO_RESULT_OPTIONS,
-        )
-
-        if not result_options and "base" not in errors:
-            errors["base"] = "no_results"
-
-        if user_input is not None and not errors and client is not None:
-            try:
-                selected = int(user_input[ATTR_RESULT])
-                station = self._radio_results[selected]
-                await client.add_radio_favorite(station, select=True)
-            except (IndexError, TypeError, ValueError):
-                errors[ATTR_RESULT] = "invalid_result"
-            except DHEError:
-                errors["base"] = "radio_favorite_failed"
-            else:
-                return self._finish_options()
-
-        return self.async_show_form(
-            step_id="radio_favorite_result",
-            data_schema=vol.Schema({vol.Required(ATTR_RESULT): vol.In(result_options)}),
-            errors=errors,
-        )
-
-    async def async_step_remove_radio_favorite(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> config_entries.ConfigFlowResult:
-        """Remove a DHE radio favorite."""
-        errors: dict[str, str] = {}
-        client = self._client_or_mark_not_loaded(errors)
-        if client is not None and user_input is None:
-            try:
-                self._radio_favorites = await client.list_radio_favorites()
-            except DHEError:
-                errors["base"] = "cannot_connect"
-
-        favorite_options = _radio_result_options(
-            self._radio_favorites,
-            max_options=MAX_RADIO_RESULT_OPTIONS,
-        )
-        if not favorite_options and not errors:
-            errors["base"] = "no_radio_favorites"
-
-        if user_input is not None and not errors and client is not None:
-            try:
-                selected = int(user_input[ATTR_RESULT])
-                station = self._radio_favorites[selected]
-                await client.remove_radio_favorite(station)
-            except (IndexError, TypeError, ValueError):
-                errors[ATTR_RESULT] = "invalid_result"
-            except DHEError:
-                errors["base"] = "remove_radio_favorite_failed"
-            else:
-                return self._finish_options()
-
-        return self.async_show_form(
-            step_id="remove_radio_favorite",
-            data_schema=vol.Schema({vol.Required(ATTR_RESULT): vol.In(favorite_options)}),
-            errors=errors,
-        )
-
-    def _client(self) -> _OptionsFlowClient | None:
-        """Return the runtime DHE client for this config entry."""
-        runtime = getattr(self.config_entry, "runtime_data", None)
-        return cast(_OptionsFlowClient | None, getattr(runtime, "client", None))

@@ -4,6 +4,80 @@
 
 - No changes yet.
 
+## v1.8.1 - 2026-05-21
+
+Patch release preparation for the v1.8 line. This release keeps public entity
+IDs, unique IDs and DHE protocol behavior stable.
+
+### Security and Privacy
+
+- Extended diagnostic redaction to raw IPv6 addresses and removed raw target
+  details from pairing notification identifiers.
+- Reduced private-context exposure in debug/warning paths.
+
+### Validation Hygiene
+
+- Added a repository-owned deprecation guard to CI and release validation. The
+  guard fails on deprecated APIs or warning-suppression settings in this repo
+  instead of filtering warnings away.
+- Raised CI dependency floors for the Home Assistant fixture stack to current
+  Python 3.14-compatible versions.
+- Disabled the pytest GitHub-annotation plugin while keeping pytest warning
+  output visible in logs, so third-party deprecations are not duplicated as
+  repository annotations.
+- Extended the deprecation guard to README, changelog and documentation files.
+- Made the HA live timer smoke skip missing or disabled timer entities with a
+  clear info result instead of aborting the complete smoke round on a 404.
+
+### Performance
+
+- Reused a compiled Socket.IO frame matcher in the client transport parser.
+
+### Robustness
+
+- Restored switch states are written immediately during startup even when
+  measurement replay is disabled, preventing stale switch state after reloads.
+- Kept climate diagnostics attributes fresh while the configured setpoint remains
+  below the inlet temperature, without re-enabling generic high-churn telemetry
+  writes.
+
+### Discovery
+
+- Improved Zeroconf/auto-discovery display names so Home Assistant can show a
+  per-device title instead of falling back to the integration domain name.
+- Preferred device-provided discovery properties for the setup name and ignored
+  technical service/domain placeholders such as `stiebel_dhe_connect`.
+- Added config-flow title placeholders for discovered setup flows.
+
+### Diagnostics
+
+- Removed the redundant `web_app_version` field from the diagnostics export.
+  The same user-facing version remains available as `protocol_version`.
+- Filtered `web_app_version` from diagnostic device-info key summaries to avoid
+  reintroducing the duplicate field indirectly.
+- Updated the firmware-matrix instructions to refer to the protocol version in
+  diagnostics.
+
+### Validation
+
+- `.venv/bin/python -m pytest -q`: `686 passed`.
+- `python3 -m pytest tests/test_config_flow_defaults.py -q`: `30 passed`.
+- `.venv/bin/python -m pytest tests/test_00_ha_fixture_runtime.py -q -k "zeroconf_flow_accepts_realistic_discovery_payload_variants or user_flow_can_select_in_progress_zeroconf_discovery"`:
+  `7 passed`.
+- `.venv/bin/python -m pytest tests/test_diagnostics.py -q`: `4 passed`.
+- `.venv/bin/python -m pytest tests/test_translations.py tests/test_check_integration.py -q`:
+  `11 passed`.
+- `.venv/bin/python -m ruff check custom_components/stiebel_dhe_connect/config_flow.py custom_components/stiebel_dhe_connect/config_flow_discovery.py custom_components/stiebel_dhe_connect/diagnostics.py tests/test_config_flow_defaults.py tests/test_diagnostics.py`:
+  `All checks passed!`.
+- `.venv/bin/python scripts/check_typing.py`:
+  `Success: no issues found in 70 source files`.
+- `.venv/bin/python scripts/check_integration.py`: `integration checks ok`.
+- `.venv/bin/python scripts/release_check.py --run-local-checks --expect-tag absent --expect-github-release absent`:
+  `release check ok`; tag and GitHub release for `v1.8.1` are absent.
+- `.venv/bin/python scripts/ha_test_api.py --url http://HA-TEST:8123 --username <ha-user> --service-smoke --entity-smoke --timer-smoke`:
+  service smoke passed, entity smoke passed, timer smoke skipped disabled timer
+  remaining entities cleanly.
+
 ## v1.8.0 - 2026-05-21
 
 Platinum-preparation update for the custom integration. This release keeps the

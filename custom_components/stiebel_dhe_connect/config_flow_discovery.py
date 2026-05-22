@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from ipaddress import ip_address
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -38,6 +39,26 @@ _STABLE_ID_KEYS = (
     "serial_number",
     "unique_id",
 )
+_DISPLAY_NAME_PROPERTY_KEYS = (
+    "friendly_name",
+    "friendlyname",
+    "device_name",
+    "devicename",
+    "name",
+    "hostname",
+)
+_TECHNICAL_DISCOVERY_NAMES = {
+    "",
+    DOMAIN,
+    DOMAIN.replace("_", "-"),
+    DHE_ZEROCONF_SERVICE.rstrip("."),
+    DHE_ZEROCONF_SERVICE.rstrip(".").replace("_", ""),
+    "_ste-dhe",
+    "ste-dhe",
+}
+_DHE_SERVICE_SUFFIX = f".{DHE_ZEROCONF_SERVICE.rstrip('.')}"
+_DISPLAY_NAME_MAX_LENGTH = 80
+_DISPLAY_WHITESPACE_RE = re.compile(r"\s+")
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,18 +180,92 @@ def coerce_setup_pairing_result(result: Any) -> SetupPairingResult:
 
 def discovery_info_name(discovery_info: Any) -> str:
     """Return a human-friendly name from a Zeroconf discovery payload."""
-    raw_name = (
-        getattr(discovery_info, "name", None)
-        or getattr(discovery_info, "hostname", None)
-        or DEFAULT_NAME
+    for raw_name in _discovery_name_candidates(discovery_info):
+        if name := _clean_discovery_name(raw_name):
+            return name
+    return DEFAULT_NAME
+
+
+def _discovery_name_candidates(discovery_info: Any) -> tuple[Any, ...]:
+    """Return display-name candidates ordered by specificity."""
+    display_properties = _discovery_display_properties(discovery_info)
+    property_candidates = tuple(
+        display_properties.get(key) for key in _DISPLAY_NAME_PROPERTY_KEYS
     )
-    name = str(raw_name).strip().rstrip(".")
-    service_suffix = f".{DHE_ZEROCONF_SERVICE.rstrip('.')}"
-    if name.endswith(service_suffix):
-        name = name[: -len(service_suffix)]
+    return (
+        *property_candidates,
+        getattr(discovery_info, "name", None),
+        getattr(discovery_info, "server", None),
+        getattr(discovery_info, "hostname", None),
+        _host_display_fallback(getattr(discovery_info, "host", None)),
+        _host_display_fallback(getattr(discovery_info, "ip_address", None)),
+    )
+
+
+def _discovery_display_properties(discovery_info: Any) -> dict[str, str]:
+    """Return raw display properties keyed by normalized discovery-property name."""
+    raw = (
+        getattr(discovery_info, "decoded_properties", None)
+        or getattr(discovery_info, "properties", None)
+        or {}
+    )
+    if not isinstance(raw, Mapping):
+        return {}
+    display_properties: dict[str, str] = {}
+    for raw_key, raw_value in raw.items():
+        normalized_key = _normalize_property_text(raw_key)
+        display_value = _decode_property_display_value(raw_value)
+        if not normalized_key or display_value is None:
+            continue
+        display_properties.setdefault(normalized_key, display_value)
+    return display_properties
+
+
+def _decode_property_display_value(value: Any) -> str | None:
+    """Return a decoded property value for display-name use."""
+    if value in (None, ""):
+        return None
+    if isinstance(value, bytes):
+        text = value.decode("utf-8", "ignore")
+    else:
+        text = str(value)
+    return text.strip() or None
+
+
+def _clean_discovery_name(raw_name: Any) -> str | None:
+    """Return a sanitized device name or None for technical placeholders."""
+    name = _decode_property_display_value(raw_name)
+    if name is None:
+        return None
+    name = name.rstrip(".")
+    if name.lower().endswith(_DHE_SERVICE_SUFFIX):
+        name = name[: -len(_DHE_SERVICE_SUFFIX)]
     if name.lower().endswith(".local"):
         name = name[:-6]
-    return name or DEFAULT_NAME
+    name = name.strip().rstrip(".")
+    if name.lower() in _TECHNICAL_DISCOVERY_NAMES:
+        return None
+    if name.lower().endswith("._tcp"):
+        return None
+    name = _DISPLAY_WHITESPACE_RE.sub(" ", name).strip()
+    if len(name) > _DISPLAY_NAME_MAX_LENGTH:
+        name = name[:_DISPLAY_NAME_MAX_LENGTH].rstrip()
+    return name or None
+
+
+def _host_display_fallback(value: Any) -> str | None:
+    """Return a last-resort per-target name when discovery has no label."""
+    text = _decode_property_display_value(value)
+    if text is None:
+        return None
+    text = text.rstrip(".")
+    if not text:
+        return None
+    try:
+        ip_address(text)
+    except ValueError:
+        return text
+    return f"{DEFAULT_NAME} {text}"
 
 
 def discovery_context_target(flow: Mapping[str, Any]) -> tuple[str, int] | None:

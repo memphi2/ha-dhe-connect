@@ -1,5 +1,6 @@
 {
   "config": {
+    "flow_title": "{name}",
     "step": {
       "user": {
         "title": "DHE Connect hinzufügen",
@@ -155,6 +156,42 @@
     },
     "dhe_unavailable_action": {
       "message": "DHE ist nicht verfügbar: {operation}"
+    },
+    "dhe_not_loaded": {
+      "message": "DHE Connect ist nicht geladen"
+    },
+    "dhe_entry_not_loaded": {
+      "message": "DHE-Connect-entry_id ist nicht geladen: {entry_id}"
+    },
+    "dhe_entry_id_required": {
+      "message": "Mehrere DHE-Connect-Geräte sind konfiguriert; entry_id im Service-Aufruf setzen."
+    },
+    "dhe_invalid_config_entry": {
+      "message": "Ungültiger DHE-Host oder Port im Config Entry."
+    },
+    "dhe_weather_country_required": {
+      "message": "{error}"
+    },
+    "dhe_weather_location_not_found": {
+      "message": "Wetter-location_id nicht gefunden: {location_id}"
+    },
+    "dhe_weather_result_unavailable": {
+      "message": "Wetter-Suchergebnis {result_number} ist nicht verfügbar"
+    },
+    "dhe_weather_location_id_empty": {
+      "message": "Wetter-location_id darf nicht leer sein"
+    },
+    "dhe_unknown_weather_location_option": {
+      "message": "Unbekannte Wetter-Standortauswahl: {option}"
+    },
+    "dhe_unknown_radio_source": {
+      "message": "Unbekannte DHE-Radioquelle: {source}"
+    },
+    "dhe_no_radio_favorites": {
+      "message": "Keine Radio-Favoriten vorhanden"
+    },
+    "dhe_unsupported_hvac_mode": {
+      "message": "Nicht unterstützter HVAC-Modus: {hvac_mode}"
     }
   },
   "options": {

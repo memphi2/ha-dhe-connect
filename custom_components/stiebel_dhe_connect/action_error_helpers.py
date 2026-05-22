@@ -29,6 +29,20 @@ def _translated_homeassistant_error(
         return HomeAssistantError(message)
 
 
+def translated_homeassistant_error(
+    message: str,
+    *,
+    translation_key: str,
+    translation_placeholders: dict[str, str] | None = None,
+) -> HomeAssistantError:
+    """Return a translated HA error for non-DHE service validation failures."""
+    return _translated_homeassistant_error(
+        message,
+        translation_key=translation_key,
+        translation_placeholders=translation_placeholders,
+    )
+
+
 def dhe_action_error(message: str, err: DHEError) -> HomeAssistantError:
     """Return the Home Assistant exception for a failed DHE-backed action."""
     return _translated_homeassistant_error(

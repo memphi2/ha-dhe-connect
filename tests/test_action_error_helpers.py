@@ -17,6 +17,7 @@ from custom_components.stiebel_dhe_connect.action_error_helpers import (  # noqa
     dhe_action_error,
     raise_if_dhe_unavailable,
     run_dhe_action,
+    translated_homeassistant_error,
 )
 from custom_components.stiebel_dhe_connect.client_types import DHEError  # noqa: E402
 
@@ -53,6 +54,20 @@ class TestActionErrorHelpers(unittest.TestCase):
         with self.assertRaises(HomeAssistantError) as ctx:
             asyncio.run(run_dhe_action(_boom(), "Could not set DHE temperature"))
         self.assertIsInstance(ctx.exception.__cause__, DHEError)
+
+    def test_translated_homeassistant_error_uses_translation_key(self) -> None:
+        error = translated_homeassistant_error(
+            "Weather location_id not found: abc",
+            translation_key="dhe_weather_location_not_found",
+            translation_placeholders={"location_id": "abc"},
+        )
+
+        self.assertIsInstance(error, HomeAssistantError)
+        self.assertEqual(getattr(error, "translation_domain", None), "stiebel_dhe_connect")
+        self.assertEqual(
+            getattr(error, "translation_key", None),
+            "dhe_weather_location_not_found",
+        )
 
 
 if __name__ == "__main__":

@@ -179,7 +179,10 @@ class StiebelDHEText(StiebelDHEBaseText):
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE measurements and availability updates."""
         self.async_on_remove(
-            self._client.add_measurement_callback(self._handle_measurement_update)
+            self._client.add_measurement_callback(
+                self._handle_measurement_update,
+                replay=False,
+            )
         )
         self.async_on_remove(
             self._client.add_availability_callback(self._handle_availability_update)
@@ -286,7 +289,10 @@ class StiebelDHEControlUnitNameText(StiebelDHEBaseText):
     async def async_added_to_hass(self) -> None:
         """Subscribe to device-info and availability updates."""
         self.async_on_remove(
-            self._client.add_measurement_callback(self._handle_measurement_update)
+            self._client.add_measurement_callback(
+                self._handle_measurement_update,
+                replay=False,
+            )
         )
         self.async_on_remove(
             self._client.add_availability_callback(self._handle_availability_update)

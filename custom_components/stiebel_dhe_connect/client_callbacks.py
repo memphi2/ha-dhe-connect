@@ -79,8 +79,20 @@ class DHEClientCallbacksMixin:
     def add_measurement_callback(
         self,
         callback: MeasurementCallback,
+        *,
+        replay: bool = True,
     ) -> CallbackRemover:
         remove = self._add_callback(self._measurement_callbacks, callback)
+        if not replay:
+            return remove
+        self._replay_measurements_to_callback(callback)
+        return remove
+
+    def _replay_measurements_to_callback(
+        self,
+        callback: MeasurementCallback,
+    ) -> None:
+        """Replay the current measurement cache to one newly registered callback."""
         for odb_id, value in self._last_measurements.items():
             self._call_callback("measurement", callback, odb_id, value)
         if self._temperature_memory_full_list_seen:
@@ -88,7 +100,6 @@ class DHEClientCallbacksMixin:
                 if measurement_id in self._last_measurements:
                     continue
                 self._call_callback("measurement", callback, measurement_id, None)
-        return remove
 
     def add_reconnect_callback(self, callback: ReconnectCallback) -> CallbackRemover:
         remove = self._add_callback(self._reconnect_callbacks, callback)

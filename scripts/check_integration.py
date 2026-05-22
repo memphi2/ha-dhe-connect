@@ -65,6 +65,10 @@ NODE24_VALIDATION_ACTION_PINS = {
     "actions/checkout": {"de0fac2e4500dabe0009e67214ff5f5447ce83dd"},
     "actions/setup-python": {"a309ff8b426b58ec0e2a45f0f869d46889d02405"},
 }
+VALIDATION_DEPENDENCY_MINIMUMS = {
+    "aiohttp": ">=3.13.5,<4",
+    "pytest-homeassistant-custom-component": ">=0.13.332,<0.14",
+}
 _ACTION_REF_RE = re.compile(r"^\s*(?:-\s*)?uses:\s*([^@\s]+)@([^\s#]+)", re.MULTILINE)
 _MAJOR_VERSION_REF_RE = re.compile(r"^v(?P<major>\d+)(?:\.|$)")
 
@@ -255,6 +259,20 @@ def check_github_actions() -> None:
                     f"{action}@{ref} must be v{minimum_major} or newer "
                     "to avoid GitHub Actions Node.js 20 runtime warnings"
                 )
+    if "python scripts/check_deprecations.py" not in text:
+        _fail("validation workflow must run scripts/check_deprecations.py")
+    for dependency, constraint in sorted(VALIDATION_DEPENDENCY_MINIMUMS.items()):
+        requirement = f'"{dependency}{constraint}"'
+        if requirement not in text:
+            _fail(
+                "validation workflow must install current dependency floor "
+                f"{requirement}"
+            )
+    if (
+        "--disable" + "-warnings" in text
+        or "ignore::" + "DeprecationWarning" in text
+    ):
+        _fail("validation workflow must not suppress deprecation warnings")
 
 
 def _workflow_action_refs(text: str) -> dict[str, list[str]]:

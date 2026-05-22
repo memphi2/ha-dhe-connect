@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
@@ -95,11 +96,15 @@ class StiebelDHEBinarySensor(StiebelDHEEntityMixin, BinarySensorEntity):
         self._attr_extra_state_attributes = dict(self._base_extra_state_attributes)
         self._attr_available = False
         self._attr_is_on: bool | None = None
+        self._last_written_binary_signature: tuple[Any, ...] | None = None
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE measurements."""
         self.async_on_remove(
-            self._client.add_measurement_callback(self._handle_measurement_update)
+            self._client.add_measurement_callback(
+                self._handle_measurement_update,
+                replay=False,
+            )
         )
         self.async_on_remove(
             self._client.add_availability_callback(self._handle_availability_update)
@@ -137,10 +142,27 @@ class StiebelDHEBinarySensor(StiebelDHEEntityMixin, BinarySensorEntity):
         if odb_id != self.entity_description.odb_id:
             return
         self._update_state(value)
-        self.async_write_ha_state()
+        self._write_binary_state()
 
     @callback
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
         self._attr_available = value_available(available, self._attr_is_on)
+        self._write_binary_state()
+
+    def _write_binary_state(self, *, force: bool = False) -> bool:
+        """Write binary sensor state only when visible state changed."""
+        signature = self._binary_write_signature()
+        if not force and signature == self._last_written_binary_signature:
+            return False
+        self._last_written_binary_signature = signature
         self.async_write_ha_state()
+        return True
+
+    def _binary_write_signature(self) -> tuple[Any, ...]:
+        """Return stable binary sensor fields that should trigger a state write."""
+        return (
+            self._attr_available,
+            self._attr_is_on,
+            dict(self._attr_extra_state_attributes or {}),
+        )

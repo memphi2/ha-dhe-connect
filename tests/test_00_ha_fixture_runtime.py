@@ -301,8 +301,16 @@ class _FixtureDHEClient:
         return lambda: self.callbacks["diagnostic"].remove(callback_fn)
 
     @callback
-    def add_measurement_callback(self, callback_fn: Callable[[int, Any], None]):
+    def add_measurement_callback(
+        self,
+        callback_fn: Callable[[int, Any], None],
+        *,
+        replay: bool = True,
+    ):
         self.callbacks["measurement"].append(callback_fn)
+        if replay:
+            for odb_id, value in self.last_measurements.items():
+                callback_fn(odb_id, value)
         return lambda: self.callbacks["measurement"].remove(callback_fn)
 
     @callback
@@ -1374,6 +1382,11 @@ async def test_config_flow_creates_entry_after_pairing_with_real_hass_fixture() 
         with (
             patch.object(config_flow, "_can_connect", can_connect),
             patch.object(config_flow, "_validate_setup_pairing", validate_pairing),
+            patch.object(
+                config_flow,
+                "_async_recent_discovery_prompt_seen",
+                AsyncMock(return_value=False),
+            ),
         ):
             result = await hass.config_entries.flow.async_init(
                 DOMAIN,
@@ -2520,9 +2533,11 @@ async def test_zeroconf_updates_existing_entry_for_identity_matched_host_change(
         )
         entry.add_to_hass(hass)
 
+        can_connect = AsyncMock(return_value=True)
         preserve_token = AsyncMock()
         reload_entry = AsyncMock(return_value=True)
         with (
+            patch.object(config_flow, "_can_connect", can_connect),
             patch.object(
                 config_flow,
                 "_async_preserve_token_for_retarget",
@@ -2549,8 +2564,60 @@ async def test_zeroconf_updates_existing_entry_for_identity_matched_host_change(
         assert updated_entry.data[CONF_PORT] == 9443
         assert updated_entry.unique_id == "aa:bb:cc:dd:ee:ff"
         assert len(hass.config_entries.async_entries(DOMAIN)) == 1
+        can_connect.assert_awaited_once_with(hass, "192.0.2.124", 9443)
         preserve_token.assert_awaited_once()
         reload_entry.assert_awaited_once_with(entry.entry_id)
+
+
+async def test_zeroconf_identity_match_keeps_existing_target_when_update_unreachable() -> None:
+    """Do not retarget an existing entry to an unreachable discovery endpoint."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        entry = _build_mock_entry(
+            host="dhe-ja06.local",
+            port=DEFAULT_PORT,
+            name="Existing DHE",
+            unique_id="aa:bb:cc:dd:ee:ff",
+        )
+        entry.add_to_hass(hass)
+
+        can_connect = AsyncMock(return_value=False)
+        preserve_token = AsyncMock()
+        reload_entry = AsyncMock(return_value=True)
+        with (
+            patch.object(config_flow, "_can_connect", can_connect),
+            patch.object(
+                config_flow,
+                "_async_preserve_token_for_retarget",
+                preserve_token,
+            ),
+            patch.object(hass.config_entries, "async_reload", reload_entry),
+        ):
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_ZEROCONF},
+                data=_zeroconf_info(
+                    "dhe-ja06.local.",
+                    9443,
+                    host="192.0.2.124",
+                    properties={"wlan_mac": "aa-bb-cc-dd-ee-ff"},
+                ),
+            )
+
+        assert result["type"] is FlowResultType.ABORT
+        assert result["reason"] == "cannot_connect"
+        updated_entry = hass.config_entries.async_get_entry(entry.entry_id)
+        assert updated_entry is not None
+        assert updated_entry.data[CONF_HOST] == "dhe-ja06.local"
+        assert updated_entry.data[CONF_PORT] == DEFAULT_PORT
+        assert updated_entry.unique_id == "aa:bb:cc:dd:ee:ff"
+        assert len(hass.config_entries.async_entries(DOMAIN)) == 1
+        can_connect.assert_awaited_once_with(hass, "192.0.2.124", 9443)
+        preserve_token.assert_not_awaited()
+        reload_entry.assert_not_awaited()
 
 
 async def test_zeroconf_identity_match_aborts_on_target_conflict_without_update() -> None:
@@ -3503,11 +3570,15 @@ async def test_unavailable_runtime_blocks_controls_except_repair_button() -> Non
 
         client.emit_availability(False)
         await hass.async_block_till_done()
+        offline_states = {
+            key: (state.state if (state := hass.states.get(entity_id)) else None)
+            for key, entity_id in entity_ids.items()
+        }
         assert all(
             (state := hass.states.get(entity_id)) is not None
             and state.state == "unavailable"
             for entity_id in entity_ids.values()
-        )
+        ), offline_states
 
         blocked_calls = (
             ("button", "press", {"entity_id": entity_ids["button"]}),

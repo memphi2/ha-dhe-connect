@@ -154,6 +154,10 @@ EXCLUDED_COVERAGE_FILES: tuple[CoverageExclusion, ...] = (
         "Options-flow selector glue covered by flow helper tests.",
     ),
     CoverageExclusion(
+        "custom_components/stiebel_dhe_connect/config_flow_options.py",
+        "Home Assistant options-flow orchestration glue covered by HA fixtures.",
+    ),
+    CoverageExclusion(
         "custom_components/stiebel_dhe_connect/config_flow_schemas.py",
         "Home Assistant voluptuous schema glue covered by flow tests.",
     ),

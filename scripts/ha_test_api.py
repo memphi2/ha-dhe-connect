@@ -88,6 +88,7 @@ DEFAULT_USERNAME = ""
 DEFAULT_CONFIG = Path("/mnt/ha-test-config")
 DEFAULT_CLIENT_ID = "http://localhost/"
 DEFAULT_BACKUP_DIR = Path(gettempdir())
+_CLEANUP_LOCALHOST_TOKEN_INTERVAL_FALLBACK = 1.0
 
 
 @dataclass(frozen=True)
@@ -476,6 +477,19 @@ def _env_default(name: str, fallback: str) -> str:
     return os.environ.get(name, fallback)
 
 
+def _env_default_non_negative_float(name: str, fallback: float) -> float:
+    raw = os.environ.get(name)
+    if raw is None:
+        return fallback
+    try:
+        parsed = float(raw)
+    except (TypeError, ValueError):
+        return fallback
+    if parsed < 0:
+        return fallback
+    return parsed
+
+
 def _non_negative_float(value: str) -> float:
     parsed = float(value)
     if parsed < 0:
@@ -592,7 +606,10 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--cleanup-localhost-token-interval",
         type=_non_negative_float,
-        default=1.0,
+        default=_env_default_non_negative_float(
+            "HA_TEST_CLEANUP_LOCALHOST_TOKEN_INTERVAL",
+            _CLEANUP_LOCALHOST_TOKEN_INTERVAL_FALLBACK,
+        ),
         help="Seconds to wait between mounted-auth cleanup attempts.",
     )
     parser.add_argument(

@@ -187,7 +187,8 @@ class DHEClientTransportMixin(
         websocket = ctx.websocket
         ctx.websocket = None
         if websocket is not None and not websocket.closed:
-            await websocket.close()
+            with _suppress_transport_errors():
+                await websocket.close()
 
     async def _force_reconnect(
         self,
