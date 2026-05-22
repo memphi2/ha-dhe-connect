@@ -19,6 +19,24 @@ and anonymized diagnostics should only use the first 7 characters.
 | `planned` | Known or expected device family, but no current live validation evidence yet |
 | `unknown` | Reported by a user without enough evidence to classify |
 
+## Feature Coverage Markers
+
+Use these marker labels in matrix notes or issue evidence so gaps are explicit:
+
+- `tested`: validated on the listed device/firmware combination.
+- `untested`: not validated yet on that combination.
+- `partially-tested`: smoke validated, but one or more feature groups are still open.
+
+Recommended per-entry marker groups:
+
+- pairing/setup
+- reconnect/offline recovery
+- climate + live water/power
+- timers
+- radio
+- weather
+- savings/consumption
+
 ## Matrix
 
 | Device | Firmware / Web-App Version | Tested | Coverage | Notes |

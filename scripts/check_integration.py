@@ -13,6 +13,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 INTEGRATION = ROOT / "custom_components" / "stiebel_dhe_connect"
 TRANSLATIONS = INTEGRATION / "translations"
+FIXTURE_ROOT = ROOT / "tests" / "fixtures"
+REPLAY_FIXTURE_NAME = "dhe_protocol_replay_sanitized.json"
 CLIENT_MODULE_MAX_BYTES = 50 * 1024
 SILVER_RULES = {
     # Bronze
@@ -104,6 +106,16 @@ def _entity_translation_keys(data: dict) -> dict[str, set[str]]:
         platform: set(platform_data)
         for platform, platform_data in entity.items()
         if isinstance(platform_data, dict)
+    }
+
+
+def _translation_structure(value: object) -> object:
+    """Return recursive dict-key structure for translation parity checks."""
+    if not isinstance(value, dict):
+        return None
+    return {
+        str(key): _translation_structure(sub_value)
+        for key, sub_value in sorted(value.items(), key=lambda item: str(item[0]))
     }
 
 
@@ -227,6 +239,42 @@ def check_quality_scale() -> None:
         _fail(f"quality_scale.yaml is missing required done rules: {missing}")
 
 
+def check_replay_fixtures() -> None:
+    """Ensure replay fixtures stay inventory-safe and self-describing."""
+    if not FIXTURE_ROOT.exists():
+        _fail("tests/fixtures directory is missing")
+
+    fixture_paths = sorted(FIXTURE_ROOT.glob(f"firmware_*/{REPLAY_FIXTURE_NAME}"))
+    if not fixture_paths:
+        _fail(f"no replay fixtures found at tests/fixtures/firmware_*/{REPLAY_FIXTURE_NAME}")
+
+    stale_fixture_dirs = sorted(
+        path
+        for path in FIXTURE_ROOT.glob("firmware_*")
+        if path.is_dir() and not (path / REPLAY_FIXTURE_NAME).exists()
+    )
+    if stale_fixture_dirs:
+        stale = ", ".join(str(path.relative_to(ROOT)) for path in stale_fixture_dirs)
+        _fail(f"replay fixture directories are missing {REPLAY_FIXTURE_NAME}: {stale}")
+
+    for path in fixture_paths:
+        fixture = _load_json(path)
+        firmware_profile = path.parent.name
+        if fixture.get("version") != 2:
+            _fail(f"{path.relative_to(ROOT)} must have version=2")
+        if fixture.get("firmware_profile") != firmware_profile:
+            _fail(
+                f"{path.relative_to(ROOT)} firmware_profile must match directory "
+                f"name {firmware_profile!r}"
+            )
+        if not isinstance(fixture.get("socketio_packets"), list):
+            _fail(f"{path.relative_to(ROOT)} must contain a socketio_packets list")
+        if not isinstance(fixture.get("expected_runtime_state"), dict):
+            _fail(
+                f"{path.relative_to(ROOT)} must contain expected_runtime_state object"
+            )
+
+
 def check_github_actions() -> None:
     workflow = ROOT / ".github" / "workflows" / "validate.yml"
     if not workflow.exists():
@@ -313,6 +361,10 @@ def check_translations() -> None:
                 f"translation keys differ for {platform}: "
                 f"missing in de={missing_de}, missing in en={missing_en}"
             )
+    en_structure = _translation_structure(en)
+    de_structure = _translation_structure(de)
+    if en_structure != de_structure:
+        _fail("translation file structures differ between en.json and de.json")
 
 
 def check_type_gate_coverage() -> None:
@@ -364,6 +416,7 @@ def main() -> None:
     check_repository_files(version)
     check_gold_evidence_docs()
     check_quality_scale()
+    check_replay_fixtures()
     check_github_actions()
     check_client_module_size()
     check_translations()

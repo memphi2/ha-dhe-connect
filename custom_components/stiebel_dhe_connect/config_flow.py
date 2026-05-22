@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import copy
 import logging
 import os
@@ -388,6 +389,10 @@ class StiebelDHEConnectConfigFlow(
         self._pending_setup_data = None
         self._setup_scan = SetupScanState()
 
+    def _clear_pending_setup_data(self) -> None:
+        """Drop pending setup state when the flow changes setup paths."""
+        self._pending_setup_data = None
+
     def _available_zeroconf_choices(self) -> list[ZeroconfSetupChoice]:
         """Return discovered Zeroconf choices not already configured."""
         choices_by_key: dict[str, ZeroconfSetupChoice] = {
@@ -742,6 +747,9 @@ class StiebelDHEConnectConfigFlow(
             )
         try:
             self._setup_scan.candidates = self._setup_scan.task.result()
+        except asyncio.CancelledError:
+            self._setup_scan.candidates = []
+            self._setup_scan.failed = True
         except (aiohttp.ClientError, OSError, RuntimeError, TimeoutError) as err:
             self._setup_scan.candidates = []
             self._setup_scan.failed = True
@@ -776,6 +784,7 @@ class StiebelDHEConnectConfigFlow(
                 )
             return self._show_setup_choice_form()
 
+        self._clear_pending_setup_data()
         if CONF_HOST in user_input:
             return await self.async_step_manual(user_input)
 
@@ -786,6 +795,7 @@ class StiebelDHEConnectConfigFlow(
 
         setup_mode = str(user_input.get(CONF_SETUP_MODE) or "").strip()
         if setup_mode == SETUP_MODE_SCAN:
+            self._setup_scan.reset()
             return await self.async_step_subnet_scan()
         if setup_mode == SETUP_MODE_MANUAL:
             return await self.async_step_manual()
@@ -954,6 +964,8 @@ class StiebelDHEConnectConfigFlow(
         """Choose how the setup scan subnet should be selected."""
         if user_input is None:
             return self._show_subnet_scan_form()
+        if self._setup_scan.done or self._setup_scan.failed:
+            self._setup_scan.reset()
         try:
             self._setup_scan.port = validate_port(
                 user_input.get(CONF_SCAN_PORT, DEFAULT_PORT)
@@ -1075,7 +1087,32 @@ class StiebelDHEConnectConfigFlow(
     @callback
     def async_remove(self) -> None:
         """Cancel a running setup scan when the flow is removed."""
-        self._setup_scan.cancel()
+        self._clear_pending_setup_data()
+        self._setup_scan.reset()
+
+    async def _async_validate_setup_pairing_data(
+        self,
+        setup_data: Mapping[str, Any],
+        *,
+        require_connectivity_check: bool,
+    ) -> SetupPairingResult:
+        """Run shared setup/reauth pairing validation with optional pre-connect check."""
+        try:
+            host = normalize_host(str(setup_data[CONF_HOST]))
+            port = validate_port(setup_data[CONF_PORT])
+            token_file = str(setup_data["token_file"])
+        except (KeyError, TypeError, ValueError):
+            return SetupPairingResult(error_key="pairing_failed")
+        if require_connectivity_check and not await _can_connect(self.hass, host, port):
+            return SetupPairingResult(error_key="cannot_connect")
+        return _coerce_setup_pairing_result(
+            await _validate_setup_pairing(
+                self.hass,
+                host,
+                port,
+                token_file,
+            )
+        )
 
     async def async_step_pairing_confirm(
         self, user_input: dict[str, Any] | None = None
@@ -1087,13 +1124,9 @@ class StiebelDHEConnectConfigFlow(
         errors: dict[str, str] = {}
         if user_input is not None:
             setup_data = dict(self._pending_setup_data)
-            pairing_result = _coerce_setup_pairing_result(
-                await _validate_setup_pairing(
-                    self.hass,
-                    setup_data[CONF_HOST],
-                    setup_data[CONF_PORT],
-                    setup_data["token_file"],
-                )
+            pairing_result = await self._async_validate_setup_pairing_data(
+                setup_data,
+                require_connectivity_check=False,
             )
             if pairing_result.error_key is None:
                 if pairing_result.unique_id is not None:
@@ -1159,30 +1192,21 @@ class StiebelDHEConnectConfigFlow(
         errors: dict[str, str] = {}
         if user_input is not None:
             setup_data = dict(self._pending_setup_data)
-            host = setup_data[CONF_HOST]
-            port = setup_data[CONF_PORT]
-            if not await _can_connect(self.hass, host, port):
-                errors["base"] = "cannot_connect"
-            else:
-                pairing_result = _coerce_setup_pairing_result(
-                    await _validate_setup_pairing(
-                        self.hass,
-                        host,
-                        port,
-                        setup_data["token_file"],
-                    )
-                )
-                if pairing_result.error_key is None:
-                    self._pending_setup_data = None
-                    from .repair_issues import async_delete_pairing_issue
+            pairing_result = await self._async_validate_setup_pairing_data(
+                setup_data,
+                require_connectivity_check=True,
+            )
+            if pairing_result.error_key is None:
+                self._pending_setup_data = None
+                from .repair_issues import async_delete_pairing_issue
 
-                    entry = self._get_reauth_entry()
-                    async_delete_pairing_issue(self.hass, entry.entry_id)
-                    return self.async_update_reload_and_abort(
-                        entry,
-                        reason="reauth_successful",
-                    )
-                errors["base"] = pairing_result.error_key
+                entry = self._get_reauth_entry()
+                async_delete_pairing_issue(self.hass, entry.entry_id)
+                return self.async_update_reload_and_abort(
+                    entry,
+                    reason="reauth_successful",
+                )
+            errors["base"] = pairing_result.error_key
 
         return self.async_show_form(
             step_id="reauth_confirm",

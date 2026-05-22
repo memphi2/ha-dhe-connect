@@ -4,6 +4,47 @@
 
 - No changes yet.
 
+## v1.8.2 - 2026-05-22
+
+Release hardening update for the v1.8 line. This release keeps public entity
+IDs, unique IDs and DHE protocol behavior stable.
+
+### Runtime and Flow Robustness
+
+- Config-flow/setup hardening for stale scan state and stale pairing-pending data.
+- Repairs flow hardening for stale or mismatched repair issue payloads and
+  missing-entry re-check during confirmation.
+- Service-layer hardening for malformed weather `result_number` payloads with
+  translated Home Assistant validation errors.
+
+### Replay and Regression Safety
+
+- Added deterministic runtime edge-case replay tests for malformed runtime
+  payloads, invalid ODB payload shapes and closed-session reconnect signaling.
+
+### Diagnostics and Validation Hygiene
+
+- Extended diagnostics redaction for additional URL/URI/origin key variants.
+- Expanded repository validation guards:
+  - replay fixture inventory/schema checks in `scripts/check_integration.py`
+  - translation structure parity checks between `en.json` and `de.json`
+  - additional deprecated HA API guard patterns in `scripts/check_deprecations.py`
+
+### Validation
+
+- `.venv/bin/python -m pytest -q`: `705 passed`.
+- `.venv/bin/python -m pytest -q tests/test_00_ha_fixture_runtime.py -k "repair or reauth or reconfigure"`:
+  `28 passed`.
+- `.venv/bin/python scripts/check_coverage.py`: `705 passed`; scoped coverage gate `96%`.
+- `.venv/bin/python scripts/check_integration.py`: `integration checks ok`.
+- `.venv/bin/python scripts/check_typing.py`:
+  `Success: no issues found in 74 source files`.
+- `.venv/bin/python scripts/check_deprecations.py`: `deprecation guard ok`.
+- `.venv/bin/python -m ruff check custom_components/stiebel_dhe_connect tests scripts`:
+  `All checks passed!`.
+- `.venv/bin/python scripts/ha_test_api.py --url http://HA-TEST:8123 --access-token-env HA_TEST_TOKEN --service-smoke --entity-smoke --timer-smoke`:
+  service smoke passed, entity smoke passed, timer smoke passed.
+
 ## v1.8.1 - 2026-05-21
 
 Patch release preparation for the v1.8 line. This release keeps public entity

@@ -1,4 +1,4 @@
-# Platinum Preparation (v1.8.1 branch)
+# Platinum Preparation (v1.8.2 branch)
 
 This document tracks the hardening work used to move this custom integration
 from a Gold-track baseline toward Home Assistant Quality Scale
@@ -116,8 +116,8 @@ reviewable:
   state. Raw token values, token paths, private hosts, local URLs, IP
   addresses, MAC addresses, session IDs, WebSocket URLs and raw WebSocket
   payloads are redacted or reduced to presence flags.
-- v1.8.1 extends that redaction to raw IPv6 strings and keeps pairing
-  notification identifiers scoped without embedding raw host or port details.
+- v1.8.2 keeps this redaction scope and adds further URL/URI-origin key
+  coverage in diagnostics exports.
 - Stable hashed identifiers are not emitted today. If they are added later,
   they must be opt-in and must not be reversible to private host, MAC, token or
   product identifiers.
@@ -137,6 +137,24 @@ reviewable:
   That artifact keeps pass/fail checks, entity counts, monitor settings and
   recorder top writers without storing local paths, hosts, IPs, token paths or
   credentials.
+
+## Why These Guards Exist
+
+- Replay fixtures and edge-case runtime tests:
+  They catch protocol/runtime regressions deterministically before live-device
+  smoke and reduce firmware-drift risk in parser paths.
+- Strict typing and Protocol contracts:
+  They make mixin boundaries explicit, reduce accidental runtime assumptions and
+  keep long-term refactors reviewable without behavior changes.
+- Recorder deduplication and high-churn protections:
+  They keep Home Assistant database growth bounded while preserving visible
+  runtime behavior for live entities.
+- Diagnostics redaction:
+  Support exports remain actionable without exposing host, MAC, token or local
+  transport details.
+- Config-flow and service split:
+  Smaller modules reduce regression blast radius and make validation failures
+  easier to localize.
 
 ## Recommended Validation Gate For Each Typing Round
 

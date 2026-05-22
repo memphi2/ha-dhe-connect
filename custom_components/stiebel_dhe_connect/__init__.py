@@ -6,6 +6,7 @@ import asyncio
 import logging
 import os
 import shutil
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -34,6 +35,8 @@ from .const import (
     DOMAIN,
     PLATFORMS,
 )
+from .entity_helpers import device_registry_model, device_registry_sw_version
+from .protocol import ID_DEVICE_INFO
 from .repair_issues import (
     DISCOVERY_CONFLICT_ISSUE,
     DEVICE_UNREACHABLE_ISSUE,
@@ -190,6 +193,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         clear_runtime_data(entry)
         raise
     _async_cleanup_empty_legacy_devices(hass, entry, client.device_identifier)
+    _async_register_device_registry_updates(hass, entry, client)
     _async_clear_stale_sensor_statistic_issues(hass, entry)
     _async_register_services(hass, _resolve_runtime)
     _async_register_reauth_trigger(hass, entry, client)
@@ -374,6 +378,90 @@ def _async_cleanup_empty_legacy_devices(
                 device_id=canonical_device_id,
             )
         device_registry.async_remove_device(device.id)
+
+
+def _async_register_device_registry_updates(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    client: DHEClient,
+) -> None:
+    """Keep the HA device registry aligned with DHE runtime device metadata."""
+    last_metadata: tuple[str, str | None] | None = None
+
+    @callback
+    def _apply_device_registry_update() -> None:
+        nonlocal last_metadata
+        metadata = _device_registry_metadata(client)
+        if metadata == last_metadata:
+            return
+        if _async_update_device_registry_info(hass, entry, client, metadata):
+            last_metadata = metadata
+
+    @callback
+    def _handle_measurement_update(odb_id: int, _value: Any) -> None:
+        if odb_id == ID_DEVICE_INFO:
+            _apply_device_registry_update()
+
+    _apply_device_registry_update()
+    entry.async_on_unload(
+        client.add_measurement_callback(_handle_measurement_update, replay=True)
+    )
+
+
+def _device_registry_metadata(client: DHEClient) -> tuple[str, str | None]:
+    """Return model and firmware values for the HA device registry."""
+    raw_device_info = getattr(client, "last_device_info", {})
+    device_info = raw_device_info if isinstance(raw_device_info, Mapping) else {}
+    return (
+        device_registry_model(device_info),
+        device_registry_sw_version(device_info),
+    )
+
+
+def _async_update_device_registry_info(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    client: DHEClient,
+    metadata: tuple[str, str | None],
+) -> bool:
+    """Update one HA device registry entry with runtime model/firmware metadata."""
+    device_registry = dr.async_get(hass)
+    device_entry = _async_entry_device(device_registry, entry, client)
+    if device_entry is None:
+        return False
+
+    model, sw_version = metadata
+    device_registry.async_update_device(
+        device_entry.id,
+        manufacturer=None,
+        model=model,
+        sw_version=sw_version,
+    )
+    return True
+
+
+def _async_entry_device(
+    device_registry: dr.DeviceRegistry,
+    entry: ConfigEntry,
+    client: DHEClient,
+) -> dr.DeviceEntry | None:
+    """Return the canonical HA device entry for one DHE config entry."""
+    stable_identifier = getattr(client, "device_identifier", None)
+    devices = [
+        device
+        for device in dr.async_entries_for_config_entry(device_registry, entry.entry_id)
+        if any(domain == DOMAIN for domain, _identifier in device.identifiers)
+    ]
+    if not devices:
+        return None
+    if stable_identifier:
+        stable_key = (DOMAIN, stable_identifier)
+        if device := next(
+            (device for device in devices if stable_key in device.identifiers),
+            None,
+        ):
+            return device
+    return devices[0]
 
 
 @callback

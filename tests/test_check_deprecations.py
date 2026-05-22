@@ -48,6 +48,19 @@ class TestCheckDeprecations(unittest.TestCase):
         self.assertEqual(len(issues), 1)
         self.assertIn("Do not hide pytest warnings", issues[0])
 
+    def test_rejects_deprecated_entry_forwarding_api(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "bad.py"
+            path.write_text(
+                "await hass.config_entries.async_forward_entry_setup(entry, 'sensor')\n",
+                encoding="utf-8",
+            )
+
+            issues = check_deprecations.find_deprecation_issues([path])
+
+        self.assertEqual(len(issues), 1)
+        self.assertIn("async_forward_entry_setups", issues[0])
+
 
 if __name__ == "__main__":
     unittest.main()

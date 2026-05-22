@@ -21,6 +21,7 @@ from .service_helpers import (
     ATTR_NAME,
     ATTR_RESULT_NUMBER,
     WEATHER_RESULT_NUMBER_MAX,
+    service_result_number,
     select_weather_location,
     weather_location_payload,
     weather_results_from_service_input,
@@ -95,7 +96,7 @@ def async_register_services(
             client.last_weather_state,
             results,
             data.get(ATTR_LOCATION_ID),
-            data[ATTR_RESULT_NUMBER],
+            service_result_number(data),
             allow_raw_location_id=True,
         )
         return client, location

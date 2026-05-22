@@ -505,7 +505,6 @@ async def test_setup_merges_empty_host_devices_into_stable_entry_device() -> Non
         old_ip_device = device_registry.async_get_or_create(
             config_entry_id=entry.entry_id,
             identifiers={(DOMAIN, "192.0.2.124:8443")},
-            manufacturer="STIEBEL ELTRON",
             model="DHE Connect",
             name="Old IP DHE",
         )
@@ -519,7 +518,6 @@ async def test_setup_merges_empty_host_devices_into_stable_entry_device() -> Non
         device_registry.async_get_or_create(
             config_entry_id=entry.entry_id,
             identifiers={(DOMAIN, "dhe-ja06.local:8443")},
-            manufacturer="STIEBEL ELTRON",
             model="DHE Connect",
             name="Old Host DHE",
         )
@@ -551,6 +549,54 @@ async def test_setup_merges_empty_host_devices_into_stable_entry_device() -> Non
             entity.unique_id == "legacy_entity_on_ip_device"
             for entity in migrated_entities
         )
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
+
+async def test_runtime_device_info_updates_ha_device_model_and_firmware() -> None:
+    """Expose DHE device type and firmware version in HA's device registry."""
+    _clear_loaded_integration_modules()
+    integration = importlib.import_module(f"custom_components.{DOMAIN}")
+    protocol = importlib.import_module(f"custom_components.{DOMAIN}.protocol")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        client = _FixtureDHEClient(host="dhe-ja06.local", port=DEFAULT_PORT)
+        entry = _build_mock_entry(
+            host=client.host,
+            port=client.port,
+            name="Device Info Fixture DHE",
+            unique_id="device-info-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+
+        with (
+            patch.object(integration, "DHEClient", return_value=client),
+            patch.object(integration, "_async_can_connect", AsyncMock(return_value=True)),
+        ):
+            assert await hass.config_entries.async_setup(entry.entry_id)
+            await hass.async_block_till_done()
+
+        device_registry = dr.async_get(hass)
+        devices = dr.async_entries_for_config_entry(device_registry, entry.entry_id)
+        assert len(devices) == 1
+        assert devices[0].model == "DHE Connect"
+        assert devices[0].manufacturer is None
+        assert devices[0].sw_version is None
+
+        client.last_device_info = {
+            "device_type": "DHE Connect 18/21/24",
+            "protocol_version": "1.9.00",
+            "raw_odb_protocol_version": 1,
+        }
+        client.emit_measurement(protocol.ID_DEVICE_INFO, "DHE Connect 18/21/24")
+        await hass.async_block_till_done()
+
+        devices = dr.async_entries_for_config_entry(device_registry, entry.entry_id)
+        assert len(devices) == 1
+        assert devices[0].model == "DHE Connect 18/21/24"
+        assert devices[0].manufacturer is None
+        assert devices[0].sw_version == "1.9.00"
 
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
@@ -1587,6 +1633,24 @@ async def test_repairs_flow_rejects_mismatched_issue_data() -> None:
             )
 
 
+async def test_repairs_flow_rejects_mismatched_issue_type_data() -> None:
+    """Reject stale issue payloads that point to a different repair type."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    repairs = importlib.import_module(f"custom_components.{DOMAIN}.repairs")
+    repair_issues = importlib.import_module(
+        f"custom_components.{DOMAIN}.repair_issues"
+    )
+    async with async_test_home_assistant() as hass:
+        issue_id = repair_issues.pairing_required_issue_id("entry-a")
+        with pytest.raises(ValueError, match="type does not match"):
+            await repairs.async_create_fix_flow(
+                hass,
+                issue_id,
+                {"entry_id": "entry-a", "issue_type": repair_issues.TOKEN_INVALID_ISSUE},
+            )
+
+
 async def test_reauth_flow_repairs_pairing_with_real_hass_fixture() -> None:
     """Run HA reauth flow and verify it validates a fresh DHE pairing."""
     _clear_loaded_integration_modules()
@@ -1691,6 +1755,45 @@ async def test_repairs_flow_validates_fresh_pairing_with_real_hass_fixture() -> 
         )
         validate_pairing.assert_awaited_once()
         assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id) is None
+
+
+async def test_repairs_flow_aborts_when_entry_is_removed_before_confirm() -> None:
+    """Abort repair confirm when the config entry disappears mid-flow."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    repairs = importlib.import_module(f"custom_components.{DOMAIN}.repairs")
+    repair_issues = importlib.import_module(
+        f"custom_components.{DOMAIN}.repair_issues"
+    )
+    async with async_test_home_assistant() as hass:
+        entry = _build_mock_entry(
+            host="repair-remove-dhe.local",
+            port=DEFAULT_PORT,
+            name="Repair Remove Fixture DHE",
+            unique_id="repair-remove-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+        repair_issues.async_create_pairing_issue(hass, entry.entry_id, entry.title)
+        issue_id = repair_issues.pairing_required_issue_id(entry.entry_id)
+        issue = ir.async_get(hass).async_get_issue(DOMAIN, issue_id)
+        assert issue is not None
+
+        repair_flow = await repairs.async_create_fix_flow(
+            hass,
+            issue_id,
+            issue.data,
+        )
+        repair_flow.hass = hass
+        repair_flow.handler = DOMAIN
+        repair_flow.flow_id = "repair-missing-after-open"
+        repair_flow.context = {}
+        repair_flow.init_data = {"issue_id": issue_id}
+
+        hass.config_entries._entries.pop(entry.entry_id, None)
+        result = await repair_flow.async_step_confirm({})
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "entry_not_found"
 
 
 async def test_repairs_flow_success_reloads_existing_entry_without_duplication() -> None:
