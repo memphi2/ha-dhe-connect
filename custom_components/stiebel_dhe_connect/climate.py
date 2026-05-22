@@ -198,7 +198,11 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
             return
 
         if temperature_update:
-            write_update = self._target_below_inlet() != target_below_inlet_before
+            target_below_inlet_after = self._target_below_inlet()
+            write_update = (
+                target_below_inlet_after
+                or target_below_inlet_after != target_below_inlet_before
+            )
 
         if not write_update:
             return

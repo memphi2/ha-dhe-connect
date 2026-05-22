@@ -35,6 +35,9 @@ IDs, unique IDs and DHE protocol behavior stable.
 
 - Restored switch states are written immediately during startup even when
   measurement replay is disabled, preventing stale switch state after reloads.
+- Kept climate diagnostics attributes fresh while the configured setpoint remains
+  below the inlet temperature, without re-enabling generic high-churn telemetry
+  writes.
 
 ### Discovery
 

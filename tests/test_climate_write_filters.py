@@ -176,6 +176,23 @@ class TestClimateWriteFilters(unittest.TestCase):
             entity._attr_extra_state_attributes["setpoint_below_inlet_temperature"]
         )
 
+    def test_inlet_updates_write_while_target_remains_below_inlet(self) -> None:
+        climate_module = _load_climate_module()
+        entity = _build_entity(climate_module)
+        entity._attr_target_temperature = 38.0
+
+        calls: list[str] = []
+        entity.async_write_ha_state = lambda: calls.append("write")
+
+        entity._handle_measurement_update(climate_module.ID_INLET_TEMPERATURE, 38.1)
+        entity._handle_measurement_update(climate_module.ID_INLET_TEMPERATURE, 38.4)
+
+        self.assertEqual(calls, ["write", "write"])
+        self.assertEqual(
+            entity._attr_extra_state_attributes["inlet_minus_setpoint"],
+            0.4,
+        )
+
     def test_target_below_inlet_exit_writes_despite_telemetry_suppression(
         self,
     ) -> None:
