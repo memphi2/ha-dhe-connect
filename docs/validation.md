@@ -339,6 +339,8 @@ Current exclusions from the 95% line-coverage report:
   Assistant discovery-flow glue covered by HA fixtures.
 - `custom_components/stiebel_dhe_connect/config_flow_mapping.py` - options-flow
   selector glue covered by flow helper tests.
+- `custom_components/stiebel_dhe_connect/config_flow_options.py` - Home
+  Assistant options-flow orchestration glue covered by HA fixtures.
 - `custom_components/stiebel_dhe_connect/config_flow_schemas.py` - Home
   Assistant voluptuous schema glue covered by flow tests.
 - `custom_components/stiebel_dhe_connect/config_flow_setup.py` - Home Assistant
@@ -488,6 +490,17 @@ For release or performance evidence, use a longer idle window:
 ```bash
 python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log --monitor-seconds 600 --require-idle --print-operational-signals
 ```
+
+To keep a sanitized release/performance evidence artifact, add
+`--evidence-json`:
+
+```bash
+python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log --monitor-seconds 600 --require-idle --print-operational-signals --evidence-json /tmp/dhe-smoke-evidence.json
+```
+
+The evidence file records pass/fail status, redacted check messages, entity
+counts, monitor settings and recorder top writers. It intentionally omits local
+config paths, DHE hosts/IPs, token paths and credentials.
 
 Run the recorder monitor while the DHE is idle when validating database churn.
 If the device-status sensor reports water running (`status_2` or the observed

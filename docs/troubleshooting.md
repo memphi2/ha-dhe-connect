@@ -348,6 +348,16 @@ For release or performance evidence, prefer a longer idle window:
 python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log --monitor-seconds 600 --require-idle --print-operational-signals
 ```
 
+For sanitized release/performance evidence, write the same run to JSON:
+
+```bash
+python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log --monitor-seconds 600 --require-idle --print-operational-signals --evidence-json /tmp/dhe-smoke-evidence.json
+```
+
+The JSON evidence contains summarized checks, entity counts, monitor settings
+and recorder top writers only. It does not persist local config paths, tokens,
+token paths, hosts or IP addresses.
+
 Run the monitor while the DHE is idle when validating database churn. If the
 device-status sensor reports water running (`status_2` or the observed
 transition state `status_4`), if the error-status diagnostic attributes carry

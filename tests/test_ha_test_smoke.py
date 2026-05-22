@@ -1046,6 +1046,125 @@ class TestHaTestSmoke(unittest.TestCase):
         self.assertIn("recorder writes total=0", output.getvalue())
         self.assertIn("reconnect count stable at 0", output.getvalue())
 
+    def test_main_writes_sanitized_evidence_json(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = Path(temp_dir)
+            db_path = config / "home-assistant_v2.db"
+            evidence_path = config / "smoke-evidence.json"
+            _create_recorder_db(db_path)
+            _write_entity_registry(
+                config,
+                [
+                    {
+                        "entity_id": "climate.dhe_connect",
+                        "platform": "stiebel_dhe_connect",
+                        "disabled_by": None,
+                    },
+                    {
+                        "entity_id": "sensor.dhe_connect_connection_state",
+                        "platform": "stiebel_dhe_connect",
+                        "disabled_by": None,
+                    },
+                    {
+                        "entity_id": "sensor.dhe_connect_reconnect_count",
+                        "platform": "stiebel_dhe_connect",
+                        "disabled_by": None,
+                    },
+                    {
+                        "entity_id": "sensor.dhe_connect_water_flow",
+                        "platform": "stiebel_dhe_connect",
+                        "disabled_by": None,
+                    },
+                    {
+                        "entity_id": "sensor.dhe_connect_debug",
+                        "platform": "stiebel_dhe_connect",
+                        "disabled_by": "integration",
+                    },
+                ],
+            )
+            _insert_state(
+                db_path,
+                state_id=1,
+                metadata_id=1,
+                entity_id="climate.dhe_connect",
+                state="heat",
+                attributes={"connection_state": "connected"},
+            )
+            _insert_state(
+                db_path,
+                state_id=2,
+                metadata_id=2,
+                entity_id="sensor.dhe_connect_connection_state",
+                state="connected",
+            )
+            _insert_state(
+                db_path,
+                state_id=3,
+                metadata_id=3,
+                entity_id="sensor.dhe_connect_reconnect_count",
+                state="0",
+            )
+            _insert_state(
+                db_path,
+                state_id=4,
+                metadata_id=4,
+                entity_id="sensor.dhe_connect_water_flow",
+                state="0.0",
+            )
+            (config / "home-assistant.log").write_text(
+                "2026-05-17 INFO custom_components.stiebel_dhe_connect ready\n",
+                encoding="utf-8",
+            )
+
+            def _record_water_flow_change(_seconds: int) -> None:
+                _insert_state(
+                    db_path,
+                    state_id=5,
+                    metadata_id=4,
+                    entity_id="sensor.dhe_connect_water_flow",
+                    state="0.3",
+                )
+
+            output = io.StringIO()
+            with (
+                redirect_stdout(output),
+                patch.object(
+                    ha_test_smoke.time,
+                    "sleep",
+                    side_effect=_record_water_flow_change,
+                ),
+            ):
+                result = ha_test_smoke.main([
+                    "--config",
+                    str(config),
+                    "--db",
+                    str(db_path),
+                    "--monitor-seconds",
+                    "1",
+                    "--evidence-json",
+                    str(evidence_path),
+                ])
+
+            evidence_text = evidence_path.read_text(encoding="utf-8")
+            evidence = json.loads(evidence_text)
+
+        self.assertEqual(result, 0, output.getvalue())
+        self.assertNotIn(str(config), evidence_text)
+        self.assertTrue(evidence["ok"])
+        self.assertEqual(evidence["entities"]["enabled"], 4)
+        self.assertEqual(evidence["entities"]["disabled_by"], {"integration": 1})
+        self.assertEqual(evidence["monitor"]["seconds"], 1)
+        self.assertTrue(evidence["monitor"]["was_run"])
+        self.assertEqual(evidence["recorder"]["writes_total"], 1)
+        self.assertEqual(
+            evidence["recorder"]["top_writers"],
+            [{"entity_id": "sensor.dhe_connect_water_flow", "count": 1}],
+        )
+        self.assertIn(
+            {"ok": True, "message": "config path exists"},
+            evidence["checks"],
+        )
+
     def test_main_fails_when_registry_has_no_enabled_dhe_entities(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             config = Path(temp_dir)

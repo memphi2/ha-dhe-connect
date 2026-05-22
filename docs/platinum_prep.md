@@ -104,6 +104,10 @@ reviewable:
   recorded attribute dictionaries are snapshot only if value/state thresholds
   indicate a state write is likely, which keeps high-frequency updates lighter
   under bursty runtime streams.
+- Static sensor descriptions, options-flow handling and Home Assistant service
+  registration are split into dedicated modules. The runtime-facing modules stay
+  smaller while preserving existing entity IDs, service names and config-entry
+  behavior.
 - Repeated weather, radio, consumption and saving-monitor payloads are kept as
   bounded summaries or attributes only when needed for services, options flows
   or visible entity state. Stable internal ODB values are recognized and
@@ -119,6 +123,10 @@ reviewable:
   live transport orchestration are deliberately excluded from the 95% line
   metric when their behavior is better covered by HA fixture tests, Fake-DHE
   tests, release checks and optional live smoke gates.
+- Mounted HA smoke can emit sanitized JSON evidence with `--evidence-json`.
+  That artifact keeps pass/fail checks, entity counts, monitor settings and
+  recorder top writers without storing local paths, hosts, IPs, token paths or
+  credentials.
 
 ## Recommended Validation Gate For Each Typing Round
 

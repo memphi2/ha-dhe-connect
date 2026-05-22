@@ -240,7 +240,7 @@ Fuer eine echte Idle-Messung sollte der gemountete HA-Smoke mit striktem
 Idle-Gate laufen:
 
 ```bash
-python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log --monitor-seconds 600 --require-idle --print-operational-signals
+python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log --monitor-seconds 600 --require-idle --print-operational-signals --evidence-json /tmp/dhe-smoke-evidence.json
 ```
 
 Wenn waehrenddessen Wasser laeuft oder eine abgeschlossene Nutzung erkannt
@@ -248,6 +248,11 @@ wird, bricht der Smoke als nicht-idle ab und nennt den ausloesenden Entity-
 oder `device_status`-Attributwert. Ohne `--require-idle` wird solch ein Fenster
 als operational gewertet; dann werden Idle-Schwellwerte uebersprungen, Logs und
 Reconnect-Stabilitaet aber weiter geprueft.
+
+Die optionale Evidence-Datei ist fuer Release- oder Performance-Notizen gedacht.
+Sie enthaelt nur zusammengefasste Checks, Entity-Zaehler, Monitor-Dauer,
+Recorder-Top-Writer und redigierte Meldungen; lokale Config-Pfade, Tokens,
+Hosts und IP-Adressen werden nicht in die JSON-Datei uebernommen.
 
 Kurze Verbindungsabbrueche bleiben in einer Reconnect-Schonfrist: gecachte
 Entitaeten koennen verfuegbar bleiben, waehrend der Diagnosewert

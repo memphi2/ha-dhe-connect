@@ -1190,6 +1190,37 @@ class TestFakeDHEEngineIOServer(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(client._runtime_parser_stats["invalid_odb_id"], 2)
         self.assertEqual(client._last_measurements, {})
 
+    async def test_unknown_radio_and_weather_payloads_are_ignored_safely(self) -> None:
+        client_module = _load_client()
+        protocol_module = _load_protocol()
+
+        async with (
+            FakeDHEEngineIOServer(protocol_module.NS) as server,
+            _connected_fake_client(client_module, server) as (
+                _DHEClient,
+                client,
+                ctx,
+            ),
+        ):
+            await _queue_message_and_handle(
+                server,
+                client,
+                ctx,
+                "set:ste.app.radio:unknown",
+                {"unexpected": ["payload"]},
+            )
+            await _queue_message_and_handle(
+                server,
+                client,
+                ctx,
+                "set:ste.app.weather:unknown",
+                {"unexpected": "payload"},
+            )
+
+        self.assertEqual(client._runtime_parser_stats["radio_unhandled"], 1)
+        self.assertEqual(client._runtime_parser_stats["unhandled"], 1)
+        self.assertEqual(client._last_measurements, {})
+
     async def test_reconnect_during_command_retries_after_session_replacement(
         self,
     ) -> None:

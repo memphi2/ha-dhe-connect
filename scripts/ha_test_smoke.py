@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter, deque
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from contextlib import closing
 from dataclasses import dataclass
 import json
@@ -145,6 +145,19 @@ def entity_registry_summary(entries: Iterable[EntityRegistryEntry]) -> str:
         )
         details.append(f"disabled_by={disabled_summary}")
     return "; ".join(details)
+
+
+def disabled_by_counts(entries: Iterable[EntityRegistryEntry]) -> dict[str, int]:
+    """Return disabled-entity counts grouped by Home Assistant reason."""
+    return dict(
+        sorted(
+            Counter(
+                str(entry.disabled_by)
+                for entry in entries
+                if entry.disabled_by is not None
+            ).items()
+        )
+    )
 
 
 def count_localhost_refresh_tokens(config: Path) -> int:
@@ -880,10 +893,7 @@ def evaluate_recorder_writes(
         if writes:
             top_writers = ", ".join(
                 f"{entity_id}={count}"
-                for entity_id, count in sorted(
-                    writes.items(),
-                    key=lambda item: (-item[1], item[0]),
-                )[:3]
+                for entity_id, count in top_recorder_writers(writes, limit=3)
             )
             message = f"{message}; top writers: {top_writers}"
         return [CheckResult(True, message)]
@@ -907,9 +917,92 @@ def evaluate_recorder_writes(
     return results
 
 
+def top_recorder_writers(
+    writes: Mapping[str, int],
+    *,
+    limit: int,
+) -> tuple[tuple[str, int], ...]:
+    """Return the highest-write recorder entities in deterministic order."""
+    return tuple(
+        sorted(
+            writes.items(),
+            key=lambda item: (-item[1], item[0]),
+        )[:limit]
+    )
+
+
 def _print_result(result: CheckResult) -> None:
     prefix = "PASS" if result.ok else "FAIL"
     print(f"{prefix}: {redact_sensitive_text(result.message)}")
+
+
+def _evidence_message(message: str) -> str:
+    """Return a path-minimized smoke message for persistent evidence files."""
+    if message.startswith("config path exists:"):
+        return "config path exists"
+    if message.startswith("recorder DB exists:"):
+        return "recorder DB exists"
+    return redact_sensitive_text(message)
+
+
+def _build_evidence(
+    *,
+    results: Iterable[CheckResult],
+    entries: Iterable[EntityRegistryEntry],
+    enabled_ids: Iterable[str],
+    latest_states: Mapping[str, LatestState],
+    monitor_seconds: int,
+    require_idle: bool,
+    monitor_was_run: bool,
+    recorder_writes: Mapping[str, int],
+    operational_signal: OperationalSignal | None,
+) -> dict[str, Any]:
+    """Build sanitized, deterministic JSON evidence for a HA smoke run."""
+    result_list = list(results)
+    entry_list = list(entries)
+    enabled_list = list(enabled_ids)
+    return {
+        "ok": all(result.ok for result in result_list),
+        "checks": [
+            {"ok": result.ok, "message": _evidence_message(result.message)}
+            for result in result_list
+        ],
+        "entities": {
+            "registry_total": len(entry_list),
+            "enabled": len(enabled_list),
+            "disabled_by": disabled_by_counts(entry_list),
+            "latest_state_count": len(latest_states),
+        },
+        "monitor": {
+            "seconds": monitor_seconds,
+            "was_run": monitor_was_run,
+            "require_idle": require_idle,
+        },
+        "operational_signal": (
+            None
+            if operational_signal is None
+            else redact_sensitive_text(operational_signal.message)
+        ),
+        "recorder": {
+            "writes_total": sum(recorder_writes.values()),
+            "top_writers": [
+                {"entity_id": entity_id, "count": count}
+                for entity_id, count in top_recorder_writers(
+                    recorder_writes,
+                    limit=5,
+                )
+            ],
+        },
+    }
+
+
+def write_evidence(path: Path, evidence: Mapping[str, Any]) -> None:
+    """Write sanitized smoke evidence JSON."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(evidence, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
@@ -970,6 +1063,11 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         action="store_true",
         help="Print the entity or attribute signal used to classify the window.",
     )
+    parser.add_argument(
+        "--evidence-json",
+        type=Path,
+        help="Write sanitized JSON evidence for the smoke run.",
+    )
     return parser.parse_args(argv)
 
 
@@ -982,6 +1080,21 @@ def main(argv: list[str] | None = None) -> int:
     results.append(CheckResult(config.exists(), f"config path exists: {config}"))
     results.append(CheckResult(db_path.exists(), f"recorder DB exists: {db_path}"))
     if not config.exists() or not db_path.exists():
+        if args.evidence_json is not None:
+            write_evidence(
+                args.evidence_json,
+                _build_evidence(
+                    results=results,
+                    entries=[],
+                    enabled_ids=[],
+                    latest_states={},
+                    monitor_seconds=args.monitor_seconds,
+                    require_idle=args.require_idle,
+                    monitor_was_run=False,
+                    recorder_writes={},
+                    operational_signal=None,
+                ),
+            )
         for result in results:
             _print_result(result)
         return 1
@@ -1038,7 +1151,9 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     baseline_operational_signal: OperationalSignal | None = None
+    operational_signal: OperationalSignal | None = None
     monitor_was_run = False
+    recorder_writes: dict[str, int] = {}
 
     if args.monitor_seconds > 0 and latest_states:
         start_state_id = max_state_id(db_path)
@@ -1076,7 +1191,7 @@ def main(argv: list[str] | None = None) -> int:
             time.sleep(args.monitor_seconds)
             monitor_was_run = True
             try:
-                writes = count_recorder_writes(
+                recorder_writes = count_recorder_writes(
                     db_path,
                     latest_states,
                     after_state_id=start_state_id,
@@ -1134,7 +1249,7 @@ def main(argv: list[str] | None = None) -> int:
                     results.append(CheckResult(True, "operational signal: none"))
                 results.extend(
                     evaluate_recorder_writes(
-                        writes,
+                        recorder_writes,
                         max_total_writes=args.max_total_writes,
                         max_entity_writes=args.max_entity_writes,
                         operational_reason=(
@@ -1178,6 +1293,22 @@ def main(argv: list[str] | None = None) -> int:
             results.append(CheckResult(False, f"recorder reconnect query failed: {err}"))
         else:
             results.extend(evaluate_reconnect_stability(latest_states, monitor_states))
+
+    if args.evidence_json is not None:
+        write_evidence(
+            args.evidence_json,
+            _build_evidence(
+                results=results,
+                entries=entries,
+                enabled_ids=enabled_ids,
+                latest_states=latest_states,
+                monitor_seconds=args.monitor_seconds,
+                require_idle=args.require_idle,
+                monitor_was_run=monitor_was_run,
+                recorder_writes=recorder_writes,
+                operational_signal=operational_signal or baseline_operational_signal,
+            ),
+        )
 
     for result in results:
         _print_result(result)
