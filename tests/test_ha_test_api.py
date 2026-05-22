@@ -836,6 +836,26 @@ class TestHATestApi(unittest.TestCase):
         ):
             ha_test_api._parse_args()
 
+    def test_parse_args_sanitizes_negative_cleanup_interval_from_env(self) -> None:
+        with (
+            patch.dict(os.environ, {"HA_TEST_CLEANUP_LOCALHOST_TOKEN_INTERVAL": "-0.1"}),
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "ha_test_api.py",
+                    "--username",
+                    "test-user",
+                ],
+            ),
+        ):
+            args = ha_test_api._parse_args()
+
+        self.assertEqual(
+            args.cleanup_localhost_token_interval,
+            1.0,
+        )
+
     def test_ha_scripts_can_run_directly(self) -> None:
         root = Path(__file__).resolve().parents[1]
         for script in ("ha_test_api.py", "ha_test_smoke.py"):

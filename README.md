@@ -298,6 +298,12 @@ Diagnostic sensors expose the current client connection state, reconnect count, 
 
 ## Validation
 
+For local setup, install dependencies once:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
 For day-to-day development, run:
 
 ```bash
