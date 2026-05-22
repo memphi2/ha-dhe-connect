@@ -181,6 +181,51 @@ class TestWellnessPrograms(unittest.TestCase):
 
         self.assertEqual(entity.async_write_ha_state.call_count, 2)
 
+    def test_odb_switch_writes_cached_startup_measurement_after_availability(
+        self,
+    ) -> None:
+        _load_component_module("client_types")
+        _load_component_module("entity_helpers")
+        _load_component_module("entity_state_helpers")
+        _load_component_module("protocol")
+        _load_component_module("runtime_helpers")
+        _load_component_module("wellness_programs")
+        switch_module = _load_component_module("switch")
+        description = switch_module.ODB_SWITCHES[0]
+
+        class _Client:
+            host = "dhe.local"
+            port = 8443
+            legacy_device_identifier = None
+            available = True
+            last_measurements = {description.measurement_id: 1}
+
+            def add_measurement_callback(self, _callback, *, replay=True):
+                self.measurement_replay = replay
+                return lambda: None
+
+            def add_availability_callback(self, callback):
+                callback(True)
+                return lambda: None
+
+        client = _Client()
+        entity = switch_module.StiebelDHEODBSwitch(
+            entry_id="entry",
+            name="DHE",
+            client=client,
+            description=description,
+        )
+        entity.async_on_remove = lambda _remove: None
+        entity.async_get_last_state = AsyncMock(return_value=None)
+        entity.async_write_ha_state = Mock()
+
+        asyncio.run(entity.async_added_to_hass())
+
+        self.assertFalse(client.measurement_replay)
+        self.assertTrue(entity._attr_is_on)
+        self.assertTrue(entity._attr_available)
+        self.assertEqual(entity.async_write_ha_state.call_count, 2)
+
     def test_binary_sensor_suppresses_redundant_state_writes(self) -> None:
         _load_component_module("client_types")
         _load_component_module("entity_helpers")
@@ -299,11 +344,13 @@ class TestWellnessPrograms(unittest.TestCase):
         entity.async_get_last_state = AsyncMock(
             return_value=types.SimpleNamespace(state="off")
         )
+        entity.async_write_ha_state = Mock()
 
         asyncio.run(entity.async_added_to_hass())
 
         self.assertFalse(entity._attr_is_on)
         self.assertFalse(entity._attr_available)
+        entity.async_write_ha_state.assert_called_once()
 
 
 if __name__ == "__main__":

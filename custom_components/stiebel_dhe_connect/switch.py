@@ -229,14 +229,14 @@ class StiebelDHEBaseSwitch(StiebelDHEEntityMixin, SwitchEntity, RestoreEntity):
         """Handle a measurement update in concrete switch subclasses."""
         raise NotImplementedError
 
-    async def _restore_state_from_measurement(self, measurement_id: int) -> None:
+    async def _restore_state_from_measurement(self, measurement_id: int) -> bool:
         """Restore switch state from the latest client value or HA state."""
         last_value = self._client.last_measurements.get(measurement_id)
         if last_value is not None:
             self._set_switch_state_from_value(last_value)
-            return
+            return True
 
-        await self._restore_last_switch_state()
+        return await self._restore_last_switch_state()
 
     async def _restore_last_switch_state(self) -> bool:
         """Restore switch state from Home Assistant's last stored state."""
@@ -307,9 +307,10 @@ class StiebelDHEODBSwitch(StiebelDHEBaseSwitch):
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE updates and restore last known state."""
         self._subscribe_to_switch_updates()
-        await self._restore_state_from_measurement(
+        if await self._restore_state_from_measurement(
             self.entity_description.measurement_id
-        )
+        ):
+            self._write_switch_state()
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         await self._set_enabled(
@@ -384,9 +385,10 @@ class StiebelDHEAppTimerSwitch(StiebelDHEBaseSwitch):
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE updates and restore last known state."""
         self._subscribe_to_switch_updates()
-        await self._restore_state_from_measurement(
+        if await self._restore_state_from_measurement(
             self.entity_description.measurement_id
-        )
+        ):
+            self._write_switch_state()
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         await self._set_enabled(True)
@@ -467,6 +469,7 @@ class StiebelDHEWellnessShowerProgramSwitch(
         last_program_value = self._client.last_measurements.get(
             ID_WELLNESS_SHOWER_PROGRAM
         )
+        restored = False
         if last_program_value is not None:
             self._last_program_value = last_program_value
             self._attr_is_on = wellness_program_switch_state(
@@ -475,8 +478,11 @@ class StiebelDHEWellnessShowerProgramSwitch(
                 self.entity_description.program_id,
             )
             self._attr_available = self._switch_available()
+            restored = True
         else:
-            await self._restore_last_switch_state()
+            restored = await self._restore_last_switch_state()
+        if restored:
+            self._write_switch_state()
 
     def _program_attributes(self) -> dict[str, Any]:
         """Return state attributes for the active DHE wellness catalog entry."""

@@ -31,6 +31,11 @@ IDs, unique IDs and DHE protocol behavior stable.
 
 - Reused a compiled Socket.IO frame matcher in the client transport parser.
 
+### Robustness
+
+- Restored switch states are written immediately during startup even when
+  measurement replay is disabled, preventing stale switch state after reloads.
+
 ### Discovery
 
 - Improved Zeroconf/auto-discovery display names so Home Assistant can show a
