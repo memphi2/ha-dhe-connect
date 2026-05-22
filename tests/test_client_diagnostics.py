@@ -194,6 +194,19 @@ class TestClientDiagnostics(unittest.TestCase):
         self.assertNotIn("abc123", message)
         self.assertNotIn("def456", message)
 
+    def test_redaction_removes_raw_ipv6_hosts(self) -> None:
+        message = self.diagnostics.redact_diagnostic_text(
+            "connect failed for fd00::1234 fallback fe80::1%eth0 "
+            "mac aa:bb:cc:dd:ee:ff"
+        )
+
+        self.assertIn("<ip-address>", message)
+        self.assertIn("<mac-address>", message)
+        self.assertNotIn("fd00::1234", message)
+        self.assertNotIn("fe80::1", message)
+        self.assertNotIn("eth0", message)
+        self.assertNotIn("aa:bb:cc:dd:ee:ff", message)
+
     def test_diagnostic_summary_preserves_colliding_redacted_keys(self) -> None:
         summary = self.diagnostics.summarize_diagnostic_value({
             "token=abc123": "first",

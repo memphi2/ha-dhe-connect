@@ -9,18 +9,16 @@ import shutil
 from dataclasses import dataclass
 from typing import Any, cast
 
-import voluptuous as vol
-
 from homeassistant.config_entries import ConfigEntry, ConfigFlowResult, SOURCE_REAUTH
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
-from homeassistant.core import HomeAssistant, ServiceCall, callback
-from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 
-from .action_error_helpers import raise_if_dhe_unavailable, run_dhe_action
+from .action_error_helpers import translated_homeassistant_error
 from .async_helpers import (
     cancel_task_if_pending,
     create_background_task,
@@ -50,7 +48,10 @@ from .runtime_helpers import (
     iter_loaded_runtime_data,
     set_runtime_data,
 )
-from .service_helpers import WEATHER_RESULT_NUMBER_MAX
+from .services import (
+    async_register_services as _async_register_services,
+    async_unregister_services as _async_unregister_services,
+)
 from .token_file_helpers import (
     LEGACY_TOKEN_FILE,
     legacy_token_file_for_entry,
@@ -59,40 +60,6 @@ from .token_file_helpers import (
 
 _LOGGER = logging.getLogger(__name__)
 
-SERVICE_SEARCH_WEATHER_LOCATION = "search_weather_location"
-SERVICE_ADD_WEATHER_FAVORITE = "add_weather_favorite"
-SERVICE_TOGGLE_WEATHER_FAVORITE = "toggle_weather_favorite"
-SERVICE_REMOVE_WEATHER_FAVORITE = "remove_weather_favorite"
-SERVICE_SELECT_WEATHER_LOCATION = "select_weather_location"
-
-ATTR_COUNTRY_ID = "country_id"
-ATTR_ENTRY_ID = "entry_id"
-ATTR_LOCATION_ID = "location_id"
-ATTR_NAME = "name"
-ATTR_RESULT_NUMBER = "result_number"
-WEATHER_SEARCH_SCHEMA = vol.Schema(
-    {
-        vol.Required(ATTR_NAME): cv.string,
-        vol.Required(ATTR_COUNTRY_ID): vol.Coerce(int),
-        vol.Optional(ATTR_ENTRY_ID): cv.string,
-    }
-)
-WEATHER_LOCATION_ACTION_SCHEMA = vol.Schema(
-    {
-        vol.Optional(ATTR_NAME): cv.string,
-        vol.Optional(ATTR_COUNTRY_ID): vol.Coerce(int),
-        vol.Optional(ATTR_LOCATION_ID): cv.string,
-        vol.Optional(ATTR_ENTRY_ID): cv.string,
-        vol.Optional(ATTR_RESULT_NUMBER, default=1): vol.All(
-            vol.Coerce(int),
-            vol.Range(min=1, max=WEATHER_RESULT_NUMBER_MAX),
-        ),
-    }
-)
-WEATHER_TOGGLE_FAVORITE_SCHEMA = WEATHER_LOCATION_ACTION_SCHEMA
-WEATHER_SELECT_LOCATION_SCHEMA = WEATHER_LOCATION_ACTION_SCHEMA
-WEATHER_ADD_FAVORITE_SCHEMA = WEATHER_LOCATION_ACTION_SCHEMA
-WEATHER_REMOVE_FAVORITE_SCHEMA = WEATHER_LOCATION_ACTION_SCHEMA
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 STALE_SENSOR_STATISTIC_TRANSLATION_KEYS = frozenset(
     {
@@ -114,7 +81,7 @@ class DHEConnectRuntimeData:
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     """Set up integration-wide services."""
     del config
-    _async_register_services(hass)
+    _async_register_services(hass, _resolve_runtime)
     return True
 
 
@@ -161,7 +128,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     data = merged_entry_data(entry)
     target = entry_target(entry)
     if target is None:
-        raise HomeAssistantError("Invalid DHE host/port in config entry")
+        raise translated_homeassistant_error(
+            "Invalid DHE host/port in config entry",
+            translation_key="dhe_invalid_config_entry",
+        )
     reachable_target = await _async_first_reachable_entry_target(hass, entry, target)
     if reachable_target is None:
         name = str(data.get(CONF_NAME, entry.title or DEFAULT_NAME)).strip() or DEFAULT_NAME
@@ -221,7 +191,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise
     _async_cleanup_empty_legacy_devices(hass, entry, client.device_identifier)
     _async_clear_stale_sensor_statistic_issues(hass, entry)
-    _async_register_services(hass)
+    _async_register_services(hass, _resolve_runtime)
     _async_register_reauth_trigger(hass, entry, client)
     runtime.start_task = _start_client_background(hass, entry, client)
     entry.async_on_unload(task_cancel_callback(runtime.start_task))
@@ -721,162 +691,6 @@ async def _async_clear_issues_when_connected(
         _async_clear_stale_sensor_statistic_issues(hass, entry)
 
 
-def _async_register_services(hass: HomeAssistant) -> None:
-    """Register integration services once."""
-
-    async def _resolve_weather_location_for_service(
-        call: ServiceCall,
-        *,
-        unavailable_message: str,
-        missing_country_error: str,
-    ) -> tuple[DHEClient, dict[str, Any] | str]:
-        """Resolve one weather location payload from a service call."""
-        runtime = _resolve_runtime(hass, call.data.get(ATTR_ENTRY_ID))
-        client = runtime.client
-        raise_if_dhe_unavailable(
-            client,
-            unavailable_message,
-        )
-        data = call.data
-        results = await _weather_results_from_service_input(
-            client,
-            data,
-            missing_country_error=missing_country_error,
-        )
-        location = _select_weather_location(
-            client.last_weather_state,
-            results,
-            data.get(ATTR_LOCATION_ID),
-            data[ATTR_RESULT_NUMBER],
-            allow_raw_location_id=True,
-        )
-        return client, location
-
-    async def async_search_weather_location(call: ServiceCall) -> None:
-        runtime = _resolve_runtime(hass, call.data.get(ATTR_ENTRY_ID))
-        raise_if_dhe_unavailable(
-            runtime.client,
-            "DHE is unavailable; cannot search weather locations",
-        )
-        await _run_dhe_service_action(
-            runtime.client.search_weather_locations(
-                call.data[ATTR_NAME],
-                call.data[ATTR_COUNTRY_ID],
-            ),
-            "Could not search DHE weather locations",
-        )
-
-    async def async_toggle_weather_favorite(call: ServiceCall) -> None:
-        client, location = await _resolve_weather_location_for_service(
-            call,
-            unavailable_message="DHE is unavailable; cannot toggle weather favorite",
-            missing_country_error=(
-                "country_id is required when toggling a weather favorite by name"
-            ),
-        )
-        await _run_dhe_service_action(
-            client.toggle_weather_favorite(_weather_location_payload(location)),
-            "Could not toggle DHE weather favorite",
-        )
-
-    async def async_add_weather_favorite(call: ServiceCall) -> None:
-        client, location = await _resolve_weather_location_for_service(
-            call,
-            unavailable_message="DHE is unavailable; cannot add weather favorite",
-            missing_country_error=(
-                "country_id is required when adding a weather favorite by name"
-            ),
-        )
-        await _run_dhe_service_action(
-            client.add_weather_favorite(_weather_location_payload(location)),
-            "Could not add DHE weather favorite",
-        )
-
-    async def async_remove_weather_favorite(call: ServiceCall) -> None:
-        client, location = await _resolve_weather_location_for_service(
-            call,
-            unavailable_message="DHE is unavailable; cannot remove weather favorite",
-            missing_country_error=(
-                "country_id is required when removing a weather favorite by name"
-            ),
-        )
-        await _run_dhe_service_action(
-            client.remove_weather_favorite(_weather_location_payload(location)),
-            "Could not remove DHE weather favorite",
-        )
-
-    async def async_select_weather_location(call: ServiceCall) -> None:
-        client, location = await _resolve_weather_location_for_service(
-            call,
-            unavailable_message="DHE is unavailable; cannot select weather location",
-            missing_country_error=(
-                "country_id is required when selecting a weather location by name"
-            ),
-        )
-        await _run_dhe_service_action(
-            client.select_weather_location(location),
-            "Could not select DHE weather location",
-        )
-
-    service_registrations = (
-        (
-            SERVICE_SEARCH_WEATHER_LOCATION,
-            async_search_weather_location,
-            WEATHER_SEARCH_SCHEMA,
-        ),
-        (
-            SERVICE_ADD_WEATHER_FAVORITE,
-            async_add_weather_favorite,
-            WEATHER_ADD_FAVORITE_SCHEMA,
-        ),
-        (
-            SERVICE_TOGGLE_WEATHER_FAVORITE,
-            async_toggle_weather_favorite,
-            WEATHER_TOGGLE_FAVORITE_SCHEMA,
-        ),
-        (
-            SERVICE_REMOVE_WEATHER_FAVORITE,
-            async_remove_weather_favorite,
-            WEATHER_REMOVE_FAVORITE_SCHEMA,
-        ),
-        (
-            SERVICE_SELECT_WEATHER_LOCATION,
-            async_select_weather_location,
-            WEATHER_SELECT_LOCATION_SCHEMA,
-        ),
-    )
-    for service_name, service_handler, service_schema in service_registrations:
-        if hass.services.has_service(DOMAIN, service_name):
-            continue
-        hass.services.async_register(
-            DOMAIN,
-            service_name,
-            service_handler,
-            schema=service_schema,
-        )
-
-
-def _async_unregister_services(hass: HomeAssistant) -> None:
-    """Remove integration services when the last entry unloads."""
-    for service in (
-        SERVICE_SEARCH_WEATHER_LOCATION,
-        SERVICE_ADD_WEATHER_FAVORITE,
-        SERVICE_TOGGLE_WEATHER_FAVORITE,
-        SERVICE_REMOVE_WEATHER_FAVORITE,
-        SERVICE_SELECT_WEATHER_LOCATION,
-    ):
-        if hass.services.has_service(DOMAIN, service):
-            hass.services.async_remove(DOMAIN, service)
-
-
-async def _run_dhe_service_action(
-    action: Any,
-    failure_message: str,
-) -> Any:
-    """Run one DHE-backed HA service action and expose DHE failures to HA."""
-    return await run_dhe_action(action, failure_message)
-
-
 def _resolve_runtime(
     hass: HomeAssistant,
     entry_id: str | None = None,
@@ -884,80 +698,22 @@ def _resolve_runtime(
     """Resolve runtime by entry_id or infer it when only one entry exists."""
     runtimes = dict(iter_loaded_runtime_data(hass))
     if not runtimes:
-        raise HomeAssistantError("DHE Connect is not loaded")
+        raise translated_homeassistant_error(
+            "DHE Connect is not loaded",
+            translation_key="dhe_not_loaded",
+        )
     if entry_id:
         runtime = runtimes.get(entry_id)
         if runtime is None:
-            raise HomeAssistantError(f"DHE Connect entry_id not loaded: {entry_id}")
+            raise translated_homeassistant_error(
+                f"DHE Connect entry_id not loaded: {entry_id}",
+                translation_key="dhe_entry_not_loaded",
+                translation_placeholders={"entry_id": str(entry_id)},
+            )
         return cast(DHEConnectRuntimeData, runtime)
     if len(runtimes) == 1:
         return cast(DHEConnectRuntimeData, next(iter(runtimes.values())))
-    raise HomeAssistantError(
-        "Multiple DHE Connect devices are configured; set entry_id in the service call."
+    raise translated_homeassistant_error(
+        "Multiple DHE Connect devices are configured; set entry_id in the service call.",
+        translation_key="dhe_entry_id_required",
     )
-
-
-async def _weather_results_from_service_input(
-    client: DHEClient,
-    data: dict[str, Any],
-    *,
-    missing_country_error: str,
-) -> list[dict[str, Any]]:
-    """Resolve weather result candidates from service input."""
-    if data.get(ATTR_NAME):
-        if ATTR_COUNTRY_ID not in data:
-            raise HomeAssistantError(missing_country_error)
-        searched = await _run_dhe_service_action(
-            client.search_weather_locations(
-                data[ATTR_NAME],
-                data[ATTR_COUNTRY_ID],
-            ),
-            "Could not search DHE weather locations",
-        )
-        return _weather_locations(searched)
-    return _weather_locations(client.last_weather_state.get("forecast_results"))
-
-
-def _select_weather_location(
-    state: dict[str, Any],
-    results: list[dict[str, Any]],
-    location_id: str | None,
-    result_number: int,
-    *,
-    allow_raw_location_id: bool = False,
-) -> dict[str, Any] | str:
-    candidates = list(results)
-    candidates.extend(_weather_locations(state.get("favorites")))
-    current_location = state.get("location")
-    if isinstance(current_location, dict):
-        candidates.append(current_location)
-
-    if location_id:
-        for location in candidates:
-            if str(location.get("LocationId", "")) == str(location_id):
-                return location
-        if allow_raw_location_id:
-            return str(location_id)
-        raise HomeAssistantError(f"Weather location_id not found: {location_id}")
-
-    if result_number > len(results):
-        raise HomeAssistantError(
-            f"Weather search result {result_number} is not available"
-        )
-    return results[result_number - 1]
-
-
-def _weather_location_payload(location: dict[str, Any] | str) -> dict[str, Any]:
-    """Return a weather location payload with LocationId for client actions."""
-    if isinstance(location, dict):
-        return location
-    location_id = str(location or "").strip()
-    if not location_id:
-        raise HomeAssistantError("Weather location_id must not be empty")
-    return {"LocationId": location_id}
-
-
-def _weather_locations(value: Any) -> list[dict[str, Any]]:
-    if not isinstance(value, list):
-        return []
-    return [item for item in value if isinstance(item, dict)]

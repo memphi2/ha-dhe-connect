@@ -4,18 +4,66 @@ This document collects the checks used before merging release-prep or hardening
 work. The commands below do not publish a Git tag or GitHub release by
 themselves.
 
-## Release Validation Command Set (v1.8.0)
+## Release Validation Command Set (v1.8.1)
 
-Run this release gate before opening or finalizing a v1.8.0 release-prep pull
+Run this release gate before opening or finalizing a v1.8.1 release-prep pull
 request:
 
 ```bash
 python scripts/check_coverage.py
 python scripts/check_integration.py
+python scripts/check_deprecations.py
 python scripts/check_typing.py
 python -m ruff check custom_components/stiebel_dhe_connect tests scripts
 python scripts/release_check.py --run-local-checks --expect-tag absent --expect-github-release absent
 ```
+
+### README Badge Visibility Check
+
+Before finalizing the release-prep branch, verify that README badges resolve to the
+expected versions and links:
+
+```bash
+python3 - <<'PY'
+import json
+from pathlib import Path
+import urllib.request
+
+headers = {"User-Agent": "ha-dhe-connect-validation/1.0"}
+
+
+def fetch(url: str):
+    req = urllib.request.Request(url, headers=headers)
+    return urllib.request.urlopen(req, timeout=20)
+
+
+with Path("custom_components/stiebel_dhe_connect/manifest.json").open("r", encoding="utf-8") as f:
+    manifest = json.load(f)
+expected_release = manifest["version"]
+
+
+with fetch("https://github.com/memphi2/ha-dhe-connect/actions/workflows/validate.yml/badge.svg") as r:
+    assert r.status == 200
+
+with fetch("https://img.shields.io/github/v/tag/memphi2/ha-dhe-connect?sort=semver&label=release") as r:
+    badge = r.read().decode()
+    assert r.status == 200
+    assert f"release: v{expected_release}" in badge
+
+with fetch("https://api.github.com/repos/memphi2/ha-dhe-connect/releases/latest") as r:
+    payload = json.loads(r.read().decode())
+    assert payload.get("tag_name") == f"v{expected_release}"
+    assert payload.get("html_url", "").endswith(f"/releases/tag/v{expected_release}")
+
+print("README badge sightcheck: pass")
+PY
+```
+
+This check confirms:
+
+- the validate badge is reachable;
+- the release badge resolves with `v{expected_release}`;
+- the Releases page resolves to `https://github.com/memphi2/ha-dhe-connect/releases/tag/v{expected_release}`.
 
 What those checks cover:
 
@@ -34,6 +82,12 @@ What those checks cover:
   behavior.
 - Repository consistency, required files, translations, pinned validation
   actions, Python syntax and `client.py` size.
+- Deprecation hygiene for repository-owned Python, CI, README, changelog and
+  documentation files. This fails on deprecated APIs and warning-suppression
+  configuration instead of hiding warnings.
+- Pytest warning output remains visible in logs, but the GitHub annotation
+  plugin is disabled so third-party deprecations are not duplicated as
+  repository annotations.
 - Static type checks for the scoped integration, config/options flow, platform,
   command, runtime, transport and helper modules.
 - Ruff linting for integration code, tests and repository scripts.
@@ -55,9 +109,26 @@ should run without `--allow-dirty`.
 The GitHub `Validate` workflow runs HACS, Hassfest, pytest, repository checks,
 type checks and Ruff. Keep local results and CI results aligned before merging.
 
+### Latest v1.8.1 Local Gate Snapshot
+
+The current v1.8.1 release-prep documentation reflects this local gate:
+
+```text
+scripts/check_coverage.py: 681 passed, 96%
+scripts/check_integration.py: 601 tests, OK
+scripts/check_deprecations.py: deprecation guard ok
+scripts/check_typing.py: Success, 74 source files
+ruff: All checks passed
+release_check.py --run-local-checks --allow-dirty --expect-tag skip --expect-github-release skip: release check ok
+```
+
+The local warning summary currently comes from third-party dependencies. The
+repository guard is intended to prevent new owned deprecations or warning
+suppression from entering the project.
+
 ## Platinum Preparation
 
-For the active `v1.8.0` hardening branch, the local Platinum-oriented evidence
+For the active `v1.8.1` hardening branch, the local Platinum-oriented evidence
 and validation sequence are tracked in
 [docs/platinum_prep.md](docs/platinum_prep.md).
 
@@ -292,6 +363,8 @@ Current exclusions from the 95% line-coverage report:
   Assistant discovery-flow glue covered by HA fixtures.
 - `custom_components/stiebel_dhe_connect/config_flow_mapping.py` - options-flow
   selector glue covered by flow helper tests.
+- `custom_components/stiebel_dhe_connect/config_flow_options.py` - Home
+  Assistant options-flow orchestration glue covered by HA fixtures.
 - `custom_components/stiebel_dhe_connect/config_flow_schemas.py` - Home
   Assistant voluptuous schema glue covered by flow tests.
 - `custom_components/stiebel_dhe_connect/config_flow_setup.py` - Home Assistant
@@ -436,11 +509,35 @@ To monitor recorder churn, add a time window:
 python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log --monitor-seconds 90
 ```
 
+For release or performance evidence, use a longer idle window:
+
+```bash
+python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log --monitor-seconds 600 --require-idle --print-operational-signals
+```
+
+To keep a sanitized release/performance evidence artifact, add
+`--evidence-json`:
+
+```bash
+python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log --monitor-seconds 600 --require-idle --print-operational-signals --evidence-json /tmp/dhe-smoke-evidence.json
+```
+
+The evidence file records pass/fail status, redacted check messages, entity
+counts, monitor settings and recorder top writers. It intentionally omits local
+config paths, DHE hosts/IPs, token paths and credentials.
+
 Run the recorder monitor while the DHE is idle when validating database churn.
 If the device-status sensor reports water running (`status_2` or the observed
-transition state `status_4`), or if `Last usage duration` changes during the
-window, the smoke check treats the window as operational and skips idle
-recorder-write limits while still checking logs and reconnect stability.
+transition state `status_4`), if the error-status diagnostic attributes carry
+that device status, or if `Last usage duration` changes during the window, the
+smoke check treats the window as operational and skips idle recorder-write
+limits while still checking logs and reconnect stability.
+Use `--require-idle` for a strict idle recorder gate. If water use or completed
+usage is detected, the run fails and `--print-operational-signals` reports the
+entity state or `device_status` attribute that made the window operational.
+If the entity registry contains DHE entries but none are enabled, the smoke
+fails instead of using recorder fallback data. That catches stale/unloaded
+integration states that otherwise look like a noisy recorder-only problem.
 
 ## Live HA API Smoke
 

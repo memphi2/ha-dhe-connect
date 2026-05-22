@@ -221,7 +221,7 @@ class TestTemperatureMemoryText(unittest.TestCase):
             available = False
             last_measurement_attributes = {}
 
-            def add_measurement_callback(self, _callback):
+            def add_measurement_callback(self, _callback, *, replay=True):
                 return lambda: None
 
             def add_availability_callback(self, _callback):

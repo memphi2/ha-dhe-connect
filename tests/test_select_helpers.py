@@ -160,6 +160,8 @@ class TestSelectHelpers(unittest.IsolatedAsyncioTestCase):
 
     async def test_unavailable_select_action_raises_without_client_call(self) -> None:
         select_module = _load_select_module()
+        from homeassistant.exceptions import HomeAssistantError
+
         location = {"Name": "Berlin", "Country": "Germany", "LocationId": "ID=1"}
         select_weather_location = AsyncMock(return_value=True)
         client = types.SimpleNamespace(
@@ -177,7 +179,7 @@ class TestSelectHelpers(unittest.IsolatedAsyncioTestCase):
         entity._locations_by_option = {"Berlin, Germany": location}
 
         with self.assertRaisesRegex(
-            select_module.HomeAssistantError,
+            HomeAssistantError,
             "DHE is unavailable",
         ):
             await entity.async_select_option("Berlin, Germany")

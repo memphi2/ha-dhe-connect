@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
+from copy import deepcopy
 from typing import Any
 
 CONF_INTERNAL_SCALD_PROTECTION = "internal_scald_protection"
@@ -209,3 +210,28 @@ def merge_state_attributes(
     if isinstance(dynamic, Mapping):
         attributes.update(dynamic)
     return attributes
+
+
+def filtered_state_attributes(
+    attributes: Mapping[str, Any] | None,
+    hidden_keys: Iterable[str],
+    *,
+    copy_collections: bool = False,
+) -> dict[str, Any]:
+    """Return state attributes after removing keys that should not hit recorder."""
+    if not isinstance(attributes, Mapping):
+        return {}
+    hidden = (
+        hidden_keys
+        if isinstance(hidden_keys, (set, frozenset))
+        else frozenset(hidden_keys)
+    )
+    return {
+        key: (
+            deepcopy(value)
+            if copy_collections and isinstance(value, (dict, list, tuple, set))
+            else value
+        )
+        for key, value in attributes.items()
+        if key not in hidden
+    }

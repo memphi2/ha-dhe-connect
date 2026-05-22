@@ -14,15 +14,18 @@ if TYPE_CHECKING:
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .action_error_helpers import dhe_action_error, raise_if_dhe_unavailable
+from .action_error_helpers import (
+    dhe_action_error,
+    raise_if_dhe_unavailable,
+    translated_homeassistant_error,
+)
 from .client import DHEClient
 from .client_types import DHEError
 from .entity_helpers import StiebelDHEEntityMixin
-from .entity_state_helpers import connected_and_ready
+from .entity_state_helpers import connected_and_ready, filtered_state_attributes
 from . import radio_mapping as radio
 from .runtime_helpers import get_runtime_data
 
@@ -185,7 +188,11 @@ class StiebelDHERadioMediaPlayer(
         )
         station = self._sources_by_option.get(source)
         if station is None:
-            raise HomeAssistantError(f"Unknown DHE radio source: {source}")
+            raise translated_homeassistant_error(
+                f"Unknown DHE radio source: {source}",
+                translation_key="dhe_unknown_radio_source",
+                translation_placeholders={"source": str(source)},
+            )
         try:
             await self._client.select_radio_station(station)
         except DHEError as err:
@@ -231,7 +238,10 @@ class StiebelDHERadioMediaPlayer(
         )
         sources = list(self._sources_by_option)
         if not sources:
-            raise HomeAssistantError("No DHE radio favorites available")
+            raise translated_homeassistant_error(
+                "No DHE radio favorites available",
+                translation_key="dhe_no_radio_favorites",
+            )
         current_index = self._current_source_index(sources)
         if current_index < 0:
             next_source = sources[-1] if offset < 0 else sources[0]
@@ -304,13 +314,10 @@ class StiebelDHERadioMediaPlayer(
 
     def _recorded_radio_attributes(self) -> dict[str, Any]:
         """Return radio attributes that should participate in recorder writes."""
-        return {
-            key: value
-            for key, value in (
-                getattr(self, "_attr_extra_state_attributes", None) or {}
-            ).items()
-            if key not in self._unrecorded_attributes
-        }
+        return filtered_state_attributes(
+            getattr(self, "_attr_extra_state_attributes", None),
+            self._unrecorded_attributes,
+        )
 
     def _apply_radio_state(self, state: dict[str, Any]) -> None:
         if state:

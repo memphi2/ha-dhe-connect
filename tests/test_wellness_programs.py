@@ -140,6 +140,152 @@ class TestWellnessPrograms(unittest.TestCase):
         self.assertEqual(entity._attr_extra_state_attributes["cold_temperature"], 20.0)
         entity.async_write_ha_state.assert_called_once()
 
+        entity._handle_wellness_programs_update((
+            {
+                "id": 1,
+                "name": "Erkältungsvorbeugung",
+                "coldwater": True,
+                "hot_temperature": 42.0,
+                "cold_temperature": 20.0,
+            },
+        ))
+
+        entity.async_write_ha_state.assert_called_once()
+
+    def test_odb_switch_suppresses_redundant_state_writes(self) -> None:
+        _load_component_module("client_types")
+        _load_component_module("entity_helpers")
+        _load_component_module("entity_state_helpers")
+        _load_component_module("protocol")
+        _load_component_module("runtime_helpers")
+        _load_component_module("wellness_programs")
+        switch_module = _load_component_module("switch")
+        description = switch_module.ODB_SWITCHES[0]
+        client = types.SimpleNamespace(
+            host="dhe.local",
+            port=8443,
+            legacy_device_identifier=None,
+            available=True,
+        )
+        entity = switch_module.StiebelDHEODBSwitch(
+            entry_id="entry",
+            name="DHE",
+            client=client,
+            description=description,
+        )
+        entity.async_write_ha_state = Mock()
+
+        entity._handle_measurement_update(description.measurement_id, 1)
+        entity._handle_measurement_update(description.measurement_id, 1)
+        entity._handle_measurement_update(description.measurement_id, 0)
+
+        self.assertEqual(entity.async_write_ha_state.call_count, 2)
+
+    def test_odb_switch_writes_cached_startup_measurement_after_availability(
+        self,
+    ) -> None:
+        _load_component_module("client_types")
+        _load_component_module("entity_helpers")
+        _load_component_module("entity_state_helpers")
+        _load_component_module("protocol")
+        _load_component_module("runtime_helpers")
+        _load_component_module("wellness_programs")
+        switch_module = _load_component_module("switch")
+        description = switch_module.ODB_SWITCHES[0]
+
+        class _Client:
+            host = "dhe.local"
+            port = 8443
+            legacy_device_identifier = None
+            available = True
+            last_measurements = {description.measurement_id: 1}
+
+            def add_measurement_callback(self, _callback, *, replay=True):
+                self.measurement_replay = replay
+                return lambda: None
+
+            def add_availability_callback(self, callback):
+                callback(True)
+                return lambda: None
+
+        client = _Client()
+        entity = switch_module.StiebelDHEODBSwitch(
+            entry_id="entry",
+            name="DHE",
+            client=client,
+            description=description,
+        )
+        entity.async_on_remove = lambda _remove: None
+        entity.async_get_last_state = AsyncMock(return_value=None)
+        entity.async_write_ha_state = Mock()
+
+        asyncio.run(entity.async_added_to_hass())
+
+        self.assertFalse(client.measurement_replay)
+        self.assertTrue(entity._attr_is_on)
+        self.assertTrue(entity._attr_available)
+        self.assertEqual(entity.async_write_ha_state.call_count, 2)
+
+    def test_binary_sensor_suppresses_redundant_state_writes(self) -> None:
+        _load_component_module("client_types")
+        _load_component_module("entity_helpers")
+        _load_component_module("entity_state_helpers")
+        _load_component_module("protocol")
+        _load_component_module("runtime_helpers")
+        binary_sensor_module = _load_component_module("binary_sensor")
+        description = binary_sensor_module.BINARY_SENSOR_DESCRIPTIONS[0]
+        client = types.SimpleNamespace(
+            host="dhe.local",
+            port=8443,
+            legacy_device_identifier=None,
+            available=True,
+            last_measurements={},
+            _last_measurement_attributes={},
+        )
+        entity = binary_sensor_module.StiebelDHEBinarySensor(
+            entry_id="entry",
+            name="DHE",
+            client=client,
+            description=description,
+        )
+        entity.async_write_ha_state = Mock()
+
+        entity._handle_measurement_update(description.odb_id, 1)
+        entity._handle_measurement_update(description.odb_id, 1)
+        entity._handle_measurement_update(description.odb_id, 0)
+
+        self.assertEqual(entity.async_write_ha_state.call_count, 2)
+
+    def test_button_suppresses_redundant_availability_writes(self) -> None:
+        _load_component_module("client_types")
+        _load_component_module("entity_helpers")
+        _load_component_module("entity_state_helpers")
+        _load_component_module("protocol")
+        _load_component_module("runtime_helpers")
+        button_module = _load_component_module("button")
+        description = button_module.STATIC_BUTTON_DESCRIPTIONS[0]
+        client = types.SimpleNamespace(
+            host="dhe.local",
+            port=8443,
+            legacy_device_identifier=None,
+            available=True,
+            last_measurements={},
+        )
+        entity = button_module.StiebelDHEButton(
+            entry_id="entry",
+            name="DHE",
+            client=client,
+            description=description,
+        )
+        entity.async_write_ha_state = Mock()
+
+        entity._handle_measurement_update(description.availability_measurement_id, 1)
+        entity._handle_measurement_update(description.availability_measurement_id, 1)
+        entity._handle_availability_update(True)
+        entity._handle_availability_update(False)
+
+        self.assertEqual(entity.async_write_ha_state.call_count, 2)
+
     def test_wellness_switch_descriptions_match_fallback_catalog(self) -> None:
         _load_component_module("client_types")
         _load_component_module("entity_helpers")
@@ -182,7 +328,7 @@ class TestWellnessPrograms(unittest.TestCase):
             available = False
             last_measurements = {}
 
-            def add_measurement_callback(self, _callback):
+            def add_measurement_callback(self, _callback, *, replay=True):
                 return lambda: None
 
             def add_availability_callback(self, _callback):
@@ -198,11 +344,13 @@ class TestWellnessPrograms(unittest.TestCase):
         entity.async_get_last_state = AsyncMock(
             return_value=types.SimpleNamespace(state="off")
         )
+        entity.async_write_ha_state = Mock()
 
         asyncio.run(entity.async_added_to_hass())
 
         self.assertFalse(entity._attr_is_on)
         self.assertFalse(entity._attr_available)
+        entity.async_write_ha_state.assert_called_once()
 
 
 if __name__ == "__main__":

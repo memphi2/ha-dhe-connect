@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from typing import Any
 import sys
 import types
@@ -41,6 +42,62 @@ def ensure_homeassistant_stubs() -> None:
             if not hasattr(existing, attr_name):
                 setattr(existing, attr_name, attr_value)
 
+    def _install_switch_component(components: types.ModuleType) -> None:
+        switch = _module("homeassistant.components.switch")
+
+        class SwitchEntity:
+            pass
+
+        @dataclass(frozen=True, kw_only=True)
+        class SwitchEntityDescription:
+            key: str | None = None
+            name: str | None = None
+            translation_key: str | None = None
+            icon: str | None = None
+            entity_category: str | None = None
+
+        switch.SwitchEntity = SwitchEntity
+        switch.SwitchEntityDescription = SwitchEntityDescription
+        components.switch = switch
+
+    def _install_binary_sensor_component(components: types.ModuleType) -> None:
+        binary_sensor = _module("homeassistant.components.binary_sensor")
+
+        class BinarySensorEntity:
+            pass
+
+        @dataclass(frozen=True, kw_only=True)
+        class BinarySensorEntityDescription:
+            key: str | None = None
+            name: str | None = None
+            translation_key: str | None = None
+            icon: str | None = None
+            device_class: str | None = None
+            entity_category: str | None = None
+            entity_registry_enabled_default: bool = True
+
+        binary_sensor.BinarySensorEntity = BinarySensorEntity
+        binary_sensor.BinarySensorEntityDescription = BinarySensorEntityDescription
+        components.binary_sensor = binary_sensor
+
+    def _install_button_component(components: types.ModuleType) -> None:
+        button = _module("homeassistant.components.button")
+
+        class ButtonEntity:
+            pass
+
+        @dataclass(frozen=True, kw_only=True)
+        class ButtonEntityDescription:
+            key: str | None = None
+            name: str | None = None
+            translation_key: str | None = None
+            icon: str | None = None
+            entity_registry_enabled_default: bool = True
+
+        button.ButtonEntity = ButtonEntity
+        button.ButtonEntityDescription = ButtonEntityDescription
+        components.button = button
+
     if "homeassistant" in sys.modules:
         homeassistant = sys.modules["homeassistant"]
         if not hasattr(homeassistant, "__path__"):
@@ -68,6 +125,13 @@ def ensure_homeassistant_stubs() -> None:
             "UnitOfVolumeFlowRate",
             {"LITERS_PER_MINUTE": "L/min", "CUBIC_METERS_PER_HOUR": "m3/h"},
         )
+        if not hasattr(const, "EntityCategory"):
+
+            class EntityCategory:
+                CONFIG = "config"
+                DIAGNOSTIC = "diagnostic"
+
+            const.EntityCategory = EntityCategory
 
         if not hasattr(const, "Platform"):
 
@@ -122,8 +186,6 @@ def ensure_homeassistant_stubs() -> None:
             diagnostics.async_redact_data = async_redact_data
             components.diagnostics = diagnostics
         if not hasattr(components, "sensor"):
-            from dataclasses import dataclass, field
-
             sensor = _module("homeassistant.components.sensor")
 
             class SensorDeviceClass:
@@ -194,24 +256,13 @@ def ensure_homeassistant_stubs() -> None:
             components.climate = climate
 
         if not hasattr(components, "switch"):
-            from dataclasses import dataclass
+            _install_switch_component(components)
 
-            switch = _module("homeassistant.components.switch")
+        if not hasattr(components, "binary_sensor"):
+            _install_binary_sensor_component(components)
 
-            class SwitchEntity:
-                pass
-
-            @dataclass(frozen=True, kw_only=True)
-            class SwitchEntityDescription:
-                key: str | None = None
-                name: str | None = None
-                translation_key: str | None = None
-                icon: str | None = None
-                entity_category: str | None = None
-
-            switch.SwitchEntity = SwitchEntity
-            switch.SwitchEntityDescription = SwitchEntityDescription
-            components.switch = switch
+        if not hasattr(components, "button"):
+            _install_button_component(components)
 
         helpers = sys.modules.get("homeassistant.helpers")
         if helpers is None:
@@ -358,8 +409,6 @@ def ensure_homeassistant_stubs() -> None:
     class SensorEntity:
         pass
 
-    from dataclasses import dataclass, field
-
     @dataclass(frozen=True, kw_only=True)
     class SensorEntityDescription:
         """Minimal stand-in for HA SensorEntityDescription.
@@ -413,22 +462,9 @@ def ensure_homeassistant_stubs() -> None:
     climate_const.HVACMode = HVACMode
     components.climate = climate
 
-    switch = _module("homeassistant.components.switch")
-
-    class SwitchEntity:
-        pass
-
-    @dataclass(frozen=True, kw_only=True)
-    class SwitchEntityDescription:
-        key: str | None = None
-        name: str | None = None
-        translation_key: str | None = None
-        icon: str | None = None
-        entity_category: str | None = None
-
-    switch.SwitchEntity = SwitchEntity
-    switch.SwitchEntityDescription = SwitchEntityDescription
-    components.switch = switch
+    _install_switch_component(components)
+    _install_binary_sensor_component(components)
+    _install_button_component(components)
 
     # constants
     const = _module("homeassistant.const")
@@ -469,6 +505,12 @@ def ensure_homeassistant_stubs() -> None:
     const.UnitOfTime = _Time
     const.UnitOfVolume = _Volume
     const.UnitOfVolumeFlowRate = _VolumeFlowRate
+    class EntityCategory:
+        CONFIG = "config"
+        DIAGNOSTIC = "diagnostic"
+
+    const.EntityCategory = EntityCategory
+
     class Platform(str):
         BINARY_SENSOR = "binary_sensor"
         CLIMATE = "climate"

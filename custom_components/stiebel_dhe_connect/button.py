@@ -216,11 +216,15 @@ class StiebelDHEButton(StiebelDHEEntityMixin, ButtonEntity):
         self._attr_extra_state_attributes = extra_state_attributes
         self._attr_available = False
         self._has_seen_availability_state = False
+        self._last_written_button_signature: tuple[Any, ...] | None = None
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to availability updates and start the persistent session."""
         self.async_on_remove(
-            self._client.add_measurement_callback(self._handle_measurement_update)
+            self._client.add_measurement_callback(
+                self._handle_measurement_update,
+                replay=False,
+            )
         )
         self.async_on_remove(
             self._client.add_availability_callback(self._handle_availability_update)
@@ -241,7 +245,7 @@ class StiebelDHEButton(StiebelDHEEntityMixin, ButtonEntity):
             return
         self._has_seen_availability_state = value is not None
         self._attr_available = self._button_available(self._client.available)
-        self.async_write_ha_state()
+        self._write_button_state()
 
     async def async_press(self) -> None:
         """Execute the DHE button action."""
@@ -263,11 +267,27 @@ class StiebelDHEButton(StiebelDHEEntityMixin, ButtonEntity):
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
         self._attr_available = self._button_available(available)
-        self.async_write_ha_state()
+        self._write_button_state(force=not available)
 
     def _button_available(self, client_available: bool) -> bool:
         return _button_available(
             self.entity_description,
             client_available=client_available,
             has_seen_availability_state=self._has_seen_availability_state,
+        )
+
+    def _write_button_state(self, *, force: bool = False) -> bool:
+        """Write button state only when visible availability changed."""
+        signature = self._button_write_signature()
+        if not force and signature == self._last_written_button_signature:
+            return False
+        self._last_written_button_signature = signature
+        self.async_write_ha_state()
+        return True
+
+    def _button_write_signature(self) -> tuple[Any, ...]:
+        """Return stable button fields that should trigger a state write."""
+        return (
+            self._attr_available,
+            dict(self._attr_extra_state_attributes or {}),
         )

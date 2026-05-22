@@ -475,6 +475,10 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
             client_a._pairing_confirmation_notification_id,
             client_b._pairing_confirmation_notification_id,
         )
+        target_fragment = client_a._pairing_notification_id.rsplit("_", 1)[-1]
+        self.assertNotIn("dhe", target_fragment)
+        self.assertNotIn("local", target_fragment)
+        self.assertNotIn("8443", target_fragment)
 
     async def test_notify_pairing_progress_cleans_up_legacy_pairing_notifications(
         self,
@@ -506,8 +510,8 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(
             async_dismiss.call_count,
-            3,
-            "Expected legacy and scoped pairing confirmation notifications to be dismissed",
+            5,
+            "Expected legacy and scoped pairing notifications to be dismissed",
         )
         async_dismiss.assert_any_call(
             client.hass,
@@ -515,7 +519,15 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         )
         async_dismiss.assert_any_call(
             client.hass,
+            client._legacy_pairing_confirmation_notification_id_with_port,
+        )
+        async_dismiss.assert_any_call(
+            client.hass,
             client._legacy_pairing_notification_id,
+        )
+        async_dismiss.assert_any_call(
+            client.hass,
+            client._legacy_pairing_notification_id_with_port,
         )
         async_dismiss.assert_any_call(
             client.hass,

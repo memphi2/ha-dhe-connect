@@ -627,6 +627,7 @@ class TestReleaseCheck(unittest.TestCase):
         self.assertTrue(all(result.ok for result in results), results)
         self.assertIn((sys.executable, "scripts/check_typing.py"), commands)
         self.assertIn((sys.executable, "scripts/check_coverage.py"), commands)
+        self.assertIn((sys.executable, "scripts/check_deprecations.py"), commands)
         self.assertIn(
             (sys.executable, "-m", "pytest", "tests/test_diagnostics.py", "-q"),
             commands,

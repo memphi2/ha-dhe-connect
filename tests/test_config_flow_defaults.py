@@ -399,6 +399,95 @@ class TestDeviceSettingsDefaults(_RestoresImportModules, unittest.TestCase):
         self.assertEqual(defaults[self.config_flow.ATTR_CO2_EMISSION], "")
 
 
+class TestDiscoveryDisplayNames(_RestoresImportModules, unittest.TestCase):
+    """Validate user-facing names derived from discovery payloads."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.config_flow = _load_config_flow()
+
+    def test_discovery_name_prefers_device_property(self) -> None:
+        info = types.SimpleNamespace(
+            name="_ste-dhe._tcp.local.",
+            hostname="dhe-ja06.local.",
+            host="192.0.2.124",
+            ip_address="192.0.2.124",
+            properties={b"name": b"Bathroom DHE"},
+        )
+
+        self.assertEqual(self.config_flow._discovery_info_name(info), "Bathroom DHE")
+
+    def test_discovery_name_ignores_technical_domain_fallback(self) -> None:
+        info = types.SimpleNamespace(
+            name="stiebel_dhe_connect",
+            hostname=None,
+            host="dhe-ja06.local.",
+            ip_address="192.0.2.124",
+            properties={},
+        )
+
+        self.assertEqual(self.config_flow._discovery_info_name(info), "dhe-ja06")
+
+    def test_discovery_name_uses_per_target_ip_fallback(self) -> None:
+        info = types.SimpleNamespace(
+            name="_ste-dhe._tcp.local.",
+            hostname=None,
+            host="192.0.2.124",
+            ip_address="192.0.2.124",
+            properties={},
+        )
+
+        self.assertEqual(
+            self.config_flow._discovery_info_name(info),
+            f"{self.config_flow.DEFAULT_NAME} 192.0.2.124",
+        )
+
+    def test_discovery_name_uses_server_after_technical_name(self) -> None:
+        info = types.SimpleNamespace(
+            name="_ste-dhe._tcp.local.",
+            server="Bathroom DHE._STE-DHE._TCP.local.",
+            hostname="dhe-ja06.local.",
+            host="192.0.2.124",
+            ip_address="192.0.2.124",
+            properties={},
+        )
+
+        self.assertEqual(self.config_flow._discovery_info_name(info), "Bathroom DHE")
+
+    def test_discovery_name_decodes_bytes_host_fallback(self) -> None:
+        info = types.SimpleNamespace(
+            name="stiebel_dhe_connect",
+            hostname=None,
+            host=b"dhe-ja06.local.",
+            ip_address="192.0.2.124",
+            properties={},
+        )
+
+        self.assertEqual(self.config_flow._discovery_info_name(info), "dhe-ja06")
+
+    def test_discovery_name_collapses_whitespace(self) -> None:
+        info = types.SimpleNamespace(
+            name="_ste-dhe._tcp.local.",
+            hostname=None,
+            host="192.0.2.124",
+            ip_address="192.0.2.124",
+            properties={b"name": b"Bathroom\n\tDHE"},
+        )
+
+        self.assertEqual(self.config_flow._discovery_info_name(info), "Bathroom DHE")
+
+    def test_discovery_name_limits_overlong_labels(self) -> None:
+        info = types.SimpleNamespace(
+            name="_ste-dhe._tcp.local.",
+            hostname=None,
+            host="192.0.2.124",
+            ip_address="192.0.2.124",
+            properties={b"name": b"DHE " + b"x" * 120},
+        )
+
+        self.assertEqual(len(self.config_flow._discovery_info_name(info)), 80)
+
+
 class TestDeviceSettingsOptionsFlow(
     _RestoresImportModules,
     unittest.IsolatedAsyncioTestCase,
@@ -709,6 +798,20 @@ class TestSetupScanConfigFlow(
                 self.config_flow.SETUP_MODE_MANUAL,
             ],
         )
+
+    async def test_discovered_setup_sets_title_placeholder(self) -> None:
+        self.config_flow._can_connect = AsyncMock(return_value=True)
+        self.flow.context = {}
+
+        result = await self.flow._async_start_discovered_setup(
+            "192.0.2.124",
+            8443,
+            "DHE-JA06",
+        )
+
+        self.assertEqual(result["type"], "form")
+        self.assertEqual(result["step_id"], "zeroconf_confirm")
+        self.assertEqual(self.flow.context["title_placeholders"], {"name": "DHE-JA06"})
 
     async def test_user_step_ignores_non_zeroconf_progress_contexts(self) -> None:
         self._flow_manager.progress = [

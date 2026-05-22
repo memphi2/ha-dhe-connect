@@ -271,7 +271,8 @@ If reconnects keep increasing:
 
 Support diagnostics include the anonymized reconnect-supervisor state: attempts,
 delay configuration, grace-window state and whether entities should already be
-marked unavailable. This does not expose host, token or credential data.
+marked unavailable. This does not expose host, IPv4/IPv6, token, credential or
+session data.
 
 ## Live Sensors Are Empty
 
@@ -342,16 +343,42 @@ operational windows:
 python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log --monitor-seconds 90
 ```
 
+For release or performance evidence, prefer a longer idle window:
+
+```bash
+python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log --monitor-seconds 600 --require-idle --print-operational-signals
+```
+
+For sanitized release/performance evidence, write the same run to JSON:
+
+```bash
+python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log --monitor-seconds 600 --require-idle --print-operational-signals --evidence-json /tmp/dhe-smoke-evidence.json
+```
+
+The JSON evidence contains summarized checks, entity counts, monitor settings
+and recorder top writers only. It does not persist local config paths, tokens,
+token paths, hosts, IPv4/IPv6 addresses or session identifiers.
+
 Run the monitor while the DHE is idle when validating database churn. If the
 device-status sensor reports water running (`status_2` or the observed
-transition state `status_4`), or if `Last usage duration` changes during the
-monitor window, the smoke check treats the window as operational and skips idle
-write thresholds. It still checks logs and reconnect stability.
+transition state `status_4`), if the error-status diagnostic attributes carry
+that device status, or if `Last usage duration` changes during the monitor
+window, the smoke check treats the window as operational and skips idle write
+thresholds. It still checks logs and reconnect stability.
+Use `--require-idle` when you explicitly want a clean idle database-growth
+measurement. In that mode, any detected water use or completed-usage signal
+fails the run and prints the responsible entity or `device_status` attribute
+when `--print-operational-signals` is set.
 
 Expected operational writers during water use include current flow, current
 power, live temperature, consumption and saving-monitor entities. Unexpected idle
 writers should be investigated from the top-writer list printed by the smoke
 check.
+
+The climate entity intentionally no longer exposes inlet/outlet temperatures as
+normal attributes. Those high-churn values have dedicated temperature sensors;
+the climate entity only writes control-state changes such as target temperature,
+HVAC mode, availability and the target-below-inlet transition.
 
 Numeric sensor write filters suppress small jitter, but current flow and current
 power still publish visible runtime changes of at least `0.2` and every
@@ -462,9 +489,9 @@ logger:
 Then restart Home Assistant or reload logging. Disable debug logging again after
 capturing the problem so large protocol payloads do not fill logs.
 
-Validation helpers redact private host, token and credential context from their
-own output, but Home Assistant backups and raw `.storage` files can still contain
-sensitive data. Treat them as private.
+Validation helpers redact private host, IPv4/IPv6, token, credential and
+session context from their own output, but Home Assistant backups and raw
+`.storage` files can still contain sensitive data. Treat them as private.
 
 ## Development Smoke Checks
 
@@ -476,6 +503,11 @@ For a mounted Home Assistant test configuration:
 ```bash
 python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log
 ```
+
+If the mounted entity registry contains DHE entries but none are enabled, the
+smoke fails instead of silently trusting stale recorder fallback data. That
+usually means Home Assistant has not loaded the integration correctly, or the
+registry state is not representative for a live validation run.
 
 For live service smoke against a test instance:
 

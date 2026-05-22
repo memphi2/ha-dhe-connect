@@ -301,7 +301,10 @@ The DHE web interface names the relevant diagnostic ODB entries as `ODB_Heizen_E
 
 To keep Home Assistant recorder growth under control, the integration throttles high-churn telemetry:
 
-- Climate inlet/outlet telemetry writes only when the temperature changes by at least `0.5 C`, or after `120` seconds without a write.
+- Climate does not expose inlet/outlet telemetry as recorder-visible attributes;
+  those values use dedicated temperature sensors. Climate writes only when its
+  control state changes, including setpoint, HVAC mode, availability, dynamic
+  max temperature or the `setpoint_below_inlet_temperature` transition.
 - Current water flow and current power write every visible runtime change of at least `0.2` in their native units, and they always write transitions between idle `0` and a non-zero value. This keeps live dashboards responsive without writing every tiny device jitter value.
 - Timer remaining values and bath-fill volumes are intentionally not write-filtered because they are user-facing live values.
 - Saving-monitor sensors update only for the category received from the DHE command (`consumption`, `possible`, `real` or `ActivationRate`) instead of refreshing every saving-monitor sensor on every message.

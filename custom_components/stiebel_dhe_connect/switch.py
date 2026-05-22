@@ -211,11 +211,15 @@ class StiebelDHEBaseSwitch(StiebelDHEEntityMixin, SwitchEntity, RestoreEntity):
         )
         self._attr_available = False
         self._attr_is_on: bool | None = None
+        self._last_written_switch_signature: tuple[Any, ...] | None = None
 
     def _subscribe_to_switch_updates(self) -> None:
         """Subscribe to common switch update callbacks."""
         self.async_on_remove(
-            self._client.add_measurement_callback(self._handle_measurement_update)
+            self._client.add_measurement_callback(
+                self._handle_measurement_update,
+                replay=False,
+            )
         )
         self.async_on_remove(
             self._client.add_availability_callback(self._handle_availability_update)
@@ -225,14 +229,14 @@ class StiebelDHEBaseSwitch(StiebelDHEEntityMixin, SwitchEntity, RestoreEntity):
         """Handle a measurement update in concrete switch subclasses."""
         raise NotImplementedError
 
-    async def _restore_state_from_measurement(self, measurement_id: int) -> None:
+    async def _restore_state_from_measurement(self, measurement_id: int) -> bool:
         """Restore switch state from the latest client value or HA state."""
         last_value = self._client.last_measurements.get(measurement_id)
         if last_value is not None:
             self._set_switch_state_from_value(last_value)
-            return
+            return True
 
-        await self._restore_last_switch_state()
+        return await self._restore_last_switch_state()
 
     async def _restore_last_switch_state(self) -> bool:
         """Restore switch state from Home Assistant's last stored state."""
@@ -258,7 +262,25 @@ class StiebelDHEBaseSwitch(StiebelDHEEntityMixin, SwitchEntity, RestoreEntity):
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
         self._attr_available = value_available(available, self._attr_is_on)
+        self._write_switch_state()
+
+    def _write_switch_state(self, *, force: bool = False) -> bool:
+        """Write switch state only when visible state changed."""
+        signature = self._switch_write_signature()
+        if not force and signature == self._last_written_switch_signature:
+            return False
+        self._last_written_switch_signature = signature
         self.async_write_ha_state()
+        return True
+
+    def _switch_write_signature(self) -> tuple[Any, ...]:
+        """Return stable switch fields that should trigger a state write."""
+        return (
+            getattr(self, "_attr_available", False),
+            getattr(self, "_attr_is_on", None),
+            getattr(self, "_attr_name", None),
+            dict(getattr(self, "_attr_extra_state_attributes", None) or {}),
+        )
 
 
 class StiebelDHEODBSwitch(StiebelDHEBaseSwitch):
@@ -285,9 +307,10 @@ class StiebelDHEODBSwitch(StiebelDHEBaseSwitch):
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE updates and restore last known state."""
         self._subscribe_to_switch_updates()
-        await self._restore_state_from_measurement(
+        if await self._restore_state_from_measurement(
             self.entity_description.measurement_id
-        )
+        ):
+            self._write_switch_state()
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         await self._set_enabled(
@@ -318,13 +341,13 @@ class StiebelDHEODBSwitch(StiebelDHEBaseSwitch):
             self._attr_is_on = bool(await setter(*setter_args))
         except DHEError as err:
             self._attr_available = self._switch_available()
-            self.async_write_ha_state()
+            self._write_switch_state()
             raise dhe_action_error(
                 f"Could not {action} DHE switch {self.entity_description.key}",
                 err,
             ) from err
         self._attr_available = True
-        self.async_write_ha_state()
+        self._write_switch_state()
 
     @callback
     def _handle_measurement_update(self, odb_id: int, value: ODBValue) -> None:
@@ -332,7 +355,7 @@ class StiebelDHEODBSwitch(StiebelDHEBaseSwitch):
         if odb_id != self.entity_description.measurement_id:
             return
         self._set_switch_state_from_value(value)
-        self.async_write_ha_state()
+        self._write_switch_state()
 
 
 class StiebelDHEAppTimerSwitch(StiebelDHEBaseSwitch):
@@ -362,9 +385,10 @@ class StiebelDHEAppTimerSwitch(StiebelDHEBaseSwitch):
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE updates and restore last known state."""
         self._subscribe_to_switch_updates()
-        await self._restore_state_from_measurement(
+        if await self._restore_state_from_measurement(
             self.entity_description.measurement_id
-        )
+        ):
+            self._write_switch_state()
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         await self._set_enabled(True)
@@ -382,20 +406,20 @@ class StiebelDHEAppTimerSwitch(StiebelDHEBaseSwitch):
             self._attr_is_on = await setter(enabled)
         except DHEError as err:
             self._attr_available = self._switch_available()
-            self.async_write_ha_state()
+            self._write_switch_state()
             raise dhe_action_error(
                 f"Could not set DHE app timer {self.entity_description.key}",
                 err,
             ) from err
         self._attr_available = True
-        self.async_write_ha_state()
+        self._write_switch_state()
 
     @callback
     def _handle_measurement_update(self, odb_id: int, value: ODBValue) -> None:
         if odb_id != self.entity_description.measurement_id:
             return
         self._set_switch_state_from_value(value)
-        self.async_write_ha_state()
+        self._write_switch_state()
 
 
 class StiebelDHEWellnessShowerProgramSwitch(
@@ -445,6 +469,7 @@ class StiebelDHEWellnessShowerProgramSwitch(
         last_program_value = self._client.last_measurements.get(
             ID_WELLNESS_SHOWER_PROGRAM
         )
+        restored = False
         if last_program_value is not None:
             self._last_program_value = last_program_value
             self._attr_is_on = wellness_program_switch_state(
@@ -453,8 +478,11 @@ class StiebelDHEWellnessShowerProgramSwitch(
                 self.entity_description.program_id,
             )
             self._attr_available = self._switch_available()
+            restored = True
         else:
-            await self._restore_last_switch_state()
+            restored = await self._restore_last_switch_state()
+        if restored:
+            self._write_switch_state()
 
     def _program_attributes(self) -> dict[str, Any]:
         """Return state attributes for the active DHE wellness catalog entry."""
@@ -500,13 +528,13 @@ class StiebelDHEWellnessShowerProgramSwitch(
             self._attr_is_on = True
         except DHEError as err:
             self._attr_available = self._switch_available()
-            self.async_write_ha_state()
+            self._write_switch_state()
             raise dhe_action_error(
                 f"Could not start DHE wellness program {self.entity_description.key}",
                 err,
             ) from err
         self._attr_available = True
-        self.async_write_ha_state()
+        self._write_switch_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         try:
@@ -518,13 +546,13 @@ class StiebelDHEWellnessShowerProgramSwitch(
             self._attr_is_on = False
         except DHEError as err:
             self._attr_available = self._switch_available()
-            self.async_write_ha_state()
+            self._write_switch_state()
             raise dhe_action_error(
                 f"Could not stop DHE wellness program {self.entity_description.key}",
                 err,
             ) from err
         self._attr_available = True
-        self.async_write_ha_state()
+        self._write_switch_state()
 
     @callback
     def _handle_wellness_programs_update(
@@ -532,7 +560,7 @@ class StiebelDHEWellnessShowerProgramSwitch(
         programs: tuple[dict[str, Any], ...],
     ) -> None:
         self._apply_program_catalog(programs)
-        self.async_write_ha_state()
+        self._write_switch_state()
 
     @callback
     def _handle_measurement_update(self, odb_id: int, value: ODBValue) -> None:
@@ -548,4 +576,4 @@ class StiebelDHEWellnessShowerProgramSwitch(
             self.entity_description.program_id,
         )
         self._attr_available = self._switch_available()
-        self.async_write_ha_state()
+        self._write_switch_state()

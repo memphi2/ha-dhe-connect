@@ -4,10 +4,11 @@ Diese Seite ist eine deutschsprachige Einstiegshilfe fuer Installation, Pairing,
 Betrieb und Fehlersuche der inoffiziellen DHE Connect Integration. Die detaillierten
 technischen Tabellen bleiben in den englischen Dokumenten:
 
-Version `1.8.0` baut auf dem Gold-core-orientierten Stand auf und bereitet die
-Integration technisch weiter in Richtung Platinum vor. Die Validierung
-orientiert sich an Home Assistant Quality Scale fuer Custom Integrations, ist
-aber keine offizielle Zertifizierung als Home-Assistant-Core-Integration.
+Version `1.8.1` baut auf dem Platinum-Track-Stand auf und korrigiert
+Zeroconf-Geraetenamen, Diagnose-Ausgabe, Deprecation-Validierung und
+Privacy-Haertung. Die Validierung orientiert sich an Home Assistant Quality
+Scale fuer Custom Integrations, ist aber keine offizielle Zertifizierung als
+Home-Assistant-Core-Integration.
 
 - [Entitaeten, Attribute und Services](entities.md)
 - [Troubleshooting](troubleshooting.md)
@@ -104,8 +105,9 @@ auszugeben.
 Support-Diagnosen enthalten zusaetzlich eine kompakte Geraete-Zusammenfassung
 mit DHE-Geraetetyp, Weboberflaechen-/Protokollversion und den ersten 7 Zeichen
 der Produkt-ID sowie Reconnect-Supervisor-Status und Runtime-Parser-Zaehler.
-Vollstaendige Produkt-IDs, MAC-Adressen, Hosts und Tokens werden redigiert oder
-nur als vorhanden/nicht vorhanden zusammengefasst.
+Vollstaendige Produkt-IDs, MAC-Adressen, Hosts, rohe IP-Adressen inklusive
+IPv6-Werte, Tokens und lokale Session-Details werden redigiert oder nur als
+vorhanden/nicht vorhanden zusammengefasst.
 
 In der Home-Assistant-Oberflaeche wird die vollstaendige Produkt-ID als
 deaktivierter Diagnose-Sensor angeboten. Der DHE-Geraetename kann ueber ein
@@ -200,6 +202,9 @@ Home-Assistant-Datenbank nicht unnoetig waechst. Besonders wichtig:
 
 - Grosse Radio-, Wetter- und Suchlisten werden nicht dauerhaft als
   recorder-relevante Attribute geschrieben.
+- Die Climate-Entitaet schreibt Zulauf- und Auslauftemperatur nicht als
+  Attribute; dafuer gibt es eigene Temperatursensoren. Climate schreibt nur
+  Steuerzustand, Verfuegbarkeit und den Wechsel bei `setpoint_below_inlet`.
 - Aktueller Wasserfluss und aktuelle Leistung bleiben live sichtbar: Aenderungen
   ab `0.2` sowie Wechsel zwischen `0` und einem aktiven Wert werden geschrieben.
 - Timer-Restzeiten und Wannenfuellmengen werden nicht gedrosselt, damit sie in
@@ -232,6 +237,24 @@ recorder:
 Wenn die Datenbank trotzdem stark waechst, zuerst die Diagnose-Entitaeten,
 Reconnect-Zaehler und Home-Assistant-Logs pruefen. Details stehen in
 [docs/troubleshooting.md](troubleshooting.md).
+
+Fuer eine echte Idle-Messung sollte der gemountete HA-Smoke mit striktem
+Idle-Gate laufen:
+
+```bash
+python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log --monitor-seconds 600 --require-idle --print-operational-signals --evidence-json /tmp/dhe-smoke-evidence.json
+```
+
+Wenn waehrenddessen Wasser laeuft oder eine abgeschlossene Nutzung erkannt
+wird, bricht der Smoke als nicht-idle ab und nennt den ausloesenden Entity-
+oder `device_status`-Attributwert. Ohne `--require-idle` wird solch ein Fenster
+als operational gewertet; dann werden Idle-Schwellwerte uebersprungen, Logs und
+Reconnect-Stabilitaet aber weiter geprueft.
+
+Die optionale Evidence-Datei ist fuer Release- oder Performance-Notizen gedacht.
+Sie enthaelt nur zusammengefasste Checks, Entity-Zaehler, Monitor-Dauer,
+Recorder-Top-Writer und redigierte Meldungen; lokale Config-Pfade, Tokens,
+Hosts und IP-Adressen werden nicht in die JSON-Datei uebernommen.
 
 Kurze Verbindungsabbrueche bleiben in einer Reconnect-Schonfrist: gecachte
 Entitaeten koennen verfuegbar bleiben, waehrend der Diagnosewert

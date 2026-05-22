@@ -81,6 +81,7 @@ TO_REDACT = {
     "wlan",
     "wlan_mac",
 }
+_HIDDEN_DEVICE_INFO_DIAGNOSTIC_KEYS = {"web_app_version"}
 
 
 async def async_get_config_entry_diagnostics(
@@ -160,7 +161,11 @@ def _runtime_diagnostics(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, A
             "measurement_ids": sorted(str(key) for key in last_measurements),
             "app_value_count": len(last_app_values),
             "app_value_keys": sorted(str(key) for key in last_app_values),
-            "device_info_keys": sorted(str(key) for key in last_device_info),
+            "device_info_keys": sorted(
+                str(key)
+                for key in last_device_info
+                if str(key) not in _HIDDEN_DEVICE_INFO_DIAGNOSTIC_KEYS
+            ),
             "radio_state_keys": sorted(str(key) for key in last_radio_state),
             "weather_state_keys": sorted(str(key) for key in last_weather_state),
         },
@@ -193,7 +198,6 @@ def _device_diagnostics(device_info: Mapping[Any, Any]) -> dict[str, Any]:
         "device_type": device_info.get("device_type"),
         "product_id_prefix": product_prefix,
         "protocol_version": device_info.get("protocol_version"),
-        "web_app_version": device_info.get("web_app_version"),
         "raw_odb_protocol_version": device_info.get("raw_odb_protocol_version"),
         "has_wlan_mac": bool(device_info.get("wlan_mac")),
         "has_bluetooth_mac": bool(device_info.get("bluetooth_mac")),
