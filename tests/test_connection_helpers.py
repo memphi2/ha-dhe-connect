@@ -41,13 +41,37 @@ class TestConnectionHelpers(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "embedded_port_not_supported"):
             self.helpers.normalize_host("http://dhe-connect.local:8443/")
 
+    def test_normalize_host_rejects_unsupported_url_scheme(self) -> None:
+        with self.assertRaisesRegex(ValueError, "invalid_scheme"):
+            self.helpers.normalize_host("ftp://dhe-connect.local/")
+
+    def test_normalize_host_rejects_url_userinfo_path_query_and_fragment(self) -> None:
+        for host in (
+            "http://user@dhe-connect.local/",
+            "http://dhe-connect.local/status",
+            "http://dhe-connect.local/?token=secret",
+            "http://dhe-connect.local/#fragment",
+        ):
+            with self.subTest(host=host):
+                with self.assertRaisesRegex(ValueError, "invalid_host"):
+                    self.helpers.normalize_host(host)
+
     def test_normalize_host_rejects_bracketed_ipv6_url_with_port(self) -> None:
         with self.assertRaisesRegex(ValueError, "embedded_port_not_supported"):
             self.helpers.normalize_host("http://[2001:db8::1]:8443/")
 
+    def test_normalize_host_accepts_bracketed_raw_ipv6(self) -> None:
+        self.assertEqual(self.helpers.normalize_host("[2001:db8::1]"), "2001:db8::1")
+
     def test_normalize_host_rejects_raw_host_port(self) -> None:
         with self.assertRaisesRegex(ValueError, "embedded_port_not_supported"):
             self.helpers.normalize_host("dhe-connect.local:8443")
+
+    def test_normalize_host_rejects_empty_and_invalid_characters(self) -> None:
+        for host in (" ", "dhe/local", "dhe?local", "dhe@local", r"dhe\\local"):
+            with self.subTest(host=host):
+                with self.assertRaises(ValueError):
+                    self.helpers.normalize_host(host)
 
     def test_host_for_url_wraps_ipv6(self) -> None:
         self.assertEqual(self.helpers.host_for_url("2001:db8::1"), "[2001:db8::1]")
@@ -96,6 +120,19 @@ class TestConnectionHelpers(unittest.TestCase):
     def test_validate_port_rejects_float(self) -> None:
         with self.assertRaises(ValueError):
             self.helpers.validate_port(8443.0)
+
+    def test_validate_port_accepts_numeric_string(self) -> None:
+        self.assertEqual(self.helpers.validate_port("8443"), 8443)
+
+    def test_validate_port_rejects_bool(self) -> None:
+        with self.assertRaisesRegex(ValueError, "invalid_port"):
+            self.helpers.validate_port(True)
+
+    def test_validate_port_rejects_out_of_range(self) -> None:
+        for port in (0, 65536):
+            with self.subTest(port=port):
+                with self.assertRaisesRegex(ValueError, "invalid_port"):
+                    self.helpers.validate_port(port)
 
     def test_validate_port_rejects_negative_float(self) -> None:
         with self.assertRaises(ValueError):
