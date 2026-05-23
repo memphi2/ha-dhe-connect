@@ -201,6 +201,7 @@ Option flows and services use additional commands only when requested:
 | `get:ste.app.weather:forecast` | Search weather locations by `{name, countryId}` |
 | `assign:ste.app.weather:favorite` | Toggle a location in weather favorites |
 | `assign:ste.common.version:controlunitName` | Set the DHE device/control-unit name; the browser UI limits this text field to 30 characters |
+| `assign:ste.common.temperature:maxOverride` | Trigger the DHE's native temporary maximum bridge (5 minutes) |
 
 The DHE web interface uses `ste.app.wellness:programs` for the wellness program
 list. Observed firmware returns the four program IDs, localized names and a

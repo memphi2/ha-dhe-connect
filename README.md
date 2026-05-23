@@ -15,7 +15,7 @@ The integration talks directly to the DHE web interface on your local network. I
 
 ## Status
 
-- Current version: `1.8.2`
+- Current version: `1.8.3`
 - Release: stable custom integration, Platinum-track quality evidence
 - Quality: Home Assistant Quality Scale (custom integration, not HA Core certified)
 - Home Assistant UI integration name: `DHE Connect` (kept short for clean
@@ -27,9 +27,9 @@ The integration talks directly to the DHE web interface on your local network. I
 - Scope: multiple configured DHE Connect devices per Home Assistant instance
 
 This is a custom integration and should be used on a trusted local network.
-v1.8.2 focuses on robustness hardening for setup/repair/service paths, replay
-regression safety and stricter repository validation gates. Not an official
-Home Assistant Core certification.
+v1.8.3 focuses on runtime consistency fixes (wellness naming/state handling,
+discovery-flow hardening and startup/default-entity hygiene) plus broader
+regression tests. Not an official Home Assistant Core certification.
 
 Development and protocol mapping for this release were assisted by OpenAI Codex.
 
@@ -63,7 +63,7 @@ interoperability hygiene policy.
 - Target temperature control through the DHE ODB command interface, including Climate limits that respect the physical `Tmax` jumper and the active child-safety limit.
 - Temperature memory controls for all 12 supported slots; slots 3 to 12 are disabled by default.
 - Eco mode, Eco flow limit, bath fill, child safety, wellness controls with DHE-provided program metadata, brush timer and shower timer controls.
-- Current water flow, current power, total water and total energy consumption sensors are enabled by default; ODB saving, last usage, timer and saving-monitor sensors start disabled to keep the device card tidy.
+- Current water flow, current power, inlet/outlet temperature, device status, total water and total energy consumption sensors are enabled by default; ODB saving, last usage, timer and saving-monitor sensors start disabled to keep the device card tidy.
 - Compact radio media player for station metadata, current title, short-description fallback, playback, volume and favorites.
 - Options-flow radio search by full text, DHE genre catalog, country catalog or city catalog.
 - Weather entity for the DHE forecast payload with favorite location selection.
@@ -267,7 +267,7 @@ The integration creates one Home Assistant device per configured DHE target and 
 - Climate target temperature with `heat`/`off` support.
 - Radio media player with favorites as selectable sources.
 - Weather entity and weather-location select for DHE forecast favorites.
-- Current water flow, current power and water/energy consumption totals enabled by default for Home Assistant dashboards.
+- Current water flow, current power, inlet/outlet temperature, device status and water/energy consumption totals enabled by default for Home Assistant dashboards.
 - Additional live telemetry, saving-monitor, diagnostic, timer, memory and protocol entities disabled by default to keep the device page manageable.
 
 The full entity table, attributes, service examples and underlying DHE sources live in [docs/entities.md](docs/entities.md).

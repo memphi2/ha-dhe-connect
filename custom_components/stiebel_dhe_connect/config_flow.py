@@ -905,24 +905,27 @@ class StiebelDHEConnectConfigFlow(
 
         if _is_target_used_by_other_entry(self.hass, host, port):
             return self.async_abort(reason=ALREADY_CONFIGURED)
-        try:
-            recent_prompt_seen = await _async_recent_discovery_prompt_seen(
-                self.hass,
-                discovery_record,
-            )
-        except (OSError, RuntimeError, TypeError, ValueError) as err:
-            recent_prompt_seen = False
-            _LOGGER.debug(
-                "DHE discovery prompt-cache check failed: %s",
-                _diagnostic_error(err),
-            )
-        if recent_prompt_seen:
-            await _async_record_discovery_safely(
-                self.hass,
-                discovery_record,
-                result="recently_discovered",
-            )
-            return self.async_abort(reason=RECENTLY_DISCOVERED)
+        # When no DHE config entry exists anymore, do not suppress rediscovery based
+        # on a stale prompt-cache record. Users expect the card to reappear in that case.
+        if self._async_current_entries():
+            try:
+                recent_prompt_seen = await _async_recent_discovery_prompt_seen(
+                    self.hass,
+                    discovery_record,
+                )
+            except (OSError, RuntimeError, TypeError, ValueError) as err:
+                recent_prompt_seen = False
+                _LOGGER.debug(
+                    "DHE discovery prompt-cache check failed: %s",
+                    _diagnostic_error(err),
+                )
+            if recent_prompt_seen:
+                await _async_record_discovery_safely(
+                    self.hass,
+                    discovery_record,
+                    result="recently_discovered",
+                )
+                return self.async_abort(reason=RECENTLY_DISCOVERED)
 
         return await self._async_start_discovered_setup(
             host,

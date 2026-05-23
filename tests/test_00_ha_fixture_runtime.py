@@ -148,6 +148,7 @@ class _FixtureDHEClient:
         self.reset_brush_timer_calls = 0
         self.temperature_calls: list[float] = []
         self.repair_pairing_calls = 0
+        self.bridge_temperature_maximum_calls = 0
         self._stopped = asyncio.Event()
         self.callbacks: dict[str, list[Callable[..., None]]] = {
             "availability": [],
@@ -249,6 +250,11 @@ class _FixtureDHEClient:
     async def repair_pairing(self) -> bool:
         """Record a repair pairing button call."""
         self.repair_pairing_calls += 1
+        return True
+
+    async def bridge_temperature_maximum(self) -> bool:
+        """Record a temporary max-override button call."""
+        self.bridge_temperature_maximum_calls += 1
         return True
 
     def emit_availability(self, available: bool) -> None:
@@ -2621,6 +2627,36 @@ async def test_zeroconf_flow_aborts_duplicate_host_port() -> None:
         assert result["reason"] == "already_configured"
 
 
+async def test_zeroconf_flow_does_not_suppress_prompt_without_existing_entry() -> None:
+    """Do not hide discovery prompts when no DHE config entry exists."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+
+        can_connect = AsyncMock(return_value=True)
+        recent_prompt_seen = AsyncMock(return_value=True)
+        with (
+            patch.object(config_flow, "_can_connect", can_connect),
+            patch.object(
+                config_flow,
+                "_async_recent_discovery_prompt_seen",
+                recent_prompt_seen,
+            ),
+        ):
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_ZEROCONF},
+                data=_zeroconf_info("DHE-JA06.local.", DEFAULT_PORT),
+            )
+
+        assert result["type"] is FlowResultType.FORM
+        assert result["step_id"] == "zeroconf_confirm"
+        recent_prompt_seen.assert_not_awaited()
+        can_connect.assert_awaited_once_with(hass, "192.0.2.124", DEFAULT_PORT)
+
+
 async def test_zeroconf_updates_existing_entry_for_identity_matched_host_change() -> None:
     """Update host/port on an existing entry when Zeroconf identity matches."""
     _clear_loaded_integration_modules()
@@ -3473,6 +3509,88 @@ async def test_repair_pairing_button_calls_client_when_enabled_with_real_hass_fi
         await hass.async_block_till_done()
 
 
+async def test_bridge_temperature_maximum_button_calls_client_when_enabled_with_real_hass_fixture() -> None:
+    """Verify bridge-max button uses child-safety state as lock signal."""
+    _clear_loaded_integration_modules()
+    integration = importlib.import_module(f"custom_components.{DOMAIN}")
+    protocol = importlib.import_module(f"custom_components.{DOMAIN}.protocol")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        client = _FixtureDHEClient()
+        entry = _build_mock_entry(
+            host=client.host,
+            port=client.port,
+            name="Bridge Maximum Fixture DHE",
+            unique_id="bridge-maximum-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+
+        registry = er.async_get(hass)
+        registry.async_get_or_create(
+            "button",
+            DOMAIN,
+            f"{DOMAIN}_{entry.entry_id}_bridge_temperature_maximum",
+            suggested_object_id="bridge_maximum_fixture_dhe_bridge_temperature_maximum",
+            disabled_by=None,
+        )
+
+        with (
+            patch.object(integration, "DHEClient", return_value=client),
+            patch.object(integration, "_async_can_connect", AsyncMock(return_value=True)),
+        ):
+            assert await hass.config_entries.async_setup(entry.entry_id)
+            await hass.async_block_till_done()
+
+        bridge_button = _entity_id_for_key(
+            hass,
+            entry.entry_id,
+            "button",
+            "bridge_temperature_maximum",
+        )
+        state = hass.states.get(bridge_button)
+        assert state is not None
+        assert state.state != "unavailable"
+
+        await hass.services.async_call(
+            "button",
+            "press",
+            {"entity_id": bridge_button},
+            blocking=True,
+        )
+        assert client.bridge_temperature_maximum_calls == 1
+
+        client.emit_measurement(protocol.ID_CHILD_SAFETY_ACTIVE, False)
+        await hass.async_block_till_done()
+        state = hass.states.get(bridge_button)
+        assert state is not None
+        assert state.state == "unavailable"
+
+        await hass.services.async_call(
+            "button",
+            "press",
+            {"entity_id": bridge_button},
+            blocking=True,
+        )
+        assert client.bridge_temperature_maximum_calls == 1
+
+        client.emit_measurement(protocol.ID_CHILD_SAFETY_ACTIVE, True)
+        await hass.async_block_till_done()
+        state = hass.states.get(bridge_button)
+        assert state is not None
+        assert state.state != "unavailable"
+
+        await hass.services.async_call(
+            "button",
+            "press",
+            {"entity_id": bridge_button},
+            blocking=True,
+        )
+        assert client.bridge_temperature_maximum_calls == 2
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
+
 async def test_entity_registry_ids_survive_reload_with_real_hass_fixture() -> None:
     """Reload an entry and verify HA keeps the same entity registry IDs."""
     _clear_loaded_integration_modules()
@@ -3667,7 +3785,7 @@ async def test_unavailable_runtime_blocks_controls_except_repair_button() -> Non
                 hass,
                 entry.entry_id,
                 "switch",
-                "wellness_winter_refresh",
+                "wellness_winter_pick_me_up",
             ),
         }
 

@@ -335,6 +335,9 @@
       "disconnect_radio_pairing": {
         "name": "Radio-Kopplung trennen"
       },
+      "bridge_temperature_maximum": {
+        "name": "Maximum überbrücken (5 Min.)"
+      },
       "temperature_memory_1": {
         "name": "Speicher 1"
       },
@@ -710,16 +713,16 @@
         "name": "Duschtimer"
       },
       "wellness_cold_prevention": {
-        "name": "Erkältungsvorbeugung"
+        "name": "Cold prevention"
       },
-      "wellness_winter_refresh": {
-        "name": "Wintererfrischung"
+      "wellness_winter_pick_me_up": {
+        "name": "Winter pick-me-up"
       },
       "wellness_summer_fitness": {
-        "name": "Sommerfitness"
+        "name": "Summer fitness"
       },
-      "wellness_circulation_support": {
-        "name": "Durchblutungsförderung"
+      "wellness_circulation_boost": {
+        "name": "Circulation boost"
       }
     }
   }

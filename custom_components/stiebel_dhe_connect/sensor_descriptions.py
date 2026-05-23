@@ -99,6 +99,9 @@ DEFAULT_ENABLED_SENSOR_KEYS = {
     "water_flow",
     "water_consumption_total",
     "energy_consumption_total",
+    "inlet_temperature",
+    "outlet_temperature",
+    "device_status",
 }
 
 # Reduce write frequency for high-churn telemetry values. The tuple is
@@ -174,7 +177,6 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:thermometer",
         entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
         odb_id=ID_INLET_TEMPERATURE,
     ),
     StiebelDHESensorEntityDescription(
@@ -185,7 +187,6 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:thermometer",
         entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
         odb_id=ID_OUTLET_TEMPERATURE,
     ),
     StiebelDHESensorEntityDescription(
@@ -205,7 +206,6 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.ENUM,
         options=list(DEVICE_STATUS_OPTIONS),
         entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
         odb_id=ID_DEVICE_STATUS,
     ),
     StiebelDHESensorEntityDescription(
