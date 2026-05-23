@@ -135,7 +135,6 @@ def _wellness_program_switches() -> tuple[
         StiebelDHEWellnessShowerProgramSwitchDescription(
             key=str(program["key"]),
             translation_key=str(program["key"]),
-            name=str(program["name"]),
             icon=WELLNESS_PROGRAM_ICONS.get(int(program["id"]), "mdi:shower"),
             program_id=int(program["id"]),
         )

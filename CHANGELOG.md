@@ -4,6 +4,37 @@
 
 - No changes yet.
 
+## v1.8.4 - 2026-05-24
+
+Bugfix release for the v1.8 line. This release keeps public entity IDs, unique
+IDs and DHE protocol behavior stable.
+
+### Entity Naming and Translations
+
+- Removed hardcoded wellness switch names from switch descriptions so Home
+  Assistant consistently uses translation keys for localized entity labels.
+- Restored German wellness program names in translations:
+  `Erkältungsvorbeugung`, `Wintererfrischung`, `Sommer-Fitness`,
+  `Durchblutungsförderung`.
+- Updated wellness description tests to enforce translation-driven naming
+  behavior and avoid regressions.
+
+### Validation
+
+- `.venv/bin/python scripts/check_coverage.py`:
+  `722 passed`; scoped integration coverage gate `96%`.
+- `.venv/bin/python scripts/check_integration.py`:
+  `Ran 636 tests ... OK`; `integration checks ok`.
+- `.venv/bin/python scripts/check_deprecations.py`:
+  `deprecation guard ok`.
+- `.venv/bin/python scripts/check_typing.py`:
+  `Success: no issues found in 74 source files`.
+- `.venv/bin/python -m ruff check custom_components/stiebel_dhe_connect tests scripts`:
+  `All checks passed!`.
+- `.venv/bin/python scripts/release_check.py --run-local-checks --allow-dirty --expect-tag absent --expect-github-release absent`:
+  `release check ok` (manifest/README/changelog/version gates passed; local tag
+  and GitHub release for `v1.8.4` are absent).
+
 ## v1.8.3 - 2026-05-23
 
 Release consistency update for the v1.8 line. This release keeps public entity

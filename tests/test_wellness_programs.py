@@ -7,6 +7,8 @@ import types
 import unittest
 from unittest.mock import AsyncMock, Mock
 
+from homeassistant.helpers.typing import UNDEFINED
+
 from custom_components.stiebel_dhe_connect.wellness_programs import (
     fallback_wellness_programs,
     normalize_wellness_programs,
@@ -307,9 +309,10 @@ class TestWellnessPrograms(unittest.TestCase):
             [program["key"] for program in fallback_programs],
         )
         self.assertEqual(
-            [description.name for description in descriptions],
-            [program["name"] for program in fallback_programs],
+            [description.translation_key for description in descriptions],
+            [program["key"] for program in fallback_programs],
         )
+        self.assertTrue(all(description.name is UNDEFINED for description in descriptions))
 
     def test_restored_timer_switch_value_stays_unavailable_offline(self) -> None:
         _load_component_module("client_types")
