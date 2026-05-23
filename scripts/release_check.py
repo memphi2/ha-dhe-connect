@@ -698,6 +698,15 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         help="Expected DHE Zeroconf service port.",
     )
     parser.add_argument(
+        "--run-history-hygiene",
+        action="store_true",
+        help=(
+            "Scan git history for known non-anonymized local or proprietary vendor "
+            "markers. This is opt-in because historical documentation examples may "
+            "intentionally include private-network CIDR notation."
+        ),
+    )
+    parser.add_argument(
         "--run-github-hygiene",
         action="store_true",
         help=(
@@ -729,9 +738,10 @@ def collect_results(args: argparse.Namespace, runner: Runner) -> list[CheckResul
             check_tag(version, args.expect_tag, runner),
             check_github_release(version, args.expect_github_release, runner),
             scan_tracked_files_for_secrets(ROOT, runner),
-            scan_git_history_for_sensitive_literals(runner),
         )
     )
+    if args.run_history_hygiene:
+        results.append(scan_git_history_for_sensitive_literals(runner))
     if args.require_current_tag:
         results.append(check_head_matches_tag(version, runner))
 

@@ -899,6 +899,79 @@ class TestReleaseCheck(unittest.TestCase):
             runner=ANY,
         )
 
+    def test_history_hygiene_flag_adds_release_gate(self) -> None:
+        args = release_check._parse_args(
+            [
+                "--allow-dirty",
+                "--expect-tag",
+                "skip",
+                "--expect-github-release",
+                "skip",
+                "--run-history-hygiene",
+            ]
+        )
+
+        with (
+            patch("scripts.release_check.load_manifest_version", return_value="1.3.2"),
+            patch("scripts.release_check.check_version_files", return_value=[]),
+            patch(
+                "scripts.release_check.scan_tracked_files_for_secrets",
+                return_value=release_check.CheckResult(True, "tracked-file scan ok"),
+            ),
+            patch(
+                "scripts.release_check.scan_git_history_for_sensitive_literals",
+                return_value=release_check.CheckResult(True, "history scan ok"),
+            ) as history_scan,
+        ):
+            results = release_check.collect_results(
+                args,
+                lambda command: release_check.CommandResult(
+                    args=tuple(command),
+                    returncode=0,
+                    stdout="",
+                    stderr="",
+                ),
+            )
+
+        self.assertTrue(all(result.ok for result in results), results)
+        history_scan.assert_called_once_with(ANY)
+
+    def test_history_hygiene_scan_is_not_enabled_by_default(self) -> None:
+        args = release_check._parse_args(
+            [
+                "--allow-dirty",
+                "--expect-tag",
+                "skip",
+                "--expect-github-release",
+                "skip",
+            ]
+        )
+
+        with (
+            patch("scripts.release_check.load_manifest_version", return_value="1.3.2"),
+            patch("scripts.release_check.check_version_files", return_value=[]),
+            patch(
+                "scripts.release_check.scan_tracked_files_for_secrets",
+                return_value=release_check.CheckResult(True, "tracked-file scan ok"),
+            ),
+            patch(
+                "scripts.release_check.scan_git_history_for_sensitive_literals",
+                return_value=release_check.CheckResult(True, "history scan ok"),
+            ) as history_scan,
+        ):
+            results = release_check.collect_results(
+                args,
+                lambda command: release_check.CommandResult(
+                    args=tuple(command),
+                    returncode=0,
+                    stdout="",
+                    stderr="",
+                ),
+            )
+
+        self.assertTrue(all(result.ok for result in results), results)
+        history_scan.assert_not_called()
+
     def test_require_current_tag_adds_head_tag_check(self) -> None:
         args = release_check._parse_args(["--require-current-tag"])
         commands: list[tuple[str, ...]] = []
