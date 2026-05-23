@@ -105,10 +105,13 @@ PROPRIETARY_VENDOR_CONTENT_PATTERNS = (
         ),
     ),
 )
-HISTORY_SENSITIVE_MARKERS = (
-    "<private-host>",
-    "<private-host>",
-    "<ha-user>",
+HISTORY_SENSITIVE_REGEXES_GIT = (
+    r"172\.((1[6-9])|(2[0-9])|(3[0-1]))\.[0-9]{1,3}\.[0-9]{1,3}",
+    r"--username[[:space:]]+[A-Za-z0-9._][A-Za-z0-9._]*",
+)
+HISTORY_SENSITIVE_REGEXES_PYTHON = (
+    r"\b172\.(?:1[6-9]|2[0-9]|3[0-1])\.[0-9]{1,3}\.[0-9]{1,3}\b",
+    r"--username\s+[A-Za-z0-9._]{3,}",
 )
 PROPRIETARY_HISTORY_MARKERS = (
     "Licensed " + "proprietary",
@@ -123,6 +126,11 @@ GITHUB_HYGIENE_SCAN_PATHS = (
     "/repos/{repo}/issues/comments?per_page=100",
     "/repos/{repo}/pulls/comments?per_page=100",
     "/repos/{repo}/releases?per_page=100",
+)
+HISTORY_HYGIENE_PATHS = (
+    "CHANGELOG.md",
+    "README.md",
+    "docs",
 )
 
 
@@ -427,10 +435,14 @@ def scan_git_history_for_sensitive_literals(runner: Runner) -> CheckResult:
         return CheckResult(True, "git history sensitive-marker scan passed (no commits)")
 
     marker_expr = "|".join(
-        re.escape(marker)
-        for marker in (*HISTORY_SENSITIVE_MARKERS, *PROPRIETARY_HISTORY_MARKERS)
+        (
+            *HISTORY_SENSITIVE_REGEXES_GIT,
+            *(re.escape(marker) for marker in PROPRIETARY_HISTORY_MARKERS),
+        )
     )
-    grep_result = runner(["git", "grep", "-nE", marker_expr, *commits])
+    grep_result = runner(
+        ["git", "grep", "-nE", marker_expr, *commits, "--", *HISTORY_HYGIENE_PATHS]
+    )
     if grep_result.returncode == 1:
         return CheckResult(True, "git history sensitive-marker scan passed")
     if grep_result.returncode != 0:
@@ -478,8 +490,10 @@ def scan_github_metadata_for_sensitive_literals(
     """Scan GitHub metadata for non-anonymized local and proprietary markers."""
     marker_pattern = re.compile(
         "|".join(
-            re.escape(marker)
-            for marker in (*HISTORY_SENSITIVE_MARKERS, *PROPRIETARY_HISTORY_MARKERS)
+            (
+                *HISTORY_SENSITIVE_REGEXES_PYTHON,
+                *(re.escape(marker) for marker in PROPRIETARY_HISTORY_MARKERS),
+            )
         ),
         re.IGNORECASE,
     )

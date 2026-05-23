@@ -549,6 +549,8 @@ class TestReleaseCheck(unittest.TestCase):
         self.assertIn("history sensitive-marker scan passed", result.message)
 
     def test_history_sensitive_scan_rejects_non_anonymized_markers(self) -> None:
+        sample_ip = ".".join(("172", "20", "44", "9"))
+
         def _runner(args):
             command = tuple(args)
             if command == ("git", "rev-list", "--all"):
@@ -562,7 +564,7 @@ class TestReleaseCheck(unittest.TestCase):
                 return release_check.CommandResult(
                     args=command,
                     returncode=0,
-                    stdout="abc123:CHANGELOG.md:1:<private-host>\n",
+                    stdout=f"abc123:CHANGELOG.md:1:{sample_ip}\n",
                     stderr="",
                 )
             raise AssertionError(f"unexpected command: {command}")
@@ -571,16 +573,18 @@ class TestReleaseCheck(unittest.TestCase):
 
         self.assertFalse(result.ok)
         self.assertIn("non-anonymized or proprietary markers", result.message)
-        self.assertIn("<private-host>", result.message)
+        self.assertIn(sample_ip, result.message)
 
     def test_github_hygiene_scan_rejects_non_anonymized_markers(self) -> None:
+        sample_user = "demo_user42"
+
         def _runner(args):
             command = tuple(args)
             if command[0:2] != ("gh", "api"):
                 raise AssertionError(f"unexpected command: {command}")
             endpoint = command[2]
             if endpoint.startswith("/repos/example/repo/pulls?state=all"):
-                payload = [{"number": 1, "body": "username <ha-user> used in log"}]
+                payload = [{"number": 1, "body": f"--username {sample_user} used in log"}]
             else:
                 payload = []
             return release_check.CommandResult(
@@ -597,7 +601,7 @@ class TestReleaseCheck(unittest.TestCase):
 
         self.assertFalse(result.ok)
         self.assertIn("GitHub metadata contains non-anonymized or proprietary markers", result.message)
-        self.assertIn("<ha-user>", result.message)
+        self.assertIn(sample_user, result.message)
 
     def test_service_smoke_requires_config_and_username(self) -> None:
         args = release_check._parse_args(["--run-ha-service-smoke"])
