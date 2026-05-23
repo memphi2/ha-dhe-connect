@@ -3785,7 +3785,7 @@ async def test_unavailable_runtime_blocks_controls_except_repair_button() -> Non
                 hass,
                 entry.entry_id,
                 "switch",
-                "wellness_winter_pick_me_up",
+                "wellness_winter_refresh",
             ),
         }
 
