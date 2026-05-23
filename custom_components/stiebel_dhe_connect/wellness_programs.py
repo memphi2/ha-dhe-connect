@@ -10,9 +10,9 @@ from .client_value_helpers import raw_to_float as _raw_to_float
 
 WELLNESS_PROGRAM_KEYS_BY_ID = {
     1: "wellness_cold_prevention",
-    2: "wellness_winter_refresh",
+    2: "wellness_winter_pick_me_up",
     3: "wellness_summer_fitness",
-    4: "wellness_circulation_support",
+    4: "wellness_circulation_boost",
 }
 
 _FALLBACK_WELLNESS_PROGRAMS: tuple[dict[str, Any], ...] = (
@@ -24,7 +24,7 @@ _FALLBACK_WELLNESS_PROGRAMS: tuple[dict[str, Any], ...] = (
     },
     {
         "id": 2,
-        "key": "wellness_winter_refresh",
+        "key": "wellness_winter_pick_me_up",
         "name": "Winter pick-me-up",
         "coldwater": False,
     },
@@ -36,7 +36,7 @@ _FALLBACK_WELLNESS_PROGRAMS: tuple[dict[str, Any], ...] = (
     },
     {
         "id": 4,
-        "key": "wellness_circulation_support",
+        "key": "wellness_circulation_boost",
         "name": "Circulation boost",
         "coldwater": True,
     },

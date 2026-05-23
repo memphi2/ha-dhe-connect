@@ -21,9 +21,10 @@ IDs, unique IDs and DHE protocol behavior stable.
 ### Entity Defaults and Naming
 
 - Enabled the bridge max-override button by default.
-- Preserved existing wellness switch keys (`wellness_winter_refresh` and
-  `wellness_circulation_support`) to keep existing entity/unique IDs stable
-  across upgrades while still exposing canonical English program names.
+- Added a wellness switch unique-id migration path from
+  `wellness_winter_refresh` -> `wellness_winter_pick_me_up` and
+  `wellness_circulation_support` -> `wellness_circulation_boost`, so existing
+  installs upgrade cleanly without duplicate entities.
 - Wellness program naming is now canonicalized to fixed program labels for the
   known IDs (`Cold prevention`, `Winter pick-me-up`, `Summer fitness`,
   `Circulation boost`) and aligned across protocol/constants/translations.

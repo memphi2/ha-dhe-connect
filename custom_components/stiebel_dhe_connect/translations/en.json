@@ -715,13 +715,13 @@
       "wellness_cold_prevention": {
         "name": "Cold prevention"
       },
-      "wellness_winter_refresh": {
+      "wellness_winter_pick_me_up": {
         "name": "Winter pick-me-up"
       },
       "wellness_summer_fitness": {
         "name": "Summer fitness"
       },
-      "wellness_circulation_support": {
+      "wellness_circulation_boost": {
         "name": "Circulation boost"
       }
     }

@@ -560,6 +560,66 @@ async def test_setup_merges_empty_host_devices_into_stable_entry_device() -> Non
         await hass.async_block_till_done()
 
 
+async def test_setup_migrates_wellness_switch_unique_ids_to_canonical_keys() -> None:
+    """Migrate legacy wellness switch unique IDs before entities are created."""
+    _clear_loaded_integration_modules()
+    integration = importlib.import_module(f"custom_components.{DOMAIN}")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        client = _FixtureDHEClient(host="dhe-ja06.local", port=DEFAULT_PORT)
+        entry = _build_mock_entry(
+            host=client.host,
+            port=client.port,
+            name="Wellness Migration Fixture DHE",
+            unique_id="wellness-migration-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+
+        entity_registry = er.async_get(hass)
+        legacy_unique_ids = {
+            f"{DOMAIN}_{entry.entry_id}_wellness_winter_refresh": (
+                f"{DOMAIN}_{entry.entry_id}_wellness_winter_pick_me_up"
+            ),
+            f"{DOMAIN}_{entry.entry_id}_wellness_circulation_support": (
+                f"{DOMAIN}_{entry.entry_id}_wellness_circulation_boost"
+            ),
+        }
+        legacy_entities = {
+            old_unique_id: entity_registry.async_get_or_create(
+                "switch",
+                DOMAIN,
+                old_unique_id,
+                config_entry=entry,
+            )
+            for old_unique_id in legacy_unique_ids
+        }
+
+        with (
+            patch.object(integration, "DHEClient", return_value=client),
+            patch.object(integration, "_async_can_connect", AsyncMock(return_value=True)),
+        ):
+            assert await hass.config_entries.async_setup(entry.entry_id)
+            await hass.async_block_till_done()
+
+        entities = er.async_entries_for_config_entry(entity_registry, entry.entry_id)
+        current_unique_ids = {entity.unique_id for entity in entities}
+        for old_unique_id, new_unique_id in legacy_unique_ids.items():
+            assert old_unique_id not in current_unique_ids
+            assert new_unique_id in current_unique_ids
+
+            migrated_entity = entity_registry.async_get(legacy_entities[old_unique_id].entity_id)
+            assert migrated_entity is not None
+            assert migrated_entity.unique_id == new_unique_id
+
+        assert sum(
+            entity.unique_id in legacy_unique_ids.values()
+            for entity in entities
+        ) == len(legacy_unique_ids)
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
+
 async def test_runtime_device_info_updates_ha_device_model_and_firmware() -> None:
     """Expose DHE device type and firmware version in HA's device registry."""
     _clear_loaded_integration_modules()
@@ -3785,7 +3845,7 @@ async def test_unavailable_runtime_blocks_controls_except_repair_button() -> Non
                 hass,
                 entry.entry_id,
                 "switch",
-                "wellness_winter_refresh",
+                "wellness_winter_pick_me_up",
             ),
         }
 
