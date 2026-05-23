@@ -78,7 +78,7 @@ class TestClientDiagnostics(unittest.TestCase):
         self.assertEqual(message, "ValueError: bad value")
 
     def test_diagnostic_error_redacts_auth_context(self) -> None:
-        private_host = ".".join(("172", "16", "1", "147"))
+        private_host = "192.168.50.20"
         private_ten_host = ".".join(("10", "0", "0", "1"))
         local_host = "dhe-ja06.local"
         mac_address = "aa:bb:cc:dd:ee:ff"
@@ -130,7 +130,7 @@ class TestClientDiagnostics(unittest.TestCase):
         self.assertEqual(weather["location"]["Country"], "Password Reset")
 
     def test_diagnostic_summary_redacts_sensitive_strings_and_keys(self) -> None:
-        private_host = ".".join(("172", "16", "1", "147"))
+        private_host = "192.168.50.20"
         summary = self.diagnostics.summarize_diagnostic_value({
             "token=abc123": "Authorization: Bearer ghijk",
             "url": f"http://user:secret@{private_host}:8123/?token=abc123",
@@ -173,7 +173,7 @@ class TestClientDiagnostics(unittest.TestCase):
         self.assertNotIn("abc123", message)
 
     def test_redaction_removes_websocket_url_hosts_and_userinfo(self) -> None:
-        private_host = ".".join(("172", "16", "2", "124"))
+        private_host = "192.168.60.24"
         message = self.diagnostics.redact_diagnostic_text(
             "WS "
             "wss://bob:secret@dhe-ja06.local:8443/socket.io/?token=abc123 "

@@ -1,4 +1,4 @@
-"""Tests for dynamic DHE wellness program metadata."""
+"""Tests for canonical DHE wellness program metadata."""
 
 from __future__ import annotations
 
@@ -6,6 +6,8 @@ import asyncio
 import types
 import unittest
 from unittest.mock import AsyncMock, Mock
+
+from homeassistant.helpers.typing import UNDEFINED
 
 from custom_components.stiebel_dhe_connect.wellness_programs import (
     fallback_wellness_programs,
@@ -28,7 +30,7 @@ except ModuleNotFoundError:
 
 
 class TestWellnessPrograms(unittest.TestCase):
-    """Validate DHE wellness catalog parsing and entity metadata."""
+    """Validate wellness catalog parsing and entity metadata."""
 
     def test_normalizes_live_wellness_catalog(self) -> None:
         programs = normalize_wellness_programs([
@@ -49,9 +51,9 @@ class TestWellnessPrograms(unittest.TestCase):
         ])
 
         self.assertEqual([program["id"] for program in programs], [1, 2])
-        self.assertEqual(programs[0]["name"], "Erkältungsvorbeugung")
+        self.assertEqual(programs[0]["name"], "Cold prevention")
         self.assertTrue(programs[0]["coldwater"])
-        self.assertEqual(programs[1]["name"], "Wintererfrischung")
+        self.assertEqual(programs[1]["name"], "Winter pick-me-up")
         self.assertFalse(programs[1]["coldwater"])
         self.assertEqual(programs[1]["hot_temperature"], 42.5)
         self.assertEqual(programs[1]["cold_temperature"], 32.0)
@@ -61,14 +63,14 @@ class TestWellnessPrograms(unittest.TestCase):
             {"id": 4, "name": "", "coldwater": "bad"},
         ])
 
-        self.assertEqual(programs[0]["name"], "Circulation support")
+        self.assertEqual(programs[0]["name"], "Circulation boost")
         self.assertTrue(programs[0]["coldwater"])
         self.assertEqual(
             wellness_program_by_id((), 3)["name"],
             "Summer fitness",
         )
 
-    def test_runtime_stores_and_notifies_dynamic_wellness_catalog(self) -> None:
+    def test_runtime_stores_and_notifies_canonical_wellness_catalog(self) -> None:
         client_module = _load_client()
         protocol = _load_protocol()
         client = client_module.DHEClient.__new__(client_module.DHEClient)
@@ -89,7 +91,7 @@ class TestWellnessPrograms(unittest.TestCase):
         )
 
         self.assertEqual(len(updates), 1)
-        self.assertEqual(updates[0][0]["name"], "Erkältungsvorbeugung")
+        self.assertEqual(updates[0][0]["name"], "Cold prevention")
         self.assertEqual(
             client._last_app_values[protocol.WELLNESS_PROGRAMS_SET_COMMAND],
             [dict(program) for program in client._last_wellness_programs],
@@ -127,10 +129,10 @@ class TestWellnessPrograms(unittest.TestCase):
             },
         ))
 
-        self.assertEqual(entity._attr_name, "Erkältungsvorbeugung")
+        self.assertEqual(entity._attr_translation_key, "wellness_cold_prevention")
         self.assertEqual(
             entity._attr_extra_state_attributes["program_name"],
-            "Erkältungsvorbeugung",
+            "Cold prevention",
         )
         self.assertTrue(entity._attr_extra_state_attributes["coldwater"])
         self.assertTrue(
@@ -307,9 +309,10 @@ class TestWellnessPrograms(unittest.TestCase):
             [program["key"] for program in fallback_programs],
         )
         self.assertEqual(
-            [description.name for description in descriptions],
-            [program["name"] for program in fallback_programs],
+            [description.translation_key for description in descriptions],
+            [program["key"] for program in fallback_programs],
         )
+        self.assertTrue(all(description.name is UNDEFINED for description in descriptions))
 
     def test_restored_timer_switch_value_stays_unavailable_offline(self) -> None:
         _load_component_module("client_types")

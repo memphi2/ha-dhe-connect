@@ -19,8 +19,10 @@ from .entity_helpers import (
     temperature_memory_icon,
     temperature_memory_measurement_slot_items,
 )
+from .entity_state_helpers import switch_state_from_value
 from .protocol import (
     BRUSH_TIMER_PATH,
+    ID_CHILD_SAFETY_ACTIVE,
     ID_BRUSH_TIMER_ACTIVATION,
     ID_SHOWER_TIMER_ACTIVATION,
     SHOWER_TIMER_PATH,
@@ -86,6 +88,18 @@ STATIC_BUTTON_DESCRIPTIONS: tuple[StiebelDHEButtonEntityDescription, ...] = (
             "radio_path": "ste.app.radio",
             "radio_property": "paired",
             "radio_value": False,
+        },
+    ),
+    StiebelDHEButtonEntityDescription(
+        key="bridge_temperature_maximum",
+        translation_key="bridge_temperature_maximum",
+        method="bridge_temperature_maximum",
+        icon="mdi:thermometer-chevron-up",
+        entity_registry_enabled_default=True,
+        extra_state_attributes={
+            "temperature_path": "ste.common.temperature",
+            "temperature_property": "maxOverride",
+            "override_duration_minutes": 5,
         },
     ),
 )
@@ -216,7 +230,12 @@ class StiebelDHEButton(StiebelDHEEntityMixin, ButtonEntity):
         self._attr_extra_state_attributes = extra_state_attributes
         self._attr_available = False
         self._has_seen_availability_state = False
+        self._bridge_child_safety_active: bool | None = None
         self._last_written_button_signature: tuple[Any, ...] | None = None
+        if self._is_bridge_temperature_maximum_button():
+            self._apply_bridge_child_safety_state(
+                self._client.last_measurements.get(ID_CHILD_SAFETY_ACTIVE)
+            )
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to availability updates and start the persistent session."""
@@ -240,6 +259,10 @@ class StiebelDHEButton(StiebelDHEEntityMixin, ButtonEntity):
     @callback
     def _handle_measurement_update(self, odb_id: int, value: MeasurementValue) -> None:
         """Track whether the heater has delivered a related state."""
+        if self._is_bridge_temperature_maximum_button() and odb_id == ID_CHILD_SAFETY_ACTIVE:
+            self._apply_bridge_child_safety_state(value)
+            self._write_button_state()
+            return
         availability_measurement_id = self.entity_description.availability_measurement_id
         if availability_measurement_id is None or odb_id != availability_measurement_id:
             return
@@ -269,12 +292,34 @@ class StiebelDHEButton(StiebelDHEEntityMixin, ButtonEntity):
         self._attr_available = self._button_available(available)
         self._write_button_state(force=not available)
 
+    def _is_bridge_temperature_maximum_button(self) -> bool:
+        return self.entity_description.key == "bridge_temperature_maximum"
+
+    def _apply_bridge_child_safety_state(self, value: MeasurementValue) -> None:
+        child_safety_active = switch_state_from_value(value)
+        self._bridge_child_safety_active = child_safety_active
+        self._set_bridge_attribute("child_safety_active", child_safety_active)
+        self._attr_available = self._button_available(self._client.available)
+
+    def _set_bridge_attribute(self, key: str, value: Any) -> None:
+        attributes = dict(self._attr_extra_state_attributes or {})
+        if value is None:
+            attributes.pop(key, None)
+        else:
+            attributes[key] = value
+        self._attr_extra_state_attributes = attributes
+
     def _button_available(self, client_available: bool) -> bool:
-        return _button_available(
+        available = _button_available(
             self.entity_description,
             client_available=client_available,
             has_seen_availability_state=self._has_seen_availability_state,
         )
+        if self._is_bridge_temperature_maximum_button() and (
+            self._bridge_child_safety_active is False
+        ):
+            return False
+        return available
 
     def _write_button_state(self, *, force: bool = False) -> bool:
         """Write button state only when visible availability changed."""

@@ -338,6 +338,20 @@ class TestAppCommandTables(unittest.TestCase):
             "get:ste.app.wellness:programs",
             self.protocol.APP_STARTUP_REQUEST_COMMANDS,
         )
+        self.assertIn(
+            self.protocol.TEMPERATURE_MAX_OVERRIDE_GET_COMMAND,
+            self.protocol.OPTIONAL_STARTUP_APP_REQUEST_COMMANDS,
+        )
+
+    def test_temperature_max_override_command_table(self) -> None:
+        self.assertEqual(
+            self.protocol.TEMPERATURE_MAX_OVERRIDE_COMMANDS,
+            {
+                self.protocol.TEMPERATURE_MAX_OVERRIDE_GET_COMMAND,
+                self.protocol.TEMPERATURE_MAX_OVERRIDE_SET_COMMAND,
+                self.protocol.TEMPERATURE_MAX_OVERRIDE_ASSIGN_COMMAND,
+            },
+        )
 
     def test_protocol_exports_only_constant_names(self) -> None:
         exported = set(self.protocol.__all__)

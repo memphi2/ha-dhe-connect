@@ -335,6 +335,9 @@
       "disconnect_radio_pairing": {
         "name": "Radio-Kopplung trennen"
       },
+      "bridge_temperature_maximum": {
+        "name": "Maximum überbrücken (5 Min.)"
+      },
       "temperature_memory_1": {
         "name": "Speicher 1"
       },
@@ -712,13 +715,13 @@
       "wellness_cold_prevention": {
         "name": "Erkältungsvorbeugung"
       },
-      "wellness_winter_refresh": {
+      "wellness_winter_pick_me_up": {
         "name": "Wintererfrischung"
       },
       "wellness_summer_fitness": {
-        "name": "Sommerfitness"
+        "name": "Sommer-Fitness"
       },
-      "wellness_circulation_support": {
+      "wellness_circulation_boost": {
         "name": "Durchblutungsförderung"
       }
     }

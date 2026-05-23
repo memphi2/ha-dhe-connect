@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-from typing import Callable, Sequence
+from typing import Any, Callable, Iterator, Sequence
 
 try:
     from scripts.ha_test_redaction import redact_sensitive_text
@@ -105,6 +105,38 @@ PROPRIETARY_VENDOR_CONTENT_PATTERNS = (
         ),
     ),
 )
+HISTORY_SENSITIVE_REGEXES_GIT = (
+    r"(10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}"
+    r"|192\.168\.[0-9]{1,3}\.[0-9]{1,3}"
+    r"|172\.((1[6-9])|(2[0-9])|(3[0-1]))\.[0-9]{1,3}\.[0-9]{1,3})",
+    r"--username[[:space:]]+[A-Za-z0-9._][A-Za-z0-9._]*",
+)
+HISTORY_SENSITIVE_REGEXES_PYTHON = (
+    r"\b(?:10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}"
+    r"|192\.168\.[0-9]{1,3}\.[0-9]{1,3}"
+    r"|172\.(?:1[6-9]|2[0-9]|3[0-1])\.[0-9]{1,3}\.[0-9]{1,3})\b",
+    r"--username\s+[A-Za-z0-9._]{3,}",
+)
+PROPRIETARY_HISTORY_MARKERS = (
+    "Licensed " + "proprietary",
+    "This software " + "is copyrighted",
+    "unauthorized use, " + "duplication, transmission, distribution",
+    "STIEBEL " + "ELTRON GmbH & Co. KG",
+    "ste-" + "dhe - v1.9.00",
+)
+GITHUB_HYGIENE_SCAN_PATHS = (
+    "/repos/{repo}/pulls?state=all&per_page=100",
+    "/repos/{repo}/issues?state=all&per_page=100",
+    "/repos/{repo}/issues/comments?per_page=100",
+    "/repos/{repo}/pulls/comments?per_page=100",
+    "/repos/{repo}/releases?per_page=100",
+)
+HISTORY_HYGIENE_PATHS = (
+    "CHANGELOG.md",
+    "README.md",
+    "docs",
+)
+HISTORY_GREP_REVISION_CHUNK_SIZE = 200
 
 
 @dataclass(frozen=True)
@@ -398,6 +430,125 @@ def scan_tracked_files_for_secrets(root: Path, runner: Runner) -> CheckResult:
     return CheckResult(True, "tracked-file secret/legal scan passed")
 
 
+def scan_git_history_for_sensitive_literals(runner: Runner) -> CheckResult:
+    """Scan git history for non-anonymized local and proprietary markers."""
+    rev_list = runner(["git", "rev-list", "--all"])
+    if rev_list.returncode != 0:
+        return CheckResult(False, _command_failed_message(rev_list))
+    commits = [line.strip() for line in rev_list.stdout.splitlines() if line.strip()]
+    if not commits:
+        return CheckResult(True, "git history sensitive-marker scan passed (no commits)")
+
+    marker_expr = "|".join(
+        (
+            *HISTORY_SENSITIVE_REGEXES_GIT,
+            *(re.escape(marker) for marker in PROPRIETARY_HISTORY_MARKERS),
+        )
+    )
+    hits: list[str] = []
+    for commit_chunk in _iter_chunks(commits, HISTORY_GREP_REVISION_CHUNK_SIZE):
+        grep_result = runner(
+            [
+                "git",
+                "grep",
+                "-nE",
+                marker_expr,
+                *commit_chunk,
+                "--",
+                *HISTORY_HYGIENE_PATHS,
+            ]
+        )
+        if grep_result.returncode == 1:
+            continue
+        if grep_result.returncode != 0:
+            return CheckResult(False, _command_failed_message(grep_result))
+        hits.extend(
+            line for line in grep_result.stdout.splitlines() if line.strip()
+        )
+
+    if not hits:
+        return CheckResult(True, "git history sensitive-marker scan passed")
+    preview = "\n".join(hits[:10])
+    remaining = len(hits) - 10
+    if remaining > 0:
+        preview = f"{preview}\n... ({remaining} more)"
+    return CheckResult(
+        False,
+        "git history contains non-anonymized or proprietary markers:\n" + preview,
+    )
+
+
+def _github_payload_strings(payload: Any) -> list[str]:
+    """Extract plain text fields from a GitHub API payload."""
+    if isinstance(payload, str):
+        return [payload]
+    if isinstance(payload, list):
+        texts: list[str] = []
+        for item in payload:
+            texts.extend(_github_payload_strings(item))
+        return texts
+    if isinstance(payload, dict):
+        texts = [
+            value
+            for key, value in payload.items()
+            if key in {"title", "name", "body", "message"} and isinstance(value, str)
+        ]
+        for value in payload.values():
+            texts.extend(_github_payload_strings(value))
+        return texts
+    return []
+
+
+def scan_github_metadata_for_sensitive_literals(
+    *,
+    repo_full_name: str,
+    runner: Runner,
+) -> CheckResult:
+    """Scan GitHub metadata for non-anonymized local and proprietary markers."""
+    marker_pattern = re.compile(
+        "|".join(
+            (
+                *HISTORY_SENSITIVE_REGEXES_PYTHON,
+                *(re.escape(marker) for marker in PROPRIETARY_HISTORY_MARKERS),
+            )
+        ),
+        re.IGNORECASE,
+    )
+    findings: list[str] = []
+
+    for path_template in GITHUB_HYGIENE_SCAN_PATHS:
+        endpoint = path_template.format(repo=repo_full_name)
+        result = runner(["gh", "api", "--paginate", "--slurp", endpoint])
+        if result.returncode != 0:
+            return CheckResult(False, _command_failed_message(result))
+        try:
+            payload = json.loads(result.stdout or "[]")
+        except json.JSONDecodeError as err:
+            return CheckResult(False, f"gh api returned invalid JSON for {endpoint}: {err}")
+
+        for text in _github_payload_strings(payload):
+            match = marker_pattern.search(text)
+            if match is not None:
+                findings.append(f"{endpoint}: marker {match.group(0)!r}")
+                break
+
+    if findings:
+        return CheckResult(
+            False,
+            "GitHub metadata contains non-anonymized or proprietary markers:\n"
+            + "\n".join(findings),
+        )
+    return CheckResult(True, "GitHub metadata hygiene scan passed")
+
+
+def _iter_chunks(items: Sequence[str], chunk_size: int) -> Iterator[tuple[str, ...]]:
+    """Yield chunked tuples from one sequence."""
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be positive")
+    for start in range(0, len(items), chunk_size):
+        yield tuple(items[start : start + chunk_size])
+
+
 def run_ha_smoke(
     config: Path,
     monitor_seconds: int,
@@ -546,6 +697,28 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         default=8443,
         help="Expected DHE Zeroconf service port.",
     )
+    parser.add_argument(
+        "--run-history-hygiene",
+        action="store_true",
+        help=(
+            "Scan git history for known non-anonymized local or proprietary vendor "
+            "markers. This is opt-in because historical documentation examples may "
+            "intentionally include private-network CIDR notation."
+        ),
+    )
+    parser.add_argument(
+        "--run-github-hygiene",
+        action="store_true",
+        help=(
+            "Scan GitHub pull requests, issues, comments and releases for known "
+            "non-anonymized local or proprietary vendor markers."
+        ),
+    )
+    parser.add_argument(
+        "--github-repo",
+        default="memphi2/ha-dhe-connect",
+        help="GitHub repository full name used by --run-github-hygiene.",
+    )
     parser.add_argument("--ha-url", default="http://127.0.0.1:8123")
     parser.add_argument("--ha-username", default="")
     parser.add_argument("--ha-password-env", default="HA_TEST_PASSWORD")
@@ -567,6 +740,8 @@ def collect_results(args: argparse.Namespace, runner: Runner) -> list[CheckResul
             scan_tracked_files_for_secrets(ROOT, runner),
         )
     )
+    if args.run_history_hygiene:
+        results.append(scan_git_history_for_sensitive_literals(runner))
     if args.require_current_tag:
         results.append(check_head_matches_tag(version, runner))
 
@@ -601,6 +776,14 @@ def collect_results(args: argparse.Namespace, runner: Runner) -> list[CheckResul
             run_zeroconf_smoke(
                 timeout=args.zeroconf_timeout,
                 expected_port=args.zeroconf_expected_port,
+                runner=runner,
+            )
+        )
+
+    if args.run_github_hygiene:
+        results.append(
+            scan_github_metadata_for_sensitive_literals(
+                repo_full_name=args.github_repo,
                 runner=runner,
             )
         )

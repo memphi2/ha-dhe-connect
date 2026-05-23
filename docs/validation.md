@@ -4,9 +4,9 @@ This document collects the checks used before merging release-prep or hardening
 work. The commands below do not publish a Git tag or GitHub release by
 themselves.
 
-## Release Validation Command Set (v1.8.2)
+## Release Validation Command Set (v1.8.3)
 
-Run this release gate before opening or finalizing a v1.8.2 release-prep pull
+Run this release gate before opening or finalizing a v1.8.3 release-prep pull
 request:
 
 ```bash
@@ -115,19 +115,19 @@ should run without `--allow-dirty`.
 The GitHub `Validate` workflow runs HACS, Hassfest, pytest, repository checks,
 type checks and Ruff. Keep local results and CI results aligned before merging.
 
-### Latest v1.8.2 Local Gate Snapshot
+### Latest v1.8.3 Local Gate Snapshot
 
-The current v1.8.2 release-prep documentation reflects this local gate:
+The current v1.8.3 release-prep documentation reflects this local gate:
 
 ```text
-scripts/check_coverage.py: 705 passed, 96%
-scripts/check_integration.py: 622 tests, OK
+scripts/check_coverage.py: 712 passed, 96%
+scripts/check_integration.py: 627 tests, OK
 scripts/check_deprecations.py: deprecation guard ok
 scripts/check_typing.py: Success, 74 source files
 ruff: All checks passed
-pytest -q: 705 passed
-HA smoke (service/entity/timer): pass
-release_check.py --run-local-checks --allow-dirty --expect-tag skip --expect-github-release skip: release check ok (after changelog sectioning)
+pytest -q: 712 passed
+HA smoke (service/entity pass, timer skipped while timer remaining is disabled by integration defaults)
+release_check.py --run-local-checks --allow-dirty --expect-tag absent --expect-github-release absent: release check ok
 ```
 
 The local warning summary currently comes from third-party dependencies. The
@@ -136,7 +136,7 @@ suppression from entering the project.
 
 ## Platinum Preparation
 
-For the active `v1.8.2` hardening branch, the local Platinum-oriented evidence
+For the active `v1.8.3` hardening branch, the local Platinum-oriented evidence
 and validation sequence are tracked in
 [docs/platinum_prep.md](docs/platinum_prep.md).
 
@@ -614,7 +614,7 @@ PR text or documentation.
 Before publishing a release, run:
 
 ```bash
-python scripts/release_check.py --run-local-checks --run-zeroconf-smoke --ha-config /mnt/ha-test-config --ha-monitor-seconds 90
+python scripts/release_check.py --run-local-checks --run-github-hygiene --run-zeroconf-smoke --ha-config /mnt/ha-test-config --ha-monitor-seconds 90
 ```
 
 Before publication, the default expectation is:
@@ -622,8 +622,11 @@ Before publication, the default expectation is:
 - Version is present in `manifest.json`, README and CHANGELOG.
 - Git worktree is clean.
 - Whitespace and tracked-file secret scans pass.
+- Git-history anonymization scan passes (known local markers must not appear in
+  history).
 - The release tag is absent.
 - The GitHub release is absent.
+- GitHub metadata hygiene scan passes when `--run-github-hygiene` is enabled.
 - Local checks pass, including the explicit `tests/test_diagnostics.py` gate
   before the full pytest suite.
 - The opt-in real Zeroconf/mDNS release-lab smoke gate passes when

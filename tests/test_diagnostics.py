@@ -86,8 +86,8 @@ class TestConfigEntryDiagnostics(unittest.TestCase):
         self.diagnostics = _load_diagnostics()
 
     def test_config_entry_diagnostics_redacts_private_context(self) -> None:
-        private_host = ".".join(("172", "16", "2", "124"))
-        private_subnet = ".".join(("172", "16", "2", "0"))
+        private_host = "192.168.60.24"
+        private_subnet = "192.168.60.0"
         private_local = "dhe-ja06.local"
         private_mac = "aa:bb:cc:dd:ee:ff"
         private_name = "Private Bathroom DHE"

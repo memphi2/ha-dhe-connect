@@ -9,7 +9,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -314,7 +314,7 @@ class TestReleaseCheck(unittest.TestCase):
         self.assertIn("missing executable", result.stderr)
 
     def test_command_failed_message_redacts_auth_context(self) -> None:
-        private_host = ".".join(("172", "16", "1", "147"))
+        private_host = "192.168.50.20"
         result = release_check.CommandResult(
             args=(
                 "python",
@@ -524,6 +524,179 @@ class TestReleaseCheck(unittest.TestCase):
                 self.assertFalse(result.ok)
                 self.assertIn("tracked generated artifact path", result.message)
 
+    def test_history_sensitive_scan_passes_when_clean(self) -> None:
+        def _runner(args):
+            command = tuple(args)
+            if command == ("git", "rev-list", "--all"):
+                return release_check.CommandResult(
+                    args=command,
+                    returncode=0,
+                    stdout="abc123\n",
+                    stderr="",
+                )
+            if command[0:3] == ("git", "grep", "-nE"):
+                return release_check.CommandResult(
+                    args=command,
+                    returncode=1,
+                    stdout="",
+                    stderr="",
+                )
+            raise AssertionError(f"unexpected command: {command}")
+
+        result = release_check.scan_git_history_for_sensitive_literals(_runner)
+
+        self.assertTrue(result.ok)
+        self.assertIn("history sensitive-marker scan passed", result.message)
+
+    def test_history_sensitive_scan_rejects_non_anonymized_markers(self) -> None:
+        sample_ip = "192.168.77.9"
+
+        def _runner(args):
+            command = tuple(args)
+            if command == ("git", "rev-list", "--all"):
+                return release_check.CommandResult(
+                    args=command,
+                    returncode=0,
+                    stdout="abc123\n",
+                    stderr="",
+                )
+            if command[0:3] == ("git", "grep", "-nE"):
+                return release_check.CommandResult(
+                    args=command,
+                    returncode=0,
+                    stdout=f"abc123:CHANGELOG.md:1:{sample_ip}\n",
+                    stderr="",
+                )
+            raise AssertionError(f"unexpected command: {command}")
+
+        result = release_check.scan_git_history_for_sensitive_literals(_runner)
+
+        self.assertFalse(result.ok)
+        self.assertIn("non-anonymized or proprietary markers", result.message)
+        self.assertIn(sample_ip, result.message)
+
+    def test_history_sensitive_scan_chunks_commit_arguments(self) -> None:
+        chunk_size = release_check.HISTORY_GREP_REVISION_CHUNK_SIZE
+        commits = [f"commit-{index}" for index in range(chunk_size + 1)]
+        grep_commands: list[tuple[str, ...]] = []
+
+        def _runner(args):
+            command = tuple(args)
+            if command == ("git", "rev-list", "--all"):
+                return release_check.CommandResult(
+                    args=command,
+                    returncode=0,
+                    stdout="\n".join(commits) + "\n",
+                    stderr="",
+                )
+            if command[0:3] == ("git", "grep", "-nE"):
+                grep_commands.append(command)
+                return release_check.CommandResult(
+                    args=command,
+                    returncode=1,
+                    stdout="",
+                    stderr="",
+                )
+            raise AssertionError(f"unexpected command: {command}")
+
+        result = release_check.scan_git_history_for_sensitive_literals(_runner)
+
+        self.assertTrue(result.ok)
+        self.assertEqual(len(grep_commands), 2)
+        first_separator = grep_commands[0].index("--")
+        second_separator = grep_commands[1].index("--")
+        self.assertEqual(first_separator - 4, chunk_size)
+        self.assertEqual(second_separator - 4, 1)
+
+    def test_history_sensitive_scan_regex_includes_all_private_ipv4_ranges(self) -> None:
+        captured_marker_expr: str | None = None
+
+        def _runner(args):
+            nonlocal captured_marker_expr
+            command = tuple(args)
+            if command == ("git", "rev-list", "--all"):
+                return release_check.CommandResult(
+                    args=command,
+                    returncode=0,
+                    stdout="abc123\n",
+                    stderr="",
+                )
+            if command[0:3] == ("git", "grep", "-nE"):
+                captured_marker_expr = command[3]
+                return release_check.CommandResult(
+                    args=command,
+                    returncode=1,
+                    stdout="",
+                    stderr="",
+                )
+            raise AssertionError(f"unexpected command: {command}")
+
+        result = release_check.scan_git_history_for_sensitive_literals(_runner)
+
+        self.assertTrue(result.ok)
+        assert captured_marker_expr is not None
+        self.assertIn("10\\.", captured_marker_expr)
+        self.assertIn("192\\.168", captured_marker_expr)
+        self.assertIn("172\\.", captured_marker_expr)
+
+    def test_github_hygiene_scan_rejects_non_anonymized_markers(self) -> None:
+        sample_user = "demo_user42"
+
+        def _runner(args):
+            command = tuple(args)
+            if command[0:2] != ("gh", "api"):
+                raise AssertionError(f"unexpected command: {command}")
+            self.assertEqual(command[2:4], ("--paginate", "--slurp"))
+            endpoint = command[4]
+            if endpoint.startswith("/repos/example/repo/pulls?state=all"):
+                payload = [[{"number": 1, "body": f"--username {sample_user} used in log"}]]
+            else:
+                payload = []
+            return release_check.CommandResult(
+                args=command,
+                returncode=0,
+                stdout=json.dumps(payload),
+                stderr="",
+            )
+
+        result = release_check.scan_github_metadata_for_sensitive_literals(
+            repo_full_name="example/repo",
+            runner=_runner,
+        )
+
+        self.assertFalse(result.ok)
+        self.assertIn("GitHub metadata contains non-anonymized or proprietary markers", result.message)
+        self.assertIn(sample_user, result.message)
+
+    def test_github_hygiene_scan_rejects_private_ipv4_markers(self) -> None:
+        sample_ip = "10.1.23.45"
+
+        def _runner(args):
+            command = tuple(args)
+            if command[0:2] != ("gh", "api"):
+                raise AssertionError(f"unexpected command: {command}")
+            self.assertEqual(command[2:4], ("--paginate", "--slurp"))
+            endpoint = command[4]
+            if endpoint.startswith("/repos/example/repo/pulls?state=all"):
+                payload = [[{"number": 1, "body": f"debug host {sample_ip}"}]]
+            else:
+                payload = []
+            return release_check.CommandResult(
+                args=command,
+                returncode=0,
+                stdout=json.dumps(payload),
+                stderr="",
+            )
+
+        result = release_check.scan_github_metadata_for_sensitive_literals(
+            repo_full_name="example/repo",
+            runner=_runner,
+        )
+
+        self.assertFalse(result.ok)
+        self.assertIn("GitHub metadata contains non-anonymized or proprietary markers", result.message)
+        self.assertIn(sample_ip, result.message)
+
     def test_service_smoke_requires_config_and_username(self) -> None:
         args = release_check._parse_args(["--run-ha-service-smoke"])
 
@@ -679,6 +852,125 @@ class TestReleaseCheck(unittest.TestCase):
             ),
             commands,
         )
+
+    def test_github_hygiene_flag_adds_release_gate(self) -> None:
+        args = release_check._parse_args(
+            [
+                "--allow-dirty",
+                "--expect-tag",
+                "skip",
+                "--expect-github-release",
+                "skip",
+                "--run-github-hygiene",
+                "--github-repo",
+                "example/repo",
+            ]
+        )
+
+        with (
+            patch("scripts.release_check.load_manifest_version", return_value="1.3.2"),
+            patch("scripts.release_check.check_version_files", return_value=[]),
+            patch(
+                "scripts.release_check.scan_tracked_files_for_secrets",
+                return_value=release_check.CheckResult(True, "tracked-file scan ok"),
+            ),
+            patch(
+                "scripts.release_check.scan_git_history_for_sensitive_literals",
+                return_value=release_check.CheckResult(True, "history scan ok"),
+            ),
+            patch(
+                "scripts.release_check.scan_github_metadata_for_sensitive_literals",
+                return_value=release_check.CheckResult(True, "github scan ok"),
+            ) as github_scan,
+        ):
+            results = release_check.collect_results(
+                args,
+                lambda command: release_check.CommandResult(
+                    args=tuple(command),
+                    returncode=0,
+                    stdout="",
+                    stderr="",
+                ),
+            )
+
+        self.assertTrue(all(result.ok for result in results), results)
+        github_scan.assert_called_once_with(
+            repo_full_name="example/repo",
+            runner=ANY,
+        )
+
+    def test_history_hygiene_flag_adds_release_gate(self) -> None:
+        args = release_check._parse_args(
+            [
+                "--allow-dirty",
+                "--expect-tag",
+                "skip",
+                "--expect-github-release",
+                "skip",
+                "--run-history-hygiene",
+            ]
+        )
+
+        with (
+            patch("scripts.release_check.load_manifest_version", return_value="1.3.2"),
+            patch("scripts.release_check.check_version_files", return_value=[]),
+            patch(
+                "scripts.release_check.scan_tracked_files_for_secrets",
+                return_value=release_check.CheckResult(True, "tracked-file scan ok"),
+            ),
+            patch(
+                "scripts.release_check.scan_git_history_for_sensitive_literals",
+                return_value=release_check.CheckResult(True, "history scan ok"),
+            ) as history_scan,
+        ):
+            results = release_check.collect_results(
+                args,
+                lambda command: release_check.CommandResult(
+                    args=tuple(command),
+                    returncode=0,
+                    stdout="",
+                    stderr="",
+                ),
+            )
+
+        self.assertTrue(all(result.ok for result in results), results)
+        history_scan.assert_called_once_with(ANY)
+
+    def test_history_hygiene_scan_is_not_enabled_by_default(self) -> None:
+        args = release_check._parse_args(
+            [
+                "--allow-dirty",
+                "--expect-tag",
+                "skip",
+                "--expect-github-release",
+                "skip",
+            ]
+        )
+
+        with (
+            patch("scripts.release_check.load_manifest_version", return_value="1.3.2"),
+            patch("scripts.release_check.check_version_files", return_value=[]),
+            patch(
+                "scripts.release_check.scan_tracked_files_for_secrets",
+                return_value=release_check.CheckResult(True, "tracked-file scan ok"),
+            ),
+            patch(
+                "scripts.release_check.scan_git_history_for_sensitive_literals",
+                return_value=release_check.CheckResult(True, "history scan ok"),
+            ) as history_scan,
+        ):
+            results = release_check.collect_results(
+                args,
+                lambda command: release_check.CommandResult(
+                    args=tuple(command),
+                    returncode=0,
+                    stdout="",
+                    stderr="",
+                ),
+            )
+
+        self.assertTrue(all(result.ok for result in results), results)
+        history_scan.assert_not_called()
 
     def test_require_current_tag_adds_head_tag_check(self) -> None:
         args = release_check._parse_args(["--require-current-tag"])

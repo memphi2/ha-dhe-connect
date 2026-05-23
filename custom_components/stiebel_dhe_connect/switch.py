@@ -35,6 +35,7 @@ from .protocol import (
 from .runtime_helpers import get_runtime_data
 from .wellness_programs import (
     fallback_wellness_programs,
+    normalize_wellness_programs,
     wellness_program_by_id,
 )
 
@@ -133,7 +134,7 @@ def _wellness_program_switches() -> tuple[
     return tuple(
         StiebelDHEWellnessShowerProgramSwitchDescription(
             key=str(program["key"]),
-            name=str(program["name"]),
+            translation_key=str(program["key"]),
             icon=WELLNESS_PROGRAM_ICONS.get(int(program["id"]), "mdi:shower"),
             program_id=int(program["id"]),
         )
@@ -447,8 +448,6 @@ class StiebelDHEWellnessShowerProgramSwitch(
             fallback_wellness_programs(),
             description.program_id,
         )
-        self._attr_translation_key = None
-        self._attr_name = str(self._program_metadata.get("name") or description.name)
         self._attr_extra_state_attributes = self._program_attributes()
         self._last_program_value: ODBValue | None = None
         self._program_active: bool | None = None
@@ -507,12 +506,10 @@ class StiebelDHEWellnessShowerProgramSwitch(
         programs: tuple[dict[str, Any], ...],
     ) -> None:
         """Apply live DHE wellness metadata while keeping entity IDs stable."""
+        normalized_programs = normalize_wellness_programs(list(programs))
         self._program_metadata = wellness_program_by_id(
-            programs,
+            normalized_programs,
             self.entity_description.program_id,
-        )
-        self._attr_name = str(
-            self._program_metadata.get("name") or self.entity_description.name
         )
         self._attr_extra_state_attributes = self._program_attributes()
 

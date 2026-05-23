@@ -872,7 +872,7 @@ class TestHaTestSmoke(unittest.TestCase):
     def test_log_scan_redacts_auth_context(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             config = Path(temp_dir)
-            private_host = ".".join(("172", "16", "1", "147"))
+            private_host = "192.168.50.20"
             (config / "home-assistant.log").write_text(
                 "2026-05-16 ERROR custom_components.stiebel_dhe_connect "
                 "access_token=abc123 refresh_token='def456' "

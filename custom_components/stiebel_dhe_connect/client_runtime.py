@@ -97,6 +97,7 @@ from .protocol import (
     RADIO_SET_COMMANDS,
     RADIO_STATIONS_SET_COMMAND,
     SAVING_MONITOR_COMMAND_IDS,
+    TEMPERATURE_MAX_OVERRIDE_COMMANDS,
     TEMP_MEMORY_ASSIGN_COMMAND,
     TEMP_MEMORY_SET_COMMAND,
     WEATHER_ASSIGN_COMMANDS,
@@ -144,6 +145,7 @@ class DHEClientRuntimeMixin(DHEClientRuntimeMediaMixin, DHEClientRuntimeAppMixin
         _message_count: int
         _nominal_power_kw: float
         _odb_value_handlers: dict[int, Callable[..., None]]
+        _ctx: DHESession | None
         _pending_expected_setpoint: float | None
         _pending_app_read_deadlines: dict[str, float]
         _pending_odb_read_deadlines: dict[int, float]
@@ -166,6 +168,10 @@ class DHEClientRuntimeMixin(DHEClientRuntimeMediaMixin, DHEClientRuntimeAppMixin
             callbacks: set[Callable[..., None]],
             *args: Any,
         ) -> None: ...
+
+        def _create_background_task(self, coro: Any, name: str) -> asyncio.Task[Any]: ...
+
+        async def _request_app_value(self, ctx: DHESession, command: str) -> None: ...
 
     async def _handle_runtime_event(self, event: DHEEvent) -> None:
         if event.name == "__closed":
@@ -250,6 +256,10 @@ class DHEClientRuntimeMixin(DHEClientRuntimeMediaMixin, DHEClientRuntimeAppMixin
         if command in {TEMP_MEMORY_SET_COMMAND, TEMP_MEMORY_ASSIGN_COMMAND}:
             self._record_runtime_parser_category("temperature_memory")
             self._handle_temperature_memory_value(value, source_command=command)
+            return
+        if command in TEMPERATURE_MAX_OVERRIDE_COMMANDS:
+            self._record_runtime_parser_category("temperature_max_override")
+            self._handle_temperature_max_override_value(command, value)
             return
         if command in DEVICE_INFO_COMMAND_IDS:
             self._record_runtime_parser_category("device_info")
@@ -498,11 +508,13 @@ class DHEClientRuntimeMixin(DHEClientRuntimeMediaMixin, DHEClientRuntimeAppMixin
         *,
         force_update: bool = False,
     ) -> None:
+        child_safety_active = _raw_to_bool(raw_value)
         self._handle_measurement(
             ID_CHILD_SAFETY_ACTIVE,
-            _raw_to_bool(raw_value),
+            child_safety_active,
             force_update=force_update,
         )
+        self._update_diagnostics(child_safety_active=child_safety_active)
 
     def _handle_odb_value(
         self,

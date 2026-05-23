@@ -36,6 +36,7 @@ from .protocol import (
     ID_WATER_PRICE_CENTS,
     ID_WATER_PRICE_EUROS,
     ODB_ASSIGN_COMMAND,
+    TEMPERATURE_MAX_OVERRIDE_ASSIGN_COMMAND,
     SET_REQ_OFF_VALUE,
     WATER_PRICE_MAX,
 )
@@ -161,6 +162,23 @@ class DHEClientCommandsMixin(
 
     async def set_child_safety_active(self, enabled: bool) -> bool:
         return bool(await self.write_odb_value(ID_CHILD_SAFETY_ACTIVE, bool(enabled)))
+
+    async def bridge_temperature_maximum(self) -> bool:
+        """Temporarily bridge the DHE maximum temperature for 5 minutes."""
+        client = _command_context(self)
+
+        async def _operation(ctx: DHESession) -> bool:
+            await client._send_ste_command(
+                ctx,
+                TEMPERATURE_MAX_OVERRIDE_ASSIGN_COMMAND,
+                True,
+            )
+            return True
+
+        return await client._run_command_with_reconnect_retry(
+            "Could not bridge DHE maximum temperature",
+            _operation,
+        )
 
     async def set_eco_mode(self, enabled: bool) -> bool:
         return bool(await self.write_odb_value(ID_ECO_MODE, bool(enabled)))

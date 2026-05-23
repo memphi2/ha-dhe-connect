@@ -381,6 +381,9 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         sensor_module = _load_sensor_module()
         self.assertIn("water_flow", sensor_module.DEFAULT_ENABLED_SENSOR_KEYS)
         self.assertIn("power", sensor_module.DEFAULT_ENABLED_SENSOR_KEYS)
+        self.assertIn("inlet_temperature", sensor_module.DEFAULT_ENABLED_SENSOR_KEYS)
+        self.assertIn("outlet_temperature", sensor_module.DEFAULT_ENABLED_SENSOR_KEYS)
+        self.assertIn("device_status", sensor_module.DEFAULT_ENABLED_SENSOR_KEYS)
         water_flow_description = next(
             item for item in sensor_module.SENSOR_DESCRIPTIONS if item.key == "water_flow"
         )

@@ -11,7 +11,7 @@ class TestHATestRedaction(unittest.TestCase):
     """Validate console-output redaction used by HA smoke helpers."""
 
     def test_redacts_tokenized_urls_and_auth_context(self) -> None:
-        private_host = ".".join(("172", "16", "1", "147"))
+        private_host = "192.168.50.20"
         text = redact_sensitive_text(
             f"http://user:secret@{private_host}:8123/path?token=abc123 "
             "access_token=def456 Authorization: Bearer ghijk password=secret"

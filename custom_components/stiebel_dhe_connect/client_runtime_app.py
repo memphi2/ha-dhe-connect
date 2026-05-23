@@ -37,6 +37,7 @@ from .protocol import (
     TEMPERATURE_MEMORY_ID_TO_MEASUREMENT,
     TIMER_DEFAULT_DURATIONS,
     TIMER_PATH_IDS,
+    TEMPERATURE_MAX_OVERRIDE_COMMANDS,
     WELLNESS_PROGRAMS_SET_COMMAND,
 )
 from .wellness_programs import normalize_wellness_programs as _normalize_wellness_programs
@@ -87,6 +88,8 @@ class DHEClientRuntimeAppMixin:
             callbacks: set[Callable[..., None]],
             *args: Any,
         ) -> None: ...
+
+        def _update_diagnostics(self, **updates: Any) -> None: ...
 
     def _handle_app_timer_value(self, command: str, raw_value: Any) -> None:
         try:
@@ -324,6 +327,20 @@ class DHEClientRuntimeAppMixin:
             measurement_id,
             self._format_app_setting_value(raw_value),
             force_update=previous_attributes != attributes,
+        )
+
+    def _handle_temperature_max_override_value(self, command: str, raw_value: Any) -> None:
+        """Track temporary DHE max-temperature bridge runtime updates."""
+        if command not in TEMPERATURE_MAX_OVERRIDE_COMMANDS:
+            return
+        self._last_app_values[command] = raw_value
+        try:
+            active = _raw_to_bool(raw_value)
+        except (TypeError, ValueError):
+            active = bool(raw_value)
+        self._update_diagnostics(
+            temperature_max_override_active=active,
+            temperature_max_override_source_command=command,
         )
 
     @staticmethod

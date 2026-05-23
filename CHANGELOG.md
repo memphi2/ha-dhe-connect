@@ -4,6 +4,98 @@
 
 - No changes yet.
 
+## v1.8.4 - 2026-05-24
+
+Bugfix release for the v1.8 line. This release keeps public entity IDs, unique
+IDs and DHE protocol behavior stable.
+
+### Entity Naming and Translations
+
+- Removed hardcoded wellness switch names from switch descriptions so Home
+  Assistant consistently uses translation keys for localized entity labels.
+- Restored German wellness program names in translations:
+  `Erkältungsvorbeugung`, `Wintererfrischung`, `Sommer-Fitness`,
+  `Durchblutungsförderung`.
+- Updated wellness description tests to enforce translation-driven naming
+  behavior and avoid regressions.
+
+### Validation
+
+- `.venv/bin/python scripts/check_coverage.py`:
+  `722 passed`; scoped integration coverage gate `96%`.
+- `.venv/bin/python scripts/check_integration.py`:
+  `Ran 636 tests ... OK`; `integration checks ok`.
+- `.venv/bin/python scripts/check_deprecations.py`:
+  `deprecation guard ok`.
+- `.venv/bin/python scripts/check_typing.py`:
+  `Success: no issues found in 74 source files`.
+- `.venv/bin/python -m ruff check custom_components/stiebel_dhe_connect tests scripts`:
+  `All checks passed!`.
+- `.venv/bin/python scripts/release_check.py --run-local-checks --allow-dirty --expect-tag absent --expect-github-release absent`:
+  `release check ok` (manifest/README/changelog/version gates passed; local tag
+  and GitHub release for `v1.8.4` are absent).
+
+## v1.8.3 - 2026-05-23
+
+Release consistency update for the v1.8 line. This release keeps public entity
+IDs, unique IDs and DHE protocol behavior stable.
+
+### Runtime and Discovery Consistency
+
+- Zeroconf prompt suppression now only applies when an existing DHE config
+  entry is present, preventing stale-cache suppression on fresh setups.
+- Runtime no longer requests `get:ste.common.temperature:maxOverride` after
+  child-safety updates; bridge handling is now explicit one-way device action.
+- Radio runtime no longer infers playback from station/title metadata updates;
+  `playing` now follows real radio play-state messages or successful HA actions.
+
+### Entity Defaults and Naming
+
+- Enabled the bridge max-override button by default.
+- Added a wellness switch unique-id migration path from
+  `wellness_winter_refresh` -> `wellness_winter_pick_me_up` and
+  `wellness_circulation_support` -> `wellness_circulation_boost`, so existing
+  installs upgrade cleanly without duplicate entities.
+- Wellness program naming is now canonicalized to fixed program labels for the
+  known IDs (`Cold prevention`, `Winter pick-me-up`, `Summer fitness`,
+  `Circulation boost`) and aligned across protocol/constants/translations.
+- Updated documentation defaults so inlet/outlet temperature and device status
+  are explicitly listed as enabled by default.
+
+### Tests and Regression Safety
+
+- Added a zeroconf regression test to ensure discovery prompts are not
+  suppressed without an existing config entry.
+- Added targeted runtime tests for child-safety/bridge behavior without
+  max-override readback polling.
+- Added targeted runtime tests for radio station/title updates that must not
+  infer playback state.
+- Expanded protocol/sensor/wellness tests for canonical naming and runtime
+  mapping consistency.
+
+### Validation
+
+- `.venv/bin/python scripts/check_coverage.py`:
+  `712 passed`; scoped integration coverage gate `96%`.
+- `.venv/bin/python scripts/check_integration.py`:
+  `Ran 627 tests ... OK`; `integration checks ok`.
+- `.venv/bin/python scripts/check_deprecations.py`:
+  `deprecation guard ok`.
+- `.venv/bin/python scripts/check_typing.py`:
+  `Success: no issues found in 74 source files`.
+- `.venv/bin/python -m ruff check custom_components/stiebel_dhe_connect tests scripts`:
+  `All checks passed!`.
+- `.venv/bin/python scripts/release_check.py --run-local-checks --allow-dirty --expect-tag absent --expect-github-release absent`:
+  `release check ok`.
+- HA live smoke on test system (`HA-TEST`) via
+  `scripts/ha_test_api.py --service-smoke --entity-smoke --timer-smoke`:
+  service smoke passed, entity smoke passed, timer smoke skipped because the
+  timer-remaining entity is disabled by integration defaults.
+- Additional HA live weather-service check:
+  `search_weather_location`, `select_weather_location`,
+  `add_weather_favorite`, `remove_weather_favorite` executed and restored to the
+  previous location/favorites state.
+
 ## v1.8.2 - 2026-05-22
 
 Release hardening update for the v1.8 line. This release keeps public entity
@@ -115,7 +207,7 @@ IDs, unique IDs and DHE protocol behavior stable.
 - `.venv/bin/python scripts/check_integration.py`: `integration checks ok`.
 - `.venv/bin/python scripts/release_check.py --run-local-checks --expect-tag absent --expect-github-release absent`:
   `release check ok`; tag and GitHub release for `v1.8.1` are absent.
-- `.venv/bin/python scripts/ha_test_api.py --url http://HA-TEST:8123 --username <ha-user> --service-smoke --entity-smoke --timer-smoke`:
+- `.venv/bin/python scripts/ha_test_api.py --url http://HA-TEST:8123 --service-smoke --entity-smoke --timer-smoke`:
   service smoke passed, entity smoke passed, timer smoke skipped disabled timer
   remaining entities cleanly.
 

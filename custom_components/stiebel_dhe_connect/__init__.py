@@ -70,6 +70,10 @@ STALE_SENSOR_STATISTIC_TRANSLATION_KEYS = frozenset(
         "odb_actual_water_saving",
     }
 )
+WELLNESS_ENTITY_KEY_MIGRATIONS: tuple[tuple[str, str], ...] = (
+    ("wellness_winter_refresh", "wellness_winter_pick_me_up"),
+    ("wellness_circulation_support", "wellness_circulation_boost"),
+)
 
 
 @dataclass
@@ -181,6 +185,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     set_runtime_data(entry, runtime)
 
     try:
+        _async_migrate_wellness_switch_unique_ids(hass, entry)
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     except asyncio.CancelledError:
         raise
@@ -206,6 +211,53 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
+
+
+def _async_migrate_wellness_switch_unique_ids(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+) -> None:
+    """Migrate legacy wellness switch unique IDs to canonical program keys."""
+    entity_registry = er.async_get(hass)
+    entities = list(
+        er.async_entries_for_config_entry(entity_registry, entry.entry_id)
+    )
+    if not entities:
+        return
+
+    prefix = f"{DOMAIN}_{entry.entry_id}_"
+    unique_id_migrations = {
+        f"{prefix}{old_key}": f"{prefix}{new_key}"
+        for old_key, new_key in WELLNESS_ENTITY_KEY_MIGRATIONS
+    }
+    unique_ids = {entity.unique_id for entity in entities}
+    migrated = 0
+
+    for entity in entities:
+        target_unique_id = unique_id_migrations.get(entity.unique_id)
+        if target_unique_id is None:
+            continue
+        if target_unique_id in unique_ids:
+            _LOGGER.debug(
+                "Skipping wellness unique-id migration for %s because %s already exists",
+                entity.entity_id,
+                target_unique_id,
+            )
+            continue
+        entity_registry.async_update_entity(
+            entity.entity_id,
+            new_unique_id=target_unique_id,
+        )
+        unique_ids.discard(entity.unique_id)
+        unique_ids.add(target_unique_id)
+        migrated += 1
+
+    if migrated:
+        _LOGGER.debug(
+            "Migrated %s wellness switch unique-id(s) for config entry %s",
+            migrated,
+            entry.entry_id,
+        )
 
 
 async def _async_first_reachable_entry_target(

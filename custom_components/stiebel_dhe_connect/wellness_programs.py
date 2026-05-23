@@ -10,9 +10,9 @@ from .client_value_helpers import raw_to_float as _raw_to_float
 
 WELLNESS_PROGRAM_KEYS_BY_ID = {
     1: "wellness_cold_prevention",
-    2: "wellness_winter_refresh",
+    2: "wellness_winter_pick_me_up",
     3: "wellness_summer_fitness",
-    4: "wellness_circulation_support",
+    4: "wellness_circulation_boost",
 }
 
 _FALLBACK_WELLNESS_PROGRAMS: tuple[dict[str, Any], ...] = (
@@ -24,8 +24,8 @@ _FALLBACK_WELLNESS_PROGRAMS: tuple[dict[str, Any], ...] = (
     },
     {
         "id": 2,
-        "key": "wellness_winter_refresh",
-        "name": "Winter refresh",
+        "key": "wellness_winter_pick_me_up",
+        "name": "Winter pick-me-up",
         "coldwater": False,
     },
     {
@@ -36,8 +36,8 @@ _FALLBACK_WELLNESS_PROGRAMS: tuple[dict[str, Any], ...] = (
     },
     {
         "id": 4,
-        "key": "wellness_circulation_support",
-        "name": "Circulation support",
+        "key": "wellness_circulation_boost",
+        "name": "Circulation boost",
         "coldwater": True,
     },
 )
@@ -96,7 +96,15 @@ def _normalize_wellness_program(raw_value: Any) -> dict[str, Any] | None:
         return None
 
     fallback = wellness_program_by_id((), program_id)
-    name = _clean_text(raw_value.get("name")) or str(fallback["name"])
+    # Keep canonical program names for known program IDs so HA names and
+    # attributes stay stable across DHE locale changes.
+    fallback_name = str(fallback["name"])
+    live_name = _clean_text(raw_value.get("name"))
+    name = (
+        fallback_name
+        if program_id in WELLNESS_PROGRAM_KEYS_BY_ID
+        else (live_name or fallback_name)
+    )
     program: dict[str, Any] = {
         "id": program_id,
         "key": WELLNESS_PROGRAM_KEYS_BY_ID.get(
@@ -117,7 +125,9 @@ def _normalize_wellness_program(raw_value: Any) -> dict[str, Any] | None:
 
     for source_key, target_key in (
         ("hot", "hot_temperature"),
+        ("hot_temperature", "hot_temperature"),
         ("cold", "cold_temperature"),
+        ("cold_temperature", "cold_temperature"),
         ("duration", "duration"),
         ("durationMinutes", "duration"),
     ):

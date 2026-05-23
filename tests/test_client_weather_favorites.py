@@ -760,6 +760,39 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         )
         client._request_app_value.assert_awaited_once()
 
+    async def test_bridge_temperature_maximum_writes_assign_command(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+
+        client = DHEClient.__new__(DHEClient)
+        sent_packets: list[dict[str, object]] = []
+        client._message_packet = lambda payload: payload
+
+        async def _post_packet(_ctx: object, packet: dict[str, object]) -> None:
+            sent_packets.append(packet)
+
+        client._post_packet = AsyncMock(side_effect=_post_packet)
+
+        async def _run_with_retry(_message, operation):
+            return await operation(object())
+
+        client._run_command_with_reconnect_retry = _run_with_retry
+        client._request_app_value = AsyncMock()
+
+        confirmed = await DHEClient.bridge_temperature_maximum(client)
+
+        self.assertTrue(confirmed)
+        self.assertEqual(
+            sent_packets,
+            [
+                {
+                    "command": "assign:ste.common.temperature:maxOverride",
+                    "value": True,
+                }
+            ],
+        )
+        client._request_app_value.assert_not_awaited()
+
     async def test_web_interface_version_updates_protocol_version(self) -> None:
         client_module = _load_client()
         protocol_module = _load_protocol()
@@ -1376,6 +1409,125 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
                 (protocol_module.ID_SHOWER_TIMER_REMAINING, 5.0),
                 (protocol_module.ID_SHOWER_TIMER_ACTIVATION, False),
             ],
+        )
+
+    async def test_temperature_max_override_runtime_event_updates_diagnostics(self) -> None:
+        client_module = _load_client()
+        protocol_module = _load_protocol()
+        client_types = _load_component_module("client_types")
+        DHEClient = client_module.DHEClient
+        DHEEvent = client_types.DHEEvent
+
+        client = DHEClient.__new__(DHEClient)
+        client._diagnostic_state = {}
+        client._diagnostic_callbacks = set()
+        client._last_message_monotonic = None
+        client._message_count = 0
+        client._runtime_parser_stats = {}
+        client._last_runtime_parser_category = None
+        client._last_app_values = {}
+        client._last_measurements = {}
+        client._last_measurement_attributes = {}
+        client._last_radio_state = {}
+        client._last_radio_stations = []
+        client._last_radio_favorites = []
+        client._last_radio_catalogs = {
+            field: [] for field in protocol_module.RADIO_CATALOG_FIELDS
+        }
+        client._last_radio_genres = []
+        client._radio_catalog_generations = {
+            field: 0 for field in protocol_module.RADIO_CATALOG_FIELDS
+        }
+        client._radio_stations_generation = 0
+        client._radio_favorites_generation = 0
+        client._radio_genres_generation = 0
+        client._radio_callbacks = set()
+        client._last_weather_state = {}
+        client._last_weather_countries = []
+        client._weather_callbacks = set()
+        client._weather_search_generation = 0
+        client._weather_favorites_generation = 0
+        client._weather_countries_generation = 0
+
+        await DHEClient._handle_runtime_event(
+            client,
+            DHEEvent(
+                "message",
+                {
+                    "command": protocol_module.TEMPERATURE_MAX_OVERRIDE_SET_COMMAND,
+                    "value": True,
+                },
+            ),
+        )
+
+        self.assertEqual(
+            client._last_app_values[protocol_module.TEMPERATURE_MAX_OVERRIDE_SET_COMMAND],
+            True,
+        )
+        self.assertIs(client._diagnostic_state["temperature_max_override_active"], True)
+        self.assertEqual(
+            client._diagnostic_state["temperature_max_override_source_command"],
+            protocol_module.TEMPERATURE_MAX_OVERRIDE_SET_COMMAND,
+        )
+        self.assertEqual(client._last_runtime_parser_category, "temperature_max_override")
+        self.assertEqual(client._runtime_parser_stats["temperature_max_override"], 1)
+
+    async def test_child_safety_off_does_not_request_temperature_max_override_readback(
+        self,
+    ) -> None:
+        client_module = _load_client()
+        protocol_module = _load_protocol()
+        DHEClient = client_module.DHEClient
+
+        client = DHEClient.__new__(DHEClient)
+        client._last_measurements = {protocol_module.ID_CHILD_SAFETY_ACTIVE: True}
+        client._request_app_value = AsyncMock()
+
+        def _handle_measurement(
+            odb_id: int,
+            value: object,
+            *,
+            force_update: bool = False,
+        ) -> None:
+            del force_update
+            client._last_measurements[odb_id] = value
+
+        client._handle_measurement = _handle_measurement
+        client._update_diagnostics = Mock()
+
+        DHEClient._handle_odb_child_safety_active_value(client, False)
+
+        client._request_app_value.assert_not_awaited()
+        client._update_diagnostics.assert_called_once_with(
+            child_safety_active=False
+        )
+
+    async def test_child_safety_off_updates_diagnostics_when_already_off(self) -> None:
+        client_module = _load_client()
+        protocol_module = _load_protocol()
+        DHEClient = client_module.DHEClient
+
+        client = DHEClient.__new__(DHEClient)
+        client._last_measurements = {protocol_module.ID_CHILD_SAFETY_ACTIVE: False}
+        client._request_app_value = AsyncMock()
+
+        def _handle_measurement(
+            odb_id: int,
+            value: object,
+            *,
+            force_update: bool = False,
+        ) -> None:
+            del force_update
+            client._last_measurements[odb_id] = value
+
+        client._handle_measurement = _handle_measurement
+        client._update_diagnostics = Mock()
+
+        DHEClient._handle_odb_child_safety_active_value(client, False)
+
+        client._request_app_value.assert_not_awaited()
+        client._update_diagnostics.assert_called_once_with(
+            child_safety_active=False
         )
 
     async def test_shower_timer_writes_use_shower_timer_path(self) -> None:
@@ -2019,7 +2171,9 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("play", client._last_radio_state)
         self.assertEqual(states[-1]["station"]["Id"], 166)
 
-    async def test_runtime_radio_device_station_update_infers_playing(self) -> None:
+    async def test_runtime_radio_device_station_update_does_not_infer_playing(
+        self,
+    ) -> None:
         client_module = _load_client()
         DHEClient = client_module.DHEClient
 
@@ -2037,10 +2191,14 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
             {"Id": 166, "Name": "Radio Test"},
         )
 
-        self.assertIs(client._last_radio_state["play"], True)
-        self.assertIs(states[-1]["play"], True)
+        self.assertNotIn("play", client._last_radio_state)
+        self.assertNotIn("play", states[-1])
+        self.assertEqual(client._last_radio_state["station"]["Id"], 166)
+        self.assertEqual(states[-1]["station"]["Id"], 166)
 
-    async def test_runtime_radio_device_title_update_infers_playing(self) -> None:
+    async def test_runtime_radio_device_title_update_does_not_infer_playing(
+        self,
+    ) -> None:
         client_module = _load_client()
         DHEClient = client_module.DHEClient
 
@@ -2058,8 +2216,10 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
             "Now Playing",
         )
 
-        self.assertIs(client._last_radio_state["play"], True)
-        self.assertIs(states[-1]["play"], True)
+        self.assertIs(client._last_radio_state["play"], False)
+        self.assertIs(states[-1]["play"], False)
+        self.assertEqual(client._last_radio_state["title"], "Now Playing")
+        self.assertEqual(states[-1]["title"], "Now Playing")
 
     async def test_runtime_ignores_unknown_radio_and_bad_weather_payloads(
         self,

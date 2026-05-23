@@ -202,9 +202,9 @@ Temperature memory name writes use the current cached or freshly read memory tem
 | Brush timer | `assign:ste.app.brushTimer:activation` | Starts or stops the brush timer |
 | Shower timer | `assign:ste.app.showerTimer:activation` | Starts or stops the shower timer |
 | Cold prevention | ODB ID `2` value `1`, trigger ODB ID `10` | Starts wellness cold prevention, off sends stop |
-| Winter refresh | ODB ID `2` value `2`, trigger ODB ID `10` | Starts winter refresh, off sends stop |
+| Winter pick-me-up | ODB ID `2` value `2`, trigger ODB ID `10` | Starts winter pick-me-up, off sends stop |
 | Summer fitness | ODB ID `2` value `3`, trigger ODB ID `10` | Starts summer fitness, off sends stop |
-| Circulation support | ODB ID `2` value `4`, trigger ODB ID `10` | Starts circulation support, off sends stop |
+| Circulation boost | ODB ID `2` value `4`, trigger ODB ID `10` | Starts circulation boost, off sends stop |
 
 Wellness programs are triggered by writing the program ID and then sending ODB ID `10`. The integration derives switch state from the latest program and active-state readbacks. The switch entity IDs stay stable, but the displayed program name and attributes are refreshed from the DHE `ste.app.wellness:programs` catalog when it is available. The catalog can include `coldwater`, `hot_temperature` and `cold_temperature`; `coldwater=true` means the DHE program contains a cold-water phase where heating is disabled by the device.
 
@@ -216,6 +216,7 @@ Wellness programs are triggered by writing the program ID and then sending ODB I
 | Reset shower timer | `assign:ste.app.showerTimer:reset` | Resets shower timer remaining time to the configured duration and turns activation off; disabled by default |
 | Repair pairing | local token reset and reconnect | Deletes the stored DHE token, starts a fresh pairing attempt and asks the user to confirm pairing on the DHE; disabled by default |
 | Disconnect radio pairing | `assign:ste.app.radio:paired` with `false` | Sends the observed DHE radio pairing disconnect action |
+| Bridge maximum temperature (5 min) | `assign:ste.common.temperature:maxOverride` with `true` | Triggers the native DHE temporary maximum bridge for 5 minutes; enabled by default |
 | Temperature memory 1-12 | ODB ID `66` command | Sends the temperature stored in the matching memory slot; slots 3 to 12 disabled by default |
 | Delete temperature memory 3-12 | `assign:ste.common.temperature:memory` | Deletes the matching memory slot with `operation: delete`; disabled by default; memory slots 1 and 2 are fixed presets and are not deletable |
 

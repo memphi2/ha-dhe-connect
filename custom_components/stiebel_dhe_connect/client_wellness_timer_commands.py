@@ -12,7 +12,7 @@ from .client_value_helpers import raw_to_float as _raw_to_float
 from .protocol import (
     BRUSH_TIMER_DEFAULT_DURATION_MINUTES,
     BRUSH_TIMER_PATH,
-    CIRCULATION_SUPPORT_PROGRAM_ID,
+    CIRCULATION_BOOST_PROGRAM_ID,
     ID_BRUSH_TIMER_ACTIVATION,
     ID_BRUSH_TIMER_DURATION,
     ID_BRUSH_TIMER_REMAINING,
@@ -25,7 +25,7 @@ from .protocol import (
     SHOWER_TIMER_PATH,
     SUMMER_FITNESS_PROGRAM_ID,
     WELLNESS_COLD_PREVENTION_PROGRAM_ID,
-    WINTER_REFRESH_PROGRAM_ID,
+    WINTER_PICK_ME_UP_PROGRAM_ID,
 )
 
 
@@ -106,13 +106,13 @@ class DHEClientWellnessTimerCommandsMixin:
             SHOWER_TIMER_DEFAULT_DURATION_MINUTES,
         )
 
-    async def run_wellness_shower_program_winter_refresh(self) -> bool:
-        """Trigger the wellness shower program 'Winter refresh'."""
+    async def run_wellness_shower_program_winter_pick_me_up(self) -> bool:
+        """Trigger the wellness shower program 'Winter pick-me-up'."""
         client = _command_context(self)
         for _ in range(2):
             await client.write_odb_value(
                 ID_WELLNESS_SHOWER_PROGRAM,
-                WINTER_REFRESH_PROGRAM_ID,
+                WINTER_PICK_ME_UP_PROGRAM_ID,
             )
             await client.write_odb_value(ID_WELLNESS_ACTIVE, True)
         return True
@@ -128,13 +128,13 @@ class DHEClientWellnessTimerCommandsMixin:
             await client.write_odb_value(ID_WELLNESS_ACTIVE, True)
         return True
 
-    async def run_wellness_shower_program_circulation_support(self) -> bool:
-        """Trigger the wellness shower program 'Circulation support'."""
+    async def run_wellness_shower_program_circulation_boost(self) -> bool:
+        """Trigger the wellness shower program 'Circulation boost'."""
         client = _command_context(self)
         for _ in range(2):
             await client.write_odb_value(
                 ID_WELLNESS_SHOWER_PROGRAM,
-                CIRCULATION_SUPPORT_PROGRAM_ID,
+                CIRCULATION_BOOST_PROGRAM_ID,
             )
             await client.write_odb_value(ID_WELLNESS_ACTIVE, True)
         return True
