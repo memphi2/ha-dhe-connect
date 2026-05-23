@@ -682,7 +682,7 @@ class TestHATestApi(unittest.TestCase):
                 return True
 
             def login(self, *_args):
-                private_host = ".".join(("172", "16", "1", "147"))
+                private_host = "192.168.50.20"
                 raise RuntimeError(
                     "auth failed access_token=abc123 refresh_token='def456' "
                     f"password=secret http://user:secret@{private_host}:8123"
@@ -709,7 +709,7 @@ class TestHATestApi(unittest.TestCase):
         self.assertNotIn("abc123", text)
         self.assertNotIn("def456", text)
         self.assertNotIn("secret", text)
-        self.assertNotIn(".".join(("172", "16", "1", "147")), text)
+        self.assertNotIn("192.168.50.20", text)
 
     def test_main_uses_access_token_env_without_password_login(self) -> None:
         class _Api:

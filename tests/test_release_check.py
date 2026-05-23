@@ -314,7 +314,7 @@ class TestReleaseCheck(unittest.TestCase):
         self.assertIn("missing executable", result.stderr)
 
     def test_command_failed_message_redacts_auth_context(self) -> None:
-        private_host = ".".join(("172", "16", "1", "147"))
+        private_host = "192.168.50.20"
         result = release_check.CommandResult(
             args=(
                 "python",
@@ -549,7 +549,7 @@ class TestReleaseCheck(unittest.TestCase):
         self.assertIn("history sensitive-marker scan passed", result.message)
 
     def test_history_sensitive_scan_rejects_non_anonymized_markers(self) -> None:
-        sample_ip = ".".join(("172", "20", "44", "9"))
+        sample_ip = "192.168.77.9"
 
         def _runner(args):
             command = tuple(args)
