@@ -575,6 +575,39 @@ class TestReleaseCheck(unittest.TestCase):
         self.assertIn("non-anonymized or proprietary markers", result.message)
         self.assertIn(sample_ip, result.message)
 
+    def test_history_sensitive_scan_chunks_commit_arguments(self) -> None:
+        chunk_size = release_check.HISTORY_GREP_REVISION_CHUNK_SIZE
+        commits = [f"commit-{index}" for index in range(chunk_size + 1)]
+        grep_commands: list[tuple[str, ...]] = []
+
+        def _runner(args):
+            command = tuple(args)
+            if command == ("git", "rev-list", "--all"):
+                return release_check.CommandResult(
+                    args=command,
+                    returncode=0,
+                    stdout="\n".join(commits) + "\n",
+                    stderr="",
+                )
+            if command[0:3] == ("git", "grep", "-nE"):
+                grep_commands.append(command)
+                return release_check.CommandResult(
+                    args=command,
+                    returncode=1,
+                    stdout="",
+                    stderr="",
+                )
+            raise AssertionError(f"unexpected command: {command}")
+
+        result = release_check.scan_git_history_for_sensitive_literals(_runner)
+
+        self.assertTrue(result.ok)
+        self.assertEqual(len(grep_commands), 2)
+        first_separator = grep_commands[0].index("--")
+        second_separator = grep_commands[1].index("--")
+        self.assertEqual(first_separator - 4, chunk_size)
+        self.assertEqual(second_separator - 4, 1)
+
     def test_github_hygiene_scan_rejects_non_anonymized_markers(self) -> None:
         sample_user = "demo_user42"
 
@@ -582,9 +615,10 @@ class TestReleaseCheck(unittest.TestCase):
             command = tuple(args)
             if command[0:2] != ("gh", "api"):
                 raise AssertionError(f"unexpected command: {command}")
-            endpoint = command[2]
+            self.assertEqual(command[2:4], ("--paginate", "--slurp"))
+            endpoint = command[4]
             if endpoint.startswith("/repos/example/repo/pulls?state=all"):
-                payload = [{"number": 1, "body": f"--username {sample_user} used in log"}]
+                payload = [[{"number": 1, "body": f"--username {sample_user} used in log"}]]
             else:
                 payload = []
             return release_check.CommandResult(

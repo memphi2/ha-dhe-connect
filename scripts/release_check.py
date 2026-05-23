@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Iterator, Sequence
 
 try:
     from scripts.ha_test_redaction import redact_sensitive_text
@@ -132,6 +132,7 @@ HISTORY_HYGIENE_PATHS = (
     "README.md",
     "docs",
 )
+HISTORY_GREP_REVISION_CHUNK_SIZE = 200
 
 
 @dataclass(frozen=True)
@@ -440,15 +441,27 @@ def scan_git_history_for_sensitive_literals(runner: Runner) -> CheckResult:
             *(re.escape(marker) for marker in PROPRIETARY_HISTORY_MARKERS),
         )
     )
-    grep_result = runner(
-        ["git", "grep", "-nE", marker_expr, *commits, "--", *HISTORY_HYGIENE_PATHS]
-    )
-    if grep_result.returncode == 1:
-        return CheckResult(True, "git history sensitive-marker scan passed")
-    if grep_result.returncode != 0:
-        return CheckResult(False, _command_failed_message(grep_result))
+    hits: list[str] = []
+    for commit_chunk in _iter_chunks(commits, HISTORY_GREP_REVISION_CHUNK_SIZE):
+        grep_result = runner(
+            [
+                "git",
+                "grep",
+                "-nE",
+                marker_expr,
+                *commit_chunk,
+                "--",
+                *HISTORY_HYGIENE_PATHS,
+            ]
+        )
+        if grep_result.returncode == 1:
+            continue
+        if grep_result.returncode != 0:
+            return CheckResult(False, _command_failed_message(grep_result))
+        hits.extend(
+            line for line in grep_result.stdout.splitlines() if line.strip()
+        )
 
-    hits = [line for line in grep_result.stdout.splitlines() if line.strip()]
     if not hits:
         return CheckResult(True, "git history sensitive-marker scan passed")
     preview = "\n".join(hits[:10])
@@ -501,7 +514,7 @@ def scan_github_metadata_for_sensitive_literals(
 
     for path_template in GITHUB_HYGIENE_SCAN_PATHS:
         endpoint = path_template.format(repo=repo_full_name)
-        result = runner(["gh", "api", endpoint])
+        result = runner(["gh", "api", "--paginate", "--slurp", endpoint])
         if result.returncode != 0:
             return CheckResult(False, _command_failed_message(result))
         try:
@@ -522,6 +535,14 @@ def scan_github_metadata_for_sensitive_literals(
             + "\n".join(findings),
         )
     return CheckResult(True, "GitHub metadata hygiene scan passed")
+
+
+def _iter_chunks(items: Sequence[str], chunk_size: int) -> Iterator[tuple[str, ...]]:
+    """Yield chunked tuples from one sequence."""
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be positive")
+    for start in range(0, len(items), chunk_size):
+        yield tuple(items[start : start + chunk_size])
 
 
 def run_ha_smoke(
