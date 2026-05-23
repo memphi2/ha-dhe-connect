@@ -608,6 +608,37 @@ class TestReleaseCheck(unittest.TestCase):
         self.assertEqual(first_separator - 4, chunk_size)
         self.assertEqual(second_separator - 4, 1)
 
+    def test_history_sensitive_scan_regex_includes_all_private_ipv4_ranges(self) -> None:
+        captured_marker_expr: str | None = None
+
+        def _runner(args):
+            nonlocal captured_marker_expr
+            command = tuple(args)
+            if command == ("git", "rev-list", "--all"):
+                return release_check.CommandResult(
+                    args=command,
+                    returncode=0,
+                    stdout="abc123\n",
+                    stderr="",
+                )
+            if command[0:3] == ("git", "grep", "-nE"):
+                captured_marker_expr = command[3]
+                return release_check.CommandResult(
+                    args=command,
+                    returncode=1,
+                    stdout="",
+                    stderr="",
+                )
+            raise AssertionError(f"unexpected command: {command}")
+
+        result = release_check.scan_git_history_for_sensitive_literals(_runner)
+
+        self.assertTrue(result.ok)
+        assert captured_marker_expr is not None
+        self.assertIn("10\\.", captured_marker_expr)
+        self.assertIn("192\\.168", captured_marker_expr)
+        self.assertIn("172\\.", captured_marker_expr)
+
     def test_github_hygiene_scan_rejects_non_anonymized_markers(self) -> None:
         sample_user = "demo_user42"
 
@@ -636,6 +667,35 @@ class TestReleaseCheck(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertIn("GitHub metadata contains non-anonymized or proprietary markers", result.message)
         self.assertIn(sample_user, result.message)
+
+    def test_github_hygiene_scan_rejects_private_ipv4_markers(self) -> None:
+        sample_ip = "10.1.23.45"
+
+        def _runner(args):
+            command = tuple(args)
+            if command[0:2] != ("gh", "api"):
+                raise AssertionError(f"unexpected command: {command}")
+            self.assertEqual(command[2:4], ("--paginate", "--slurp"))
+            endpoint = command[4]
+            if endpoint.startswith("/repos/example/repo/pulls?state=all"):
+                payload = [[{"number": 1, "body": f"debug host {sample_ip}"}]]
+            else:
+                payload = []
+            return release_check.CommandResult(
+                args=command,
+                returncode=0,
+                stdout=json.dumps(payload),
+                stderr="",
+            )
+
+        result = release_check.scan_github_metadata_for_sensitive_literals(
+            repo_full_name="example/repo",
+            runner=_runner,
+        )
+
+        self.assertFalse(result.ok)
+        self.assertIn("GitHub metadata contains non-anonymized or proprietary markers", result.message)
+        self.assertIn(sample_ip, result.message)
 
     def test_service_smoke_requires_config_and_username(self) -> None:
         args = release_check._parse_args(["--run-ha-service-smoke"])
