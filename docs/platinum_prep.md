@@ -169,7 +169,7 @@ python scripts/check_coverage.py
 Optional release-style gate:
 
 ```bash
-python scripts/release_check.py --run-local-checks --expect-tag skip --expect-github-release skip
+python scripts/release_check.py --run-local-checks --run-github-hygiene --expect-tag skip --expect-github-release skip
 ```
 
 ## Done Criteria For Platinum-Prep Milestone

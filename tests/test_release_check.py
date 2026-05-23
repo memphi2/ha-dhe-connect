@@ -9,7 +9,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -524,6 +524,81 @@ class TestReleaseCheck(unittest.TestCase):
                 self.assertFalse(result.ok)
                 self.assertIn("tracked generated artifact path", result.message)
 
+    def test_history_sensitive_scan_passes_when_clean(self) -> None:
+        def _runner(args):
+            command = tuple(args)
+            if command == ("git", "rev-list", "--all"):
+                return release_check.CommandResult(
+                    args=command,
+                    returncode=0,
+                    stdout="abc123\n",
+                    stderr="",
+                )
+            if command[0:3] == ("git", "grep", "-nE"):
+                return release_check.CommandResult(
+                    args=command,
+                    returncode=1,
+                    stdout="",
+                    stderr="",
+                )
+            raise AssertionError(f"unexpected command: {command}")
+
+        result = release_check.scan_git_history_for_sensitive_literals(_runner)
+
+        self.assertTrue(result.ok)
+        self.assertIn("history sensitive-marker scan passed", result.message)
+
+    def test_history_sensitive_scan_rejects_non_anonymized_markers(self) -> None:
+        def _runner(args):
+            command = tuple(args)
+            if command == ("git", "rev-list", "--all"):
+                return release_check.CommandResult(
+                    args=command,
+                    returncode=0,
+                    stdout="abc123\n",
+                    stderr="",
+                )
+            if command[0:3] == ("git", "grep", "-nE"):
+                return release_check.CommandResult(
+                    args=command,
+                    returncode=0,
+                    stdout="abc123:CHANGELOG.md:1:<private-host>\n",
+                    stderr="",
+                )
+            raise AssertionError(f"unexpected command: {command}")
+
+        result = release_check.scan_git_history_for_sensitive_literals(_runner)
+
+        self.assertFalse(result.ok)
+        self.assertIn("non-anonymized or proprietary markers", result.message)
+        self.assertIn("<private-host>", result.message)
+
+    def test_github_hygiene_scan_rejects_non_anonymized_markers(self) -> None:
+        def _runner(args):
+            command = tuple(args)
+            if command[0:2] != ("gh", "api"):
+                raise AssertionError(f"unexpected command: {command}")
+            endpoint = command[2]
+            if endpoint.startswith("/repos/example/repo/pulls?state=all"):
+                payload = [{"number": 1, "body": "username <ha-user> used in log"}]
+            else:
+                payload = []
+            return release_check.CommandResult(
+                args=command,
+                returncode=0,
+                stdout=json.dumps(payload),
+                stderr="",
+            )
+
+        result = release_check.scan_github_metadata_for_sensitive_literals(
+            repo_full_name="example/repo",
+            runner=_runner,
+        )
+
+        self.assertFalse(result.ok)
+        self.assertIn("GitHub metadata contains non-anonymized or proprietary markers", result.message)
+        self.assertIn("<ha-user>", result.message)
+
     def test_service_smoke_requires_config_and_username(self) -> None:
         args = release_check._parse_args(["--run-ha-service-smoke"])
 
@@ -678,6 +753,52 @@ class TestReleaseCheck(unittest.TestCase):
                 "8443",
             ),
             commands,
+        )
+
+    def test_github_hygiene_flag_adds_release_gate(self) -> None:
+        args = release_check._parse_args(
+            [
+                "--allow-dirty",
+                "--expect-tag",
+                "skip",
+                "--expect-github-release",
+                "skip",
+                "--run-github-hygiene",
+                "--github-repo",
+                "example/repo",
+            ]
+        )
+
+        with (
+            patch("scripts.release_check.load_manifest_version", return_value="1.3.2"),
+            patch("scripts.release_check.check_version_files", return_value=[]),
+            patch(
+                "scripts.release_check.scan_tracked_files_for_secrets",
+                return_value=release_check.CheckResult(True, "tracked-file scan ok"),
+            ),
+            patch(
+                "scripts.release_check.scan_git_history_for_sensitive_literals",
+                return_value=release_check.CheckResult(True, "history scan ok"),
+            ),
+            patch(
+                "scripts.release_check.scan_github_metadata_for_sensitive_literals",
+                return_value=release_check.CheckResult(True, "github scan ok"),
+            ) as github_scan,
+        ):
+            results = release_check.collect_results(
+                args,
+                lambda command: release_check.CommandResult(
+                    args=tuple(command),
+                    returncode=0,
+                    stdout="",
+                    stderr="",
+                ),
+            )
+
+        self.assertTrue(all(result.ok for result in results), results)
+        github_scan.assert_called_once_with(
+            repo_full_name="example/repo",
+            runner=ANY,
         )
 
     def test_require_current_tag_adds_head_tag_check(self) -> None:

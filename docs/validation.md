@@ -614,7 +614,7 @@ PR text or documentation.
 Before publishing a release, run:
 
 ```bash
-python scripts/release_check.py --run-local-checks --run-zeroconf-smoke --ha-config /mnt/ha-test-config --ha-monitor-seconds 90
+python scripts/release_check.py --run-local-checks --run-github-hygiene --run-zeroconf-smoke --ha-config /mnt/ha-test-config --ha-monitor-seconds 90
 ```
 
 Before publication, the default expectation is:
@@ -622,8 +622,11 @@ Before publication, the default expectation is:
 - Version is present in `manifest.json`, README and CHANGELOG.
 - Git worktree is clean.
 - Whitespace and tracked-file secret scans pass.
+- Git-history anonymization scan passes (known local markers must not appear in
+  history).
 - The release tag is absent.
 - The GitHub release is absent.
+- GitHub metadata hygiene scan passes when `--run-github-hygiene` is enabled.
 - Local checks pass, including the explicit `tests/test_diagnostics.py` gate
   before the full pytest suite.
 - The opt-in real Zeroconf/mDNS release-lab smoke gate passes when
