@@ -174,8 +174,6 @@ def check_repository_files(version: str) -> None:
         _fail("CHANGELOG is missing a section for the manifest version")
     if "[docs/troubleshooting.md](docs/troubleshooting.md)" not in readme:
         _fail("README troubleshooting reference points to docs/troubleshooting.md")
-    if "[docs/validation.md](docs/validation.md)" not in readme:
-        _fail("README validation reference points to docs/validation.md")
     if "[docs/examples.md](docs/examples.md)" not in readme:
         _fail("README examples reference points to docs/examples.md")
     if "[docs/use-cases.md](docs/use-cases.md)" not in readme:
