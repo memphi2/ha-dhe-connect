@@ -34,6 +34,7 @@ class TestPairingResultSuccess(unittest.TestCase):
         self.assertFalse(self.helpers.pairing_result_success("rejected"))
         self.assertFalse(self.helpers.pairing_result_success({"result": "failed"}))
         self.assertIsNone(self.helpers.pairing_result_success({"other": True}))
+        self.assertIsNone(self.helpers.pairing_result_success("unknown"))
 
 
 class TestPairingErrorMapping(unittest.TestCase):
@@ -86,6 +87,37 @@ class TestPairingErrorMapping(unittest.TestCase):
                 "",
             ),
             "pairing_confirm_after_auth_timeout",
+        )
+
+    def test_map_pairing_error_handles_failed_state_sub_paths(self) -> None:
+        self.assertEqual(
+            self.helpers.map_pairing_error(Exception("socket closed"), "failed"),
+            "cannot_connect",
+        )
+        self.assertEqual(
+            self.helpers.map_pairing_error(Exception("timeout while pairing"), "failed"),
+            "pairing_timeout",
+        )
+        self.assertEqual(
+            self.helpers.map_pairing_error(Exception("unexpected"), "failed"),
+            "pairing_failed",
+        )
+
+    def test_map_pairing_error_maps_state_based_token_and_confirmation_paths(self) -> None:
+        for state in ("requesting_token", "token_received", "confirmed", "result_received"):
+            self.assertEqual(
+                self.helpers.map_pairing_error(Exception("n/a"), state),
+                "pairing_token_timeout",
+            )
+        self.assertEqual(
+            self.helpers.map_pairing_error(Exception("n/a"), "authenticated_pending_confirmation"),
+            "pairing_confirm_after_auth_timeout",
+        )
+
+    def test_map_pairing_error_maps_authenticated_message_to_auth_failed(self) -> None:
+        self.assertEqual(
+            self.helpers.map_pairing_error(Exception("authenticated but rejected later"), ""),
+            "auth_failed",
         )
 
 

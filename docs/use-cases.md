@@ -1,43 +1,59 @@
-# Use Cases
+# Use Cases And Automation Patterns
 
 ## Family Bathroom / Scald Protection
 
-- Keep a fixed physical `Tmax` jumper profile in Home Assistant options.
-- Use child safety and bath fill controls with dashboard visibility.
-- Add a simple automation for timer completion notifications.
+- Keep physical `Tmax` aligned with integration options.
+- Use child safety and bath fill controls in a visible dashboard section.
+- Add timer-finished notifications for daily use.
 
 ## Energy Monitoring
 
-- Track current power and water flow during peak usage windows.
-- Use total water/energy sensors for monthly utility overview dashboards.
-- Keep high-frequency diagnostics disabled if recorder growth is a concern.
+- Track `sensor.dhe_connect_current_power` and
+  `sensor.dhe_connect_current_water_flow` during peak usage.
+- Use total water/energy sensors for monthly trend dashboards.
+- Keep optional high-churn diagnostics disabled unless needed.
 
 ## Eco / Comfort Operation
 
-- Schedule `Eco mode` for night hours.
-- Keep daytime comfort by switching Eco mode off in the morning.
-- Combine with target temperature presets for routine operation.
+- Schedule `switch.dhe_connect_eco_mode` for night hours.
+- Switch Eco mode off in the morning for comfort.
+
+Example:
+
+```yaml
+alias: DHE eco mode at night
+triggers:
+  - trigger: time
+    at: "22:30:00"
+actions:
+  - action: switch.turn_on
+    target:
+      entity_id: switch.dhe_connect_eco_mode
+mode: single
+```
 
 ## Vacation Home / Secondary Location
 
-- Keep one dedicated config entry per physical device.
-- Use Reconfigure when host or port changes after router replacement.
-- Use Repairs flow if pairing/token state is lost after device reset.
+- Keep one config entry per physical DHE.
+- Use Reconfigure if host/port changes after network changes.
+- Use Repairs flow for token/pairing recovery after resets.
 
-## DHE Radio / Weather in Bathroom
+## DHE Radio / Weather In Bathroom
 
-- Use the radio media player and weather entity exposed by the integration.
-- Keep favorites in sync through options flow and service actions.
-- Use entity-based cards for quick source/favorite switching.
+- Use the radio media player and weather entity from the same device card.
+- Keep favorites in sync with options-flow or services.
 
 ## Multi-DHE Household
 
 - Add one config entry per DHE.
-- Use `entry_id` in service calls when more than one DHE is configured.
-- Keep names explicit (`Main Bath`, `Guest Bath`) for clear automation targets.
+- Include `entry_id` in service calls when multiple devices exist.
+- Keep explicit device names (`Main Bath`, `Guest Bath`) for clean automations.
 
 ## Tablet / Wall Dashboard
 
-- Show connection status, current power, current flow and controls on one panel.
-- Include only frequently used controls in the default view.
-- Keep diagnostics entities available for support and troubleshooting views.
+- Put connection state, power, water flow and key switches on one panel.
+- Keep the default view compact; expose diagnostics in a secondary view.
+
+## More Ready-To-Use Examples
+
+For additional automation and card snippets, see [examples.md](examples.md).

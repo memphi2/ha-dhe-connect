@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 from typing import Any
 
 import voluptuous as vol
@@ -53,6 +54,29 @@ DEFAULT_RADIO_SEARCH_TEXTS = {
     "country": "*",
     "city": "*",
 }
+
+
+def _schema_marker_key(marker: object) -> Any:
+    """Return a schema key that works with real HA and lightweight tests."""
+    return getattr(marker, "key", getattr(marker, "schema", marker))
+
+
+def apply_suggested_values_to_schema(
+    data_schema: vol.Schema,
+    suggested_values: dict[str, Any],
+) -> vol.Schema:
+    """Apply suggested values to a config-flow schema."""
+    if not suggested_values:
+        return data_schema
+    schema: dict[object, object] = {}
+    for marker, validator in getattr(data_schema, "schema", {}).items():
+        marker_key = _schema_marker_key(marker)
+        if marker_key in suggested_values:
+            new_marker = copy.copy(marker)
+            new_marker.description = {"suggested_value": suggested_values[marker_key]}
+            marker = new_marker
+        schema[marker] = validator
+    return data_schema.__class__(schema)
 
 
 def schema(

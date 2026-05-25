@@ -117,7 +117,11 @@ HISTORY_SENSITIVE_REGEXES_PYTHON = (
     r"\b(?:10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}"
     r"|192\.168\.[0-9]{1,3}\.[0-9]{1,3}"
     r"|172\.(?:1[6-9]|2[0-9]|3[0-1])\.[0-9]{1,3}\.[0-9]{1,3})\b",
-    r"--username\s+[A-Za-z0-9._]{3,}",
+    r"--username\s+[A-Za-z0-9._][A-Za-z0-9._]*",
+)
+SAFE_HISTORY_MARKER_SNIPPETS = (
+    "`192.168.1.0`",
+    "`192.168.1.0/24`",
 )
 PROPRIETARY_HISTORY_MARKERS = (
     "Licensed " + "proprietary",
@@ -127,11 +131,11 @@ PROPRIETARY_HISTORY_MARKERS = (
     "ste-" + "dhe - v1.9.00",
 )
 GITHUB_HYGIENE_SCAN_PATHS = (
-    "/repos/{repo}/pulls?state=all&per_page=100",
-    "/repos/{repo}/issues?state=all&per_page=100",
-    "/repos/{repo}/issues/comments?per_page=100",
-    "/repos/{repo}/pulls/comments?per_page=100",
-    "/repos/{repo}/releases?per_page=100",
+    "repos/{repo}/pulls?state=all&per_page=100",
+    "repos/{repo}/issues?state=all&per_page=100",
+    "repos/{repo}/issues/comments?per_page=100",
+    "repos/{repo}/pulls/comments?per_page=100",
+    "repos/{repo}/releases?per_page=100",
 )
 HISTORY_HYGIENE_PATHS = (
     "CHANGELOG.md",
@@ -193,7 +197,12 @@ def load_manifest_version(root: Path) -> str:
     return str(manifest.get("version", "")).strip()
 
 
-def check_version_files(root: Path, version: str) -> list[CheckResult]:
+def check_version_files(
+    root: Path,
+    version: str,
+    *,
+    require_empty_unreleased: bool = True,
+) -> list[CheckResult]:
     """Check manifest, README and changelog release version consistency."""
     results: list[CheckResult] = []
     manifest_version = load_manifest_version(root)
@@ -225,12 +234,13 @@ def check_version_files(root: Path, version: str) -> list[CheckResult]:
             f"CHANGELOG contains {heading}",
         )
     )
-    results.append(
-        CheckResult(
-            _changelog_unreleased_is_empty(changelog),
-            "CHANGELOG Unreleased section has no pending release entries",
+    if require_empty_unreleased:
+        results.append(
+            CheckResult(
+                _changelog_unreleased_is_empty(changelog),
+                "CHANGELOG Unreleased section has no pending release entries",
+            )
         )
-    )
     results.append(
         CheckResult(
             protocol.exists() and "[docs/protocol.md](docs/protocol.md)" in readme,
@@ -447,6 +457,15 @@ def scan_git_history_for_sensitive_literals(runner: Runner) -> CheckResult:
             *(re.escape(marker) for marker in PROPRIETARY_HISTORY_MARKERS),
         )
     )
+    marker_pattern = re.compile(
+        "|".join(
+            (
+                *HISTORY_SENSITIVE_REGEXES_PYTHON,
+                *(re.escape(marker) for marker in PROPRIETARY_HISTORY_MARKERS),
+            )
+        ),
+        re.IGNORECASE,
+    )
     hits: list[str] = []
     for commit_chunk in _iter_chunks(commits, HISTORY_GREP_REVISION_CHUNK_SIZE):
         grep_result = runner(
@@ -464,9 +483,16 @@ def scan_git_history_for_sensitive_literals(runner: Runner) -> CheckResult:
             continue
         if grep_result.returncode != 0:
             return CheckResult(False, _command_failed_message(grep_result))
-        hits.extend(
-            line for line in grep_result.stdout.splitlines() if line.strip()
-        )
+        for line in grep_result.stdout.splitlines():
+            if not line.strip():
+                continue
+            _, matched_text = _split_git_grep_history_line(line)
+            if matched_text is None:
+                hits.append(line)
+                continue
+            if not _has_non_safe_history_match(matched_text, marker_pattern):
+                continue
+            hits.append(line)
 
     if not hits:
         return CheckResult(True, "git history sensitive-marker scan passed")
@@ -478,6 +504,46 @@ def scan_git_history_for_sensitive_literals(runner: Runner) -> CheckResult:
         False,
         "git history contains non-anonymized or proprietary markers:\n" + preview,
     )
+
+
+def _split_git_grep_history_line(line: str) -> tuple[str, str | None]:
+    """Split `git grep` output into a stable prefix and matched content."""
+    parts = line.split(":", 3)
+    if len(parts) != 4:
+        return line, None
+    return ":".join(parts[:3]), parts[3]
+
+
+def _has_non_safe_history_match(text: str, marker_pattern: re.Pattern[str]) -> bool:
+    """Return true when the line has at least one non-whitelisted sensitive marker."""
+    safe_ranges = _safe_history_snippet_ranges(text)
+    for match in marker_pattern.finditer(text):
+        if _is_history_match_within_ranges(match.span(), safe_ranges):
+            continue
+        return True
+    return False
+
+
+def _safe_history_snippet_ranges(text: str) -> list[tuple[int, int]]:
+    """Return index ranges for whitelisted documentation snippets on one line."""
+    ranges: list[tuple[int, int]] = []
+    for snippet in SAFE_HISTORY_MARKER_SNIPPETS:
+        start = 0
+        while True:
+            index = text.find(snippet, start)
+            if index < 0:
+                break
+            ranges.append((index, index + len(snippet)))
+            start = index + len(snippet)
+    return ranges
+
+
+def _is_history_match_within_ranges(
+    span: tuple[int, int], safe_ranges: Sequence[tuple[int, int]]
+) -> bool:
+    """Return true when a marker match is fully inside a safe snippet range."""
+    start, end = span
+    return any(start >= safe_start and end <= safe_end for safe_start, safe_end in safe_ranges)
 
 
 def _github_payload_strings(payload: Any) -> list[str]:
@@ -501,6 +567,24 @@ def _github_payload_strings(payload: Any) -> list[str]:
     return []
 
 
+def _parse_paginated_gh_json(stdout: str) -> list[Any]:
+    """Parse one or more JSON documents returned by `gh api --paginate`."""
+    decoder = json.JSONDecoder()
+    docs: list[Any] = []
+    data = stdout.strip()
+    index = 0
+    length = len(data)
+    while index < length:
+        while index < length and data[index].isspace():
+            index += 1
+        if index >= length:
+            break
+        parsed, next_index = decoder.raw_decode(data, index)
+        docs.append(parsed)
+        index = next_index
+    return docs
+
+
 def scan_github_metadata_for_sensitive_literals(
     *,
     repo_full_name: str,
@@ -520,15 +604,15 @@ def scan_github_metadata_for_sensitive_literals(
 
     for path_template in GITHUB_HYGIENE_SCAN_PATHS:
         endpoint = path_template.format(repo=repo_full_name)
-        result = runner(["gh", "api", "--paginate", "--slurp", endpoint])
+        result = runner(["gh", "api", endpoint, "--paginate"])
         if result.returncode != 0:
             return CheckResult(False, _command_failed_message(result))
         try:
-            payload = json.loads(result.stdout or "[]")
+            payload_docs = _parse_paginated_gh_json(result.stdout or "[]")
         except json.JSONDecodeError as err:
             return CheckResult(False, f"gh api returned invalid JSON for {endpoint}: {err}")
 
-        for text in _github_payload_strings(payload):
+        for text in _github_payload_strings(payload_docs):
             match = marker_pattern.search(text)
             if match is not None:
                 findings.append(f"{endpoint}: marker {match.group(0)!r}")
@@ -731,7 +815,11 @@ def collect_results(args: argparse.Namespace, runner: Runner) -> list[CheckResul
     """Collect all release check results."""
     manifest_version = load_manifest_version(ROOT)
     version = args.version or manifest_version
-    results = check_version_files(ROOT, version)
+    results = check_version_files(
+        ROOT,
+        version,
+        require_empty_unreleased=args.expect_tag != "skip",
+    )
     if not args.allow_dirty:
         results.append(check_clean_tree(runner))
     results.extend(
@@ -756,7 +844,12 @@ def collect_results(args: argparse.Namespace, runner: Runner) -> list[CheckResul
                 ),
                 check_command([sys.executable, "scripts/check_coverage.py"], runner),
                 check_command([sys.executable, "scripts/check_integration.py"], runner),
+                check_command([sys.executable, "scripts/check_translation_keys.py"], runner),
+                check_command(
+                    [sys.executable, "scripts/check_release_consistency.py"], runner
+                ),
                 check_command([sys.executable, "scripts/check_deprecations.py"], runner),
+                check_command([sys.executable, "scripts/check_privacy_markers.py"], runner),
                 check_command([sys.executable, "scripts/check_typing.py"], runner),
                 check_command(
                     [

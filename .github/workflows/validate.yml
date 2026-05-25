@@ -58,8 +58,17 @@ jobs:
       - name: Run deprecation guard
         run: python scripts/check_deprecations.py
 
+      - name: Run privacy marker guard
+        run: python scripts/check_privacy_markers.py
+
       - name: Run integration checks
         run: python scripts/check_integration.py
+
+      - name: Run translation key checks
+        run: python scripts/check_translation_keys.py
+
+      - name: Run release consistency check
+        run: python scripts/check_release_consistency.py
 
       - name: Run type checks
         run: python scripts/check_typing.py

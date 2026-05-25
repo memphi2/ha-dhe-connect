@@ -2,11 +2,37 @@
 
 ## Unreleased
 
-- No changes yet.
+- Hardened repository checks so README documentation validation is based on
+  required link targets (layout-independent) instead of fixed table rows.
+- Added stable-release changelog language guards to prevent prerelease wording
+  (`beta`, `pre-release`, `release candidate`) in stable sections.
+- Added `scripts/check_release_consistency.py` and wired it into CI plus
+  `release_check --run-local-checks`.
+- Made `release_check --expect-tag skip` development-friendly by allowing
+  non-empty `Unreleased` sections while keeping strict release-tag checks.
+- Fixed GitHub hygiene scan compatibility with GH CLI versions without
+  `gh api --slurp` support.
+- Reduced release documentation overlap: `docs/release_process.md` now delegates
+  command-set details to `docs/validation.md`, and `docs/migration_policy.md`
+  now references troubleshooting recovery guidance.
+- Clarified README status support scope for stable vs private/dev branches.
+- Added `scripts/check_privacy_markers.py` and CI/release gates to block
+  lab-specific aliases, private lab subnet fragments and JWT-like token leaks in
+  tracked files.
+- Added `scripts/check_translation_keys.py` to enforce required user-facing
+  flow/repairs/service translation keys in `en.json` and `de.json`.
+- Tightened the coverage gate by moving `pairing_helpers.py` into the measured
+  deterministic module set and extending pairing helper tests accordingly.
+- Added long-run reconnect supervisor churn tests to harden deterministic
+  reconnect/backoff/grace behavior.
+- Refactored schema suggested-value application out of `config_flow.py` into
+  `config_flow_schemas.py` to keep flow orchestration code slimmer.
+- Added typed payload shape definitions in `payload_types.py` while keeping
+  existing runtime payload aliases stable for compatibility.
 
-## v2.0.0-beta - 2026-05-25
+## v2.0.1 - 2026-05-25
 
-Beta release candidate for the v2 line. This release keeps public entity IDs,
+Stable release for the v2 line. This release keeps public entity IDs,
 unique IDs and DHE protocol behavior stable.
 
 ### Runtime/Auth and Pairing Hardening
@@ -22,9 +48,9 @@ unique IDs and DHE protocol behavior stable.
 - Tightened runtime state/write handling for better recorder hygiene and
   deterministic behavior during reconnect/auth transitions.
 
-### Legacy Policy for v2 Beta
+### Legacy Policy for v2 Line
 
-- This beta does not include compatibility shims for legacy/private migration
+- This release does not include compatibility shims for legacy/private migration
   edge cases from older development snapshots.
 - If an older private/dev setup behaves inconsistently after upgrade, remove
   and re-add the integration cleanly.

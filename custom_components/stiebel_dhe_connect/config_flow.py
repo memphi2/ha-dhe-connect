@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import copy
 import logging
 import os
 import shutil
@@ -22,6 +21,7 @@ from .config_flow_schemas import (
     ATTR_CO2_EMISSION,
     ATTR_ELECTRICITY_PRICE,
     ATTR_WATER_PRICE,
+    apply_suggested_values_to_schema as _apply_suggested_values_to_schema,
     device_settings_defaults as _device_settings_defaults,
     internal_scald_protection_options as _internal_scald_protection_options,
     schema as _schema,
@@ -200,29 +200,6 @@ def _async_delete_discovery_conflict_issue(
         DOMAIN,
         _discovery_conflict_issue_id(host, port),
     )
-
-
-def _schema_marker_key(marker: object) -> Any:
-    """Return a schema key that works with real HA and lightweight tests."""
-    return getattr(marker, "key", getattr(marker, "schema", marker))
-
-
-def _apply_suggested_values_to_schema(
-    data_schema: vol.Schema,
-    suggested_values: Mapping[str, Any],
-) -> vol.Schema:
-    """Apply suggested values to a config-flow schema in a stable, testable way."""
-    if not suggested_values:
-        return data_schema
-    schema: dict[object, object] = {}
-    for marker, validator in getattr(data_schema, "schema", {}).items():
-        marker_key = _schema_marker_key(marker)
-        if marker_key in suggested_values:
-            new_marker = copy.copy(marker)
-            new_marker.description = {"suggested_value": suggested_values[marker_key]}
-            marker = new_marker
-        schema[marker] = validator
-    return data_schema.__class__(schema)
 
 
 def _connection_data_from_user_input(user_input: Mapping[str, Any]) -> dict[str, Any]:

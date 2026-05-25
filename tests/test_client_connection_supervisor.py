@@ -154,6 +154,49 @@ class TestDHEConnectionSupervisor(unittest.TestCase):
             },
         )
 
+    def test_long_running_reconnect_churn_stays_bounded(self) -> None:
+        supervisor = self._supervisor()
+        supervisor.mark_connected(count_reconnect=False)
+
+        for cycle in range(1, 61):
+            self.now += 1.0
+            supervisor.mark_disconnected()
+            self.assertLessEqual(supervisor.next_delay(), 10.0)
+            self.assertTrue(supervisor.in_grace_period)
+
+            # Alternate short and longer reconnect windows.
+            self.now += 0.5 if cycle % 2 else 3.0
+            supervisor.mark_connected()
+            self.assertFalse(supervisor.in_grace_period)
+            self.assertIsNone(supervisor.grace_seconds_remaining())
+
+            # Every 10 cycles keep the connection stable long enough to reset backoff.
+            if cycle % 10 == 0:
+                self.now += 61.0
+                supervisor.mark_disconnected()
+                self.assertEqual(supervisor.next_delay(), 2.0)
+                self.now += 1.0
+                supervisor.mark_connected()
+
+        diagnostics = supervisor.diagnostic_state()
+        self.assertGreaterEqual(diagnostics["successful_reconnect_count"], 60)
+        self.assertLessEqual(diagnostics["next_delay_seconds"], 10.0)
+
+    def test_reconnect_counter_resets_after_stable_runtime(self) -> None:
+        supervisor = self._supervisor()
+        supervisor.mark_connected(count_reconnect=False)
+
+        for _ in range(3):
+            self.now += 1.0
+            supervisor.mark_disconnected()
+        self.assertEqual(supervisor.next_delay(), 8.0)
+
+        self.now += 1.0
+        supervisor.mark_connected()
+        self.now += 120.0
+        supervisor.mark_disconnected()
+        self.assertEqual(supervisor.next_delay(), 2.0)
+
 
 if __name__ == "__main__":
     unittest.main()

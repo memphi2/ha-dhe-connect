@@ -174,10 +174,6 @@ EXCLUDED_COVERAGE_FILES: tuple[CoverageExclusion, ...] = (
         "Engine.IO parser edge glue covered by transport tests.",
     ),
     CoverageExclusion(
-        "custom_components/stiebel_dhe_connect/pairing_helpers.py",
-        "Pairing file-name normalization glue covered by pairing tests.",
-    ),
-    CoverageExclusion(
         "custom_components/stiebel_dhe_connect/setup_scan.py",
         "User-triggered network scan I/O glue covered by helper and HA tests.",
     ),

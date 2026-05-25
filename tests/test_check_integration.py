@@ -55,6 +55,59 @@ def _write_replay_fixture(root: Path, profile: str, *, version: int = 2) -> None
     )
 
 
+def _write_repository_files_fixture(
+    root: Path,
+    *,
+    version: str = "1.3.2",
+    changelog_section_text: str = "Stable release.",
+) -> None:
+    integration = root / "custom_components" / "stiebel_dhe_connect"
+    (integration / "brand").mkdir(parents=True, exist_ok=True)
+    (integration / "services.yaml").write_text("{}", encoding="utf-8")
+    (integration / "quality_scale.yaml").write_text("rules: {}\n", encoding="utf-8")
+    (integration / "brand" / "icon.png").write_bytes(b"png")
+    (integration / "brand" / "logo.png").write_bytes(b"png")
+
+    docs = root / "docs"
+    docs.mkdir(parents=True, exist_ok=True)
+    for name in (
+        "troubleshooting.md",
+        "validation.md",
+        "examples.md",
+        "use-cases.md",
+        "known_limitations.md",
+        "legal.md",
+    ):
+        (docs / name).write_text(f"# {name}\n", encoding="utf-8")
+
+    (root / "LICENSE").write_text("MIT\n", encoding="utf-8")
+    (root / "hacs.json").write_text('{"name":"DHE Connect","render_readme":true}\n', encoding="utf-8")
+    (root / "README.md").write_text(
+        (
+            "# README\n\n"
+            f"Current version: `{version}`\n\n"
+            "### Removal\n\n"
+            "## Documentation\n\n"
+            "- [Troubleshooting guide](docs/troubleshooting.md)\n"
+            "- [Examples](docs/examples.md)\n"
+            "- [Use cases](docs/use-cases.md)\n"
+            "- [Known limitations](docs/known_limitations.md)\n"
+            "- [Legal notes](docs/legal.md)\n"
+        ),
+        encoding="utf-8",
+    )
+    (root / "CHANGELOG.md").write_text(
+        (
+            "# Changelog\n\n"
+            "## Unreleased\n\n"
+            "- No changes yet.\n\n"
+            f"## v{version}\n\n"
+            f"{changelog_section_text}\n"
+        ),
+        encoding="utf-8",
+    )
+
+
 class TestCheckIntegration(unittest.TestCase):
     """Validate repository guard helpers."""
 
@@ -71,6 +124,9 @@ class TestCheckIntegration(unittest.TestCase):
                   - uses: home-assistant/actions/hassfest@f6f29a7ee3fa0eccadf3620a7b9ee00ab54ec03b
                   - run: python -m pip install "aiohttp>=3.13.5,<4" "pytest-homeassistant-custom-component>=0.13.332,<0.14"
                   - run: python scripts/check_deprecations.py
+                  - run: python scripts/check_privacy_markers.py
+                  - run: python scripts/check_translation_keys.py
+                  - run: python scripts/check_release_consistency.py
                 """,
             )
 
@@ -89,6 +145,51 @@ class TestCheckIntegration(unittest.TestCase):
                   - uses: hacs/action@dcb30e72781db3f207d5236b861172774ab0b485
                   - uses: home-assistant/actions/hassfest@f6f29a7ee3fa0eccadf3620a7b9ee00ab54ec03b
                   - run: python -m pip install "aiohttp>=3.13.5,<4" "pytest-homeassistant-custom-component>=0.13.332,<0.14"
+                """,
+            )
+
+            with patch.object(check_integration, "ROOT", root), redirect_stderr(
+                StringIO()
+            ), self.assertRaises(SystemExit):
+                check_integration.check_github_actions()
+
+    def test_github_actions_requires_privacy_guard(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            _write_validate_workflow(
+                root,
+                """
+                steps:
+                  - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+                  - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+                  - uses: hacs/action@dcb30e72781db3f207d5236b861172774ab0b485
+                  - uses: home-assistant/actions/hassfest@f6f29a7ee3fa0eccadf3620a7b9ee00ab54ec03b
+                  - run: python -m pip install "aiohttp>=3.13.5,<4" "pytest-homeassistant-custom-component>=0.13.332,<0.14"
+                  - run: python scripts/check_deprecations.py
+                  - run: python scripts/check_release_consistency.py
+                """,
+            )
+
+            with patch.object(check_integration, "ROOT", root), redirect_stderr(
+                StringIO()
+            ), self.assertRaises(SystemExit):
+                check_integration.check_github_actions()
+
+    def test_github_actions_requires_translation_key_guard(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            _write_validate_workflow(
+                root,
+                """
+                steps:
+                  - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+                  - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+                  - uses: hacs/action@dcb30e72781db3f207d5236b861172774ab0b485
+                  - uses: home-assistant/actions/hassfest@f6f29a7ee3fa0eccadf3620a7b9ee00ab54ec03b
+                  - run: python -m pip install "aiohttp>=3.13.5,<4" "pytest-homeassistant-custom-component>=0.13.332,<0.14"
+                  - run: python scripts/check_deprecations.py
+                  - run: python scripts/check_privacy_markers.py
+                  - run: python scripts/check_release_consistency.py
                 """,
             )
 
@@ -272,6 +373,32 @@ class TestCheckIntegration(unittest.TestCase):
                 self.assertRaises(SystemExit),
             ):
                 check_integration.check_translations()
+
+    def test_repository_files_accepts_required_doc_links_with_custom_labels(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            _write_repository_files_fixture(root)
+
+            with patch.object(check_integration, "ROOT", root):
+                check_integration.check_repository_files("1.3.2")
+
+    def test_repository_files_rejects_prerelease_terms_for_stable_release(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            _write_repository_files_fixture(
+                root,
+                changelog_section_text=(
+                    "Stable release.\n\n"
+                    "Contains beta compatibility notes."
+                ),
+            )
+
+            with (
+                patch.object(check_integration, "ROOT", root),
+                redirect_stderr(StringIO()),
+                self.assertRaises(SystemExit),
+            ):
+                check_integration.check_repository_files("1.3.2")
 
 
 if __name__ == "__main__":
