@@ -73,7 +73,7 @@ or release prep notes:
 Device family: DHE Connect 18/21/24
 Firmware/web-app: 1.9.00
 Validation date: 2026-05-21
-Branch/tag: v1.8.1
+Branch/tag: vX.Y.Z
 Result: yes
 Coverage:
 - setup/pairing: pass
