@@ -257,42 +257,6 @@ class TestTemperatureMemoryNumbers(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(entity._attr_native_value, 300)
         self.assertFalse(entity._attr_available)
 
-    def test_restore_timer_legacy_minutes_value_converts_to_seconds(self) -> None:
-        """Legacy minute-based restore values must map back to whole seconds."""
-        number_module = _load_number_module()
-        description = next(
-            item
-            for item in number_module.STATIC_NUMBER_DESCRIPTIONS
-            if item.key == "shower_timer_duration"
-        )
-
-        class _FakeClient:
-            host = "127.0.0.1"
-            port = 8443
-            device_identifier = None
-            available = True
-            last_measurements = {}
-            last_measurement_attributes = {}
-
-            def add_measurement_callback(self, _callback, *, replay=True):
-                return lambda: None
-
-            def add_availability_callback(self, _callback):
-                return lambda: None
-
-        entity = number_module.StiebelDHENumber(
-            entry=types.SimpleNamespace(data={}, options={}),
-            entry_id="test-entry",
-            name="Test DHE",
-            client=_FakeClient(),
-            description=description,
-        )
-
-        restored = entity._restore_native_value(10)
-
-        self.assertEqual(restored, 600)
-        self.assertEqual(entity._timer_duration_seconds, 600)
-
 
 if __name__ == "__main__":
     unittest.main()

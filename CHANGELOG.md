@@ -22,6 +22,13 @@ unique IDs and DHE protocol behavior stable.
 - Tightened runtime state/write handling for better recorder hygiene and
   deterministic behavior during reconnect/auth transitions.
 
+### Legacy Policy for v2 Beta
+
+- This beta does not include compatibility shims for legacy/private migration
+  edge cases from older development snapshots.
+- If an older private/dev setup behaves inconsistently after upgrade, remove
+  and re-add the integration cleanly.
+
 ### Tests and Regression Safety
 
 - Added dedicated eco-flow command regression tests.
