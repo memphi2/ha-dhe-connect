@@ -72,6 +72,16 @@ PRIVACY_PATTERNS = (
     ),
     PrivacyPattern(
         re.compile(
+            r"\bHA_TEST_URL\s*=\s*['\"]https?://"
+            r"(?:10[.]\d{1,3}[.]\d{1,3}[.]\d{1,3}"
+            r"|172[.](?:1[6-9]|2\d|3[01])[.]\d{1,3}[.]\d{1,3}"
+            r"|192[.]168[.]\d{1,3}[.]\d{1,3})"
+            r"(?::\d+)?['\"](?:\s|#|$)"
+        ),
+        "Remove private-IP HA_TEST_URL from tracked files.",
+    ),
+    PrivacyPattern(
+        re.compile(
             r"\beyJ[A-Za-z0-9_-]{8,}[.][A-Za-z0-9_-]{8,}[.][A-Za-z0-9_-]{8,}\b"
         ),
         "Remove JWT-like token value; keep secrets in env vars only.",

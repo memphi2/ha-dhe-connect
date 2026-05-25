@@ -54,6 +54,17 @@ class TestCheckPrivacyMarkers(unittest.TestCase):
             self.assertEqual(len(issues), 1)
             self.assertIn("private-IP HA_TEST_URL", issues[0])
 
+    def test_rejects_private_ip_test_url_when_quoted(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "ip-quoted.md"
+            path.write_text(
+                'HA_TEST_URL="http://192.168.1.42:8123"\n',
+                encoding="utf-8",
+            )
+            issues = check_privacy_markers.find_privacy_issues([path])
+            self.assertEqual(len(issues), 1)
+            self.assertIn("private-IP HA_TEST_URL", issues[0])
+
     def test_rejects_jwt_like_token(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "token.md"
