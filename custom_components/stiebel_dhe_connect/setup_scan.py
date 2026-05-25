@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import deque
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from ipaddress import IPv4Address, IPv4Network, ip_address, ip_network
 import socket
@@ -66,22 +66,6 @@ class SetupScanSubnetInput:
     network_address: str = ""
     netmask: str = ""
     cidr: str = ""
-
-    @classmethod
-    def from_mapping(
-        cls,
-        values: Mapping[str, Any],
-        *,
-        network_key: str,
-        netmask_key: str,
-        cidr_key: str,
-    ) -> SetupScanSubnetInput:
-        """Return normalized split subnet values from a config-flow mapping."""
-        return cls(
-            network_address=str(values.get(network_key) or "").strip(),
-            netmask=str(values.get(netmask_key) or "").strip(),
-            cidr=str(values.get(cidr_key) or "").strip(),
-        )
 
     def parse(self) -> IPv4Network | None:
         """Return the selected subnet or None when the scan should use local nets."""

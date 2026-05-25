@@ -68,7 +68,7 @@ class TestPairingValidation(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(path, os.path.normcase(os.path.abspath("token.txt")))
 
-    def test_configured_token_paths_includes_entry_and_target_paths(self) -> None:
+    def test_configured_token_paths_includes_target_paths(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             entry = types.SimpleNamespace(
@@ -80,12 +80,6 @@ class TestPairingValidation(unittest.IsolatedAsyncioTestCase):
 
             paths = self.module._configured_token_paths(hass)
 
-            self.assertIn(
-                os.path.normcase(
-                    os.path.abspath(root / ".storage/stiebel_dhe_connect_token_entry-one.txt")
-                ),
-                paths,
-            )
             self.assertIn(
                 os.path.normcase(
                     os.path.abspath(root / ".storage/stiebel_dhe_connect_token_dhe.local_8443.txt")
@@ -105,7 +99,6 @@ class TestPairingValidation(unittest.IsolatedAsyncioTestCase):
             )
             hass = _FakeHass(root, [configured_entry])
             remove_paths = (
-                storage / "stiebel_dhe_connect_token.txt",
                 storage / "stiebel_dhe_connect_token_new.local_8443.txt",
                 storage / "stiebel_dhe_connect_token_stale_8443.txt",
             )

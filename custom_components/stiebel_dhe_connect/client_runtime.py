@@ -175,101 +175,14 @@ class DHEClientRuntimeMixin(DHEClientRuntimeMediaMixin, DHEClientRuntimeAppMixin
 
     async def _handle_runtime_event(self, event: DHEEvent) -> None:
         if event.name == "__closed":
-            reason = (
-                str(event.data)
-                if isinstance(event.data, str) and event.data.strip()
-                else "DHE closed Socket.IO session"
-            )
-            self._record_runtime_parser_category("socket_closed")
-            self._update_diagnostics(
-                connection_state="reconnecting",
-                last_reconnect_reason=reason,
-            )
-            raise DHESessionClosed(reason)
-        if event.name != "message":
-            self._record_runtime_parser_category("ignored_event")
+            raise self._session_closed_error(event)
+        message = self._parse_runtime_message(event)
+        if message is None:
             return
-        if not isinstance(event.data, dict):
-            self._record_runtime_parser_category("invalid_message_payload")
+        command, value = message
+        if self._handle_runtime_non_odb_command(command, value):
             return
-        data = event.data
-        command = data.get("command")
-        value = data.get("value")
-        self._record_runtime_message(command, value)
-        if not isinstance(command, str):
-            self._record_runtime_parser_category("invalid_command")
-            self._log_unhandled_ste_command(command, value)
-            return
-        is_radio_command = RADIO_PATH in command
-        if command in APP_TIMER_RESET_COMMANDS:
-            self._record_runtime_parser_category("timer_reset")
-            self._handle_app_timer_reset(command)
-            return
-        if command in APP_TIMER_VALUE_COMMANDS:
-            self._record_runtime_parser_category("timer_value")
-            self._handle_app_timer_value(command, value)
-            return
-        if command in RADIO_KNOWN_REQUEST_COMMANDS:
-            self._record_runtime_parser_category("radio_request")
-            self._last_app_values[command] = _summarize_radio_value(value)
-            return
-        if command == RADIO_STATIONS_SET_COMMAND:
-            self._record_runtime_parser_category("radio_stations")
-            self._handle_radio_stations_value(value)
-            return
-        if command == RADIO_FAVORITES_SET_COMMAND:
-            self._record_runtime_parser_category("radio_favorites")
-            self._handle_radio_favorites_value(value)
-            return
-        if command in RADIO_ASSIGN_COMMANDS:
-            self._record_runtime_parser_category("radio_assign")
-            self._last_app_values[command] = _summarize_radio_value(value)
-            return
-        if command in RADIO_SET_COMMANDS:
-            self._record_runtime_parser_category("radio_state")
-            self._handle_radio_value(
-                command,
-                value,
-                requested_readback=self._app_read_source(command),
-            )
-            return
-        if command in WEATHER_SET_COMMANDS:
-            self._record_runtime_parser_category("weather_state")
-            self._handle_weather_value(command, value)
-            return
-        if command in WEATHER_ASSIGN_COMMANDS:
-            self._record_runtime_parser_category("weather_assign")
-            self._last_app_values[command] = _summarize_weather_value(value)
-            return
-        if command in CONSUMPTION_COMMAND_IDS:
-            self._record_runtime_parser_category("consumption")
-            self._handle_consumption_value(command, value)
-            return
-        if command == LAST_USAGE_SET_COMMAND:
-            self._record_runtime_parser_category("last_usage")
-            self._handle_last_usage_value(value)
-            return
-        if command in SAVING_MONITOR_COMMAND_IDS:
-            self._record_runtime_parser_category("saving_monitor")
-            self._handle_saving_monitor_value(command, value)
-            return
-        if command in {TEMP_MEMORY_SET_COMMAND, TEMP_MEMORY_ASSIGN_COMMAND}:
-            self._record_runtime_parser_category("temperature_memory")
-            self._handle_temperature_memory_value(value, source_command=command)
-            return
-        if command in TEMPERATURE_MAX_OVERRIDE_COMMANDS:
-            self._record_runtime_parser_category("temperature_max_override")
-            self._handle_temperature_max_override_value(command, value)
-            return
-        if command in DEVICE_INFO_COMMAND_IDS:
-            self._record_runtime_parser_category("device_info")
-            self._handle_device_info_value(command, value)
-            return
-        if command in APP_STARTUP_SET_COMMANDS:
-            self._record_runtime_parser_category("app_startup")
-            self._handle_app_startup_value(command, value)
-            return
-        if is_radio_command:
+        if RADIO_PATH in command:
             self._record_runtime_parser_category("radio_unhandled")
             _LOGGER.debug(
                 "DHE radio unhandled command=%s value_summary=%s",
@@ -277,6 +190,109 @@ class DHEClientRuntimeMixin(DHEClientRuntimeMediaMixin, DHEClientRuntimeAppMixin
                 _summarize_radio_value(value),
             )
             return
+        self._handle_runtime_odb_command(command, value)
+
+    def _session_closed_error(self, event: DHEEvent) -> DHESessionClosed:
+        reason = (
+            str(event.data)
+            if isinstance(event.data, str) and event.data.strip()
+            else "DHE closed Socket.IO session"
+        )
+        self._record_runtime_parser_category("socket_closed")
+        self._update_diagnostics(
+            connection_state="reconnecting",
+            last_reconnect_reason=reason,
+        )
+        return DHESessionClosed(reason)
+
+    def _parse_runtime_message(self, event: DHEEvent) -> tuple[str, Any] | None:
+        if event.name != "message":
+            self._record_runtime_parser_category("ignored_event")
+            return None
+        if not isinstance(event.data, dict):
+            self._record_runtime_parser_category("invalid_message_payload")
+            return None
+        command = event.data.get("command")
+        value = event.data.get("value")
+        self._record_runtime_message(command, value)
+        if not isinstance(command, str):
+            self._record_runtime_parser_category("invalid_command")
+            self._log_unhandled_ste_command(command, value)
+            return None
+        return command, value
+
+    def _handle_runtime_non_odb_command(self, command: str, value: Any) -> bool:
+        if command in APP_TIMER_RESET_COMMANDS:
+            self._record_runtime_parser_category("timer_reset")
+            self._handle_app_timer_reset(command)
+            return True
+        if command in APP_TIMER_VALUE_COMMANDS:
+            self._record_runtime_parser_category("timer_value")
+            self._handle_app_timer_value(command, value)
+            return True
+        if command in RADIO_KNOWN_REQUEST_COMMANDS:
+            self._record_runtime_parser_category("radio_request")
+            self._last_app_values[command] = _summarize_radio_value(value)
+            return True
+        if command == RADIO_STATIONS_SET_COMMAND:
+            self._record_runtime_parser_category("radio_stations")
+            self._handle_radio_stations_value(value)
+            return True
+        if command == RADIO_FAVORITES_SET_COMMAND:
+            self._record_runtime_parser_category("radio_favorites")
+            self._handle_radio_favorites_value(value)
+            return True
+        if command in RADIO_ASSIGN_COMMANDS:
+            self._record_runtime_parser_category("radio_assign")
+            self._last_app_values[command] = _summarize_radio_value(value)
+            return True
+        if command in RADIO_SET_COMMANDS:
+            self._record_runtime_parser_category("radio_state")
+            self._handle_radio_value(
+                command,
+                value,
+                requested_readback=self._app_read_source(command),
+            )
+            return True
+        if command in WEATHER_SET_COMMANDS:
+            self._record_runtime_parser_category("weather_state")
+            self._handle_weather_value(command, value)
+            return True
+        if command in WEATHER_ASSIGN_COMMANDS:
+            self._record_runtime_parser_category("weather_assign")
+            self._last_app_values[command] = _summarize_weather_value(value)
+            return True
+        if command in CONSUMPTION_COMMAND_IDS:
+            self._record_runtime_parser_category("consumption")
+            self._handle_consumption_value(command, value)
+            return True
+        if command == LAST_USAGE_SET_COMMAND:
+            self._record_runtime_parser_category("last_usage")
+            self._handle_last_usage_value(value)
+            return True
+        if command in SAVING_MONITOR_COMMAND_IDS:
+            self._record_runtime_parser_category("saving_monitor")
+            self._handle_saving_monitor_value(command, value)
+            return True
+        if command in {TEMP_MEMORY_SET_COMMAND, TEMP_MEMORY_ASSIGN_COMMAND}:
+            self._record_runtime_parser_category("temperature_memory")
+            self._handle_temperature_memory_value(value, source_command=command)
+            return True
+        if command in TEMPERATURE_MAX_OVERRIDE_COMMANDS:
+            self._record_runtime_parser_category("temperature_max_override")
+            self._handle_temperature_max_override_value(command, value)
+            return True
+        if command in DEVICE_INFO_COMMAND_IDS:
+            self._record_runtime_parser_category("device_info")
+            self._handle_device_info_value(command, value)
+            return True
+        if command in APP_STARTUP_SET_COMMANDS:
+            self._record_runtime_parser_category("app_startup")
+            self._handle_app_startup_value(command, value)
+            return True
+        return False
+
+    def _handle_runtime_odb_command(self, command: str, value: Any) -> None:
         original_command = command
         if original_command in ODB_VALUE_COMMANDS and not isinstance(value, Mapping):
             self._record_runtime_parser_category("invalid_odb_payload")

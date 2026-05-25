@@ -393,6 +393,91 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
             errors=errors,
         )
 
+    def _effective_radio_search_type(self) -> str:
+        """Return the currently selected radio search type."""
+        if self._radio_search_type in RADIO_SEARCH_TYPES:
+            return self._radio_search_type
+        return "text"
+
+    async def _ensure_radio_catalog(
+        self,
+        client: _OptionsFlowClient | None,
+        search_type: str,
+        errors: dict[str, str],
+    ) -> None:
+        """Load the selected radio catalog if needed."""
+        if (
+            client is None
+            or search_type not in RADIO_CATALOG_SEARCH_TYPES
+            or search_type in self._radio_catalogs
+        ):
+            return
+        try:
+            self._radio_catalogs[search_type] = await client.list_radio_catalog(search_type)
+        except DHEError:
+            errors["base"] = "radio_catalog_failed"
+
+    def _validate_radio_catalog_input(
+        self,
+        *,
+        user_input: dict[str, Any],
+        search_type: str,
+        catalog_options: dict[str, str],
+        errors: dict[str, str],
+    ) -> tuple[str, str | None] | None:
+        """Validate radio search inputs and return normalized search values."""
+        catalog_value = str(user_input.get(ATTR_RADIO_SELECTION, "")).strip()
+        search_text = str(user_input.get(ATTR_RADIO_FILTER_TEXT, "")).strip()
+        if search_type in RADIO_CATALOG_SEARCH_TYPES and not catalog_value:
+            errors[ATTR_RADIO_SELECTION] = "required"
+            return None
+        if (
+            search_type in RADIO_CATALOG_SEARCH_TYPES
+            and catalog_options
+            and catalog_value not in catalog_options
+        ):
+            errors[ATTR_RADIO_SELECTION] = "invalid_radio_catalog_value"
+            return None
+        if (
+            search_type == "text" or search_type in RADIO_FILTER_SEARCH_TYPES
+        ) and not search_text:
+            errors[ATTR_RADIO_FILTER_TEXT] = "required"
+            return None
+        station_search_value = search_text if search_type == "text" else catalog_value
+        station_search_text = (
+            search_text if search_type in RADIO_FILTER_SEARCH_TYPES else None
+        )
+        return station_search_value, station_search_text
+
+    async def _search_radio_results(
+        self,
+        client: _OptionsFlowClient,
+        *,
+        search_type: str,
+        station_search_value: str,
+        station_search_text: str | None,
+        errors: dict[str, str],
+    ) -> bool:
+        """Search radio stations and store results; return True on success."""
+        try:
+            self._radio_results = await client.search_radio_stations(
+                search_type,
+                station_search_value,
+                search_text=station_search_text,
+            )
+            if station_search_text:
+                self._radio_results = _filter_radio_results_by_text(
+                    self._radio_results,
+                    station_search_text,
+                )
+        except DHEError:
+            errors["base"] = "radio_search_failed"
+            return False
+        if not self._radio_results:
+            errors["base"] = "no_results"
+            return False
+        return True
+
     async def async_step_radio_favorite_catalog(
         self,
         user_input: dict[str, Any] | None = None,
@@ -401,24 +486,8 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
         errors: dict[str, str] = {}
         client = self._client_or_mark_not_loaded(errors)
         defaults = user_input or {}
-        search_type = (
-            self._radio_search_type
-            if self._radio_search_type in RADIO_SEARCH_TYPES
-            else "text"
-        )
-
-        if (
-            client is not None
-            and
-            search_type in RADIO_CATALOG_SEARCH_TYPES
-            and search_type not in self._radio_catalogs
-        ):
-            try:
-                self._radio_catalogs[search_type] = await client.list_radio_catalog(
-                    search_type
-                )
-            except DHEError:
-                errors["base"] = "radio_catalog_failed"
+        search_type = self._effective_radio_search_type()
+        await self._ensure_radio_catalog(client, search_type, errors)
 
         catalog_options = (
             _radio_catalog_options(self._radio_catalogs.get(search_type, []))
@@ -433,45 +502,23 @@ class StiebelDHEConnectOptionsFlow(config_entries.OptionsFlow):
             errors["base"] = "no_radio_catalog"
 
         if user_input is not None and not errors and client is not None:
-            catalog_value = str(user_input.get(ATTR_RADIO_SELECTION, "")).strip()
-            search_text = str(user_input.get(ATTR_RADIO_FILTER_TEXT, "")).strip()
-            if search_type in RADIO_CATALOG_SEARCH_TYPES and not catalog_value:
-                errors[ATTR_RADIO_SELECTION] = "required"
-            elif (
-                search_type in RADIO_CATALOG_SEARCH_TYPES
-                and catalog_options
-                and catalog_value not in catalog_options
-            ):
-                errors[ATTR_RADIO_SELECTION] = "invalid_radio_catalog_value"
-            elif (
-                search_type == "text" or search_type in RADIO_FILTER_SEARCH_TYPES
-            ) and not search_text:
-                errors[ATTR_RADIO_FILTER_TEXT] = "required"
-            else:
-                station_search_value = (
-                    search_text if search_type == "text" else catalog_value
+            validated = self._validate_radio_catalog_input(
+                user_input=user_input,
+                search_type=search_type,
+                catalog_options=catalog_options,
+                errors=errors,
+            )
+            if validated is not None:
+                station_search_value, station_search_text = validated
+                success = await self._search_radio_results(
+                    client,
+                    search_type=search_type,
+                    station_search_value=station_search_value,
+                    station_search_text=station_search_text,
+                    errors=errors,
                 )
-                station_search_text = (
-                    search_text if search_type in RADIO_FILTER_SEARCH_TYPES else None
-                )
-                try:
-                    self._radio_results = await client.search_radio_stations(
-                        search_type,
-                        station_search_value,
-                        search_text=station_search_text,
-                    )
-                    if station_search_text:
-                        self._radio_results = _filter_radio_results_by_text(
-                            self._radio_results,
-                            station_search_text,
-                        )
-                except DHEError:
-                    errors["base"] = "radio_search_failed"
-                else:
-                    if not self._radio_results:
-                        errors["base"] = "no_results"
-                    else:
-                        return await self.async_step_radio_favorite_result()
+                if success:
+                    return await self.async_step_radio_favorite_result()
 
         return self.async_show_form(
             step_id="radio_favorite_catalog",

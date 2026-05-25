@@ -334,8 +334,8 @@ evidence:
   gold:
     devices:
       implementation: >
-        Device identity is stable per config entry and merges legacy host/IP
-        identifiers when needed.
+        Device identity is stable per config entry and anchored to config-entry
+        unique_id/device identifiers without runtime identifier migrations.
       tests: >
         Entity-registry and multi-entry fixture tests cover device stability.
       docs: >
@@ -500,7 +500,7 @@ evidence:
     stale-devices:
       implementation: >
         Exempt because removing the config entry removes the single DHE device;
-        legacy host/IP identifiers are merged during setup.
+        stale host/IP entries are not retained by current setup logic.
       tests: >
         Device cleanup, unload and entity-registry tests cover stale-device
         behavior.

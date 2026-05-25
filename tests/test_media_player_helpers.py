@@ -379,7 +379,7 @@ class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
             available = True
             last_radio_state = state
 

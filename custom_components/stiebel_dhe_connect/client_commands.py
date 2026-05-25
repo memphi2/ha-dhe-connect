@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from .client_command_context import command_context as _command_context
@@ -79,10 +80,6 @@ class DHEClientCommandsMixin(
             _operation,
             on_error=lambda: client._clear_pending_future(None),
         )
-
-    async def set_heating_off(self) -> None:
-        """Backward-compatible wrapper for the known DHE sync request."""
-        await self._send_set_req_sync()
 
     async def set_water_heating_enabled(self, enabled: bool) -> bool:
         """Enable or disable water heating via ODB id 33 and sync request."""
@@ -184,7 +181,7 @@ class DHEClientCommandsMixin(
         return bool(await self.write_odb_value(ID_ECO_MODE, bool(enabled)))
 
     async def set_eco_flow_limit(self, liters_per_minute: float) -> float:
-        requested_l_min = _round_to_half_c(_clamp(float(liters_per_minute), 4.0, 15.0))
+        requested_l_min = math.floor(_clamp(float(liters_per_minute), 4.0, 15.0) + 0.5)
         raw_value = round(requested_l_min * 10.0)
         return float(await self.write_odb_value(ID_ECO_FLOW_LIMIT, raw_value))
 

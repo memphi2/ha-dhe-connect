@@ -50,7 +50,7 @@ class LatestState:
     state: str
     attributes: dict[str, Any]
     state_id: int
-    last_updated: float | str | None
+    last_updated: float | str | None = None
 
 
 @dataclass(frozen=True)
@@ -210,15 +210,6 @@ def _table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
     return {str(row["name"]) for row in conn.execute(f"PRAGMA table_info({table})")}
 
 
-def _state_timestamp_expression(conn: sqlite3.Connection) -> str:
-    columns = _table_columns(conn, "states")
-    if "last_updated_ts" in columns:
-        return "s.last_updated_ts"
-    if "last_updated" in columns:
-        return "s.last_updated"
-    return "NULL"
-
-
 def _state_attributes_expression(conn: sqlite3.Connection) -> str:
     columns = _table_columns(conn, "state_attributes")
     if "shared_attrs" in columns:
@@ -251,7 +242,6 @@ def load_latest_states(db_path: Path, entity_ids: Iterable[str]) -> dict[str, La
             return {}
 
         placeholders = ",".join("?" for _ in entity_id_list)
-        timestamp_expression = _state_timestamp_expression(conn)
         attributes_expression = _state_attributes_expression(conn)
         query = f"""
             WITH metadata AS (
@@ -269,7 +259,6 @@ def load_latest_states(db_path: Path, entity_ids: Iterable[str]) -> dict[str, La
                 m.entity_id,
                 s.state,
                 s.state_id,
-                {timestamp_expression} AS last_updated,
                 {attributes_expression} AS shared_attrs
             FROM latest l
             JOIN states s ON s.state_id = l.state_id
@@ -295,7 +284,6 @@ def load_latest_states(db_path: Path, entity_ids: Iterable[str]) -> dict[str, La
             state=str(row["state"]),
             attributes=attributes,
             state_id=int(row["state_id"]),
-            last_updated=row["last_updated"],
         )
     return states
 

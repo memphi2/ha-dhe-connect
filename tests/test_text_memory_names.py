@@ -121,7 +121,7 @@ class TestTemperatureMemoryText(unittest.TestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
             available = True
             last_measurement_attributes = {700: {"name": "Memory 1"}}
 
@@ -149,7 +149,7 @@ class TestTemperatureMemoryText(unittest.TestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
             available = True
             last_measurement_attributes = {}
 
@@ -178,7 +178,7 @@ class TestTemperatureMemoryText(unittest.TestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
             available = True
             last_device_info = {"controlunit_name": "DHE-JA06"}
             last_measurement_attributes = {}
@@ -217,7 +217,7 @@ class TestTemperatureMemoryText(unittest.TestCase):
         class _OfflineClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
             available = False
             last_measurement_attributes = {}
 

@@ -187,7 +187,7 @@ class TestTemperatureMemoryNumbers(unittest.IsolatedAsyncioTestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
             available = True
             last_measurement_attributes = {}
 
@@ -208,6 +208,16 @@ class TestTemperatureMemoryNumbers(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(writes, [8.0, 8.5])
 
+    def test_eco_flow_limit_number_uses_whole_liters_step(self) -> None:
+        number_module = _load_number_module()
+        description = next(
+            item
+            for item in number_module.STATIC_NUMBER_DESCRIPTIONS
+            if item.key == "eco_flow_limit"
+        )
+
+        self.assertEqual(description.native_step, 1.0)
+
     async def test_restored_static_number_value_stays_unavailable_offline(self) -> None:
         number_module = _load_number_module()
         description = next(
@@ -219,7 +229,7 @@ class TestTemperatureMemoryNumbers(unittest.IsolatedAsyncioTestCase):
         class _OfflineClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
             available = False
             last_measurements = {}
             last_measurement_attributes = {}

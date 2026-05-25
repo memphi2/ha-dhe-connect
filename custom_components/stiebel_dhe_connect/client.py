@@ -112,8 +112,6 @@ class DHEClient(
         self.port = _validate_port(port)
         self.name = name
         self.device_identifier: str | None = None
-        self.legacy_device_identifier: str | None = None
-        self.legacy_device_identifiers: set[str] = set()
         self.base_url = f"http://{self._url_host}:{self.port}"
         self.token_path = (
             token_file if os.path.isabs(token_file) else hass.config.path(token_file)

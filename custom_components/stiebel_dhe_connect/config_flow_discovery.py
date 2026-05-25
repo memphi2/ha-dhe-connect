@@ -170,12 +170,13 @@ def _normalize_stable_device_id(value: Any) -> str | None:
 
 
 def coerce_setup_pairing_result(result: Any) -> SetupPairingResult:
-    """Accept the current result object and older string/None test doubles."""
+    """Return a typed setup pairing result."""
     if isinstance(result, SetupPairingResult):
         return result
-    if result is None:
-        return SetupPairingResult()
-    return SetupPairingResult(error_key=str(result))
+    raise TypeError(
+        "validate_setup_pairing must return SetupPairingResult, "
+        f"got {type(result).__name__}"
+    )
 
 
 def discovery_info_name(discovery_info: Any) -> str:
