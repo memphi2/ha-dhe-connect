@@ -457,6 +457,15 @@ def scan_git_history_for_sensitive_literals(runner: Runner) -> CheckResult:
             *(re.escape(marker) for marker in PROPRIETARY_HISTORY_MARKERS),
         )
     )
+    marker_pattern = re.compile(
+        "|".join(
+            (
+                *HISTORY_SENSITIVE_REGEXES_PYTHON,
+                *(re.escape(marker) for marker in PROPRIETARY_HISTORY_MARKERS),
+            )
+        ),
+        re.IGNORECASE,
+    )
     hits: list[str] = []
     for commit_chunk in _iter_chunks(commits, HISTORY_GREP_REVISION_CHUNK_SIZE):
         grep_result = runner(
@@ -477,7 +486,11 @@ def scan_git_history_for_sensitive_literals(runner: Runner) -> CheckResult:
         for line in grep_result.stdout.splitlines():
             if not line.strip():
                 continue
-            if any(snippet in line for snippet in SAFE_HISTORY_MARKER_SNIPPETS):
+            _, matched_text = _split_git_grep_history_line(line)
+            if matched_text is None:
+                hits.append(line)
+                continue
+            if not _has_non_safe_history_match(matched_text, marker_pattern):
                 continue
             hits.append(line)
 
@@ -491,6 +504,46 @@ def scan_git_history_for_sensitive_literals(runner: Runner) -> CheckResult:
         False,
         "git history contains non-anonymized or proprietary markers:\n" + preview,
     )
+
+
+def _split_git_grep_history_line(line: str) -> tuple[str, str | None]:
+    """Split `git grep` output into a stable prefix and matched content."""
+    parts = line.split(":", 3)
+    if len(parts) != 4:
+        return line, None
+    return ":".join(parts[:3]), parts[3]
+
+
+def _has_non_safe_history_match(text: str, marker_pattern: re.Pattern[str]) -> bool:
+    """Return true when the line has at least one non-whitelisted sensitive marker."""
+    safe_ranges = _safe_history_snippet_ranges(text)
+    for match in marker_pattern.finditer(text):
+        if _is_history_match_within_ranges(match.span(), safe_ranges):
+            continue
+        return True
+    return False
+
+
+def _safe_history_snippet_ranges(text: str) -> list[tuple[int, int]]:
+    """Return index ranges for whitelisted documentation snippets on one line."""
+    ranges: list[tuple[int, int]] = []
+    for snippet in SAFE_HISTORY_MARKER_SNIPPETS:
+        start = 0
+        while True:
+            index = text.find(snippet, start)
+            if index < 0:
+                break
+            ranges.append((index, index + len(snippet)))
+            start = index + len(snippet)
+    return ranges
+
+
+def _is_history_match_within_ranges(
+    span: tuple[int, int], safe_ranges: Sequence[tuple[int, int]]
+) -> bool:
+    """Return true when a marker match is fully inside a safe snippet range."""
+    start, end = span
+    return any(start >= safe_start and end <= safe_end for safe_start, safe_end in safe_ranges)
 
 
 def _github_payload_strings(payload: Any) -> list[str]:

@@ -31,6 +31,19 @@ class TestCheckPrivacyMarkers(unittest.TestCase):
             self.assertEqual(len(issues), 1)
             self.assertIn("HA_TEST_USERNAME", issues[0])
 
+    def test_accepts_quoted_placeholder_credentials(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "placeholders.md"
+            path.write_text(
+                (
+                    "HA_TEST_USERNAME=\"your-ha-user\"\n"
+                    "HA_TEST_PASSWORD='your-ha-password'\n"
+                ),
+                encoding="utf-8",
+            )
+            issues = check_privacy_markers.find_privacy_issues([path])
+            self.assertEqual(issues, [])
+
     def test_rejects_private_ip_test_url(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "ip.md"

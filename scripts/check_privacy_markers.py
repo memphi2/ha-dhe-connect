@@ -47,11 +47,17 @@ class PrivacyPattern:
 
 PRIVACY_PATTERNS = (
     PrivacyPattern(
-        re.compile(r"\bHA_TEST_USERNAME\s*=\s*(?!your-ha-user\b)[^\s#]+"),
+        re.compile(
+            r"\bHA_TEST_USERNAME\s*=\s*"
+            r"(?!['\"]?your-ha-user['\"]?(?:\s|#|$))[^\s#]+"
+        ),
         "Remove non-placeholder HA_TEST_USERNAME from tracked files.",
     ),
     PrivacyPattern(
-        re.compile(r"\bHA_TEST_PASSWORD\s*=\s*(?!your-ha-password\b)[^\s#]+"),
+        re.compile(
+            r"\bHA_TEST_PASSWORD\s*=\s*"
+            r"(?!['\"]?your-ha-password['\"]?(?:\s|#|$))[^\s#]+"
+        ),
         "Remove non-placeholder HA_TEST_PASSWORD from tracked files.",
     ),
     PrivacyPattern(

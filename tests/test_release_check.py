@@ -687,6 +687,35 @@ class TestReleaseCheck(unittest.TestCase):
 
         self.assertTrue(result.ok, result.message)
 
+    def test_history_sensitive_scan_rejects_mixed_safe_and_real_markers(self) -> None:
+        real_ip = "192.168.1.42"
+
+        def _runner(args):
+            command = tuple(args)
+            if command == ("git", "rev-list", "--all"):
+                return release_check.CommandResult(
+                    args=command,
+                    returncode=0,
+                    stdout="abc123\n",
+                    stderr="",
+                )
+            if command[0:3] == ("git", "grep", "-nE"):
+                return release_check.CommandResult(
+                    args=command,
+                    returncode=0,
+                    stdout=(
+                        "abc123:README.md:12:"
+                        f"Use `192.168.1.0` example, real host was {real_ip}.\n"
+                    ),
+                    stderr="",
+                )
+            raise AssertionError(f"unexpected command: {command}")
+
+        result = release_check.scan_git_history_for_sensitive_literals(_runner)
+
+        self.assertFalse(result.ok)
+        self.assertIn(real_ip, result.message)
+
     def test_github_hygiene_scan_rejects_non_anonymized_markers(self) -> None:
         sample_user = "demo_user42"
 
