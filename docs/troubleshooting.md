@@ -209,8 +209,8 @@ still validated before the config entry is saved.
 
 Subnet fields are shown only after the scan option is selected. Home Assistant
 pre-fills custom subnet forms from its current local subnet when possible. Use
-the current local subnet, enter network address `192.168.1.0` plus subnet mask
-`255.255.255.0`, or enter CIDR `192.168.1.0/24`. If you skip the scan or it
+the current local subnet, enter network address `192.0.2.0` plus subnet mask
+`255.255.255.0`, or enter CIDR `192.0.2.0/24`. If you skip the scan or it
 finds nothing, enter the DHE host/IP and port manually.
 
 Only change the scan port if the DHE web interface is reachable on a

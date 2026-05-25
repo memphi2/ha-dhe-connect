@@ -8,6 +8,10 @@
   (`beta`, `pre-release`, `release candidate`) in stable sections.
 - Added `scripts/check_release_consistency.py` and wired it into CI plus
   `release_check --run-local-checks`.
+- Made `release_check --expect-tag skip` development-friendly by allowing
+  non-empty `Unreleased` sections while keeping strict release-tag checks.
+- Fixed GitHub hygiene scan compatibility with GH CLI versions without
+  `gh api --slurp` support.
 - Reduced release documentation overlap: `docs/release_process.md` now delegates
   command-set details to `docs/validation.md`, and `docs/migration_policy.md`
   now references troubleshooting recovery guidance.
