@@ -52,6 +52,11 @@ SECRET_PATH_MARKERS = (
     ".tmp_pairing_token",
     "stiebel_dhe_connect_token",
 )
+SECRET_SCAN_EXCLUDED_FILES = {
+    # Synthetic fixtures that intentionally contain secret-like literals
+    # to verify guard behavior.
+    "tests/test_check_privacy_markers.py",
+}
 GENERATED_ARTIFACT_PATH_PATTERNS = (
     re.compile(r"(^|/)__pycache__/"),
     re.compile(r"\.py[co]$"),
@@ -411,6 +416,8 @@ def scan_tracked_files_for_secrets(root: Path, runner: Runner) -> CheckResult:
     failures: list[str] = []
     for relative in (item for item in result.stdout.split("\0") if item):
         normalized = relative.replace("\\", "/")
+        if normalized in SECRET_SCAN_EXCLUDED_FILES:
+            continue
         if any(marker in normalized for marker in SECRET_PATH_MARKERS):
             failures.append(f"tracked secret-like path: {relative}")
             continue

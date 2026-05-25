@@ -47,3 +47,19 @@ def test_measurement_callback_can_skip_startup_replay() -> None:
     remove()
     client._notify_callbacks("measurement", client._measurement_callbacks, 1, 40)
     assert calls == [(1, 30)]
+
+
+def test_callback_exception_does_not_block_other_callbacks() -> None:
+    """One failing callback must not block the remaining callback fanout."""
+    client = _CallbackClient()
+    calls: list[tuple[Any, ...]] = []
+
+    def _failing_callback(*_args: Any) -> None:
+        raise RuntimeError("boom")
+
+    client.add_measurement_callback(_failing_callback, replay=False)
+    client.add_measurement_callback(lambda *args: calls.append(args), replay=False)
+
+    client._notify_callbacks("measurement", client._measurement_callbacks, 7, 77)
+
+    assert calls == [(7, 77)]

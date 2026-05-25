@@ -469,6 +469,32 @@ class TestReleaseCheck(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertIn("literal HA test password", result.message)
 
+    def test_secret_scan_ignores_intentional_guard_fixture_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fixture = root / "tests" / "test_check_privacy_markers.py"
+            fixture.parent.mkdir(parents=True)
+            fixture.write_text(
+                "HA_TEST_" "PASSWORD='very-secret-value'\n",
+                encoding="utf-8",
+            )
+
+            def _runner(args):
+                self.assertEqual(
+                    tuple(args),
+                    ("git", "ls-files", "-z", "--cached"),
+                )
+                return release_check.CommandResult(
+                    args=tuple(args),
+                    returncode=0,
+                    stdout="tests/test_check_privacy_markers.py\0",
+                    stderr="",
+                )
+
+            result = release_check.scan_tracked_files_for_secrets(root, _runner)
+
+        self.assertTrue(result.ok)
+
     def test_secret_scan_rejects_vendor_web_assets(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
-import shutil
 from collections.abc import Callable, Mapping
 from typing import Any, cast
 
@@ -37,6 +35,7 @@ from .config_flow_setup import (
     CONF_SETUP_MODE,
     SETUP_SCAN_PROGRESS_ACTION,
     apply_validation_error as _apply_validation_error,
+    connection_data_from_user_input as _connection_data_from_user_input,
     language_from_hass as _language_from_hass,
     required_scan_subnet as _required_scan_subnet,
     scan_subnet_cidr_input as _scan_subnet_cidr_input,
@@ -67,6 +66,10 @@ from .config_flow_discovery import (
     zeroconf_setup_choice_key,
     zeroconf_setup_choices_from_progress as _zeroconf_setup_choices_from_progress,
 )
+from .config_flow_connection import (
+    async_preserve_token_for_retarget as _async_preserve_token_for_retarget_impl,
+    connection_options_for_entry as _connection_options_for_entry_impl,
+)
 from .discovery_state import (
     DISCOVERY_MIN_PROMPT_CONFIDENCE,
     DiscoveryRecord,
@@ -77,11 +80,7 @@ from .discovery_state import (
     cached_discovery_choices as _cached_discovery_choices,
     zeroconf_discovery_record as _zeroconf_discovery_record,
 )
-from .connection_helpers import (
-    normalize_host,
-    target_changed,
-    validate_port,
-)
+from .connection_helpers import normalize_host, target_changed, validate_port
 from .client import DHEClient
 from .const import (
     DEFAULT_NAME,
@@ -95,7 +94,6 @@ from .entity_state_helpers import (
 )
 from .pairing_validation import (
     _async_clear_setup_token_files as _validation_async_clear_setup_token_files,
-    _abs_config_path as _validation_abs_config_path,
     can_connect as _can_connect,
     validate_setup_pairing as _validate_setup_pairing_fn,
 )
@@ -202,32 +200,12 @@ def _async_delete_discovery_conflict_issue(
     )
 
 
-def _connection_data_from_user_input(user_input: Mapping[str, Any]) -> dict[str, Any]:
-    """Return normalized connection data from config/options flow input."""
-    host = normalize_host(user_input[CONF_HOST])
-    port = validate_port(user_input.get(CONF_PORT, DEFAULT_PORT))
-    internal_scald_protection = str(
-        user_input.get(CONF_INTERNAL_SCALD_PROTECTION) or ""
-    ).strip()
-    if internal_scald_protection not in INTERNAL_SCALD_PROTECTION_OPTIONS:
-        raise ValueError(INVALID_INTERNAL_SCALD_PROTECTION)
-    name = str(user_input.get(CONF_NAME, DEFAULT_NAME)).strip() or DEFAULT_NAME
-    return {
-        CONF_HOST: host,
-        CONF_PORT: port,
-        CONF_NAME: name,
-        CONF_INTERNAL_SCALD_PROTECTION: internal_scald_protection,
-    }
-
-
 def _connection_options_for_entry(
     entry: config_entries.ConfigEntry,
     connection_data: Mapping[str, Any],
 ) -> dict[str, Any]:
     """Return options updated with normalized connection fields."""
-    options = dict(entry.options)
-    options.update(connection_data)
-    return options
+    return _connection_options_for_entry_impl(entry, connection_data)
 
 
 def _normalized_entry_unique_id(entry: config_entries.ConfigEntry) -> str | None:
@@ -246,34 +224,8 @@ async def _async_preserve_token_for_retarget(
     entry: config_entries.ConfigEntry,
     connection_data: Mapping[str, Any],
 ) -> None:
-    """Copy the existing DHE token when a configured device target changes."""
-    current_target = _entry_target(entry)
-    if current_target is None:
-        return
-    old_host, old_port = current_target
-    new_host = str(connection_data[CONF_HOST])
-    new_port = int(connection_data[CONF_PORT])
-    if not target_changed(
-        {CONF_HOST: old_host, CONF_PORT: old_port},
-        new_host,
-        new_port,
-        default_port=DEFAULT_PORT,
-    ):
-        return
-
-    old_path = _validation_abs_config_path(hass, token_file_for_target(old_host, old_port))
-    new_path = _validation_abs_config_path(hass, token_file_for_target(new_host, new_port))
-    if old_path == new_path:
-        return
-
-    def _copy() -> bool:
-        if not os.path.exists(old_path) or os.path.exists(new_path):
-            return False
-        os.makedirs(os.path.dirname(new_path), exist_ok=True)
-        shutil.copy2(old_path, new_path)
-        return True
-
-    if await hass.async_add_executor_job(_copy):
+    """Copy existing token files when a configured DHE target changes."""
+    if await _async_preserve_token_for_retarget_impl(hass, entry, connection_data):
         _LOGGER.debug(
             "Preserved existing DHE token while reconfiguring target for entry=%s",
             entry.entry_id,
@@ -993,7 +945,7 @@ class StiebelDHEConnectConfigFlow(
         self,
         user_input: dict[str, Any] | None,
         *,
-        parse_input: Callable[[dict[str, Any]], SetupScanSubnetInput],
+        parse_input: Callable[[Mapping[str, Any]], SetupScanSubnetInput],
         error_field: Callable[[SetupScanSubnetInput], str],
         show_form: Callable[
             ...,
@@ -1036,19 +988,14 @@ class StiebelDHEConnectConfigFlow(
 
         if user_input is not None:
             try:
-                host = normalize_host(user_input[CONF_HOST])
-                port = validate_port(user_input.get(CONF_PORT, DEFAULT_PORT))
-                internal_scald_protection = str(
-                    user_input.get(CONF_INTERNAL_SCALD_PROTECTION) or ""
-                ).strip()
-                if internal_scald_protection not in INTERNAL_SCALD_PROTECTION_OPTIONS:
-                    raise ValueError(INVALID_INTERNAL_SCALD_PROTECTION)
+                data = _connection_data_from_user_input(user_input)
             except ValueError as err:
                 _apply_validation_error(errors, err)
             else:
+                host = data[CONF_HOST]
+                port = data[CONF_PORT]
                 if _is_target_used_by_other_entry(self.hass, host, port):
                     return self.async_abort(reason=ALREADY_CONFIGURED)
-                name = str(user_input.get(CONF_NAME, DEFAULT_NAME)).strip() or DEFAULT_NAME
 
                 if not await _can_connect(self.hass, host, port):
                     errors["base"] = "cannot_connect"
@@ -1056,9 +1003,9 @@ class StiebelDHEConnectConfigFlow(
                     self._set_pending_setup_data(
                         host=host,
                         port=port,
-                        name=name,
+                        name=str(data[CONF_NAME]),
                         token_file=token_file_for_target(host, port),
-                        internal_scald_protection=internal_scald_protection,
+                        internal_scald_protection=str(data[CONF_INTERNAL_SCALD_PROTECTION]),
                     )
                     return await self.async_step_pairing_confirm()
 

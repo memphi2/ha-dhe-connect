@@ -165,11 +165,24 @@ class DHEClientCallbacksMixin:
         try:
             callback(*args)
         except Exception:  # noqa: BLE001
-            DHEClientCallbacksMixin._log_callback_exception(callback_name)
+            DHEClientCallbacksMixin._log_callback_exception(callback_name, callback)
 
     @staticmethod
-    def _log_callback_exception(callback_name: str) -> None:
-        _LOGGER.debug("DHE %s callback raised an exception", callback_name, exc_info=True)
+    def _log_callback_exception(
+        callback_name: str,
+        callback: Callable[..., None],
+    ) -> None:
+        callback_label = getattr(callback, "__qualname__", None) or getattr(
+            callback, "__name__", None
+        )
+        if not callback_label:
+            callback_label = callback.__class__.__name__
+        _LOGGER.debug(
+            "DHE %s callback raised an exception (%s)",
+            callback_name,
+            callback_label,
+            exc_info=True,
+        )
 
     def _create_background_task(self, coro: Any, name: str) -> asyncio.Task[Any]:
         return create_background_task(self.hass, coro, name)

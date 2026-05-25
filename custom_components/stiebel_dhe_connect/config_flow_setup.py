@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 from ipaddress import IPv4Network
+from collections.abc import Mapping
 from typing import Any
 
-from homeassistant.const import CONF_HOST, CONF_PORT
+from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import HomeAssistant
 
 from .config_flow_discovery import SETUP_MODE_MANUAL, SETUP_MODE_SCAN
-from .entity_state_helpers import CONF_INTERNAL_SCALD_PROTECTION
+from .connection_helpers import normalize_host, validate_port
+from .const import DEFAULT_NAME, DEFAULT_PORT
+from .entity_state_helpers import (
+    CONF_INTERNAL_SCALD_PROTECTION,
+    INTERNAL_SCALD_PROTECTION_OPTIONS,
+)
 from .error_codes import (
     EMBEDDED_PORT_NOT_SUPPORTED,
     INVALID_HOST,
@@ -48,8 +54,26 @@ def apply_validation_error(errors: dict[str, str], err: ValueError) -> None:
         errors[CONF_HOST] = INVALID_HOST
 
 
+def connection_data_from_user_input(user_input: Mapping[str, Any]) -> dict[str, Any]:
+    """Return normalized host/port/name/internal-safeguard config data."""
+    host = normalize_host(user_input[CONF_HOST])
+    port = validate_port(user_input.get(CONF_PORT, DEFAULT_PORT))
+    internal_scald_protection = str(
+        user_input.get(CONF_INTERNAL_SCALD_PROTECTION) or ""
+    ).strip()
+    if internal_scald_protection not in INTERNAL_SCALD_PROTECTION_OPTIONS:
+        raise ValueError(INVALID_INTERNAL_SCALD_PROTECTION)
+    name = str(user_input.get(CONF_NAME, DEFAULT_NAME)).strip() or DEFAULT_NAME
+    return {
+        CONF_HOST: host,
+        CONF_PORT: port,
+        CONF_NAME: name,
+        CONF_INTERNAL_SCALD_PROTECTION: internal_scald_protection,
+    }
+
+
 def scan_subnet_network_mask_input(
-    user_input: dict[str, Any],
+    user_input: Mapping[str, Any],
 ) -> SetupScanSubnetInput:
     """Return normalized network-address and subnet-mask input."""
     return SetupScanSubnetInput(
@@ -58,7 +82,7 @@ def scan_subnet_network_mask_input(
     )
 
 
-def scan_subnet_cidr_input(user_input: dict[str, Any]) -> SetupScanSubnetInput:
+def scan_subnet_cidr_input(user_input: Mapping[str, Any]) -> SetupScanSubnetInput:
     """Return normalized CIDR-only subnet input."""
     return SetupScanSubnetInput(cidr=str(user_input.get(CONF_SCAN_CIDR) or "").strip())
 
