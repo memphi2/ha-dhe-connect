@@ -140,10 +140,13 @@ See [SECURITY.md](SECURITY.md).
 | German quick guide | [docs/de.md](docs/de.md) |
 | Legal and asset hygiene | [docs/legal.md](docs/legal.md) |
 
-## Legal Status
+## Legal Notes
 
-This project is an unofficial community integration. It is not affiliated with,
-endorsed by, sponsored by or otherwise approved by any device manufacturer,
-Home Assistant, HACS or their respective owners.
+This repository is an independent community project.
+
+- Unofficial integration: no affiliation with, endorsement by, or sponsorship from
+  STIEBEL ELTRON, Home Assistant, Nabu Casa, or HACS.
+- Brand names and trademarks belong to their respective owners.
+- No official Home Assistant Core certification is claimed.
 
 See [docs/legal.md](docs/legal.md) for full legal and asset-hygiene details.
