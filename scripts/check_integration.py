@@ -358,6 +358,10 @@ def check_github_actions() -> None:
                 )
     if "python scripts/check_deprecations.py" not in text:
         _fail("validation workflow must run scripts/check_deprecations.py")
+    if "python scripts/check_privacy_markers.py" not in text:
+        _fail("validation workflow must run scripts/check_privacy_markers.py")
+    if "python scripts/check_translation_keys.py" not in text:
+        _fail("validation workflow must run scripts/check_translation_keys.py")
     if "python scripts/check_release_consistency.py" not in text:
         _fail("validation workflow must run scripts/check_release_consistency.py")
     for dependency, constraint in sorted(VALIDATION_DEPENDENCY_MINIMUMS.items()):

@@ -12,8 +12,10 @@ Run this before opening/finalizing release-prep PRs:
 ```bash
 python scripts/check_coverage.py
 python scripts/check_integration.py
+python scripts/check_translation_keys.py
 python scripts/check_release_consistency.py
 python scripts/check_deprecations.py
+python scripts/check_privacy_markers.py
 python scripts/check_typing.py
 python -m ruff check custom_components/stiebel_dhe_connect tests scripts
 python scripts/release_check.py --run-local-checks --expect-tag absent --expect-github-release absent

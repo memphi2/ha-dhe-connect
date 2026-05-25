@@ -16,6 +16,19 @@
   command-set details to `docs/validation.md`, and `docs/migration_policy.md`
   now references troubleshooting recovery guidance.
 - Clarified README status support scope for stable vs private/dev branches.
+- Added `scripts/check_privacy_markers.py` and CI/release gates to block
+  lab-specific aliases, private lab subnet fragments and JWT-like token leaks in
+  tracked files.
+- Added `scripts/check_translation_keys.py` to enforce required user-facing
+  flow/repairs/service translation keys in `en.json` and `de.json`.
+- Tightened the coverage gate by moving `pairing_helpers.py` into the measured
+  deterministic module set and extending pairing helper tests accordingly.
+- Added long-run reconnect supervisor churn tests to harden deterministic
+  reconnect/backoff/grace behavior.
+- Refactored schema suggested-value application out of `config_flow.py` into
+  `config_flow_schemas.py` to keep flow orchestration code slimmer.
+- Added typed payload shape definitions in `payload_types.py` while keeping
+  existing runtime payload aliases stable for compatibility.
 
 ## v2.0.1 - 2026-05-25
 

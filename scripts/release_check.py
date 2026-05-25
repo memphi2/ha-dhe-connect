@@ -791,10 +791,12 @@ def collect_results(args: argparse.Namespace, runner: Runner) -> list[CheckResul
                 ),
                 check_command([sys.executable, "scripts/check_coverage.py"], runner),
                 check_command([sys.executable, "scripts/check_integration.py"], runner),
+                check_command([sys.executable, "scripts/check_translation_keys.py"], runner),
                 check_command(
                     [sys.executable, "scripts/check_release_consistency.py"], runner
                 ),
                 check_command([sys.executable, "scripts/check_deprecations.py"], runner),
+                check_command([sys.executable, "scripts/check_privacy_markers.py"], runner),
                 check_command([sys.executable, "scripts/check_typing.py"], runner),
                 check_command(
                     [
