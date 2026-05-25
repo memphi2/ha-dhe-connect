@@ -10,7 +10,7 @@
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/memphi2/ha-dhe-connect/issues",
   "requirements": [],
-  "version": "1.8.4",
+  "version": "2.0.0-beta",
   "zeroconf": [
     "_ste-dhe._tcp.local."
   ]

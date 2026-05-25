@@ -308,20 +308,12 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
         return coerce_float(value)
 
     def _restore_native_value(self, value: object) -> float | None:
-        """Return a restored native value."""
+        """Return a restored native value, accepting old minute-based timer state."""
         restored_value = coerce_float(value)
         if restored_value is None:
             return None
         if self._is_timer_duration:
-            total_seconds = clamp_duration_seconds(
-                restored_value,
-                minimum=TIMER_DURATION_MIN_SECONDS,
-                maximum=TIMER_DURATION_MAX_SECONDS,
-            )
-            if total_seconds is None:
-                return None
-            self._timer_duration_seconds = total_seconds
-            return total_seconds
+            return self._restore_timer_native_value(restored_value)
         if self._is_child_safety_temperature_limit:
             self._child_safety_temperature_limit_raw = restored_value
             return bounded_child_safety_temperature_limit(
@@ -331,6 +323,23 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
                 maximum=float(self.entity_description.native_max_value or 60.0),
             )
         return restored_value
+
+    def _restore_timer_native_value(self, restored_value: float) -> float | None:
+        """Return seconds, accepting old minute-based timer state."""
+        candidate = (
+            minutes_to_seconds(restored_value)
+            if 0 < restored_value < TIMER_DURATION_MIN_SECONDS
+            else restored_value
+        )
+        total_seconds = clamp_duration_seconds(
+            candidate,
+            minimum=TIMER_DURATION_MIN_SECONDS,
+            maximum=TIMER_DURATION_MAX_SECONDS,
+        )
+        if total_seconds is None:
+            return None
+        self._timer_duration_seconds = total_seconds
+        return total_seconds
 
     def _timer_total_seconds_from_client(self, value: object) -> int | None:
         """Return whole timer seconds from the client minute value."""

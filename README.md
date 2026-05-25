@@ -15,8 +15,8 @@ The integration talks directly to the DHE web interface on your local network. I
 
 ## Status
 
-- Current version: `1.8.4`
-- Release: stable custom integration, Platinum-track quality evidence
+- Current version: `2.0.0-beta`
+- Release: beta custom integration, Platinum-track quality evidence
 - Quality: Home Assistant Quality Scale (custom integration, not HA Core certified)
 - Home Assistant UI integration name: `DHE Connect` (kept short for clean
   device labels in the HA UI)
@@ -27,8 +27,8 @@ The integration talks directly to the DHE web interface on your local network. I
 - Scope: multiple configured DHE Connect devices per Home Assistant instance
 
 This is a custom integration and should be used on a trusted local network.
-v1.8.4 is a bugfix release that restores translated wellness switch naming in
-Home Assistant and aligns switch entities with translation-driven labels.
+v2.0.0-beta is a stabilization beta focused on runtime/auth robustness,
+flow/repair cleanup and regression safety before the final v2.0.0 release.
 Not an official Home Assistant Core certification.
 
 Development and protocol mapping for this release were assisted by OpenAI Codex.

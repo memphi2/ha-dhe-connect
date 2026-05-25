@@ -23,7 +23,9 @@ MANIFEST = INTEGRATION / "manifest.json"
 README = ROOT / "README.md"
 CHANGELOG = ROOT / "CHANGELOG.md"
 
-SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+(?:[abrc]\d+)?$")
+SEMVER_RE = re.compile(
+    r"^\d+\.\d+\.\d+(?:(?:[abrc]\d+)|(?:-[0-9A-Za-z][0-9A-Za-z.-]*))?$"
+)
 TAG_PREFIX = "v"
 CHANGELOG_HEADING_RE = re.compile(r"^##\s+", re.MULTILINE)
 SECRET_PATTERNS = (

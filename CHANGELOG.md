@@ -4,6 +4,31 @@
 
 - No changes yet.
 
+## v2.0.0-beta - 2026-05-25
+
+Beta release candidate for the v2 line. This release keeps public entity IDs,
+unique IDs and DHE protocol behavior stable.
+
+### Runtime/Auth and Pairing Hardening
+
+- Refined transport auth/token request handling to reduce stale or ambiguous
+  runtime auth states.
+- Hardened pairing/token validation paths and related reconnect handling.
+
+### Flow and Runtime Cleanup
+
+- Cleaned up setup/options/runtime helper paths to reduce legacy fallback
+  ballast.
+- Tightened runtime state/write handling for better recorder hygiene and
+  deterministic behavior during reconnect/auth transitions.
+
+### Tests and Regression Safety
+
+- Added dedicated eco-flow command regression tests.
+- Expanded deterministic test coverage across pairing, weather favorites,
+  config-flow defaults, recorder attributes and helper behavior.
+- Updated HA smoke helper checks to match current runtime/recorder expectations.
+
 ## v1.8.4 - 2026-05-24
 
 Bugfix release for the v1.8 line. This release keeps public entity IDs, unique
