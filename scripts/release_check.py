@@ -119,6 +119,10 @@ HISTORY_SENSITIVE_REGEXES_PYTHON = (
     r"|172\.(?:1[6-9]|2[0-9]|3[0-1])\.[0-9]{1,3}\.[0-9]{1,3})\b",
     r"--username\s+[A-Za-z0-9._]{3,}",
 )
+SAFE_HISTORY_MARKER_SNIPPETS = (
+    "`192.168.1.0`",
+    "`192.168.1.0/24`",
+)
 PROPRIETARY_HISTORY_MARKERS = (
     "Licensed " + "proprietary",
     "This software " + "is copyrighted",
@@ -127,11 +131,11 @@ PROPRIETARY_HISTORY_MARKERS = (
     "ste-" + "dhe - v1.9.00",
 )
 GITHUB_HYGIENE_SCAN_PATHS = (
-    "/repos/{repo}/pulls?state=all&per_page=100",
-    "/repos/{repo}/issues?state=all&per_page=100",
-    "/repos/{repo}/issues/comments?per_page=100",
-    "/repos/{repo}/pulls/comments?per_page=100",
-    "/repos/{repo}/releases?per_page=100",
+    "repos/{repo}/pulls?state=all&per_page=100",
+    "repos/{repo}/issues?state=all&per_page=100",
+    "repos/{repo}/issues/comments?per_page=100",
+    "repos/{repo}/pulls/comments?per_page=100",
+    "repos/{repo}/releases?per_page=100",
 )
 HISTORY_HYGIENE_PATHS = (
     "CHANGELOG.md",
@@ -470,9 +474,12 @@ def scan_git_history_for_sensitive_literals(runner: Runner) -> CheckResult:
             continue
         if grep_result.returncode != 0:
             return CheckResult(False, _command_failed_message(grep_result))
-        hits.extend(
-            line for line in grep_result.stdout.splitlines() if line.strip()
-        )
+        for line in grep_result.stdout.splitlines():
+            if not line.strip():
+                continue
+            if any(snippet in line for snippet in SAFE_HISTORY_MARKER_SNIPPETS):
+                continue
+            hits.append(line)
 
     if not hits:
         return CheckResult(True, "git history sensitive-marker scan passed")
@@ -507,6 +514,24 @@ def _github_payload_strings(payload: Any) -> list[str]:
     return []
 
 
+def _parse_paginated_gh_json(stdout: str) -> list[Any]:
+    """Parse one or more JSON documents returned by `gh api --paginate`."""
+    decoder = json.JSONDecoder()
+    docs: list[Any] = []
+    data = stdout.strip()
+    index = 0
+    length = len(data)
+    while index < length:
+        while index < length and data[index].isspace():
+            index += 1
+        if index >= length:
+            break
+        parsed, next_index = decoder.raw_decode(data, index)
+        docs.append(parsed)
+        index = next_index
+    return docs
+
+
 def scan_github_metadata_for_sensitive_literals(
     *,
     repo_full_name: str,
@@ -526,15 +551,15 @@ def scan_github_metadata_for_sensitive_literals(
 
     for path_template in GITHUB_HYGIENE_SCAN_PATHS:
         endpoint = path_template.format(repo=repo_full_name)
-        result = runner(["gh", "api", "--paginate", "--slurp", endpoint])
+        result = runner(["gh", "api", endpoint, "--paginate"])
         if result.returncode != 0:
             return CheckResult(False, _command_failed_message(result))
         try:
-            payload = json.loads(result.stdout or "[]")
+            payload_docs = _parse_paginated_gh_json(result.stdout or "[]")
         except json.JSONDecodeError as err:
             return CheckResult(False, f"gh api returned invalid JSON for {endpoint}: {err}")
 
-        for text in _github_payload_strings(payload):
+        for text in _github_payload_strings(payload_docs):
             match = marker_pattern.search(text)
             if match is not None:
                 findings.append(f"{endpoint}: marker {match.group(0)!r}")

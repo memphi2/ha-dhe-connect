@@ -661,6 +661,32 @@ class TestReleaseCheck(unittest.TestCase):
         self.assertIn("192\\.168", captured_marker_expr)
         self.assertIn("172\\.", captured_marker_expr)
 
+    def test_history_sensitive_scan_ignores_documentation_network_examples(self) -> None:
+        def _runner(args):
+            command = tuple(args)
+            if command == ("git", "rev-list", "--all"):
+                return release_check.CommandResult(
+                    args=command,
+                    returncode=0,
+                    stdout="abc123\n",
+                    stderr="",
+                )
+            if command[0:3] == ("git", "grep", "-nE"):
+                return release_check.CommandResult(
+                    args=command,
+                    returncode=0,
+                    stdout=(
+                        "abc123:docs/troubleshooting.md:1:"
+                        "Use `192.168.1.0` and `192.168.1.0/24` examples.\n"
+                    ),
+                    stderr="",
+                )
+            raise AssertionError(f"unexpected command: {command}")
+
+        result = release_check.scan_git_history_for_sensitive_literals(_runner)
+
+        self.assertTrue(result.ok, result.message)
+
     def test_github_hygiene_scan_rejects_non_anonymized_markers(self) -> None:
         sample_user = "demo_user42"
 
@@ -668,10 +694,10 @@ class TestReleaseCheck(unittest.TestCase):
             command = tuple(args)
             if command[0:2] != ("gh", "api"):
                 raise AssertionError(f"unexpected command: {command}")
-            self.assertEqual(command[2:4], ("--paginate", "--slurp"))
-            endpoint = command[4]
-            if endpoint.startswith("/repos/example/repo/pulls?state=all"):
-                payload = [[{"number": 1, "body": f"--username {sample_user} used in log"}]]
+            endpoint = command[2]
+            self.assertEqual(command[3:], ("--paginate",))
+            if endpoint.startswith("repos/example/repo/pulls?state=all"):
+                payload = [{"number": 1, "body": f"--username {sample_user} used in log"}]
             else:
                 payload = []
             return release_check.CommandResult(
@@ -697,10 +723,10 @@ class TestReleaseCheck(unittest.TestCase):
             command = tuple(args)
             if command[0:2] != ("gh", "api"):
                 raise AssertionError(f"unexpected command: {command}")
-            self.assertEqual(command[2:4], ("--paginate", "--slurp"))
-            endpoint = command[4]
-            if endpoint.startswith("/repos/example/repo/pulls?state=all"):
-                payload = [[{"number": 1, "body": f"debug host {sample_ip}"}]]
+            endpoint = command[2]
+            self.assertEqual(command[3:], ("--paginate",))
+            if endpoint.startswith("repos/example/repo/pulls?state=all"):
+                payload = [{"number": 1, "body": f"debug host {sample_ip}"}]
             else:
                 payload = []
             return release_check.CommandResult(
@@ -718,6 +744,10 @@ class TestReleaseCheck(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertIn("GitHub metadata contains non-anonymized or proprietary markers", result.message)
         self.assertIn(sample_ip, result.message)
+
+    def test_parse_paginated_gh_json_accepts_concatenated_documents(self) -> None:
+        docs = release_check._parse_paginated_gh_json('{"a":1}\n{"b":2}\n')
+        self.assertEqual(docs, [{"a": 1}, {"b": 2}])
 
     def test_service_smoke_requires_config_and_username(self) -> None:
         args = release_check._parse_args(["--run-ha-service-smoke"])
