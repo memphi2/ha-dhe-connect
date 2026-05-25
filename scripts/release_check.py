@@ -193,7 +193,12 @@ def load_manifest_version(root: Path) -> str:
     return str(manifest.get("version", "")).strip()
 
 
-def check_version_files(root: Path, version: str) -> list[CheckResult]:
+def check_version_files(
+    root: Path,
+    version: str,
+    *,
+    require_empty_unreleased: bool = True,
+) -> list[CheckResult]:
     """Check manifest, README and changelog release version consistency."""
     results: list[CheckResult] = []
     manifest_version = load_manifest_version(root)
@@ -225,12 +230,13 @@ def check_version_files(root: Path, version: str) -> list[CheckResult]:
             f"CHANGELOG contains {heading}",
         )
     )
-    results.append(
-        CheckResult(
-            _changelog_unreleased_is_empty(changelog),
-            "CHANGELOG Unreleased section has no pending release entries",
+    if require_empty_unreleased:
+        results.append(
+            CheckResult(
+                _changelog_unreleased_is_empty(changelog),
+                "CHANGELOG Unreleased section has no pending release entries",
+            )
         )
-    )
     results.append(
         CheckResult(
             protocol.exists() and "[docs/protocol.md](docs/protocol.md)" in readme,
@@ -731,7 +737,11 @@ def collect_results(args: argparse.Namespace, runner: Runner) -> list[CheckResul
     """Collect all release check results."""
     manifest_version = load_manifest_version(ROOT)
     version = args.version or manifest_version
-    results = check_version_files(ROOT, version)
+    results = check_version_files(
+        ROOT,
+        version,
+        require_empty_unreleased=args.expect_tag != "skip",
+    )
     if not args.allow_dirty:
         results.append(check_clean_tree(runner))
     results.extend(

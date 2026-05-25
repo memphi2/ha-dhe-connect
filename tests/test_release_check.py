@@ -147,6 +147,28 @@ class TestReleaseCheck(unittest.TestCase):
             [result.message for result in results if not result.ok],
         )
 
+    def test_version_files_can_skip_unreleased_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            _write_release_files(root, "1.3.2")
+            (root / "CHANGELOG.md").write_text(
+                (
+                    "## Unreleased\n\n"
+                    "### Changed\n\n"
+                    "- Active development item.\n\n"
+                    "## v1.3.2 - 2026-05-16\n"
+                ),
+                encoding="utf-8",
+            )
+
+            results = release_check.check_version_files(
+                root,
+                "1.3.2",
+                require_empty_unreleased=False,
+            )
+
+        self.assertTrue(all(result.ok for result in results), results)
+
     def test_clean_tree_includes_untracked_files(self) -> None:
         calls: list[tuple[str, ...]] = []
 
@@ -809,6 +831,41 @@ class TestReleaseCheck(unittest.TestCase):
             (sys.executable, "-m", "pytest", "tests/test_diagnostics.py", "-q"),
             commands,
         )
+
+    def test_collect_results_skips_unreleased_gate_when_expect_tag_is_skip(self) -> None:
+        args = release_check._parse_args(
+            [
+                "--allow-dirty",
+                "--expect-tag",
+                "skip",
+                "--expect-github-release",
+                "skip",
+            ]
+        )
+
+        with (
+            patch("scripts.release_check.load_manifest_version", return_value="1.3.2"),
+            patch(
+                "scripts.release_check.check_version_files",
+                return_value=[release_check.CheckResult(True, "version files ok")],
+            ) as check_version_files,
+            patch(
+                "scripts.release_check.scan_tracked_files_for_secrets",
+                return_value=release_check.CheckResult(True, "tracked-file scan ok"),
+            ),
+        ):
+            release_check.collect_results(
+                args,
+                lambda command: release_check.CommandResult(
+                    args=tuple(command),
+                    returncode=0,
+                    stdout="",
+                    stderr="",
+                ),
+            )
+
+        _, kwargs = check_version_files.call_args
+        self.assertEqual(kwargs.get("require_empty_unreleased"), False)
 
     def test_zeroconf_smoke_flag_adds_release_gate(self) -> None:
         args = release_check._parse_args(
