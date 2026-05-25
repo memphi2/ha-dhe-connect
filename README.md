@@ -16,29 +16,51 @@ The integration uses the local DHE web interface only (no cloud relay).
 ## Status
 
 - Current version: `2.0.0-beta`
-- Current line: v2 beta hardening
-- Next milestone: `v2.0.1` documentation/process cleanup
+- v2.0.1 prep focus: docs and release-process cleanup
 - Quality target: Home Assistant Quality Scale Platinum track for a custom integration
 - Not an official Home Assistant Core certification
 
-## Documentation
+## Highlights
 
-| Topic | Document |
-|---|---|
-| Entity list, attributes and service examples | [docs/entities.md](docs/entities.md) |
-| Pairing, connectivity and recorder troubleshooting | [docs/troubleshooting.md](docs/troubleshooting.md) |
-| Validation and release gates | [docs/validation.md](docs/validation.md) |
-| Automation examples | [docs/examples.md](docs/examples.md) |
-| Practical use cases | [docs/use-cases.md](docs/use-cases.md) |
-| Known limitations | [docs/known_limitations.md](docs/known_limitations.md) |
-| Device and firmware evidence matrix | [docs/firmware_matrix.md](docs/firmware_matrix.md) |
-| Protocol and ODB reference | [docs/protocol.md](docs/protocol.md) |
-| Migration policy (v2 line) | [docs/migration_policy.md](docs/migration_policy.md) |
-| Release process checklist | [docs/release_process.md](docs/release_process.md) |
-| FAQ | [docs/faq.md](docs/faq.md) |
-| German quick guide | [docs/de.md](docs/de.md) |
-| Legal and asset hygiene | [docs/legal.md](docs/legal.md) |
-| Security and token handling | [SECURITY.md](SECURITY.md) |
+- Local runtime connection (Socket.IO / Engine.IO), no cloud dependency.
+- Climate target temperature control with reconnect-aware behavior.
+- Live water flow and live power for daily monitoring.
+- Timer, eco mode, child safety, bath fill and wellness controls.
+- Radio and weather support through the DHE runtime payload.
+- Multi-device support: one config entry per DHE.
+
+## Important Entities
+
+Common entities used in dashboards and automations:
+
+- `climate.dhe_connect`
+- `sensor.dhe_connect_connection_state`
+- `sensor.dhe_connect_current_power`
+- `sensor.dhe_connect_current_water_flow`
+- `switch.dhe_connect_eco_mode`
+- `switch.dhe_connect_bath_fill`
+
+Complete entity reference:
+[docs/entities.md](docs/entities.md)
+
+## Quick Automation Example
+
+```yaml
+alias: DHE eco mode at night
+triggers:
+  - trigger: time
+    at: "22:30:00"
+actions:
+  - action: switch.turn_on
+    target:
+      entity_id: switch.dhe_connect_eco_mode
+mode: single
+```
+
+More automation examples and practical scenarios:
+
+- [docs/examples.md](docs/examples.md)
+- [docs/use-cases.md](docs/use-cases.md)
 
 ## Installation
 
@@ -83,53 +105,45 @@ The setup flow supports:
 - Subnet scan (private IPv4 ranges, default port `8443`)
 - Manual host/port entry
 
-Zeroconf typically works only in the local subnet/VLAN unless mDNS relay is
-configured.
+Zeroconf usually requires mDNS visibility in the local subnet/VLAN or an
+explicit relay setup across subnets.
 
-Each DHE uses its own config entry and token file:
+Each DHE uses its own token file:
 
 ```text
 /config/.storage/stiebel_dhe_connect_token_<host>_<port>.txt
 ```
 
-## Core behavior
-
-- Local push runtime via Socket.IO / Engine.IO.
-- Climate control, timers, eco mode, bath fill, child safety, wellness,
-  radio, weather.
-- Recorder-sensitive and diagnostic entities are disabled by default where
-  appropriate.
-
-For full details, use [docs/entities.md](docs/entities.md) and
-[docs/protocol.md](docs/protocol.md).
-
-## Validation
-
-Install local dependencies once:
-
-```bash
-python -m pip install -r requirements.txt
-```
-
-Run the standard gate:
-
-```bash
-python scripts/check_coverage.py
-python scripts/check_integration.py
-python scripts/check_deprecations.py
-python scripts/check_typing.py
-python -m ruff check custom_components/stiebel_dhe_connect tests scripts
-python scripts/release_check.py --run-local-checks --expect-tag absent --expect-github-release absent
-```
-
-For full gate details and optional live smoke tests, see
-[docs/validation.md](docs/validation.md).
-
-## Security notes
+## Security Notes
 
 - Use only on trusted local networks.
 - Do not expose the DHE web interface to the internet.
 - Treat Home Assistant backups/config mounts as sensitive.
 - Do not publish tokens, private hosts or private IPs.
 
-See [SECURITY.md](SECURITY.md) and [docs/legal.md](docs/legal.md).
+See [SECURITY.md](SECURITY.md).
+
+## Legal Status
+
+This project is an unofficial community integration. It is not affiliated with,
+endorsed by, sponsored by or otherwise approved by any device manufacturer,
+Home Assistant, HACS or their respective owners.
+
+See [docs/legal.md](docs/legal.md) for full legal and asset-hygiene details.
+
+## Documentation
+
+| Topic | Document |
+|---|---|
+| Pairing, connectivity and recorder troubleshooting | [docs/troubleshooting.md](docs/troubleshooting.md) |
+| Validation and release gates | [docs/validation.md](docs/validation.md) |
+| Entity list, attributes and service examples | [docs/entities.md](docs/entities.md) |
+| Automation examples | [docs/examples.md](docs/examples.md) |
+| Practical use cases | [docs/use-cases.md](docs/use-cases.md) |
+| Known limitations | [docs/known_limitations.md](docs/known_limitations.md) |
+| Device and firmware evidence matrix | [docs/firmware_matrix.md](docs/firmware_matrix.md) |
+| Protocol and ODB reference | [docs/protocol.md](docs/protocol.md) |
+| Migration policy (v2 line) | [docs/migration_policy.md](docs/migration_policy.md) |
+| Release process checklist | [docs/release_process.md](docs/release_process.md) |
+| German quick guide | [docs/de.md](docs/de.md) |
+| Legal and asset hygiene | [docs/legal.md](docs/legal.md) |

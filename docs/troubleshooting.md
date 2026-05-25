@@ -16,6 +16,42 @@ Start with these checks before changing configuration:
 5. Check Home Assistant logs for `custom_components.stiebel_dhe_connect`.
 6. If the issue started after testing development builds, reload the integration once and restart Home Assistant if entities still look stale.
 
+## FAQ (Short Answers)
+
+### Zeroconf finds nothing
+
+Use manual host/port setup or subnet scan. Zeroconf usually needs mDNS
+visibility in the same subnet/VLAN.
+
+### Setup scan finds nothing
+
+Check selected subnet and scan port (`8443` by default), then continue with
+manual host/port entry.
+
+### DHE is connected but entities are unavailable
+
+Check reconnect state and availability diagnostics. After reconnect grace,
+entities remain unavailable until fresh runtime payloads arrive.
+
+### Token invalid / pairing required
+
+Use `Repair pairing` and confirm the pairing request on the DHE display.
+
+### Reconfigure host/port without creating a new device
+
+Use the Reconfigure flow on the existing integration entry. Do not create a
+second entry for the same physical device.
+
+### Recorder grows too fast
+
+Enable only needed high-churn entities and verify recorder writes with mounted
+smoke checks.
+
+### Radio or weather behavior looks inconsistent
+
+Check favorite/source sync and current runtime state first, then run the
+service checks from the development smoke section if needed.
+
 ## Pairing Required / Token Invalid / Repairs
 
 Symptoms that usually point to an invalid or stale token:
