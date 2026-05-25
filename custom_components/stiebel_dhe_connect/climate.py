@@ -63,7 +63,7 @@ async def async_setup_entry(
 class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
     """DHE setpoint entity with persistent local WebSocket session."""
 
-    # Explicitly opt out of legacy automatic TURN_ON/TURN_OFF feature handling.
+    # Keep explicit turn_on/turn_off handling under integration control.
     _enable_turn_on_off_backwards_compatibility = False
     _attr_has_entity_name = True
     _attr_temperature_unit = UnitOfTemperature.CELSIUS

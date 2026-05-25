@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import re
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components import persistent_notification
@@ -27,7 +26,6 @@ if TYPE_CHECKING:
 MAX_PAIRING_AUTO_RETRIES = 3
 PAIRING_NOTIFICATION_ID_PREFIX = "stiebel_dhe_connect_pairing"
 PAIRING_CONFIRM_HINT_NOTIFICATION_ID_PREFIX = "stiebel_dhe_connect_pairing_confirm"
-_PAIRING_NOTIFICATION_HOST_SAFE_RE = re.compile(r"[^A-Za-z0-9_-]+")
 
 
 class DHEClientPairingMixin:
@@ -173,31 +171,22 @@ class DHEClientPairingMixin:
         self._pairing_active = False
 
     def _notify_pairing_progress(self, state: str) -> None:
-        # Cleanup legacy pairing notifications without a port suffix.
+        # Keep one pairing notification per current host/port target.
+        pairing_notification_id, pairing_confirmation_notification_id = (
+            self._pairing_notification_ids()
+        )
         try:
             persistent_notification.async_dismiss(
                 self.hass,
-                self._legacy_pairing_confirmation_notification_id,
+                pairing_confirmation_notification_id,
             )
             persistent_notification.async_dismiss(
                 self.hass,
-                self._legacy_pairing_confirmation_notification_id_with_port,
-            )
-            persistent_notification.async_dismiss(
-                self.hass,
-                self._legacy_pairing_notification_id,
-            )
-            persistent_notification.async_dismiss(
-                self.hass,
-                self._legacy_pairing_notification_id_with_port,
-            )
-            persistent_notification.async_dismiss(
-                self.hass,
-                self._pairing_confirmation_notification_id,
+                pairing_notification_id,
             )
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug(
-                "Could not dismiss legacy pairing notifications: %s",
+                "Could not dismiss pairing notifications: %s",
                 _diagnostic_error(err),
             )
         title, message = self._pairing_notification_text(state)
@@ -205,12 +194,16 @@ class DHEClientPairingMixin:
             self.hass,
             message,
             title=title,
-            notification_id=self._pairing_notification_id,
+            notification_id=pairing_notification_id,
         )
 
-    @staticmethod
-    def _safe_host_for_notification(host: str) -> str:
-        return _PAIRING_NOTIFICATION_HOST_SAFE_RE.sub("_", host)
+    def _pairing_notification_ids(self) -> tuple[str, str]:
+        """Return scoped pairing and pairing-confirmation notification ids."""
+        target_id = self._pairing_notification_target_id
+        return (
+            f"{PAIRING_NOTIFICATION_ID_PREFIX}_{target_id}",
+            f"{PAIRING_CONFIRM_HINT_NOTIFICATION_ID_PREFIX}_{target_id}",
+        )
 
     @property
     def _pairing_notification_target_id(self) -> str:
@@ -220,34 +213,11 @@ class DHEClientPairingMixin:
 
     @property
     def _pairing_notification_id(self) -> str:
-        return f"{PAIRING_NOTIFICATION_ID_PREFIX}_{self._pairing_notification_target_id}"
-
-    @property
-    def _legacy_pairing_notification_id(self) -> str:
-        safe_host = self._safe_host_for_notification(self.host)
-        return f"{PAIRING_NOTIFICATION_ID_PREFIX}_{safe_host}"
-
-    @property
-    def _legacy_pairing_notification_id_with_port(self) -> str:
-        safe_host = self._safe_host_for_notification(self.host)
-        return f"{PAIRING_NOTIFICATION_ID_PREFIX}_{safe_host}_{self.port}"
+        return self._pairing_notification_ids()[0]
 
     @property
     def _pairing_confirmation_notification_id(self) -> str:
-        return (
-            f"{PAIRING_CONFIRM_HINT_NOTIFICATION_ID_PREFIX}_"
-            f"{self._pairing_notification_target_id}"
-        )
-
-    @property
-    def _legacy_pairing_confirmation_notification_id(self) -> str:
-        safe_host = self._safe_host_for_notification(self.host)
-        return f"{PAIRING_CONFIRM_HINT_NOTIFICATION_ID_PREFIX}_{safe_host}"
-
-    @property
-    def _legacy_pairing_confirmation_notification_id_with_port(self) -> str:
-        safe_host = self._safe_host_for_notification(self.host)
-        return f"{PAIRING_CONFIRM_HINT_NOTIFICATION_ID_PREFIX}_{safe_host}_{self.port}"
+        return self._pairing_notification_ids()[1]
 
     def _pairing_notification_text(self, state: str) -> tuple[str, str]:
         language = str(getattr(self.hass.config, "language", "") or "").lower()

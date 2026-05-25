@@ -27,7 +27,7 @@ def _load_token_file_helpers():
 
 
 class TestTokenFileHelpers(unittest.TestCase):
-    """Validate stable and legacy token file paths."""
+    """Validate deterministic token file paths."""
 
     def setUp(self) -> None:
         self.helpers = _load_token_file_helpers()
@@ -36,32 +36,6 @@ class TestTokenFileHelpers(unittest.TestCase):
         self.assertEqual(
             self.helpers.token_file_for_target("192.0.2.10", 8443),
             ".storage/stiebel_dhe_connect_token_192.0.2.10_8443.txt",
-        )
-
-    def test_legacy_token_file_for_entry_uses_entry_id(self) -> None:
-        self.assertEqual(
-            self.helpers.legacy_token_file_for_entry("abc123"),
-            ".storage/stiebel_dhe_connect_token_abc123.txt",
-        )
-
-    def test_legacy_token_files_for_target_includes_unbounded_old_path(self) -> None:
-        long_host = "device-" + ("x" * 150)
-
-        legacy_paths = self.helpers.legacy_token_files_for_target(long_host, 8443)
-
-        self.assertEqual(len(legacy_paths), 1)
-        self.assertTrue(
-            legacy_paths[0].startswith(".storage/stiebel_dhe_connect_token_device-")
-        )
-        self.assertNotEqual(
-            legacy_paths[0],
-            self.helpers.token_file_for_target(long_host, 8443),
-        )
-
-    def test_legacy_token_files_for_target_skips_current_path_duplicate(self) -> None:
-        self.assertEqual(
-            self.helpers.legacy_token_files_for_target("192.0.2.10", 8443),
-            (),
         )
 
     def test_stale_unconfigured_token_paths_filters_storage_token_files(self) -> None:

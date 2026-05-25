@@ -166,7 +166,7 @@ The browser UI exposes ODB IDs `29` (`ODB_Heizen_Energie`), `30` (`ODB_WW_Volume
 |---|---:|---:|---|---|
 | Bath fill target volume | `L` | `5` to `200`, step `1` | slider | ODB ID `3`, shown as whole liters |
 | Child safety temperature limit | `C` | `20` to configured internal scald-protection limit, step `0.5` | slider | ODB ID `5`, sent as raw tenths |
-| Eco flow limit | `L/min` | `4` to `15`, step `0.5` | slider | ODB ID `7`, sent as raw tenths |
+| Eco flow limit | `L/min` | `4` to `15`, step `1` | slider | ODB ID `7`, sent as raw tenths |
 | Brush timer duration | `s` | `60` to `1200`, step `1` | box | `assign:ste.app.brushTimer:durationMilliseconds`; shown in Home Assistant as seconds |
 | Shower timer duration | `s` | `60` to `1200`, step `1` | box | `assign:ste.app.showerTimer:durationMilliseconds`; shown in Home Assistant as seconds |
 | Temperature memory 1-12 temperature | `C` | `20` to `60` | box | `assign:ste.common.temperature:memory`, memory ID `0` to `11`; slots 3 to 12 disabled by default |

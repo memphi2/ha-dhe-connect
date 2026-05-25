@@ -336,13 +336,6 @@ def _install_fake_integration_modules() -> None:
     fake_tokens = types.ModuleType(
         "custom_components.stiebel_dhe_connect.token_file_helpers",
     )
-    fake_tokens.LEGACY_TOKEN_FILE = ".stiebel_dhe_connect_token.json"
-
-    def _legacy_token_file_for_entry(entry_id: str) -> str:
-        return f"legacy_token_{entry_id}.json"
-
-    fake_tokens.legacy_token_file_for_entry = _legacy_token_file_for_entry
-    fake_tokens.legacy_token_files_for_target = lambda *_args, **_kwargs: []
     fake_tokens.stale_unconfigured_token_paths = lambda *_args, **_kwargs: []
     fake_tokens.token_file_for_target = lambda host, port: f"token_{host}_{port}.json"
 

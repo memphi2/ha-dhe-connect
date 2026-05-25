@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
-import shutil
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, cast
@@ -55,11 +53,7 @@ from .services import (
     async_register_services as _async_register_services,
     async_unregister_services as _async_unregister_services,
 )
-from .token_file_helpers import (
-    LEGACY_TOKEN_FILE,
-    legacy_token_file_for_entry,
-    token_file_for_target,
-)
+from .token_file_helpers import token_file_for_target
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -69,10 +63,6 @@ STALE_SENSOR_STATISTIC_TRANSLATION_KEYS = frozenset(
         "odb_possible_energy_saving",
         "odb_actual_water_saving",
     }
-)
-WELLNESS_ENTITY_KEY_MIGRATIONS: tuple[tuple[str, str], ...] = (
-    ("wellness_winter_refresh", "wellness_winter_pick_me_up"),
-    ("wellness_circulation_support", "wellness_circulation_boost"),
 )
 
 
@@ -92,56 +82,35 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     return True
 
 
-def _token_file_for_entry(entry: ConfigEntry) -> str:
-    target = entry_target(entry)
-    if target is None:
-        return legacy_token_file_for_entry(entry.entry_id)
-    host, port = target
-    return token_file_for_target(host, port)
-
-
-async def _async_migrate_legacy_token_if_needed(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    token_file: str,
-) -> None:
-    """Move legacy single-entry token file when upgrading old installs."""
-    target_path = (
-        token_file if os.path.isabs(token_file) else hass.config.path(token_file)
-    )
-    legacy_path = hass.config.path(LEGACY_TOKEN_FILE)
-    if len(hass.config_entries.async_entries(DOMAIN)) != 1:
-        return
-
-    def _move() -> bool:
-        if os.path.exists(target_path) or not os.path.exists(legacy_path):
-            return False
-        os.makedirs(os.path.dirname(target_path), exist_ok=True)
-        shutil.move(legacy_path, target_path)
-        return True
-
-    migrated = await hass.async_add_executor_job(_move)
-    if not migrated:
-        return
-    _LOGGER.debug(
-        "Migrated legacy token file for entry_id=%s to %s (legacy file consumed)",
-        entry.entry_id,
-        token_file,
-    )
-
-
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up DHE Connect from a config entry."""
-    data = merged_entry_data(entry)
+def _entry_target_or_raise(entry: ConfigEntry) -> tuple[str, int]:
+    """Return merged host/port target or raise a translated config-entry error."""
     target = entry_target(entry)
     if target is None:
         raise translated_homeassistant_error(
             "Invalid DHE host/port in config entry",
             translation_key="dhe_invalid_config_entry",
         )
+    return target
+
+
+def _entry_display_name(entry: ConfigEntry, data: Mapping[str, Any]) -> str:
+    """Return a normalized display name for one config entry."""
+    return str(data.get(CONF_NAME, entry.title or DEFAULT_NAME)).strip() or DEFAULT_NAME
+
+
+def _token_file_for_entry(entry: ConfigEntry) -> str:
+    """Return token file path for a config entry target."""
+    host, port = _entry_target_or_raise(entry)
+    return token_file_for_target(host, port)
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up DHE Connect from a config entry."""
+    data = merged_entry_data(entry)
+    target = _entry_target_or_raise(entry)
     reachable_target = await _async_first_reachable_entry_target(hass, entry, target)
     if reachable_target is None:
-        name = str(data.get(CONF_NAME, entry.title or DEFAULT_NAME)).strip() or DEFAULT_NAME
+        name = _entry_display_name(entry, data)
         host, port = target
         async_create_repair_issue(
             hass,
@@ -152,10 +121,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         raise ConfigEntryNotReady("Could not connect to DHE before setup")
     host, port = reachable_target
-    name = data.get(CONF_NAME, DEFAULT_NAME)
+    name = _entry_display_name(entry, data)
 
     token_file = _token_file_for_entry(entry)
-    await _async_migrate_legacy_token_if_needed(hass, entry, token_file)
 
     client = DHEClient(
         hass=hass,
@@ -165,18 +133,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         name="Home Assistant",
     )
     client.device_identifier = _device_identifier_for_entry(entry)
-    client.legacy_device_identifier = _legacy_device_identifier_for_entry(
-        hass,
-        entry,
-        host,
-    )
-    client.legacy_device_identifiers = _legacy_device_identifiers_for_entry(
-        hass,
-        entry,
-        host,
-        port,
-        client.device_identifier,
-    )
 
     runtime = DHEConnectRuntimeData(
         client=client,
@@ -185,7 +141,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     set_runtime_data(entry, runtime)
 
     try:
-        _async_migrate_wellness_switch_unique_ids(hass, entry)
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     except asyncio.CancelledError:
         raise
@@ -197,7 +152,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         clear_runtime_data(entry)
         raise
-    _async_cleanup_empty_legacy_devices(hass, entry, client.device_identifier)
     _async_register_device_registry_updates(hass, entry, client)
     _async_clear_stale_sensor_statistic_issues(hass, entry)
     _async_register_services(hass, _resolve_runtime)
@@ -211,53 +165,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
-
-
-def _async_migrate_wellness_switch_unique_ids(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-) -> None:
-    """Migrate legacy wellness switch unique IDs to canonical program keys."""
-    entity_registry = er.async_get(hass)
-    entities = list(
-        er.async_entries_for_config_entry(entity_registry, entry.entry_id)
-    )
-    if not entities:
-        return
-
-    prefix = f"{DOMAIN}_{entry.entry_id}_"
-    unique_id_migrations = {
-        f"{prefix}{old_key}": f"{prefix}{new_key}"
-        for old_key, new_key in WELLNESS_ENTITY_KEY_MIGRATIONS
-    }
-    unique_ids = {entity.unique_id for entity in entities}
-    migrated = 0
-
-    for entity in entities:
-        target_unique_id = unique_id_migrations.get(entity.unique_id)
-        if target_unique_id is None:
-            continue
-        if target_unique_id in unique_ids:
-            _LOGGER.debug(
-                "Skipping wellness unique-id migration for %s because %s already exists",
-                entity.entity_id,
-                target_unique_id,
-            )
-            continue
-        entity_registry.async_update_entity(
-            entity.entity_id,
-            new_unique_id=target_unique_id,
-        )
-        unique_ids.discard(entity.unique_id)
-        unique_ids.add(target_unique_id)
-        migrated += 1
-
-    if migrated:
-        _LOGGER.debug(
-            "Migrated %s wellness switch unique-id(s) for config entry %s",
-            migrated,
-            entry.entry_id,
-        )
 
 
 async def _async_first_reachable_entry_target(
@@ -311,125 +218,6 @@ def _device_identifier_for_entry(entry: ConfigEntry) -> str:
     if entry.unique_id:
         return f"device:{entry.unique_id}"
     return f"entry:{entry.entry_id}"
-
-
-def _legacy_device_identifiers_for_entry(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    host: str,
-    port: int,
-    stable_identifier: str,
-) -> set[str]:
-    """Return old host-derived identifiers that should merge into the device."""
-    identifiers = {f"{host}:{port}"}
-    device_registry = dr.async_get(hass)
-    for device in dr.async_entries_for_config_entry(device_registry, entry.entry_id):
-        for domain, identifier in device.identifiers:
-            if domain == DOMAIN and identifier != stable_identifier:
-                identifiers.add(identifier)
-    return identifiers
-
-
-def _legacy_device_identifier_for_entry(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    host: str,
-) -> str | None:
-    """Return legacy host identifier only for upgraded installs.
-
-    We keep `(DOMAIN, host)` only when this config entry already has a device
-    with that old identifier in the registry. New installs keep only the
-    host:port identifier to avoid cross-port device merges.
-    """
-    device_registry = dr.async_get(hass)
-    legacy_identifier = (DOMAIN, host)
-    for device in dr.async_entries_for_config_entry(device_registry, entry.entry_id):
-        if legacy_identifier in device.identifiers:
-            return host
-    return None
-
-
-def _async_cleanup_empty_legacy_devices(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    stable_identifier: str | None,
-) -> None:
-    """Remove empty host-derived devices left behind by older identity schemes."""
-    if not stable_identifier:
-        return
-
-    device_registry = dr.async_get(hass)
-    entity_registry = er.async_get(hass)
-    canonical_identifier = (DOMAIN, stable_identifier)
-    dhe_devices = [
-        device
-        for device in dr.async_entries_for_config_entry(device_registry, entry.entry_id)
-        if any(domain == DOMAIN for domain, _identifier in device.identifiers)
-    ]
-    if not dhe_devices:
-        return
-
-    identifiers = {canonical_identifier}
-    for device in dhe_devices:
-        identifiers.update(
-            (domain, identifier)
-            for domain, identifier in device.identifiers
-            if domain == DOMAIN
-        )
-
-    entity_counts = {
-        device.id: len(
-            er.async_entries_for_device(
-                entity_registry,
-                device.id,
-                include_disabled_entities=True,
-            )
-        )
-        for device in dhe_devices
-    }
-    canonical_device = next(
-        (device for device in dhe_devices if canonical_identifier in device.identifiers),
-        None,
-    )
-    target_device = canonical_device
-    if canonical_device is None:
-        target_device = max(
-            dhe_devices,
-            key=lambda device: entity_counts[device.id],
-        )
-    elif entity_counts[canonical_device.id] == 0:
-        entity_devices = [
-            device for device in dhe_devices if entity_counts[device.id] > 0
-        ]
-        if entity_devices:
-            target_device = max(
-                entity_devices,
-                key=lambda device: entity_counts[device.id],
-            )
-
-    if target_device is None:
-        return
-
-    if not identifiers.issubset(target_device.identifiers):
-        device_registry.async_update_device(
-            target_device.id,
-            merge_identifiers=identifiers,
-        )
-
-    canonical_device_id = target_device.id
-    for device in dhe_devices:
-        if device.id == canonical_device_id:
-            continue
-        for entity_entry in er.async_entries_for_device(
-            entity_registry,
-            device.id,
-            include_disabled_entities=True,
-        ):
-            entity_registry.async_update_entity(
-                entity_entry.entity_id,
-                device_id=canonical_device_id,
-            )
-        device_registry.async_remove_device(device.id)
 
 
 def _async_register_device_registry_updates(

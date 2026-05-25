@@ -84,17 +84,10 @@ def build_device_info(
     port: int,
     name: str,
     stable_identifier: str | None = None,
-    legacy_identifier: str | None = None,
-    legacy_identifiers: set[str] | None = None,
     runtime_device_info: Mapping[str, Any] | None = None,
 ) -> DeviceInfo:
     """Build a consistent Home Assistant device_info payload."""
     identifiers = {(DOMAIN, stable_identifier or f"{host}:{port}")}
-    if legacy_identifier:
-        identifiers.add((DOMAIN, legacy_identifier))
-    for identifier in legacy_identifiers or set():
-        if identifier:
-            identifiers.add((DOMAIN, identifier))
 
     device_info: DeviceInfo = {
         "identifiers": identifiers,
@@ -131,7 +124,5 @@ class StiebelDHEEntityMixin:
             client.port,
             name,
             getattr(client, "device_identifier", None) or f"entry:{entry_id}",
-            client.legacy_device_identifier,
-            getattr(client, "legacy_device_identifiers", None),
             getattr(client, "last_device_info", None),
         )

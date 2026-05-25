@@ -72,7 +72,7 @@ def _load_climate_module():
 class _FakeClimateClient:
     host = "127.0.0.1"
     port = 8443
-    legacy_device_identifier = None
+    device_identifier = None
     available = True
 
     def __init__(self) -> None:

@@ -70,7 +70,7 @@ def _fake_error_status_client():
     return types.SimpleNamespace(
         host="127.0.0.1",
         port=8443,
-        legacy_device_identifier=None,
+        device_identifier=None,
         online=True,
         available=True,
         last_setpoint=38.0,
@@ -174,7 +174,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
             online = True
             last_measurement_attributes = {}
 
@@ -207,7 +207,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
             online = True
             last_measurement_attributes = {
                 description.odb_id: {
@@ -254,7 +254,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
 
         sensor = sensor_module.StiebelDHEDiagnosticSensor(
             entry_id="test-entry",
@@ -327,7 +327,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
 
         sensor = sensor_module.StiebelDHEDiagnosticSensor(
             entry_id="test-entry",
@@ -362,7 +362,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
             reconnect_count = 0
 
         sensor = sensor_module.StiebelDHEDiagnosticSensor(
@@ -429,7 +429,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
             online = True
             last_measurements: dict[int, object] = {}
             last_measurement_attributes: dict[int, dict[str, object]] = {}
@@ -472,7 +472,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
             online = True
             last_measurements: dict[int, object] = {}
             last_measurement_attributes: dict[int, dict[str, object]] = {}
@@ -519,7 +519,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
             online = True
             last_measurements: dict[int, object] = {}
             last_measurement_attributes: dict[int, dict[str, object]] = {}
@@ -585,7 +585,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
             online = True
             last_measurements: dict[int, object] = {}
             last_measurement_attributes: dict[int, dict[str, object]] = {}
@@ -661,7 +661,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
             online = True
             last_measurements = {
                 protocol_module.ID_BRUSH_TIMER_DURATION: 3.0,
@@ -705,7 +705,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
 
         sensor = sensor_module.StiebelDHESensor(
             entry_id="test-entry",
@@ -730,7 +730,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
 
         for key, (min_write_delta, _max_interval) in sensor_module.SENSOR_WRITE_FILTERS.items():
             with self.subTest(key=key):
@@ -765,7 +765,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
             available = True
             online = True
 
@@ -817,7 +817,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
 
         for key in ("power", "water_flow"):
             with self.subTest(key=key):
@@ -854,7 +854,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
 
         shower_sensor = sensor_module.StiebelDHESensor(
             entry_id="test-entry",
@@ -897,7 +897,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
 
             def __init__(self) -> None:
                 self.request_measurement_refresh = AsyncMock()
@@ -941,7 +941,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
             online = True
 
         for description in descriptions:
@@ -972,7 +972,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
             online = True
             last_measurements: dict[int, object] = {}
             last_measurement_attributes: dict[int, dict[str, object]] = {}
@@ -1039,7 +1039,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
             online = True
             last_measurements: dict[int, object] = {}
             last_measurement_attributes: dict[int, dict[str, object]] = {}
@@ -1101,7 +1101,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
             online = False
             last_measurement_attributes: dict[int, dict[str, object]] = {}
 
@@ -1132,7 +1132,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
             online = False
             last_measurement_attributes: dict[int, dict[str, object]] = {}
 
@@ -1167,7 +1167,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
             online = False
             last_measurements: dict[int, object] = {}
             last_measurement_attributes: dict[int, dict[str, object]] = {}
@@ -1240,7 +1240,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
 
         sensor = sensor_module.StiebelDHESensor(
             entry_id="test-entry",
@@ -1271,7 +1271,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
 
         sensor = sensor_module.StiebelDHESensor(
             entry_id="test-entry",
@@ -1300,7 +1300,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
 
             def __init__(self) -> None:
                 self.last_measurement_attributes = {
@@ -1348,7 +1348,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
 
             def __init__(self) -> None:
                 self.last_measurement_attributes = {
@@ -1393,7 +1393,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
 
             def __init__(self) -> None:
                 self.last_measurement_attributes = {

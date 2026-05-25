@@ -39,7 +39,7 @@ def repair_issue_id(issue_type: str, entry_id: str) -> str:
 
 
 def pairing_required_issue_id(entry_id: str) -> str:
-    """Backward-compatible accessor for the pairing-required issue id."""
+    """Return the pairing-required issue ID for one DHE config entry."""
     return repair_issue_id(PAIRING_REQUIRED_ISSUE, entry_id)
 
 
@@ -136,7 +136,7 @@ def async_create_pairing_issue(
     name: str | None,
     placeholders: Mapping[str, Any] | None = None,
 ) -> None:
-    """Backward-compatible pairing-required issue creation wrapper."""
+    """Create one pairing-required issue for a DHE config entry."""
     async_create_repair_issue(
         hass,
         entry_id,
@@ -148,7 +148,7 @@ def async_create_pairing_issue(
 
 @callback
 def async_delete_pairing_issue(hass: HomeAssistant, entry_id: str) -> None:
-    """Backward-compatible pairing-required issue deletion wrapper."""
+    """Delete one pairing-required issue for a DHE config entry."""
     async_delete_repair_issue(hass, entry_id, PAIRING_REQUIRED_ISSUE)
 
 

@@ -286,9 +286,6 @@ class DHEClientRuntimeMediaMixin:
             return list(catalog)
         raise DHEError(f"radio {requested_attribute} catalog timed out")
 
-    async def _wait_for_radio_genres(self, previous_generation: int) -> list[str]:
-        return await self._wait_for_radio_catalog("genre", previous_generation)
-
     async def _wait_for_radio_station(self, station_id: int) -> None:
         if await _wait_until(
             lambda: (

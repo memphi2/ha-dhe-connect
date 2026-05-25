@@ -123,7 +123,7 @@ class TestWeatherEntityWrites(unittest.TestCase):
         class _FakeClient:
             host = "127.0.0.1"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
             available = True
             last_weather_state = state
 

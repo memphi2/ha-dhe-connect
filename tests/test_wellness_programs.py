@@ -109,7 +109,7 @@ class TestWellnessPrograms(unittest.TestCase):
         client = types.SimpleNamespace(
             host="dhe.local",
             port=8443,
-            legacy_device_identifier=None,
+            device_identifier=None,
         )
         entity = switch_module.StiebelDHEWellnessShowerProgramSwitch(
             entry_id="entry",
@@ -166,7 +166,7 @@ class TestWellnessPrograms(unittest.TestCase):
         client = types.SimpleNamespace(
             host="dhe.local",
             port=8443,
-            legacy_device_identifier=None,
+            device_identifier=None,
             available=True,
         )
         entity = switch_module.StiebelDHEODBSwitch(
@@ -198,7 +198,7 @@ class TestWellnessPrograms(unittest.TestCase):
         class _Client:
             host = "dhe.local"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
             available = True
             last_measurements = {description.measurement_id: 1}
 
@@ -239,7 +239,7 @@ class TestWellnessPrograms(unittest.TestCase):
         client = types.SimpleNamespace(
             host="dhe.local",
             port=8443,
-            legacy_device_identifier=None,
+            device_identifier=None,
             available=True,
             last_measurements={},
             _last_measurement_attributes={},
@@ -269,7 +269,7 @@ class TestWellnessPrograms(unittest.TestCase):
         client = types.SimpleNamespace(
             host="dhe.local",
             port=8443,
-            legacy_device_identifier=None,
+            device_identifier=None,
             available=True,
             last_measurements={},
         )
@@ -327,7 +327,7 @@ class TestWellnessPrograms(unittest.TestCase):
         class _OfflineClient:
             host = "dhe.local"
             port = 8443
-            legacy_device_identifier = None
+            device_identifier = None
             available = False
             last_measurements = {}
 

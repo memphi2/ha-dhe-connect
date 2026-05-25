@@ -5,10 +5,8 @@ from __future__ import annotations
 import asyncio
 import os
 from collections.abc import Awaitable, Callable, Sequence
-from typing import cast
 
 from homeassistant.core import HomeAssistant
-
 
 from .client import DHEClient
 from .client_types import DHEError
@@ -18,9 +16,6 @@ from .connection_probe import async_can_connect as _async_can_connect
 from .const import DOMAIN
 from .pairing_helpers import map_pairing_error
 from .token_file_helpers import (
-    LEGACY_TOKEN_FILE,
-    legacy_token_file_for_entry,
-    legacy_token_files_for_target,
     stale_unconfigured_token_paths,
     token_file_for_target,
 )
@@ -31,10 +26,10 @@ SETUP_PAIRING_TIMEOUT_SECONDS = 180.0
 def _validation_path_getter(hass: HomeAssistant, path: str) -> str:
     """Return a normalized path with minimal test compatibility."""
     config = getattr(hass, "config", None)
-    if config is None or not hasattr(config, "path"):
+    config_path = getattr(config, "path", None)
+    if not callable(config_path):
         return os.path.normcase(os.path.abspath(path))
-    config_path = cast(str, config.path(path))
-    return os.path.normcase(os.path.abspath(config_path))
+    return os.path.normcase(os.path.abspath(str(config_path(path))))
 
 
 def _abs_config_path(hass: HomeAssistant, path: str) -> str:
@@ -50,51 +45,24 @@ def _configured_token_paths(hass: HomeAssistant) -> set[str]:
 
     paths: set[str] = set()
     for entry in entries(DOMAIN):
-        paths.add(_abs_config_path(hass, legacy_token_file_for_entry(entry.entry_id)))
         target = entry_target(entry)
         if target is None:
             continue
         entry_host, entry_port = target
         paths.add(_abs_config_path(hass, token_file_for_target(entry_host, entry_port)))
-        for legacy_path in legacy_token_files_for_target(entry_host, entry_port):
-            paths.add(_abs_config_path(hass, legacy_path))
     return paths
-
-
-def _setup_token_cleanup_context(
-    hass: HomeAssistant,
-    host: str,
-    port: int,
-    token_file: str,
-) -> tuple[set[str], str, set[str]]:
-    """Return token cleanup data without touching the filesystem."""
-    explicit_paths = {
-        _abs_config_path(hass, token_file),
-        _abs_config_path(hass, LEGACY_TOKEN_FILE),
-    }
-    explicit_paths.update(
-        _abs_config_path(hass, legacy_path)
-        for legacy_path in legacy_token_files_for_target(host, port)
-    )
-
-    configured_paths = _configured_token_paths(hass)
-    storage_path = hass.config.path(".storage")
-    return explicit_paths, storage_path, configured_paths
 
 
 async def _async_clear_setup_token_files(
     hass: HomeAssistant,
-    host: str,
-    port: int,
+    _host: str,
+    _port: int,
     token_file: str,
 ) -> None:
     """Remove stale setup tokens before requesting a fresh DHE pairing token."""
-    explicit_paths, storage_path, configured_paths = _setup_token_cleanup_context(
-        hass,
-        host,
-        port,
-        token_file,
-    )
+    explicit_paths = {_abs_config_path(hass, token_file)}
+    configured_paths = _configured_token_paths(hass)
+    storage_path = hass.config.path(".storage")
 
     def _delete() -> list[str]:
         paths = set(explicit_paths)

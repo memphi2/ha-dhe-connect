@@ -100,7 +100,7 @@ from .pairing_validation import (
     validate_setup_pairing as _validate_setup_pairing_fn,
 )
 from .pairing_helpers import map_pairing_error
-from .repair_issues import DISCOVERY_CONFLICT_ISSUE
+from .repair_issues import DISCOVERY_CONFLICT_ISSUE, async_delete_pairing_issue
 from .error_codes import (
     ALREADY_CONFIGURED,
     ALREADY_IN_PROGRESS,
@@ -1201,8 +1201,6 @@ class StiebelDHEConnectConfigFlow(
             )
             if pairing_result.error_key is None:
                 self._pending_setup_data = None
-                from .repair_issues import async_delete_pairing_issue
-
                 entry = self._get_reauth_entry()
                 async_delete_pairing_issue(self.hass, entry.entry_id)
                 return self.async_update_reload_and_abort(
