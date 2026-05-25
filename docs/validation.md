@@ -12,6 +12,7 @@ Run this before opening/finalizing release-prep PRs:
 ```bash
 python scripts/check_coverage.py
 python scripts/check_integration.py
+python scripts/check_release_consistency.py
 python scripts/check_deprecations.py
 python scripts/check_typing.py
 python -m ruff check custom_components/stiebel_dhe_connect tests scripts

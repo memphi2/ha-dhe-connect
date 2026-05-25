@@ -12,11 +12,12 @@ This document defines migration expectations for the v2 release line.
 
 ## When Upgrades Fail From Old Private/Dev States
 
-Recommended recovery path:
+Use the operational recovery flow in
+[docs/troubleshooting.md](troubleshooting.md), especially:
 
-1. Reload the integration once.
-2. Run `Repair pairing` if token/pairing is invalid.
-3. If state remains inconsistent, remove and re-add the integration cleanly.
+- `Pairing required / token invalid / Repairs`
+- `Reconfigure host or port`
+- `Device unreachable during repair`
 
 ## Public Stability Guarantees
 

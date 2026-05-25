@@ -10,22 +10,16 @@ This checklist describes the repository release flow.
 
 ## 2) Validation Gate
 
-Run:
+Use the canonical command set from [docs/validation.md](validation.md).
+
+For release-prep gating, run at minimum:
 
 ```bash
-python scripts/check_coverage.py
-python scripts/check_integration.py
-python scripts/check_deprecations.py
-python scripts/check_typing.py
-python -m ruff check custom_components/stiebel_dhe_connect tests scripts
 python scripts/release_check.py --run-local-checks --expect-tag absent --expect-github-release absent
 ```
 
-Optional lab checks (network dependent):
-
-- `scripts/zeroconf_smoke.py`
-- `scripts/ha_test_smoke.py`
-- `scripts/ha_test_api.py`
+Optional lab checks are listed in [docs/validation.md](validation.md) and remain
+network/infrastructure dependent.
 
 ## 3) PR Phase
 

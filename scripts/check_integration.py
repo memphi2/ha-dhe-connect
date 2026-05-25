@@ -73,6 +73,21 @@ VALIDATION_DEPENDENCY_MINIMUMS = {
 }
 _ACTION_REF_RE = re.compile(r"^\s*(?:-\s*)?uses:\s*([^@\s]+)@([^\s#]+)", re.MULTILINE)
 _MAJOR_VERSION_REF_RE = re.compile(r"^v(?P<major>\d+)(?:\.|$)")
+_MARKDOWN_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
+README_REQUIRED_DOC_LINKS = {
+    "docs/troubleshooting.md",
+    "docs/examples.md",
+    "docs/use-cases.md",
+    "docs/known_limitations.md",
+    "docs/legal.md",
+}
+STABLE_CHANGELOG_DISALLOWED_TERMS = (
+    "beta",
+    "pre-release",
+    "prerelease",
+    "release candidate",
+    "rc ",
+)
 
 
 def _load_json(path: Path) -> dict:
@@ -96,6 +111,42 @@ def _reject_duplicate_json_keys(path: Path):
 def _fail(message: str) -> None:
     print(f"ERROR: {message}", file=sys.stderr)
     raise SystemExit(1)
+
+
+def _markdown_link_targets(text: str) -> set[str]:
+    """Return Markdown link targets from text."""
+    return {target.strip() for target in _MARKDOWN_LINK_RE.findall(text)}
+
+
+def _changelog_section_body(changelog: str, version: str) -> str | None:
+    """Return the changelog body for a version heading."""
+    match = re.search(
+        rf"^##[ \t]+v{re.escape(version)}(?:[ \t]+.*)?$",
+        changelog,
+        re.MULTILINE,
+    )
+    if match is None:
+        return None
+    next_heading = re.search(r"^##\s+", changelog[match.end() :], re.MULTILINE)
+    if next_heading is None:
+        return changelog[match.end() :]
+    return changelog[match.end() : match.end() + next_heading.start()]
+
+
+def _check_stable_changelog_language(version: str, changelog: str) -> None:
+    """Reject beta/prerelease terms in stable release sections."""
+    if "-" in version:
+        return
+    section = _changelog_section_body(changelog, version)
+    if section is None:
+        return
+    lower_section = section.lower()
+    for term in STABLE_CHANGELOG_DISALLOWED_TERMS:
+        if term in lower_section:
+            _fail(
+                "stable CHANGELOG section contains prerelease term "
+                f"{term!r} in ## v{version}"
+            )
 
 
 def _entity_translation_keys(data: dict) -> dict[str, set[str]]:
@@ -172,16 +223,16 @@ def check_repository_files(version: str) -> None:
         _fail("README current version does not match manifest version")
     if f"## v{version}" not in changelog:
         _fail("CHANGELOG is missing a section for the manifest version")
-    if "[docs/troubleshooting.md](docs/troubleshooting.md)" not in readme:
-        _fail("README troubleshooting reference points to docs/troubleshooting.md")
-    if "[docs/examples.md](docs/examples.md)" not in readme:
-        _fail("README examples reference points to docs/examples.md")
-    if "[docs/use-cases.md](docs/use-cases.md)" not in readme:
-        _fail("README use-cases reference points to docs/use-cases.md")
-    if "[docs/known_limitations.md](docs/known_limitations.md)" not in readme:
-        _fail("README known-limitations reference points to docs/known_limitations.md")
-    if "[docs/legal.md](docs/legal.md)" not in readme:
-        _fail("README legal reference points to docs/legal.md")
+    _check_stable_changelog_language(version, changelog)
+    if "## Documentation" not in readme:
+        _fail("README is missing a Documentation section")
+    readme_links = _markdown_link_targets(readme)
+    missing_readme_doc_links = sorted(README_REQUIRED_DOC_LINKS - readme_links)
+    if missing_readme_doc_links:
+        _fail(
+            "README is missing required documentation links: "
+            + ", ".join(missing_readme_doc_links)
+        )
     if "### Removal" not in readme:
         _fail("README is missing removal instructions")
     if (ROOT / "info.md").exists():
@@ -307,6 +358,8 @@ def check_github_actions() -> None:
                 )
     if "python scripts/check_deprecations.py" not in text:
         _fail("validation workflow must run scripts/check_deprecations.py")
+    if "python scripts/check_release_consistency.py" not in text:
+        _fail("validation workflow must run scripts/check_release_consistency.py")
     for dependency, constraint in sorted(VALIDATION_DEPENDENCY_MINIMUMS.items()):
         requirement = f'"{dependency}{constraint}"'
         if requirement not in text:
