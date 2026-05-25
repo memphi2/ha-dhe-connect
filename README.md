@@ -146,7 +146,9 @@ This repository is an independent community project.
 
 - Unofficial integration: no affiliation with, endorsement by, or sponsorship from
   STIEBEL ELTRON, Home Assistant, Nabu Casa, or HACS.
-- Brand names and trademarks belong to their respective owners.
+- Trademark notice: names such as STIEBEL ELTRON, DHE Connect, Home Assistant,
+  HACS, and Nabu Casa are used only for compatibility reference and belong to
+  their respective owners.
 - No official Home Assistant Core certification is claimed.
 
 See [docs/legal.md](docs/legal.md) for full legal and asset-hygiene details.
