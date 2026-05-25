@@ -4,9 +4,9 @@
 
 - No changes yet.
 
-## v2.0.0-beta - 2026-05-25
+## v2.0.1 - 2026-05-25
 
-Beta release candidate for the v2 line. This release keeps public entity IDs,
+Stable release for the v2 line. This release keeps public entity IDs,
 unique IDs and DHE protocol behavior stable.
 
 ### Runtime/Auth and Pairing Hardening
@@ -22,9 +22,9 @@ unique IDs and DHE protocol behavior stable.
 - Tightened runtime state/write handling for better recorder hygiene and
   deterministic behavior during reconnect/auth transitions.
 
-### Legacy Policy for v2 Beta
+### Legacy Policy for v2 Line
 
-- This beta does not include compatibility shims for legacy/private migration
+- This release does not include compatibility shims for legacy/private migration
   edge cases from older development snapshots.
 - If an older private/dev setup behaves inconsistently after upgrade, remove
   and re-add the integration cleanly.

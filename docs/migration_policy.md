@@ -4,7 +4,7 @@ This document defines migration expectations for the v2 release line.
 
 ## Current Policy
 
-- The v2 beta/hardening line prioritizes clean runtime behavior over broad
+- The v2 hardening line prioritizes clean runtime behavior over broad
   compatibility shims for old private/dev snapshots.
 - No silent data rewrites for unknown legacy states.
 - No automatic token or config storage rewrites without explicit migration

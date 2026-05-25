@@ -15,8 +15,8 @@ The integration uses the local DHE web interface only (no cloud relay).
 
 ## Status
 
-- Current version: `2.0.0-beta`
-- v2.0.1 prep focus: docs and release-process cleanup
+- Current version: `2.0.1`
+- Release channel: stable
 - Quality target: Home Assistant Quality Scale Platinum track for a custom integration
 - Not an official Home Assistant Core certification
 
@@ -123,20 +123,11 @@ Each DHE uses its own token file:
 
 See [SECURITY.md](SECURITY.md).
 
-## Legal Status
-
-This project is an unofficial community integration. It is not affiliated with,
-endorsed by, sponsored by or otherwise approved by any device manufacturer,
-Home Assistant, HACS or their respective owners.
-
-See [docs/legal.md](docs/legal.md) for full legal and asset-hygiene details.
-
 ## Documentation
 
 | Topic | Document |
 |---|---|
 | Pairing, connectivity and recorder troubleshooting | [docs/troubleshooting.md](docs/troubleshooting.md) |
-| Validation and release gates | [docs/validation.md](docs/validation.md) |
 | Entity list, attributes and service examples | [docs/entities.md](docs/entities.md) |
 | Automation examples | [docs/examples.md](docs/examples.md) |
 | Practical use cases | [docs/use-cases.md](docs/use-cases.md) |
@@ -147,3 +138,11 @@ See [docs/legal.md](docs/legal.md) for full legal and asset-hygiene details.
 | Release process checklist | [docs/release_process.md](docs/release_process.md) |
 | German quick guide | [docs/de.md](docs/de.md) |
 | Legal and asset hygiene | [docs/legal.md](docs/legal.md) |
+
+## Legal Status
+
+This project is an unofficial community integration. It is not affiliated with,
+endorsed by, sponsored by or otherwise approved by any device manufacturer,
+Home Assistant, HACS or their respective owners.
+
+See [docs/legal.md](docs/legal.md) for full legal and asset-hygiene details.
