@@ -2,20 +2,41 @@
 
 ## Unreleased
 
+- No changes yet.
+
+## v2.0.2 - 2026-05-26
+
+### Runtime Resilience
+
+- Added a stale-runtime watchdog for long-lived sessions that remain connected
+  but stop receiving device payloads.
+- After prolonged runtime silence, the integration now sends a lightweight ODB
+  probe and forces one reconnect when that probe stays unanswered.
+- Added watchdog tests for probe send, probe-ack reset, probe-timeout reconnect
+  and probe-command transport failure paths.
+
+### Flow and Runtime Hardening
+
+- Added shared connection helper module for setup/options/reconfigure paths to
+  reduce duplicated normalization/update logic.
+- Made token preservation on host/port retarget best-effort and non-fatal
+  (I/O copy errors no longer break reconfigure flows).
+- Added focused tests for token-preserve copy/skip/error behavior.
+- Improved callback error logging to include callback identity and added
+  regression coverage that one failing callback does not block others.
+
+### Release and Validation Gates
+
 - Hardened repository checks so README documentation validation is based on
   required link targets (layout-independent) instead of fixed table rows.
-- Added stable-release changelog language guards to prevent prerelease wording
-  (`beta`, `pre-release`, `release candidate`) in stable sections.
+- Added stable-release changelog language guards to prevent non-stable wording
+  in stable sections.
 - Added `scripts/check_release_consistency.py` and wired it into CI plus
   `release_check --run-local-checks`.
 - Made `release_check --expect-tag skip` development-friendly by allowing
   non-empty `Unreleased` sections while keeping strict release-tag checks.
 - Fixed GitHub hygiene scan compatibility with GH CLI versions without
   `gh api --slurp` support.
-- Reduced release documentation overlap: `docs/release_process.md` now delegates
-  command-set details to `docs/validation.md`, and `docs/migration_policy.md`
-  now references troubleshooting recovery guidance.
-- Clarified README status support scope for stable vs private/dev branches.
 - Added `scripts/check_privacy_markers.py` and CI/release gates to block
   lab-specific aliases, private lab subnet fragments and JWT-like token leaks in
   tracked files.

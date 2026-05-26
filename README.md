@@ -15,7 +15,7 @@ The integration uses the local DHE web interface only (no cloud relay).
 
 ## Status
 
-- Current version: `2.0.1`
+- Current version: `2.0.2`
 - Release channel: stable
 - Quality target: Home Assistant Quality Scale Platinum track for a custom integration
 - Support scope: stable tags are supported; private/dev branches are best-effort

@@ -1821,6 +1821,136 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(events[0].name, "__closed")
         self.assertEqual(events[0].data, "DHE websocket idle timeout after 0.1s")
 
+    async def test_stale_runtime_watchdog_sends_probe_before_forced_reconnect(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        DHESession = client_module.DHESession
+
+        client = DHEClient.__new__(DHEClient)
+        ctx = DHESession(url_token="token", sid="sid")
+        client._ctx = ctx
+        client._stopped = client_module.asyncio.Event()
+        client._ready = client_module.asyncio.Event()
+        client._ready.set()
+        client._message_count = 12
+        client._last_message_monotonic = 0.0
+        client._stale_watchdog_probe_message_count = None
+        client._stale_watchdog_probe_started_monotonic = None
+        client._request_odb_value = AsyncMock()
+        client._force_reconnect = AsyncMock()
+
+        original_monotonic = client_module.time.monotonic
+        client_module.time.monotonic = lambda: 901.0
+        try:
+            await DHEClient._maybe_recover_stale_runtime(client, ctx)
+        finally:
+            client_module.time.monotonic = original_monotonic
+
+        client._request_odb_value.assert_awaited_once_with(
+            ctx,
+            client_module.ID_DEVICE_STATUS,
+        )
+        client._force_reconnect.assert_not_awaited()
+        self.assertEqual(client._stale_watchdog_probe_message_count, 12)
+        self.assertEqual(client._stale_watchdog_probe_started_monotonic, 901.0)
+
+    async def test_stale_runtime_watchdog_reconnects_when_probe_stays_unanswered(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        DHESession = client_module.DHESession
+        constants = _load_component_module("client_constants")
+
+        client = DHEClient.__new__(DHEClient)
+        ctx = DHESession(url_token="token", sid="sid")
+        client._ctx = ctx
+        client._stopped = client_module.asyncio.Event()
+        client._ready = client_module.asyncio.Event()
+        client._ready.set()
+        client._message_count = 5
+        client._last_message_monotonic = 0.0
+        client._stale_watchdog_probe_message_count = 5
+        client._stale_watchdog_probe_started_monotonic = 0.0
+        client._request_odb_value = AsyncMock()
+        client._force_reconnect = AsyncMock()
+
+        original_monotonic = client_module.time.monotonic
+        client_module.time.monotonic = lambda: (
+            constants.RUNTIME_STALE_WATCHDOG_SECONDS
+            + constants.RUNTIME_STALE_PROBE_GRACE_SECONDS
+            + 1.0
+        )
+        try:
+            await DHEClient._maybe_recover_stale_runtime(client, ctx)
+        finally:
+            client_module.time.monotonic = original_monotonic
+
+        client._request_odb_value.assert_not_awaited()
+        client._force_reconnect.assert_awaited_once()
+        args, kwargs = client._force_reconnect.await_args
+        self.assertEqual(args, (ctx,))
+        self.assertIn("Runtime stale watchdog", kwargs["reason"])
+        self.assertIsNone(client._stale_watchdog_probe_message_count)
+        self.assertIsNone(client._stale_watchdog_probe_started_monotonic)
+
+    async def test_stale_runtime_watchdog_clears_probe_after_new_message(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        DHESession = client_module.DHESession
+
+        client = DHEClient.__new__(DHEClient)
+        ctx = DHESession(url_token="token", sid="sid")
+        client._ctx = ctx
+        client._stopped = client_module.asyncio.Event()
+        client._ready = client_module.asyncio.Event()
+        client._ready.set()
+        client._message_count = 9
+        client._last_message_monotonic = 100.0
+        client._stale_watchdog_probe_message_count = 8
+        client._stale_watchdog_probe_started_monotonic = 50.0
+        client._request_odb_value = AsyncMock()
+        client._force_reconnect = AsyncMock()
+
+        await DHEClient._maybe_recover_stale_runtime(client, ctx)
+
+        client._request_odb_value.assert_not_awaited()
+        client._force_reconnect.assert_not_awaited()
+        self.assertIsNone(client._stale_watchdog_probe_message_count)
+        self.assertIsNone(client._stale_watchdog_probe_started_monotonic)
+
+    async def test_stale_runtime_watchdog_reconnects_when_probe_command_fails(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        DHESession = client_module.DHESession
+        DHEError = client_module.DHEError
+
+        client = DHEClient.__new__(DHEClient)
+        ctx = DHESession(url_token="token", sid="sid")
+        client._ctx = ctx
+        client._stopped = client_module.asyncio.Event()
+        client._ready = client_module.asyncio.Event()
+        client._ready.set()
+        client._message_count = 4
+        client._last_message_monotonic = 0.0
+        client._stale_watchdog_probe_message_count = None
+        client._stale_watchdog_probe_started_monotonic = None
+        client._request_odb_value = AsyncMock(side_effect=DHEError("transport closed"))
+        client._force_reconnect = AsyncMock()
+
+        original_monotonic = client_module.time.monotonic
+        client_module.time.monotonic = lambda: 901.0
+        try:
+            await DHEClient._maybe_recover_stale_runtime(client, ctx)
+        finally:
+            client_module.time.monotonic = original_monotonic
+
+        client._request_odb_value.assert_awaited_once()
+        client._force_reconnect.assert_awaited_once()
+        args, kwargs = client._force_reconnect.await_args
+        self.assertEqual(args, (ctx,))
+        self.assertIn("probe failed", kwargs["reason"])
+        self.assertIsNone(client._stale_watchdog_probe_message_count)
+        self.assertIsNone(client._stale_watchdog_probe_started_monotonic)
+
     async def test_force_reconnect_keeps_available_inside_reconnect_grace(self) -> None:
         client_module = _load_client()
         DHEClient = client_module.DHEClient

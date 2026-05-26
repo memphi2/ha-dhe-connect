@@ -293,6 +293,12 @@ remain available while the `Connection state` diagnostic sensor reports
 `reconnecting`. Repeated reconnects are visible through the `Reconnects`,
 `Next reconnect delay` and `Last reconnect reason` sensors.
 
+The runtime now also detects stale sessions where the socket stays technically
+connected but no device data arrives for an extended period. In that case the
+integration sends a lightweight watchdog probe and forces one reconnect if the
+probe remains unanswered. This replaces most cases where a manual "reconnect
+Wi-Fi" action on the DHE UI was previously needed.
+
 If reconnects keep increasing:
 
 1. Check whether the DHE web interface is stable in a browser from the Home
