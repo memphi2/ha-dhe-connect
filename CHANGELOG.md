@@ -4,6 +4,19 @@
 
 - No changes yet.
 
+## v2.0.3 - 2026-05-28
+
+### Runtime Resilience
+
+- Cleared stale-runtime watchdog probe bookkeeping when reconnect/auth handling
+  replaces the active session.
+- Added regression coverage for watchdog probe bookkeeping when the active
+  session changes while the probe is in flight.
+
+### Maintenance
+
+- Prepared the v2.0.3 release metadata.
+
 ## v2.0.2 - 2026-05-26
 
 ### Runtime Resilience

@@ -133,6 +133,8 @@ class DHEClientTransportMixin(
 
         def _cancel_reconnect_grace_timer(self) -> None: ...
 
+        def _clear_stale_runtime_probe(self) -> None: ...
+
         def _update_diagnostics(self, **updates: Any) -> None: ...
 
         def _notify_callbacks(
@@ -204,6 +206,7 @@ class DHEClientTransportMixin(
         ctx = self._ctx
         self._ctx = None
         self._ready.clear()
+        self._clear_stale_runtime_probe()
         self._mark_reconnecting(
             reason or "Forced reconnect requested",
             immediate_availability=immediate_availability,

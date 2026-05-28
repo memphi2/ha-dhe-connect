@@ -1854,6 +1854,45 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(client._stale_watchdog_probe_message_count, 12)
         self.assertEqual(client._stale_watchdog_probe_started_monotonic, 901.0)
 
+    async def test_stale_runtime_watchdog_skips_probe_state_after_context_change(
+        self,
+    ) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+        DHESession = client_module.DHESession
+
+        client = DHEClient.__new__(DHEClient)
+        ctx = DHESession(url_token="token", sid="sid")
+        client._ctx = ctx
+        client._stopped = client_module.asyncio.Event()
+        client._ready = client_module.asyncio.Event()
+        client._ready.set()
+        client._message_count = 12
+        client._last_message_monotonic = 0.0
+        client._stale_watchdog_probe_message_count = None
+        client._stale_watchdog_probe_started_monotonic = None
+        client._force_reconnect = AsyncMock()
+
+        async def _replace_context(_ctx, _odb_id):
+            client._ctx = None
+
+        client._request_odb_value = AsyncMock(side_effect=_replace_context)
+
+        original_monotonic = client_module.time.monotonic
+        client_module.time.monotonic = lambda: 901.0
+        try:
+            await DHEClient._maybe_recover_stale_runtime(client, ctx)
+        finally:
+            client_module.time.monotonic = original_monotonic
+
+        client._request_odb_value.assert_awaited_once_with(
+            ctx,
+            client_module.ID_DEVICE_STATUS,
+        )
+        client._force_reconnect.assert_not_awaited()
+        self.assertIsNone(client._stale_watchdog_probe_message_count)
+        self.assertIsNone(client._stale_watchdog_probe_started_monotonic)
+
     async def test_stale_runtime_watchdog_reconnects_when_probe_stays_unanswered(self) -> None:
         client_module = _load_client()
         DHEClient = client_module.DHEClient
@@ -1967,6 +2006,8 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         client._diagnostic_callbacks = set()
         client._diagnostic_state = {}
         client._last_message_monotonic = None
+        client._stale_watchdog_probe_message_count = 4
+        client._stale_watchdog_probe_started_monotonic = 12.0
         client._notify_callbacks = Mock()
         client._reconnect_grace_task = None
         scheduled_tasks: list[tuple[object, str]] = []
@@ -1987,6 +2028,8 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         await DHEClient._force_reconnect(client, reason="test reconnect")
 
         self.assertFalse(client._ready.is_set())
+        self.assertIsNone(client._stale_watchdog_probe_message_count)
+        self.assertIsNone(client._stale_watchdog_probe_started_monotonic)
         self.assertFalse(client._online)
         self.assertTrue(client._available)
         self.assertEqual(client._diagnostic_state["connection_state"], "reconnecting")

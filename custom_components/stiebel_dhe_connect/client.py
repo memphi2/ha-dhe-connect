@@ -433,6 +433,7 @@ class DHEClient(
                     for event in await self._read_events_once(current_ctx):
                         await self._handle_runtime_event(event)
                     if self._ctx is not current_ctx:
+                        self._clear_stale_runtime_probe()
                         continue
                     await self._maybe_recover_stale_runtime(current_ctx)
             except asyncio.CancelledError:  # noqa: PERF203
@@ -453,6 +454,7 @@ class DHEClient(
         self._clear_pending_future(err)
         self._clear_pending_write_future(err)
         self._ready.clear()
+        self._clear_stale_runtime_probe()
         ctx = self._ctx
         self._ctx = None
         reconnect_delay = self._mark_reconnecting(_diagnostic_error(err))
@@ -478,6 +480,7 @@ class DHEClient(
         self._clear_pending_future(err)
         self._clear_pending_write_future(err)
         self._ready.clear()
+        self._clear_stale_runtime_probe()
         ctx = self._ctx
         self._ctx = None
         if ctx is not None:
@@ -550,6 +553,10 @@ class DHEClient(
                     f"{_diagnostic_error(transport_err)}"
                 ),
             )
+            return
+
+        if self._stopped.is_set() or not self._ready.is_set() or self._ctx is not ctx:
+            self._clear_stale_runtime_probe()
             return
 
         self._stale_watchdog_probe_message_count = self._message_count
