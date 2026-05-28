@@ -382,6 +382,15 @@ class DHEClient(
             await self.start()
         return True
 
+    async def restart_after_reauth(self) -> None:
+        """Restart the runtime session after reauth wrote a fresh token."""
+        async with self._command_lock:
+            self._token = None
+            was_running = self._runner is not None and not self._runner.done()
+            if was_running:
+                await self.stop()
+            await self.start()
+
     async def request_measurement_refresh(
         self,
         *,

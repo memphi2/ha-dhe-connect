@@ -1604,6 +1604,11 @@ async def test_reauth_flow_repairs_pairing_with_real_hass_fixture() -> None:
             unique_id="reauth-fixture-dhe",
         )
         entry.add_to_hass(hass)
+        restart_after_reauth = AsyncMock()
+        entry.runtime_data = types.SimpleNamespace(
+            client=types.SimpleNamespace(restart_after_reauth=restart_after_reauth),
+            name=entry.title,
+        )
         repair_issues.async_create_pairing_issue(hass, entry.entry_id, entry.title)
         issue_id = repair_issues.pairing_required_issue_id(entry.entry_id)
         assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id) is not None
@@ -1635,7 +1640,8 @@ async def test_reauth_flow_repairs_pairing_with_real_hass_fixture() -> None:
         assert result["reason"] == "reauth_successful"
         can_connect.assert_awaited_once_with(hass, "reauth-dhe.local", DEFAULT_PORT)
         validate_pairing.assert_awaited_once()
-        schedule_reload.assert_called_once_with(entry.entry_id)
+        schedule_reload.assert_not_called()
+        restart_after_reauth.assert_awaited_once_with()
         assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id) is None
 
 

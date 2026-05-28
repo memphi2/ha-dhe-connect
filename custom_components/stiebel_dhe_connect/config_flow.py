@@ -99,6 +99,7 @@ from .pairing_validation import (
 )
 from .pairing_helpers import map_pairing_error
 from .repair_issues import DISCOVERY_CONFLICT_ISSUE, async_delete_pairing_issue
+from .runtime_helpers import get_runtime_data
 from .error_codes import (
     ALREADY_CONFIGURED,
     ALREADY_IN_PROGRESS,
@@ -231,6 +232,21 @@ async def _async_preserve_token_for_retarget(
             entry.entry_id,
         )
 
+
+async def _async_restart_runtime_after_reauth(
+    hass: HomeAssistant,
+    entry: config_entries.ConfigEntry,
+) -> None:
+    """Restart a loaded runtime client after the reauth flow updated its token."""
+    try:
+        runtime = get_runtime_data(hass, entry)
+    except RuntimeError:
+        _LOGGER.debug(
+            "Skipped runtime restart after reauth because entry=%s is not loaded",
+            entry.entry_id,
+        )
+        return
+    await runtime.client.restart_after_reauth()
 
 
 async def _async_clear_setup_token_files(
@@ -1128,7 +1144,7 @@ class StiebelDHEConnectConfigFlow(
                 self._pending_setup_data = None
                 entry = self._get_reauth_entry()
                 async_delete_pairing_issue(self.hass, entry.entry_id)
-                self.hass.config_entries.async_schedule_reload(entry.entry_id)
+                await _async_restart_runtime_after_reauth(self.hass, entry)
                 return self.async_abort(reason="reauth_successful")
             errors["base"] = pairing_result.error_key
 

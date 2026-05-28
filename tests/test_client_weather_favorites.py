@@ -101,6 +101,50 @@ def _load_protocol():
 class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
     """Validate weather-favorite toggle safeguards."""
 
+    async def test_restart_after_reauth_restarts_running_client_with_fresh_token(
+        self,
+    ) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+
+        client = DHEClient.__new__(DHEClient)
+        client._command_lock = asyncio.Lock()
+        client._token = "stale-token"
+        runner = asyncio.create_task(asyncio.sleep(60))
+        client._runner = runner
+        client.stop = AsyncMock()
+        client.start = AsyncMock()
+
+        try:
+            await DHEClient.restart_after_reauth(client)
+        finally:
+            runner.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await runner
+
+        self.assertIsNone(client._token)
+        client.stop.assert_awaited_once_with()
+        client.start.assert_awaited_once_with()
+
+    async def test_restart_after_reauth_starts_unloaded_client_with_fresh_token(
+        self,
+    ) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+
+        client = DHEClient.__new__(DHEClient)
+        client._command_lock = asyncio.Lock()
+        client._token = "stale-token"
+        client._runner = None
+        client.stop = AsyncMock()
+        client.start = AsyncMock()
+
+        await DHEClient.restart_after_reauth(client)
+
+        self.assertIsNone(client._token)
+        client.stop.assert_not_awaited()
+        client.start.assert_awaited_once_with()
+
     async def test_client_init_normalizes_host_and_url(self) -> None:
         client_module = _load_client()
         DHEClient = client_module.DHEClient
