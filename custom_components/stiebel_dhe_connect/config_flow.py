@@ -1186,6 +1186,7 @@ class StiebelDHEConnectConfigFlow(
                         entry,
                         options=_connection_options_for_entry(entry, data),
                         reason="reconfigure_successful",
+                        reload_even_if_entry_is_unchanged=False,
                     )
 
         return self._show_reconfigure_form(errors=errors, defaults=current)
