@@ -82,6 +82,10 @@ PATTERNS = (
         re.compile(r"\basync_forward_entry_unload\s*[(]"),
         "Use async_unload_platforms() instead of async_forward_entry_unload().",
     ),
+    DeprecatedPattern(
+        re.compile(r"\basync_update_reload_and_abort\s*[(]"),
+        "Use async_update_entry/update listeners or async_update_and_abort instead of async_update_reload_and_abort().",
+    ),
 )
 
 

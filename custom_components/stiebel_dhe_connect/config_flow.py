@@ -622,12 +622,13 @@ class StiebelDHEConnectConfigFlow(
         updated_data = dict(entry.data)
         updated_data[CONF_HOST] = host
         updated_data[CONF_PORT] = port
-        self.hass.config_entries.async_update_entry(
+        updated = self.hass.config_entries.async_update_entry(
             entry,
             data=updated_data,
             options=_connection_options_for_entry(entry, connection_data),
         )
-        await self.hass.config_entries.async_reload(entry.entry_id)
+        if updated and not entry.update_listeners:
+            await self.hass.config_entries.async_reload(entry.entry_id)
 
     async def _async_abort_discovery_conflict(
         self,
@@ -1127,10 +1128,8 @@ class StiebelDHEConnectConfigFlow(
                 self._pending_setup_data = None
                 entry = self._get_reauth_entry()
                 async_delete_pairing_issue(self.hass, entry.entry_id)
-                return self.async_update_reload_and_abort(
-                    entry,
-                    reason="reauth_successful",
-                )
+                self.hass.config_entries.async_schedule_reload(entry.entry_id)
+                return self.async_abort(reason="reauth_successful")
             errors["base"] = pairing_result.error_key
 
         return self.async_show_form(
