@@ -1182,12 +1182,11 @@ class StiebelDHEConnectConfigFlow(
                             entry,
                             data,
                         )
-                    return self.async_update_reload_and_abort(
+                    self.hass.config_entries.async_update_entry(
                         entry,
                         options=_connection_options_for_entry(entry, data),
-                        reason="reconfigure_successful",
-                        reload_even_if_entry_is_unchanged=False,
                     )
+                    return self.async_abort(reason="reconfigure_successful")
 
         return self._show_reconfigure_form(errors=errors, defaults=current)
 
