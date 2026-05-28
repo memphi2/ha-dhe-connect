@@ -63,7 +63,7 @@ def main() -> int:
     if importlib.util.find_spec("mypy") is None:
         print(
             "ERROR: mypy is not installed. Install it with "
-            "`python -m pip install 'mypy>=1.13,<2'`.",
+            "`python -m pip install 'mypy>=1.20,<2'`.",
             file=sys.stderr,
         )
         return 1
