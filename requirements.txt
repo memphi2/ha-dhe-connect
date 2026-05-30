@@ -1,16 +1,15 @@
 # Runtime and validation dependencies for local development and release checks.
 
 # Runtime dependency used by the integration.
-# Keep this compatible with the Home Assistant 2026.6 fixture environment.
+# Keep this compatible with the Home Assistant 2026.6 stable fixture environment.
 aiohttp>=3.13.5,<4
 
 # Home Assistant integration test/runtime plugin.
-# 0.13.334 pins Home Assistant 2026.6.0b0 on Python 3.14.
-homeassistant==2026.6.0b0
-pytest-homeassistant-custom-component==0.13.334
+homeassistant==2026.6.0
+pytest-homeassistant-custom-component>=0.13.334,<0.14
 
 # Test tooling.
-# Keep the lower bound compatible with the pinned HA 2026.6 fixture helper package.
+# Keep the lower bound compatible with the HA 2026.6 fixture helper range.
 pytest>=9.0.3,<10
 pytest-cov>=7.1,<8
 
