@@ -70,6 +70,7 @@ NODE24_VALIDATION_ACTION_PINS = {
 VALIDATION_DEPENDENCY_MINIMUMS = {
     "aiohttp": ">=3.13.5,<4",
     "pytest-homeassistant-custom-component": ">=0.13.332,<0.14",
+    "zeroconf": ">=0.149.7,<0.150",
 }
 _ACTION_REF_RE = re.compile(r"^\s*(?:-\s*)?uses:\s*([^@\s]+)@([^\s#]+)", re.MULTILINE)
 _MAJOR_VERSION_REF_RE = re.compile(r"^v(?P<major>\d+)(?:\.|$)")

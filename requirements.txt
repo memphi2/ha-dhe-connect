@@ -19,4 +19,4 @@ ruff>=0.15,<0.16
 
 # Test/runtime helpers.
 voluptuous>=0.14,<1
-zeroconf>=0.144,<0.145
+zeroconf>=0.149.7,<0.150

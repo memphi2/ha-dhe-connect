@@ -122,7 +122,7 @@ class TestCheckIntegration(unittest.TestCase):
                   - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
                   - uses: hacs/action@dcb30e72781db3f207d5236b861172774ab0b485
                   - uses: home-assistant/actions/hassfest@f6f29a7ee3fa0eccadf3620a7b9ee00ab54ec03b
-                  - run: python -m pip install "aiohttp>=3.13.5,<4" "pytest-homeassistant-custom-component>=0.13.332,<0.14"
+                  - run: python -m pip install "aiohttp>=3.13.5,<4" "pytest-homeassistant-custom-component>=0.13.332,<0.14" "zeroconf>=0.149.7,<0.150"
                   - run: python scripts/check_deprecations.py
                   - run: python scripts/check_privacy_markers.py
                   - run: python scripts/check_translation_keys.py
@@ -144,7 +144,7 @@ class TestCheckIntegration(unittest.TestCase):
                   - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
                   - uses: hacs/action@dcb30e72781db3f207d5236b861172774ab0b485
                   - uses: home-assistant/actions/hassfest@f6f29a7ee3fa0eccadf3620a7b9ee00ab54ec03b
-                  - run: python -m pip install "aiohttp>=3.13.5,<4" "pytest-homeassistant-custom-component>=0.13.332,<0.14"
+                  - run: python -m pip install "aiohttp>=3.13.5,<4" "pytest-homeassistant-custom-component>=0.13.332,<0.14" "zeroconf>=0.149.7,<0.150"
                 """,
             )
 
@@ -164,7 +164,7 @@ class TestCheckIntegration(unittest.TestCase):
                   - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
                   - uses: hacs/action@dcb30e72781db3f207d5236b861172774ab0b485
                   - uses: home-assistant/actions/hassfest@f6f29a7ee3fa0eccadf3620a7b9ee00ab54ec03b
-                  - run: python -m pip install "aiohttp>=3.13.5,<4" "pytest-homeassistant-custom-component>=0.13.332,<0.14"
+                  - run: python -m pip install "aiohttp>=3.13.5,<4" "pytest-homeassistant-custom-component>=0.13.332,<0.14" "zeroconf>=0.149.7,<0.150"
                   - run: python scripts/check_deprecations.py
                   - run: python scripts/check_release_consistency.py
                 """,
@@ -186,7 +186,7 @@ class TestCheckIntegration(unittest.TestCase):
                   - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
                   - uses: hacs/action@dcb30e72781db3f207d5236b861172774ab0b485
                   - uses: home-assistant/actions/hassfest@f6f29a7ee3fa0eccadf3620a7b9ee00ab54ec03b
-                  - run: python -m pip install "aiohttp>=3.13.5,<4" "pytest-homeassistant-custom-component>=0.13.332,<0.14"
+                  - run: python -m pip install "aiohttp>=3.13.5,<4" "pytest-homeassistant-custom-component>=0.13.332,<0.14" "zeroconf>=0.149.7,<0.150"
                   - run: python scripts/check_deprecations.py
                   - run: python scripts/check_privacy_markers.py
                   - run: python scripts/check_release_consistency.py

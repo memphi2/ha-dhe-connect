@@ -50,7 +50,7 @@ jobs:
           python-version: "3.14"
 
       - name: Install repository check dependencies
-        run: python -m pip install "aiohttp>=3.13.5,<4" "mypy>=1.13,<2" "pytest-homeassistant-custom-component>=0.13.332,<0.14" "ruff>=0.13,<1"
+        run: python -m pip install "aiohttp>=3.13.5,<4" "mypy>=1.13,<2" "pytest-homeassistant-custom-component>=0.13.332,<0.14" "ruff>=0.13,<1" "zeroconf>=0.149.7,<0.150"
 
       - name: Run unit tests
         run: python -m pytest -q
