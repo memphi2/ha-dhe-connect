@@ -16,6 +16,7 @@
 ### Maintenance
 
 - Prepared the v2.0.3 release metadata.
+- Aligned the validation stack with Home Assistant 2026.6 and Python 3.14.
 
 ## v2.0.2 - 2026-05-26
 

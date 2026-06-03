@@ -76,9 +76,8 @@ VALIDATION_DEPENDENCY_MINIMUMS = {
     "ruff": ">=0.15,<0.16",
 }
 VALIDATION_NO_DEPS_DEPENDENCIES = {
-    # pytest-homeassistant-custom-component 0.13.335 still declares a
-    # homeassistant==2026.6.0b2 dependency while this release validates against
-    # homeassistant==2026.6.0 stable.
+    # pytest-homeassistant-custom-component 0.13.335 still declares a Home
+    # Assistant transitive pin that differs from the HA 2026.6 fixture.
     "pytest-homeassistant-custom-component": ">=0.13.335,<0.14",
 }
 _ACTION_REF_RE = re.compile(r"^\s*(?:-\s*)?uses:\s*([^@\s]+)@([^\s#]+)", re.MULTILINE)

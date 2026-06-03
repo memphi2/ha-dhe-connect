@@ -53,8 +53,8 @@ jobs:
         run: python -m pip install -r requirements.txt
 
       - name: Install Home Assistant test fixture helper
-        # The helper metadata still pins a HA 2026.6 beta while the fixtures run
-        # against HA 2026.6 stable. Keep its stale transitive pin isolated.
+        # The helper metadata still declares a Home Assistant transitive pin
+        # that differs from the HA 2026.6 fixture. Keep that pin isolated.
         run: python -m pip install --no-deps "pytest-homeassistant-custom-component>=0.13.335,<0.14"
 
       - name: Run unit tests

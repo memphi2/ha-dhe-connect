@@ -1,15 +1,15 @@
 # Runtime and validation dependencies for local development and release checks.
 
 # Runtime dependency used by the integration.
-# Keep this compatible with the Home Assistant 2026.6 stable fixture environment.
+# Keep this compatible with the Home Assistant 2026.6 fixture environment.
 aiohttp>=3.13.5,<4
 
 # Home Assistant integration test/runtime plugin.
 homeassistant==2026.6.0
 # Install pytest-homeassistant-custom-component separately with --no-deps until its
-# metadata catches up with Home Assistant 2026.6 stable. The support dependencies
-# below mirror pytest-homeassistant-custom-component 0.13.335 except for its stale
-# homeassistant==2026.6.0b2 pin.
+# metadata catches up with Home Assistant 2026.6. The support dependencies below
+# mirror pytest-homeassistant-custom-component 0.13.335 except for its Home
+# Assistant transitive pin.
 aiohasupervisor==0.4.3
 ast-serialize==0.3.0
 coverage==7.14.0
@@ -36,7 +36,7 @@ tqdm==4.67.1
 unidiff==0.7.5
 
 # Test tooling.
-# Keep the lower bound compatible with the HA 2026.6 fixture helper range.
+# Keep these pins aligned with the HA 2026.6 fixture helper range.
 pytest==9.0.3
 pytest-cov==7.1.0
 
