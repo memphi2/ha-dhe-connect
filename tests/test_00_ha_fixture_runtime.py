@@ -1604,6 +1604,11 @@ async def test_reauth_flow_repairs_pairing_with_real_hass_fixture() -> None:
             unique_id="reauth-fixture-dhe",
         )
         entry.add_to_hass(hass)
+        restart_after_reauth = AsyncMock()
+        entry.runtime_data = types.SimpleNamespace(
+            client=types.SimpleNamespace(restart_after_reauth=restart_after_reauth),
+            name=entry.title,
+        )
         repair_issues.async_create_pairing_issue(hass, entry.entry_id, entry.title)
         issue_id = repair_issues.pairing_required_issue_id(entry.entry_id)
         assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id) is not None
@@ -1613,6 +1618,7 @@ async def test_reauth_flow_repairs_pairing_with_real_hass_fixture() -> None:
         with (
             patch.object(config_flow, "_can_connect", can_connect),
             patch.object(config_flow, "_validate_setup_pairing", validate_pairing),
+            patch.object(hass.config_entries, "async_schedule_reload") as schedule_reload,
         ):
             result = await hass.config_entries.flow.async_init(
                 DOMAIN,
@@ -1634,6 +1640,8 @@ async def test_reauth_flow_repairs_pairing_with_real_hass_fixture() -> None:
         assert result["reason"] == "reauth_successful"
         can_connect.assert_awaited_once_with(hass, "reauth-dhe.local", DEFAULT_PORT)
         validate_pairing.assert_awaited_once()
+        schedule_reload.assert_not_called()
+        restart_after_reauth.assert_awaited_once_with()
         assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id) is None
 
 
@@ -2636,6 +2644,58 @@ async def test_zeroconf_updates_existing_entry_for_identity_matched_host_change(
         can_connect.assert_awaited_once_with(hass, "192.0.2.124", 9443)
         preserve_token.assert_awaited_once()
         reload_entry.assert_awaited_once_with(entry.entry_id)
+
+
+async def test_zeroconf_update_uses_update_listener_for_loaded_entry() -> None:
+    """Avoid a direct reload when a loaded entry already reloads via update listener."""
+    _clear_loaded_integration_modules()
+    importlib.import_module(f"custom_components.{DOMAIN}")
+    config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
+    async with async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        entry = _build_mock_entry(
+            host="dhe-ja06.local",
+            port=DEFAULT_PORT,
+            name="Existing DHE",
+            unique_id="aa:bb:cc:dd:ee:ff",
+        )
+        entry.add_to_hass(hass)
+        update_listener = AsyncMock()
+        entry.add_update_listener(update_listener)
+
+        can_connect = AsyncMock(return_value=True)
+        preserve_token = AsyncMock()
+        reload_entry = AsyncMock(return_value=True)
+        with (
+            patch.object(config_flow, "_can_connect", can_connect),
+            patch.object(
+                config_flow,
+                "_async_preserve_token_for_retarget",
+                preserve_token,
+            ),
+            patch.object(hass.config_entries, "async_reload", reload_entry),
+        ):
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_ZEROCONF},
+                data=_zeroconf_info(
+                    "dhe-ja06.local.",
+                    9443,
+                    host="192.0.2.124",
+                    properties={"wlan_mac": "aa-bb-cc-dd-ee-ff"},
+                ),
+            )
+            await hass.async_block_till_done()
+
+        assert result["type"] is FlowResultType.ABORT
+        assert result["reason"] == "already_configured"
+        updated_entry = hass.config_entries.async_get_entry(entry.entry_id)
+        assert updated_entry is not None
+        assert updated_entry.data[CONF_HOST] == "192.0.2.124"
+        assert updated_entry.data[CONF_PORT] == 9443
+        preserve_token.assert_awaited_once()
+        update_listener.assert_awaited_once_with(hass, entry)
+        reload_entry.assert_not_awaited()
 
 
 async def test_zeroconf_identity_match_keeps_existing_target_when_update_unreachable() -> None:

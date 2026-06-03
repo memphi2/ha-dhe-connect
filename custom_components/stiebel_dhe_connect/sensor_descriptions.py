@@ -91,6 +91,7 @@ class StiebelDHESensorEntityDescription(SensorEntityDescription):
     source_command: str | None = None
     period: str | None = None
     available_without_value: bool = False
+    keep_last_value_when_unavailable: bool = False
     online_default_value: MeasurementValue = None
 
 
@@ -227,6 +228,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         odb_id=ID_WATER_CONSUMPTION_WEEK,
         source_command="set:ste.app.consumption:waterWeek",
         period="week",
+        keep_last_value_when_unavailable=True,
     ),
     StiebelDHESensorEntityDescription(
         key="water_consumption_year",
@@ -238,6 +240,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         odb_id=ID_WATER_CONSUMPTION_YEAR,
         source_command="set:ste.app.consumption:waterYear",
         period="year",
+        keep_last_value_when_unavailable=True,
     ),
     StiebelDHESensorEntityDescription(
         key="water_consumption_total",
@@ -249,6 +252,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         odb_id=ID_WATER_CONSUMPTION_YEARS,
         source_command="set:ste.app.consumption:waterYears",
         period="years",
+        keep_last_value_when_unavailable=True,
     ),
     StiebelDHESensorEntityDescription(
         key="odb_hot_water_volume",
@@ -261,16 +265,18 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         entity_registry_enabled_default=False,
         odb_id=ID_ODB_HOT_WATER_VOLUME,
         available_without_value=True,
+        keep_last_value_when_unavailable=True,
     ),
     StiebelDHESensorEntityDescription(
         key="energy_consumption_week",
         translation_key="energy_consumption_week",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL,
+        state_class=SensorStateClass.TOTAL_INCREASING,
         odb_id=ID_ENERGY_CONSUMPTION_WEEK,
         source_command="set:ste.app.consumption:energyWeek",
         period="week",
+        keep_last_value_when_unavailable=True,
     ),
     StiebelDHESensorEntityDescription(
         key="odb_heating_energy",
@@ -283,6 +289,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         entity_registry_enabled_default=False,
         odb_id=ID_ODB_HEATING_ENERGY,
         available_without_value=True,
+        keep_last_value_when_unavailable=True,
     ),
     StiebelDHESensorEntityDescription(
         key="odb_possible_energy_saving",
@@ -313,20 +320,22 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
         translation_key="energy_consumption_year",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL,
+        state_class=SensorStateClass.TOTAL_INCREASING,
         odb_id=ID_ENERGY_CONSUMPTION_YEAR,
         source_command="set:ste.app.consumption:energyYear",
         period="year",
+        keep_last_value_when_unavailable=True,
     ),
     StiebelDHESensorEntityDescription(
         key="energy_consumption_total",
         translation_key="energy_consumption_total",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL,
+        state_class=SensorStateClass.TOTAL_INCREASING,
         odb_id=ID_ENERGY_CONSUMPTION_YEARS,
         source_command="set:ste.app.consumption:energyYears",
         period="years",
+        keep_last_value_when_unavailable=True,
     ),
     StiebelDHESensorEntityDescription(
         key="last_usage_water",

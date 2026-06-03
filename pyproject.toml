@@ -41,6 +41,7 @@ files = [
     "custom_components/stiebel_dhe_connect/climate.py",
     "custom_components/stiebel_dhe_connect/config_entry_helpers.py",
     "custom_components/stiebel_dhe_connect/config_flow.py",
+    "custom_components/stiebel_dhe_connect/config_flow_connection.py",
     "custom_components/stiebel_dhe_connect/config_flow_discovery.py",
     "custom_components/stiebel_dhe_connect/config_flow_mapping.py",
     "custom_components/stiebel_dhe_connect/config_flow_options.py",

@@ -58,7 +58,7 @@
       },
       "reauth_confirm": {
         "title": "Repair DHE pairing",
-        "description": "Click OK now to request a new local pairing token. Confirm the pairing request on the DHE display. The existing integration is reloaded after successful pairing and login."
+        "description": "Click OK now to request a new local pairing token. Confirm the pairing request on the DHE display. The existing connection is restarted after successful pairing and login."
       },
       "reconfigure": {
         "title": "Reconfigure DHE Connect",

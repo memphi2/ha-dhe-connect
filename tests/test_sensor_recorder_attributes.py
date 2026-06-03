@@ -116,6 +116,21 @@ class TestSensorRecorderAttributes(unittest.TestCase):
             descriptions["odb_actual_water_saving"].state_class,
             sensor_module.SensorStateClass.TOTAL,
         )
+        for key in (
+            "water_consumption_week",
+            "water_consumption_year",
+            "water_consumption_total",
+            "energy_consumption_week",
+            "energy_consumption_year",
+            "energy_consumption_total",
+            "odb_hot_water_volume",
+            "odb_heating_energy",
+        ):
+            self.assertEqual(
+                descriptions[key].state_class,
+                sensor_module.SensorStateClass.TOTAL_INCREASING,
+            )
+            self.assertTrue(descriptions[key].keep_last_value_when_unavailable)
         self.assertNotIn(
             sensor_module.SensorStateClass.MEASUREMENT,
             {item.state_class for item in descriptions.values()},
@@ -1288,6 +1303,39 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         sensor._last_written_native_value = 10.0
         sensor._last_written_monotonic = -1_000_000_000.0
         self.assertTrue(sensor._should_write_measurement_state(10.01))
+
+    def test_total_consumption_sensor_keeps_last_value_when_unavailable(self) -> None:
+        sensor_module = _load_sensor_module()
+        description = next(
+            item
+            for item in sensor_module.SENSOR_DESCRIPTIONS
+            if item.key == "energy_consumption_total"
+        )
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            device_identifier = None
+            online = True
+            last_measurement_attributes: dict[int, dict[str, object]] = {}
+
+        sensor = sensor_module.StiebelDHESensor(
+            entry_id="test-entry",
+            name="Test DHE",
+            client=_FakeClient(),
+            description=description,
+        )
+        writes: list[float | str | None] = []
+        sensor.async_write_ha_state = lambda: writes.append(sensor._attr_native_value)
+        sensor._attr_native_value = 42.0
+        sensor._attr_available = True
+
+        sensor._handle_availability_update(False)
+        sensor._handle_measurement_update(description.odb_id, "unavailable")
+
+        self.assertTrue(sensor._attr_available)
+        self.assertEqual(sensor._attr_native_value, 42.0)
+        self.assertEqual(writes, [])
 
     def test_recorded_attribute_changes_write_when_value_is_unchanged(self) -> None:
         sensor_module = _load_sensor_module()

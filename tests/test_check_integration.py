@@ -17,11 +17,25 @@ if str(ROOT) not in sys.path:
 
 from scripts import check_integration  # noqa: E402
 
+VALIDATION_INSTALL_STEPS = """
+                  - run: python -m pip install -r requirements.txt
+                  - run: python -m pip install --no-deps "pytest-homeassistant-custom-component>=0.13.335,<0.14"
+"""
+VALIDATION_REQUIREMENTS_TEXT = """
+aiohttp>=3.13.5,<4
+homeassistant==2026.6.0
+mypy>=1.20,<2
+pytest==9.0.3
+pytest-cov==7.1.0
+ruff>=0.15,<0.16
+"""
+
 
 def _write_validate_workflow(root: Path, content: str) -> None:
     path = root / ".github" / "workflows" / "validate.yml"
     path.parent.mkdir(parents=True)
     path.write_text(content, encoding="utf-8")
+    (root / "requirements.txt").write_text(VALIDATION_REQUIREMENTS_TEXT, encoding="utf-8")
 
 
 def _write_type_gate_fixture(root: Path, files: list[str]) -> None:
@@ -122,7 +136,8 @@ class TestCheckIntegration(unittest.TestCase):
                   - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
                   - uses: hacs/action@dcb30e72781db3f207d5236b861172774ab0b485
                   - uses: home-assistant/actions/hassfest@f6f29a7ee3fa0eccadf3620a7b9ee00ab54ec03b
-                  - run: python -m pip install "aiohttp>=3.13.5,<4" "pytest-homeassistant-custom-component>=0.13.332,<0.14"
+                  - run: python -m pip install -r requirements.txt
+                  - run: python -m pip install --no-deps "pytest-homeassistant-custom-component>=0.13.335,<0.14"
                   - run: python scripts/check_deprecations.py
                   - run: python scripts/check_privacy_markers.py
                   - run: python scripts/check_translation_keys.py
@@ -144,7 +159,7 @@ class TestCheckIntegration(unittest.TestCase):
                   - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
                   - uses: hacs/action@dcb30e72781db3f207d5236b861172774ab0b485
                   - uses: home-assistant/actions/hassfest@f6f29a7ee3fa0eccadf3620a7b9ee00ab54ec03b
-                  - run: python -m pip install "aiohttp>=3.13.5,<4" "pytest-homeassistant-custom-component>=0.13.332,<0.14"
+""" + VALIDATION_INSTALL_STEPS + """
                 """,
             )
 
@@ -164,7 +179,7 @@ class TestCheckIntegration(unittest.TestCase):
                   - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
                   - uses: hacs/action@dcb30e72781db3f207d5236b861172774ab0b485
                   - uses: home-assistant/actions/hassfest@f6f29a7ee3fa0eccadf3620a7b9ee00ab54ec03b
-                  - run: python -m pip install "aiohttp>=3.13.5,<4" "pytest-homeassistant-custom-component>=0.13.332,<0.14"
+""" + VALIDATION_INSTALL_STEPS + """
                   - run: python scripts/check_deprecations.py
                   - run: python scripts/check_release_consistency.py
                 """,
@@ -186,9 +201,34 @@ class TestCheckIntegration(unittest.TestCase):
                   - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
                   - uses: hacs/action@dcb30e72781db3f207d5236b861172774ab0b485
                   - uses: home-assistant/actions/hassfest@f6f29a7ee3fa0eccadf3620a7b9ee00ab54ec03b
-                  - run: python -m pip install "aiohttp>=3.13.5,<4" "pytest-homeassistant-custom-component>=0.13.332,<0.14"
+""" + VALIDATION_INSTALL_STEPS + """
                   - run: python scripts/check_deprecations.py
                   - run: python scripts/check_privacy_markers.py
+                  - run: python scripts/check_release_consistency.py
+                """,
+            )
+
+            with patch.object(check_integration, "ROOT", root), redirect_stderr(
+                StringIO()
+            ), self.assertRaises(SystemExit):
+                check_integration.check_github_actions()
+
+    def test_github_actions_requires_fixture_helper_no_deps(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            _write_validate_workflow(
+                root,
+                """
+                steps:
+                  - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+                  - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+                  - uses: hacs/action@dcb30e72781db3f207d5236b861172774ab0b485
+                  - uses: home-assistant/actions/hassfest@f6f29a7ee3fa0eccadf3620a7b9ee00ab54ec03b
+                  - run: python -m pip install -r requirements.txt
+                  - run: python -m pip install "pytest-homeassistant-custom-component>=0.13.335,<0.14"
+                  - run: python scripts/check_deprecations.py
+                  - run: python scripts/check_privacy_markers.py
+                  - run: python scripts/check_translation_keys.py
                   - run: python scripts/check_release_consistency.py
                 """,
             )

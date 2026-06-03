@@ -69,7 +69,16 @@ NODE24_VALIDATION_ACTION_PINS = {
 }
 VALIDATION_DEPENDENCY_MINIMUMS = {
     "aiohttp": ">=3.13.5,<4",
-    "pytest-homeassistant-custom-component": ">=0.13.332,<0.14",
+    "homeassistant": "==2026.6.0",
+    "mypy": ">=1.20,<2",
+    "pytest": "==9.0.3",
+    "pytest-cov": "==7.1.0",
+    "ruff": ">=0.15,<0.16",
+}
+VALIDATION_NO_DEPS_DEPENDENCIES = {
+    # pytest-homeassistant-custom-component 0.13.335 still declares a Home
+    # Assistant transitive pin that differs from the HA 2026.6 fixture.
+    "pytest-homeassistant-custom-component": ">=0.13.335,<0.14",
 }
 _ACTION_REF_RE = re.compile(r"^\s*(?:-\s*)?uses:\s*([^@\s]+)@([^\s#]+)", re.MULTILINE)
 _MAJOR_VERSION_REF_RE = re.compile(r"^v(?P<major>\d+)(?:\.|$)")
@@ -364,12 +373,36 @@ def check_github_actions() -> None:
         _fail("validation workflow must run scripts/check_translation_keys.py")
     if "python scripts/check_release_consistency.py" not in text:
         _fail("validation workflow must run scripts/check_release_consistency.py")
+    requirements_text = ""
+    if "python -m pip install -r requirements.txt" in text:
+        requirements_path = ROOT / "requirements.txt"
+        if not requirements_path.exists():
+            _fail("validation workflow installs requirements.txt but it is missing")
+        requirements_text = requirements_path.read_text(encoding="utf-8")
+    dependency_text = requirements_text or text
     for dependency, constraint in sorted(VALIDATION_DEPENDENCY_MINIMUMS.items()):
+        requirement = f'"{dependency}{constraint}"'
+        unquoted_requirement = f"{dependency}{constraint}"
+        if requirement not in dependency_text and unquoted_requirement not in dependency_text:
+            _fail(
+                "validation workflow must install current dependency floor "
+                f"{unquoted_requirement!r}"
+            )
+    for dependency, constraint in sorted(VALIDATION_NO_DEPS_DEPENDENCIES.items()):
         requirement = f'"{dependency}{constraint}"'
         if requirement not in text:
             _fail(
                 "validation workflow must install current dependency floor "
                 f"{requirement}"
+            )
+        no_deps_install = re.compile(
+            r"python -m pip install[^\n]*--no-deps[^\n]*"
+            + re.escape(requirement)
+        )
+        if no_deps_install.search(text) is None:
+            _fail(
+                "validation workflow must install stale-metadata dependency "
+                f"{requirement} with --no-deps"
             )
     if (
         "--disable" + "-warnings" in text

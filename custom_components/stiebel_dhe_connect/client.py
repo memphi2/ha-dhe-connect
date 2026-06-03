@@ -20,6 +20,8 @@ from .client_commands import DHEClientCommandsMixin
 from .client_callbacks import DHEClientCallbacksMixin
 from .client_connection_state import DHEClientConnectionStateMixin
 from .client_constants import DEFAULT_NOMINAL_POWER_KW
+from .client_constants import RUNTIME_STALE_PROBE_GRACE_SECONDS
+from .client_constants import RUNTIME_STALE_WATCHDOG_SECONDS
 from .client_constants import RUNTIME_STARTUP_PROOF_TIMEOUT_SECONDS
 from .client_diagnostics import diagnostic_error as _diagnostic_error
 from .client_errors import (
@@ -147,6 +149,8 @@ class DHEClient(
         self._websocket_upgrade_failures = 0
         self._last_message_monotonic: float | None = None
         self._message_count = 0
+        self._stale_watchdog_probe_message_count: int | None = None
+        self._stale_watchdog_probe_started_monotonic: float | None = None
         self._diagnostic_state: dict[str, Any] = {"connection_state": "starting"}
         self._connection_supervisor = DHEConnectionSupervisor()
         self._reconnect_grace_task: asyncio.Task[None] | None = None
@@ -321,6 +325,7 @@ class DHEClient(
             await self._close_session(ctx)
         self._set_online(False)
         self._set_available(False, immediate=True)
+        self._clear_stale_runtime_probe()
         self._update_diagnostics(connection_state="stopped")
 
     async def validate_setup_authentication(
@@ -377,6 +382,15 @@ class DHEClient(
             await self.start()
         return True
 
+    async def restart_after_reauth(self) -> None:
+        """Restart the runtime session after reauth wrote a fresh token."""
+        async with self._command_lock:
+            self._token = None
+            was_running = self._runner is not None and not self._runner.done()
+            if was_running:
+                await self.stop()
+            await self.start()
+
     async def request_measurement_refresh(
         self,
         *,
@@ -422,9 +436,15 @@ class DHEClient(
                 self._ready.set()
                 self._set_available(True)
                 self._update_diagnostics(connection_state="connected")
+                self._clear_stale_runtime_probe()
                 while not self._stopped.is_set() and self._ctx is not None:
-                    for event in await self._read_events_once(self._ctx):
+                    current_ctx = self._ctx
+                    for event in await self._read_events_once(current_ctx):
                         await self._handle_runtime_event(event)
+                    if self._ctx is not current_ctx:
+                        self._clear_stale_runtime_probe()
+                        continue
+                    await self._maybe_recover_stale_runtime(current_ctx)
             except asyncio.CancelledError:  # noqa: PERF203
                 raise
             except DHEAuthError as err:
@@ -443,6 +463,7 @@ class DHEClient(
         self._clear_pending_future(err)
         self._clear_pending_write_future(err)
         self._ready.clear()
+        self._clear_stale_runtime_probe()
         ctx = self._ctx
         self._ctx = None
         reconnect_delay = self._mark_reconnecting(_diagnostic_error(err))
@@ -468,6 +489,7 @@ class DHEClient(
         self._clear_pending_future(err)
         self._clear_pending_write_future(err)
         self._ready.clear()
+        self._clear_stale_runtime_probe()
         ctx = self._ctx
         self._ctx = None
         if ctx is not None:
@@ -482,6 +504,72 @@ class DHEClient(
         )
         await self._stopped.wait()
         return True
+
+    def _clear_stale_runtime_probe(self) -> None:
+        """Reset stale-runtime watchdog probe tracking."""
+        self._stale_watchdog_probe_message_count = None
+        self._stale_watchdog_probe_started_monotonic = None
+
+    async def _maybe_recover_stale_runtime(self, ctx: DHESession) -> None:
+        """Probe and recover sessions that stay connected but stop sending data."""
+        if self._stopped.is_set() or not self._ready.is_set() or self._ctx is not ctx:
+            self._clear_stale_runtime_probe()
+            return
+        if self._last_message_monotonic is None:
+            return
+
+        now = time.monotonic()
+        last_age = now - self._last_message_monotonic
+        probe_count = self._stale_watchdog_probe_message_count
+        probe_started = self._stale_watchdog_probe_started_monotonic
+
+        if probe_count is not None and self._message_count > probe_count:
+            self._clear_stale_runtime_probe()
+            return
+
+        if last_age < RUNTIME_STALE_WATCHDOG_SECONDS:
+            return
+
+        if probe_count is not None and probe_started is not None:
+            if now - probe_started < RUNTIME_STALE_PROBE_GRACE_SECONDS:
+                return
+            self._clear_stale_runtime_probe()
+            await self._force_reconnect(
+                ctx,
+                reason=(
+                    "Runtime stale watchdog: no device data after watchdog probe "
+                    f"for {int(round(last_age))}s"
+                ),
+            )
+            return
+
+        try:
+            await self._request_odb_value(ctx, ID_DEVICE_STATUS)
+        except _DHE_TRANSPORT_EXCEPTIONS as err:
+            self._clear_stale_runtime_probe()
+            await self._force_reconnect(
+                ctx,
+                reason=f"Runtime stale watchdog probe failed: {_diagnostic_error(err)}",
+            )
+            return
+        except RuntimeError as err:
+            transport_err = _runtime_transport_error_or_raise(err)
+            self._clear_stale_runtime_probe()
+            await self._force_reconnect(
+                ctx,
+                reason=(
+                    "Runtime stale watchdog probe failed: "
+                    f"{_diagnostic_error(transport_err)}"
+                ),
+            )
+            return
+
+        if self._stopped.is_set() or not self._ready.is_set() or self._ctx is not ctx:
+            self._clear_stale_runtime_probe()
+            return
+
+        self._stale_watchdog_probe_message_count = self._message_count
+        self._stale_watchdog_probe_started_monotonic = now
 
     async def _request_setpoint(self, ctx: DHESession) -> None:
         await self._request_odb_value(ctx, ID_SETPOINT)

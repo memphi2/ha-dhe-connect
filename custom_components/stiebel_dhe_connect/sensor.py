@@ -318,9 +318,19 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
             not self.entity_description.timer_path
             and self.entity_description.key != "last_usage_time"
         ):
+            if self.entity_description.state_class is not None:
+                return coerce_float(value)
             return value
 
         return format_minutes_duration(value)
+
+    def _keeps_last_value_for_invalid_update(self, value: MeasurementValue) -> bool:
+        """Return whether an invalid numeric update should preserve the last state."""
+        return (
+            self.entity_description.keep_last_value_when_unavailable
+            and value is None
+            and self._attr_native_value is not None
+        )
 
     def _sync_timer_activation_from_client(self) -> None:
         """Load the latest timer activation state for a timer remaining sensor."""
@@ -498,6 +508,8 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
 
     def _available_from_value(self, connected: bool, value: MeasurementValue) -> bool:
         """Return whether the sensor should be available for this value."""
+        if self.entity_description.keep_last_value_when_unavailable and value is not None:
+            return True
         if self.entity_description.available_without_value:
             return bool(connected)
         return value_available(connected, value)
@@ -541,7 +553,14 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
 
         self._update_extra_state_attributes()
         self._update_timer_remaining_base(value)
-        self._attr_native_value = self._convert_value(value)
+        native_value = self._convert_value(value)
+        if self._keeps_last_value_for_invalid_update(native_value):
+            self._attr_available = self._available_from_value(
+                self._client_online(),
+                self._attr_native_value,
+            )
+            return
+        self._attr_native_value = native_value
         self._attr_available = self._available_from_value(
             self._client_online(),
             self._attr_native_value,

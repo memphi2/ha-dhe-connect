@@ -58,7 +58,7 @@
       },
       "reauth_confirm": {
         "title": "DHE-Pairing reparieren",
-        "description": "Jetzt OK klicken, um ein neues lokales Pairing-Token anzufordern. Die Pairing-Anfrage am DHE-Display bestätigen. Die bestehende Integration wird nach erfolgreichem Pairing und Login neu geladen."
+        "description": "Jetzt OK klicken, um ein neues lokales Pairing-Token anzufordern. Die Pairing-Anfrage am DHE-Display bestätigen. Die bestehende Verbindung wird nach erfolgreichem Pairing und Login neu gestartet."
       },
       "reconfigure": {
         "title": "DHE Connect neu konfigurieren",

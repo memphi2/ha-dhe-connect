@@ -61,6 +61,19 @@ class TestCheckDeprecations(unittest.TestCase):
         self.assertEqual(len(issues), 1)
         self.assertIn("async_forward_entry_setups", issues[0])
 
+    def test_rejects_config_flow_reload_helper_with_update_listener(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "bad.py"
+            path.write_text(
+                "return self.async_update_reload_and_abort(entry)\n",
+                encoding="utf-8",
+            )
+
+            issues = check_deprecations.find_deprecation_issues([path])
+
+        self.assertEqual(len(issues), 1)
+        self.assertIn("async_update_and_abort", issues[0])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -119,12 +119,12 @@ data:
 | Water consumption year | `m3` | `water`, disabled by default | `total_increasing` | `set:ste.app.consumption:waterYear` |
 | Total water consumption | `m3` | `water` | `total_increasing` | `set:ste.app.consumption:waterYears` |
 | Hot water volume | `m3` | `water`, disabled by default | `total_increasing` | ODB ID `30 / 10` |
-| Energy consumption week | `kWh` | `energy`, disabled by default | `total` | `set:ste.app.consumption:energyWeek` |
+| Energy consumption week | `kWh` | `energy`, disabled by default | `total_increasing` | `set:ste.app.consumption:energyWeek` |
 | Heating energy | `kWh` | `energy`, disabled by default | `total_increasing` | ODB ID `29` |
 | Possible energy saving | `kWh` | `energy`, diagnostic, disabled by default | `total` | ODB ID `63` |
 | Actual water saving | `m3` | `water`, diagnostic, disabled by default | `total` | ODB ID `64 / 10` |
-| Energy consumption year | `kWh` | `energy`, disabled by default | `total` | `set:ste.app.consumption:energyYear` |
-| Total energy consumption | `kWh` | `energy` | `total` | `set:ste.app.consumption:energyYears` |
+| Energy consumption year | `kWh` | `energy`, disabled by default | `total_increasing` | `set:ste.app.consumption:energyYear` |
+| Total energy consumption | `kWh` | `energy` | `total_increasing` | `set:ste.app.consumption:energyYears` |
 | Last usage water | `L` | disabled by default | `measurement` | `set:ste.app.consumption:lastUsage.water` |
 | Last usage energy | `kWh` | disabled by default | `measurement` | `set:ste.app.consumption:lastUsage.energy` |
 | Last usage duration | `M:SS` | disabled by default | none | `set:ste.app.consumption:lastUsage.time`, rendered like timer remaining values |
