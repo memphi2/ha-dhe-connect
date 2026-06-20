@@ -1,0 +1,406 @@
+"""Media player platform for DHE Connect."""
+
+from __future__ import annotations
+
+from importlib import import_module
+from typing import TYPE_CHECKING
+from typing import Any
+
+from homeassistant.components.media_player import (
+    MediaPlayerEntity,
+)
+if TYPE_CHECKING:
+    from homeassistant.components.media_player.const import MediaPlayerState
+
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
+
+from .action_error_helpers import (
+    dhe_action_error,
+    raise_if_dhe_unavailable,
+    translated_homeassistant_error,
+)
+from .client import DHEClient
+from .client_types import DHEError
+from .entity_helpers import StiebelDHEEntityMixin
+from .entity_state_helpers import connected_and_ready, filtered_state_attributes
+from . import radio_mapping as radio
+from .runtime_helpers import get_runtime_data
+
+PARALLEL_UPDATES = 0
+
+
+def _media_player_attr(class_name: str, attr_name: str, fallback: Any) -> Any:
+    """Return a media-player const value across HA module layouts."""
+    for module_name in (
+        "homeassistant.components.media_player",
+        "homeassistant.components.media_player.const",
+    ):
+        try:
+            cls = getattr(import_module(module_name), class_name)
+        except (AttributeError, ImportError):
+            continue
+        return getattr(cls, attr_name, fallback)
+    return fallback
+
+
+def _media_player_feature(name: str) -> Any:
+    """Return one media-player feature flag when the HA version exposes it."""
+    return _media_player_attr("MediaPlayerEntityFeature", name, 0)
+
+
+STATE_OFF: Any = _media_player_attr("MediaPlayerState", "OFF", "off")
+STATE_PAUSED: Any = _media_player_attr("MediaPlayerState", "PAUSED", "paused")
+STATE_PLAYING: Any = _media_player_attr("MediaPlayerState", "PLAYING", "playing")
+
+
+def _state_key(state: Any) -> str:
+    """Return the recorder string for a media-player state constant."""
+    return str(getattr(state, "value", state))
+
+
+RESTORABLE_PLAYBACK_STATES = {
+    _state_key(STATE_OFF): STATE_OFF,
+    _state_key(STATE_PAUSED): STATE_PAUSED,
+    _state_key(STATE_PLAYING): STATE_PLAYING,
+}
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up DHE media players from a config entry."""
+    runtime = get_runtime_data(hass, entry)
+    async_add_entities([
+        StiebelDHERadioMediaPlayer(
+            entry_id=entry.entry_id,
+            name=runtime.name,
+            client=runtime.client,
+        )
+    ])
+
+
+class StiebelDHERadioMediaPlayer(
+    StiebelDHEEntityMixin,
+    MediaPlayerEntity,
+    RestoreEntity,
+):
+    """Radio media player backed by the DHE app radio protocol."""
+
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:radio"
+    _attr_should_poll = False
+    _attr_supported_features = (
+        _media_player_feature("PLAY")
+        | _media_player_feature("PAUSE")
+        | _media_player_feature("TURN_ON")
+        | _media_player_feature("TURN_OFF")
+        | _media_player_feature("VOLUME_SET")
+        | _media_player_feature("SELECT_SOURCE")
+        | _media_player_feature("NEXT_TRACK")
+        | _media_player_feature("PREVIOUS_TRACK")
+    )
+    _attr_translation_key = "radio"
+    _unrecorded_attributes = frozenset({"favorites"})
+
+    def __init__(self, entry_id: str, name: str, client: DHEClient) -> None:
+        """Initialize the radio media player."""
+        self._init_dhe_entity(
+            entry_id=entry_id,
+            key="radio",
+            name=name,
+            client=client,
+        )
+        self._attr_available = False
+        self._attr_extra_state_attributes = {"radio_path": "ste.app.radio"}
+        self._attr_media_artist: str | None = None
+        self._attr_media_content_id: str | None = None
+        self._attr_media_content_type: str | None = None
+        self._attr_media_image_url: str | None = None
+        self._attr_media_title: str | None = None
+        self._attr_source: str | None = None
+        self._attr_source_list: list[str] = []
+        self._attr_state: MediaPlayerState | None = None
+        self._attr_volume_level: float | None = None
+        self._have_radio_state = False
+        self._radio_off_requested = False
+        self._sources_by_option: dict[str, dict[str, Any]] = {}
+        self._last_written_radio_signature: tuple[Any, ...] | None = None
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to DHE radio updates."""
+        self.async_on_remove(self._client.add_radio_callback(self._handle_radio_update))
+        self.async_on_remove(
+            self._client.add_availability_callback(self._handle_availability_update)
+        )
+        await self._restore_playback_state()
+        self._apply_radio_state(self._client.last_radio_state)
+
+    async def _restore_playback_state(self) -> None:
+        """Restore the previous HA playback state until the DHE publishes play."""
+        last_state = await self.async_get_last_state()
+        if last_state is None:
+            return
+        restored_state = RESTORABLE_PLAYBACK_STATES.get(_state_key(last_state.state))
+        if restored_state is None:
+            return
+        self._attr_state = restored_state
+        self._radio_off_requested = restored_state == STATE_OFF
+
+    async def async_media_play(self) -> None:
+        """Start radio playback."""
+        await self._set_playing(True)
+
+    async def async_media_pause(self) -> None:
+        """Pause radio playback."""
+        await self._set_playing(False)
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Start radio playback."""
+        await self.async_media_play()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn off radio playback."""
+        await self._set_playing(False, state=STATE_OFF, off_requested=True)
+
+    async def async_set_volume_level(self, volume: float) -> None:
+        """Set radio volume."""
+        try:
+            raise_if_dhe_unavailable(
+                self._client,
+                "DHE is unavailable; cannot set radio volume",
+            )
+            self._attr_volume_level = await self._client.set_radio_volume(volume)
+        except DHEError as err:
+            raise dhe_action_error("Could not set DHE radio volume", err) from err
+        self._attr_available = True
+        self._write_radio_state(force=True)
+
+    async def async_select_source(self, source: str) -> None:
+        """Select a DHE radio favorite."""
+        raise_if_dhe_unavailable(
+            self._client,
+            "DHE is unavailable; cannot select radio source",
+        )
+        station = self._sources_by_option.get(source)
+        if station is None:
+            raise translated_homeassistant_error(
+                f"Unknown DHE radio source: {source}",
+                translation_key="dhe_unknown_radio_source",
+                translation_placeholders={"source": str(source)},
+            )
+        try:
+            await self._client.select_radio_station(station)
+        except DHEError as err:
+            raise dhe_action_error("Could not select DHE radio source", err) from err
+        self._attr_source = source
+        self._radio_off_requested = False
+        self._attr_state = STATE_PLAYING
+        self._attr_available = True
+        self._write_radio_state(force=True)
+
+    async def async_media_next_track(self) -> None:
+        """Select the next DHE radio favorite."""
+        await self._select_relative_source(1)
+
+    async def async_media_previous_track(self) -> None:
+        """Select the previous DHE radio favorite."""
+        await self._select_relative_source(-1)
+
+    async def _set_playing(
+        self,
+        playing: bool,
+        *,
+        state: MediaPlayerState | None = None,
+        off_requested: bool = False,
+    ) -> None:
+        try:
+            raise_if_dhe_unavailable(
+                self._client,
+                "DHE is unavailable; cannot set radio playback",
+            )
+            accepted_playing = await self._client.set_radio_play(playing)
+        except DHEError as err:
+            raise dhe_action_error("Could not set DHE radio playback", err) from err
+        self._radio_off_requested = off_requested
+        self._attr_state = state or (STATE_PLAYING if accepted_playing else STATE_PAUSED)
+        self._attr_available = True
+        self._write_radio_state(force=True)
+
+    async def _select_relative_source(self, offset: int) -> None:
+        raise_if_dhe_unavailable(
+            self._client,
+            "DHE is unavailable; cannot select radio source",
+        )
+        sources = list(self._sources_by_option)
+        if not sources:
+            raise translated_homeassistant_error(
+                "No DHE radio favorites available",
+                translation_key="dhe_no_radio_favorites",
+            )
+        current_index = self._current_source_index(sources)
+        if current_index < 0:
+            next_source = sources[-1] if offset < 0 else sources[0]
+        else:
+            next_source = sources[(current_index + offset) % len(sources)]
+        await self.async_select_source(next_source)
+
+    def _current_source_index(self, sources: list[str]) -> int:
+        current_source = self._attr_source
+        if current_source in sources:
+            return sources.index(current_source)
+
+        station_id = self._current_station_id()
+        if station_id is not None:
+            for index, source in enumerate(sources):
+                if radio.station_id(self._sources_by_option[source]) == station_id:
+                    return index
+        return -1
+
+    def _current_station_id(self) -> int | None:
+        content_id = self._attr_media_content_id
+        if content_id is None:
+            return None
+        try:
+            return int(content_id)
+        except (TypeError, ValueError):
+            return None
+
+    @callback
+    def _handle_radio_update(self, state: dict[str, Any]) -> None:
+        """Handle radio state updates from the persistent client."""
+        self._apply_radio_state(state)
+        self._write_radio_state()
+
+    @callback
+    def _handle_availability_update(self, available: bool) -> None:
+        """Handle DHE connection availability updates."""
+        self._attr_available = connected_and_ready(available, self._have_radio_state)
+        self._write_radio_state()
+
+    def _write_radio_state(self, *, force: bool = False) -> bool:
+        """Write radio state only when recorder-visible state changed."""
+        signature = self._radio_write_signature()
+        if not force and signature == getattr(
+            self,
+            "_last_written_radio_signature",
+            None,
+        ):
+            return False
+        self._last_written_radio_signature = signature
+        self.async_write_ha_state()
+        return True
+
+    def _radio_write_signature(self) -> tuple[Any, ...]:
+        """Return stable media-player fields that should trigger a state write."""
+        return (
+            getattr(self, "_attr_available", False),
+            getattr(self, "_attr_state", None),
+            getattr(self, "_attr_volume_level", None),
+            getattr(self, "_attr_source", None),
+            tuple(getattr(self, "_attr_source_list", []) or ()),
+            getattr(self, "_attr_media_content_id", None),
+            getattr(self, "_attr_media_content_type", None),
+            getattr(self, "_attr_media_image_url", None),
+            getattr(self, "_attr_media_title", None),
+            getattr(self, "_attr_media_artist", None),
+            getattr(self, "_radio_off_requested", False),
+            self._recorded_radio_attributes(),
+        )
+
+    def _recorded_radio_attributes(self) -> dict[str, Any]:
+        """Return radio attributes that should participate in recorder writes."""
+        return filtered_state_attributes(
+            getattr(self, "_attr_extra_state_attributes", None),
+            self._unrecorded_attributes,
+        )
+
+    def _apply_radio_state(self, state: dict[str, Any]) -> None:
+        if state:
+            self._have_radio_state = True
+
+        self._apply_playback_state(state)
+        self._apply_volume_state(state)
+
+        station = state.get("station")
+        if isinstance(station, dict):
+            self._apply_station_media(state, station)
+        else:
+            self._clear_station_media()
+
+        self._apply_source_state(state, station)
+
+        self._attr_extra_state_attributes = radio.radio_attributes(state)
+        self._attr_available = connected_and_ready(
+            self._client.available,
+            self._have_radio_state,
+        )
+
+    def _apply_playback_state(self, state: dict[str, Any]) -> None:
+        """Apply HA playback state from the DHE radio state."""
+        play = state.get("play")
+        if play is True:
+            self._radio_off_requested = False
+            self._attr_state = STATE_PLAYING
+        elif play is False:
+            current_state = getattr(self, "_attr_state", None)
+            self._attr_state = (
+                STATE_OFF
+                if (
+                    getattr(self, "_radio_off_requested", False)
+                    or current_state in {None, STATE_OFF}
+                )
+                else STATE_PAUSED
+            )
+        elif state and getattr(self, "_attr_state", None) is None:
+            self._attr_state = STATE_OFF
+
+    def _apply_volume_state(self, state: dict[str, Any]) -> None:
+        """Apply HA volume level from the DHE radio state."""
+        volume = state.get("volume")
+        if isinstance(volume, (int, float)):
+            self._attr_volume_level = max(0.0, min(float(volume) / 100.0, 1.0))
+
+    def _apply_source_state(
+        self,
+        state: dict[str, Any],
+        station: Any,
+    ) -> None:
+        """Apply source list and active source from the DHE radio state."""
+        self._sources_by_option = radio.source_option_map_for_state(
+            state,
+            self._sources_by_option,
+        )
+        self._attr_source_list = list(self._sources_by_option)
+        self._attr_source = radio.source_for_state(
+            station,
+            self._sources_by_option,
+            self._attr_source,
+        )
+
+    def _apply_station_media(
+        self,
+        state: dict[str, Any],
+        station: dict[str, Any],
+    ) -> None:
+        """Apply station media fields used by the HA media-player controls."""
+        current_station_id = radio.station_id(station)
+        self._attr_media_content_id = (
+            str(current_station_id) if current_station_id is not None else None
+        )
+        self._attr_media_content_type = "music"
+        self._attr_media_image_url = radio.station_logo_url(station)
+        self._attr_media_title = radio.media_title(state, station)
+        self._attr_media_artist = radio.station_name(station)
+
+    def _clear_station_media(self) -> None:
+        """Clear station metadata when the DHE does not publish a station."""
+        self._attr_media_content_id = None
+        self._attr_media_content_type = None
+        self._attr_media_image_url = None
+        self._attr_media_title = None
+        self._attr_media_artist = None
