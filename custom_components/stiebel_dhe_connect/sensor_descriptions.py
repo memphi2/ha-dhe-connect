@@ -11,7 +11,6 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import (
     EntityCategory,
-    PERCENTAGE,
     UnitOfEnergy,
     UnitOfMass,
     UnitOfPower,
@@ -407,7 +406,7 @@ SENSOR_DESCRIPTIONS: tuple[StiebelDHESensorEntityDescription, ...] = (
     StiebelDHESensorEntityDescription(
         key="saving_monitor_activation_rate",
         translation_key="saving_monitor_activation_rate",
-        native_unit_of_measurement=PERCENTAGE,
+        native_unit_of_measurement="%",
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
         icon="mdi:leaf-circle",

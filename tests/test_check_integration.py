@@ -34,7 +34,16 @@ ruff>=0.15,<0.16
 def _write_validate_workflow(root: Path, content: str) -> None:
     path = root / ".github" / "workflows" / "validate.yml"
     path.parent.mkdir(parents=True)
-    path.write_text(content, encoding="utf-8")
+    path.write_text(
+        (
+            "on:\n"
+            "  schedule:\n"
+            "    - cron: \"0 4 1 * *\"\n"
+            "  workflow_dispatch:\n\n"
+            + content
+        ),
+        encoding="utf-8",
+    )
     (root / "requirements.txt").write_text(VALIDATION_REQUIREMENTS_TEXT, encoding="utf-8")
 
 
@@ -142,6 +151,8 @@ class TestCheckIntegration(unittest.TestCase):
                   - run: python scripts/check_privacy_markers.py
                   - run: python scripts/check_translation_keys.py
                   - run: python scripts/check_release_consistency.py
+                  - if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+                    run: python -m pip install --upgrade homeassistant
                 """,
             )
 

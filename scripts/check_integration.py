@@ -373,6 +373,16 @@ def check_github_actions() -> None:
         _fail("validation workflow must run scripts/check_translation_keys.py")
     if "python scripts/check_release_consistency.py" not in text:
         _fail("validation workflow must run scripts/check_release_consistency.py")
+    if "cron: \"0 4 1 * *\"" not in text:
+        _fail("validation workflow must keep monthly scheduled validation enabled")
+    if "uses: hacs/action@" not in text:
+        _fail("validation workflow must keep scheduled HACS validation enabled")
+    if "uses: home-assistant/actions/hassfest@" not in text:
+        _fail("validation workflow must keep scheduled Hassfest validation enabled")
+    if "github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'" not in text:
+        _fail("latest Home Assistant drift check must run on schedule and workflow_dispatch")
+    if "python -m pip install --upgrade homeassistant" not in text:
+        _fail("validation workflow must include a latest Home Assistant drift check")
     requirements_text = ""
     if "python -m pip install -r requirements.txt" in text:
         requirements_path = ROOT / "requirements.txt"

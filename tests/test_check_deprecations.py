@@ -74,6 +74,19 @@ class TestCheckDeprecations(unittest.TestCase):
         self.assertEqual(len(issues), 1)
         self.assertIn("async_update_and_abort", issues[0])
 
+    def test_rejects_percentage_unit_constant_for_native_unit(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "bad.py"
+            path.write_text(
+                "native_unit_of_measurement=PERCENTAGE\n",
+                encoding="utf-8",
+            )
+
+            issues = check_deprecations.find_deprecation_issues([path])
+
+        self.assertEqual(len(issues), 1)
+        self.assertIn("literal '%'", issues[0])
+
 
 if __name__ == "__main__":
     unittest.main()
