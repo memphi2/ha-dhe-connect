@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
+import datetime as dt
 import importlib
 from ipaddress import ip_address, ip_network
 from pathlib import Path
@@ -16,19 +18,24 @@ import pytest
 import pytest_homeassistant_custom_component
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
-    async_test_home_assistant,
+    StoreWithoutWriteLoad,
+    async_test_home_assistant as _ha_async_test_home_assistant,
 )
 
-from homeassistant import config_entries, loader
+from homeassistant import bootstrap, config_entries, loader
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import (
+    area_registry as ar,
+    category_registry as cr,
     device_registry as dr,
     entity_registry as er,
     issue_registry as ir,
+    label_registry as lr,
+    restore_state as rs,
 )
 
 
@@ -53,6 +60,133 @@ except ModuleNotFoundError:
         PAIRING_TOKEN,
         STORED_TOKEN,
     )
+
+
+async def _async_get_test_time_zone(_time_zone: str) -> dt.tzinfo:
+    """Avoid aiozoneinfo lookups hanging the HA fixture in sandboxed tests."""
+    return dt.UTC
+
+
+async def _async_load_no_translations(
+    _hass: HomeAssistant,
+    _integrations: set[str],
+) -> dict[str, Any]:
+    """Avoid HA translation loading paths that can block the sandboxed fixture."""
+    return {}
+
+
+async def _async_load_test_network_adapters() -> list[dict[str, Any]]:
+    """Return deterministic network adapters without opening system sockets."""
+    return [
+        {
+            "name": "lo",
+            "index": None,
+            "enabled": True,
+            "auto": True,
+            "default": True,
+            "ipv4": [{"address": "127.0.0.1", "network_prefix": 8}],
+            "ipv6": [],
+        }
+    ]
+
+
+def _get_test_source_ip(*_args: Any, **_kwargs: Any) -> str:
+    """Return a deterministic source IP without creating sockets."""
+    return "127.0.0.1"
+
+
+async def _async_load_test_registries(hass: HomeAssistant) -> None:
+    """Load the HA registries needed by entity platforms without floor storage."""
+    with (
+        patch.object(StoreWithoutWriteLoad, "async_load", return_value=None),
+        patch(
+            "homeassistant.helpers.area_registry.AreaRegistryStore",
+            StoreWithoutWriteLoad,
+        ),
+        patch(
+            "homeassistant.helpers.device_registry.DeviceRegistryStore",
+            StoreWithoutWriteLoad,
+        ),
+        patch(
+            "homeassistant.helpers.entity_registry.EntityRegistryStore",
+            StoreWithoutWriteLoad,
+        ),
+        patch(
+            "homeassistant.helpers.storage.Store",
+            StoreWithoutWriteLoad,
+        ),
+        patch(
+            "homeassistant.helpers.issue_registry.IssueRegistryStore",
+            StoreWithoutWriteLoad,
+        ),
+        patch(
+            "homeassistant.helpers.restore_state.RestoreStateData.async_setup_dump",
+            return_value=None,
+        ),
+        patch("homeassistant.helpers.restore_state.start.async_at_start"),
+    ):
+        await ar.async_load(hass)
+        await cr.async_load(hass)
+        await dr.async_load(hass)
+        await er.async_load(hass)
+        await ir.async_load(hass)
+        await lr.async_load(hass)
+        await rs.async_load(hass)
+    hass.data[bootstrap.DATA_REGISTRIES_LOADED] = None
+
+
+@asynccontextmanager
+async def _async_test_home_assistant(
+    **kwargs: Any,
+) -> AsyncIterator[HomeAssistant]:
+    """Return a HA test instance with deterministic timezone setup."""
+    kwargs.setdefault("load_registries", False)
+    with (
+        patch("homeassistant.util.dt.async_get_time_zone", _async_get_test_time_zone),
+        patch(
+            "homeassistant.core_config.dt_util.async_get_time_zone",
+            _async_get_test_time_zone,
+        ),
+        patch(
+            "homeassistant.helpers.translation.async_load_integrations",
+            _async_load_no_translations,
+        ),
+        patch(
+            "homeassistant.components.network.util.async_load_adapters",
+            _async_load_test_network_adapters,
+        ),
+        patch(
+            "homeassistant.components.network.network.async_load_adapters",
+            _async_load_test_network_adapters,
+        ),
+        patch(
+            "homeassistant.components.network.util.async_get_source_ip",
+            _get_test_source_ip,
+        ),
+    ):
+        async with _ha_async_test_home_assistant(**kwargs) as hass:
+            original_executor = hass.async_add_executor_job
+            original_import_executor = hass.async_add_import_executor_job
+
+            def _async_add_test_executor_job(
+                target: Callable[..., Any],
+                *args: Any,
+            ) -> asyncio.Future[Any]:
+                future: asyncio.Future[Any] = hass.loop.create_future()
+                try:
+                    future.set_result(target(*args))
+                except BaseException as err:  # pragma: no cover - propagated by HA
+                    future.set_exception(err)
+                return future
+
+            hass.async_add_executor_job = _async_add_test_executor_job
+            hass.async_add_import_executor_job = _async_add_test_executor_job
+            try:
+                await _async_load_test_registries(hass)
+                yield hass
+            finally:
+                hass.async_add_executor_job = original_executor
+                hass.async_add_import_executor_job = original_import_executor
 
 
 @pytest.fixture(autouse=True)
@@ -356,7 +490,7 @@ async def test_entry_setup_and_unload_with_real_hass_fixture() -> None:
     """Set up and unload the integration through HA's ConfigEntries manager."""
     _clear_loaded_integration_modules()
     integration = importlib.import_module(f"custom_components.{DOMAIN}")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         await _assert_entry_setup_and_unload(hass, integration)
 
@@ -365,7 +499,7 @@ async def test_async_setup_registers_services_before_entry_load() -> None:
     """Register integration services at domain setup time."""
     _clear_loaded_integration_modules()
     integration = importlib.import_module(f"custom_components.{DOMAIN}")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         assert await integration.async_setup(hass, {})
         assert hass.services.has_service(DOMAIN, "search_weather_location")
 
@@ -382,7 +516,7 @@ async def test_entry_setup_raises_not_ready_when_target_unreachable() -> None:
     """Do not set up platforms until the configured DHE endpoint responds."""
     _clear_loaded_integration_modules()
     integration = importlib.import_module(f"custom_components.{DOMAIN}")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         entry = _build_mock_entry(
             host="offline-dhe.local",
@@ -405,7 +539,7 @@ async def test_entry_setup_falls_back_to_original_data_target() -> None:
     """Use original Zeroconf IP data if an option hostname cannot be reached."""
     _clear_loaded_integration_modules()
     integration = importlib.import_module(f"custom_components.{DOMAIN}")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         client = _FixtureDHEClient(host="192.0.2.124", port=DEFAULT_PORT)
         entry = _build_mock_entry(
@@ -453,7 +587,7 @@ async def test_entry_reload_restarts_client_with_real_hass_fixture() -> None:
     """Reload through HA and assert runtime cleanup/startup remains balanced."""
     _clear_loaded_integration_modules()
     integration = importlib.import_module(f"custom_components.{DOMAIN}")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         first_client = _FixtureDHEClient()
         second_client = _FixtureDHEClient(last_setpoint=41.0)
@@ -495,7 +629,7 @@ async def test_runtime_device_info_updates_ha_device_model_and_firmware() -> Non
     _clear_loaded_integration_modules()
     integration = importlib.import_module(f"custom_components.{DOMAIN}")
     protocol = importlib.import_module(f"custom_components.{DOMAIN}.protocol")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         client = _FixtureDHEClient(host="dhe-ja06.local", port=DEFAULT_PORT)
         entry = _build_mock_entry(
@@ -545,7 +679,7 @@ async def test_runtime_auth_failure_creates_single_repair_issue() -> None:
     repair_issues = importlib.import_module(
         f"custom_components.{DOMAIN}.repair_issues"
     )
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         client = _FixtureDHEClient()
         entry = _build_mock_entry(
@@ -601,7 +735,7 @@ async def test_runtime_auth_failure_does_not_create_duplicate_repair_issues() ->
     repair_issues = importlib.import_module(
         f"custom_components.{DOMAIN}.repair_issues"
     )
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         client = _FixtureDHEClient()
         entry = _build_mock_entry(
@@ -645,7 +779,7 @@ async def test_runtime_auth_failure_with_token_reason_creates_token_invalid_issu
     repair_issues = importlib.import_module(
         f"custom_components.{DOMAIN}.repair_issues"
     )
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         client = _FixtureDHEClient()
         entry = _build_mock_entry(
@@ -693,7 +827,7 @@ async def test_runtime_connectivity_repairs_respect_grace_and_classify_target() 
     repair_issues = importlib.import_module(
         f"custom_components.{DOMAIN}.repair_issues"
     )
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         client = _FixtureDHEClient()
         entry = _build_mock_entry(
@@ -788,7 +922,7 @@ async def test_runtime_discovery_conflict_repair_issue_lifecycle() -> None:
     repair_issues = importlib.import_module(
         f"custom_components.{DOMAIN}.repair_issues"
     )
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         client = _FixtureDHEClient()
         entry = _build_mock_entry(
@@ -838,7 +972,7 @@ async def test_runtime_stored_token_pairing_prompt_creates_single_repair_issue()
     token_file_helpers = importlib.import_module(
         f"custom_components.{DOMAIN}.token_file_helpers"
     )
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         await _ensure_network_loaded(hass)
         async with FakeDHEEngineIOServer(protocol.NS) as server:
@@ -905,7 +1039,7 @@ async def test_runtime_connected_deletes_stale_reauth_issues() -> None:
     repair_issues = importlib.import_module(
         f"custom_components.{DOMAIN}.repair_issues"
     )
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         client = _FixtureDHEClient()
         entry = _build_mock_entry(
@@ -1032,7 +1166,7 @@ async def test_multiple_entries_keep_services_and_unique_ids_separate() -> None:
     """Load two DHE entries and verify service lifetime plus entity IDs."""
     _clear_loaded_integration_modules()
     integration = importlib.import_module(f"custom_components.{DOMAIN}")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         client_one = _FixtureDHEClient(host="127.0.0.1", port=8443)
         client_two = _FixtureDHEClient(host="127.0.0.2", port=8444)
@@ -1096,7 +1230,7 @@ async def test_services_route_to_requested_entry_with_real_hass_fixture() -> Non
     """Call registered services through HA and verify entry_id routing."""
     _clear_loaded_integration_modules()
     integration = importlib.import_module(f"custom_components.{DOMAIN}")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         client_one = _FixtureDHEClient(host="127.0.0.1", port=8443)
         client_two = _FixtureDHEClient(host="127.0.0.2", port=8444)
@@ -1181,7 +1315,7 @@ async def test_weather_services_use_cached_candidates_with_real_hass_fixture() -
     """Verify weather services resolve cached results, favorites and raw IDs."""
     _clear_loaded_integration_modules()
     integration = importlib.import_module(f"custom_components.{DOMAIN}")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         client = _FixtureDHEClient()
         client.last_weather_state = {
@@ -1257,7 +1391,7 @@ async def test_weather_service_dhe_errors_raise_homeassistant_error() -> None:
     client_types = importlib.import_module(
         f"custom_components.{DOMAIN}.client_types"
     )
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         client = _FixtureDHEClient()
         client.last_weather_state = {
@@ -1306,7 +1440,7 @@ async def test_weather_service_unavailable_runtime_raises_homeassistant_error() 
     """Block DHE service calls while the runtime is unavailable."""
     _clear_loaded_integration_modules()
     integration = importlib.import_module(f"custom_components.{DOMAIN}")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         client = _FixtureDHEClient()
         client.available = False
@@ -1352,7 +1486,7 @@ async def test_config_flow_creates_entry_after_pairing_with_real_hass_fixture() 
     _clear_loaded_integration_modules()
     importlib.import_module(f"custom_components.{DOMAIN}")
     config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
 
         can_connect = AsyncMock(return_value=True)
@@ -1422,7 +1556,7 @@ async def test_repairs_flow_keeps_issue_when_dhe_is_unreachable() -> None:
     repair_issues = importlib.import_module(
         f"custom_components.{DOMAIN}.repair_issues"
     )
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         entry = _build_mock_entry(
             host="repair-offline-dhe.local",
@@ -1476,7 +1610,7 @@ async def test_repairs_flow_keeps_issue_when_pairing_validation_fails() -> None:
     repair_issues = importlib.import_module(
         f"custom_components.{DOMAIN}.repair_issues"
     )
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         entry = _build_mock_entry(
             host="repair-pairing-error-dhe.local",
@@ -1531,7 +1665,7 @@ async def test_repairs_flow_aborts_when_issue_entry_is_missing() -> None:
     repair_issues = importlib.import_module(
         f"custom_components.{DOMAIN}.repair_issues"
     )
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         missing_entry_id = "missing-repair-entry"
         issue_id = repair_issues.pairing_required_issue_id(missing_entry_id)
         repair_flow = await repairs.async_create_fix_flow(
@@ -1559,7 +1693,7 @@ async def test_repairs_flow_rejects_mismatched_issue_data() -> None:
     repair_issues = importlib.import_module(
         f"custom_components.{DOMAIN}.repair_issues"
     )
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         issue_id = repair_issues.pairing_required_issue_id("entry-a")
         with pytest.raises(ValueError, match="does not match"):
             await repairs.async_create_fix_flow(
@@ -1577,7 +1711,7 @@ async def test_repairs_flow_rejects_mismatched_issue_type_data() -> None:
     repair_issues = importlib.import_module(
         f"custom_components.{DOMAIN}.repair_issues"
     )
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         issue_id = repair_issues.pairing_required_issue_id("entry-a")
         with pytest.raises(ValueError, match="type does not match"):
             await repairs.async_create_fix_flow(
@@ -1595,7 +1729,7 @@ async def test_reauth_flow_repairs_pairing_with_real_hass_fixture() -> None:
     repair_issues = importlib.import_module(
         f"custom_components.{DOMAIN}.repair_issues"
     )
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         entry = _build_mock_entry(
             host="reauth-dhe.local",
@@ -1654,7 +1788,7 @@ async def test_repairs_flow_validates_fresh_pairing_with_real_hass_fixture() -> 
     repair_issues = importlib.import_module(
         f"custom_components.{DOMAIN}.repair_issues"
     )
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         entry = _build_mock_entry(
             host="repair-flow-dhe.local",
@@ -1709,7 +1843,7 @@ async def test_repairs_flow_aborts_when_entry_is_removed_before_confirm() -> Non
     repair_issues = importlib.import_module(
         f"custom_components.{DOMAIN}.repair_issues"
     )
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         entry = _build_mock_entry(
             host="repair-remove-dhe.local",
             port=DEFAULT_PORT,
@@ -1749,7 +1883,7 @@ async def test_repairs_flow_success_reloads_existing_entry_without_duplication()
     repair_issues = importlib.import_module(
         f"custom_components.{DOMAIN}.repair_issues"
     )
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         client = _FixtureDHEClient()
         entry = _build_mock_entry(
@@ -1827,7 +1961,7 @@ async def test_token_invalid_repairs_flow_reuses_pairing_validation_path() -> No
     repair_issues = importlib.import_module(
         f"custom_components.{DOMAIN}.repair_issues"
     )
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         entry = _build_mock_entry(
             host="token-flow-dhe.local",
@@ -1884,7 +2018,7 @@ async def test_config_flow_scan_choice_prefills_manual_form_with_real_hass_fixtu
     _clear_loaded_integration_modules()
     importlib.import_module(f"custom_components.{DOMAIN}")
     config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
 
         scan = AsyncMock(
@@ -1964,7 +2098,7 @@ async def test_config_flow_current_subnet_scan_progress_with_real_hass_fixture()
     _clear_loaded_integration_modules()
     importlib.import_module(f"custom_components.{DOMAIN}")
     config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
 
         scan = AsyncMock(return_value=[])
@@ -2015,7 +2149,7 @@ async def test_scan_prefilled_flow_uses_pairing_unique_id_with_real_hass_fixture
     _clear_loaded_integration_modules()
     importlib.import_module(f"custom_components.{DOMAIN}")
     config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
 
         scan = AsyncMock(
@@ -2092,7 +2226,7 @@ async def test_config_flow_aborts_duplicate_target_with_real_hass_fixture() -> N
     """Verify HA config flow prevents duplicate normalized DHE targets."""
     _clear_loaded_integration_modules()
     importlib.import_module(f"custom_components.{DOMAIN}")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         entry = _build_mock_entry(
             host="dhe-duplicate.local",
@@ -2122,7 +2256,7 @@ async def test_zeroconf_flow_collects_tmax_then_creates_entry_after_pairing() ->
     _clear_loaded_integration_modules()
     importlib.import_module(f"custom_components.{DOMAIN}")
     config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
 
         can_connect = AsyncMock(return_value=True)
@@ -2182,7 +2316,7 @@ async def test_zeroconf_flow_pairs_against_fake_dhe_engineio_server() -> None:
         f"custom_components.{DOMAIN}.client_pairing"
     )
     protocol = importlib.import_module(f"custom_components.{DOMAIN}.protocol")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         await _ensure_network_loaded(hass)
         async with FakeDHEEngineIOServer(protocol.NS) as server:
@@ -2315,7 +2449,7 @@ async def test_zeroconf_flow_accepts_realistic_discovery_payload_variants(
     _clear_loaded_integration_modules()
     importlib.import_module(f"custom_components.{DOMAIN}")
     config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
 
         can_connect = AsyncMock(return_value=True)
@@ -2365,7 +2499,7 @@ async def test_zeroconf_flow_aborts_invalid_port_payload(port: Any) -> None:
     _clear_loaded_integration_modules()
     importlib.import_module(f"custom_components.{DOMAIN}")
     config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
 
         can_connect = AsyncMock(return_value=True)
@@ -2386,7 +2520,7 @@ async def test_zeroconf_conflict_creates_and_clears_discovery_repair_issue() -> 
     _clear_loaded_integration_modules()
     importlib.import_module(f"custom_components.{DOMAIN}")
     config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         issue_registry = ir.async_get(hass)
         conflict_host = "192.0.2.140"
@@ -2432,7 +2566,7 @@ async def test_user_flow_can_select_in_progress_zeroconf_discovery() -> None:
     _clear_loaded_integration_modules()
     importlib.import_module(f"custom_components.{DOMAIN}")
     config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
 
         can_connect = AsyncMock(return_value=True)
@@ -2510,7 +2644,7 @@ async def test_user_zeroconf_takeover_keeps_source_flow_on_connect_failure() -> 
     _clear_loaded_integration_modules()
     importlib.import_module(f"custom_components.{DOMAIN}")
     config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
 
         can_connect = AsyncMock(side_effect=[True, False])
@@ -2545,7 +2679,7 @@ async def test_zeroconf_flow_aborts_duplicate_host_port() -> None:
     """Verify Zeroconf discovery does not start for an existing DHE target."""
     _clear_loaded_integration_modules()
     importlib.import_module(f"custom_components.{DOMAIN}")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         entry = _build_mock_entry(
             host="192.0.2.124",
@@ -2570,7 +2704,7 @@ async def test_zeroconf_flow_does_not_suppress_prompt_without_existing_entry() -
     _clear_loaded_integration_modules()
     importlib.import_module(f"custom_components.{DOMAIN}")
     config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
 
         can_connect = AsyncMock(return_value=True)
@@ -2600,7 +2734,7 @@ async def test_zeroconf_updates_existing_entry_for_identity_matched_host_change(
     _clear_loaded_integration_modules()
     importlib.import_module(f"custom_components.{DOMAIN}")
     config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         entry = _build_mock_entry(
             host="dhe-ja06.local",
@@ -2651,7 +2785,7 @@ async def test_zeroconf_update_uses_update_listener_for_loaded_entry() -> None:
     _clear_loaded_integration_modules()
     importlib.import_module(f"custom_components.{DOMAIN}")
     config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         entry = _build_mock_entry(
             host="dhe-ja06.local",
@@ -2703,7 +2837,7 @@ async def test_zeroconf_identity_match_keeps_existing_target_when_update_unreach
     _clear_loaded_integration_modules()
     importlib.import_module(f"custom_components.{DOMAIN}")
     config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         entry = _build_mock_entry(
             host="dhe-ja06.local",
@@ -2754,7 +2888,7 @@ async def test_zeroconf_identity_match_aborts_on_target_conflict_without_update(
     _clear_loaded_integration_modules()
     importlib.import_module(f"custom_components.{DOMAIN}")
     config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         matched_entry = _build_mock_entry(
             host="dhe-ja06.local",
@@ -2799,7 +2933,7 @@ async def test_zeroconf_pairing_aborts_duplicate_mac_after_host_ip_mismatch() ->
     _clear_loaded_integration_modules()
     importlib.import_module(f"custom_components.{DOMAIN}")
     config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         entry = _build_mock_entry(
             host="dhe-ja06.local",
@@ -2855,7 +2989,7 @@ async def test_zeroconf_flow_aborts_matching_flow_already_in_progress() -> None:
     _clear_loaded_integration_modules()
     importlib.import_module(f"custom_components.{DOMAIN}")
     config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
 
         with patch.object(config_flow, "_can_connect", AsyncMock(return_value=True)):
@@ -2881,7 +3015,7 @@ async def test_options_connection_flow_preserves_token_for_changed_target() -> N
     _clear_loaded_integration_modules()
     importlib.import_module(f"custom_components.{DOMAIN}")
     config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         entry = _build_mock_entry(
             host="old-dhe.local",
@@ -2946,7 +3080,7 @@ async def test_reconfigure_flow_updates_connection_without_new_entry_with_real_h
     _clear_loaded_integration_modules()
     importlib.import_module(f"custom_components.{DOMAIN}")
     config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         entry = _build_mock_entry(
             host="reconfigure-old.local",
@@ -3015,7 +3149,7 @@ async def test_reconfigure_flow_reloads_existing_loaded_entry() -> None:
     _clear_loaded_integration_modules()
     integration = importlib.import_module(f"custom_components.{DOMAIN}")
     config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         client = _FixtureDHEClient()
         entry = _build_mock_entry(
@@ -3073,7 +3207,7 @@ async def test_reconfigure_name_only_during_reconnect_grace_keeps_entry_identity
     _clear_loaded_integration_modules()
     integration = importlib.import_module(f"custom_components.{DOMAIN}")
     config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         client = _FixtureDHEClient()
         entry = _build_mock_entry(
@@ -3147,7 +3281,7 @@ async def test_reconfigure_flow_updates_name_only_without_connectivity_check() -
     _clear_loaded_integration_modules()
     importlib.import_module(f"custom_components.{DOMAIN}")
     config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         entry = _build_mock_entry(
             host="reconfigure-name-only.local",
@@ -3189,7 +3323,7 @@ async def test_reconfigure_flow_updates_tmax_only_without_connectivity_check() -
     _clear_loaded_integration_modules()
     importlib.import_module(f"custom_components.{DOMAIN}")
     config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         entry = _build_mock_entry(
             host="reconfigure-tmax-only.local",
@@ -3231,7 +3365,7 @@ async def test_reconfigure_flow_skips_pairing_for_unchanged_target_with_real_has
     _clear_loaded_integration_modules()
     importlib.import_module(f"custom_components.{DOMAIN}")
     config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         entry = _build_mock_entry(
             host="reconfigure-same.local",
@@ -3279,7 +3413,7 @@ async def test_reconfigure_flow_keeps_entered_values_when_new_target_is_unreacha
     _clear_loaded_integration_modules()
     importlib.import_module(f"custom_components.{DOMAIN}")
     config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         entry = _build_mock_entry(
             host="reconfigure-current.local",
@@ -3335,7 +3469,7 @@ async def test_reconfigure_flow_changes_target_without_existing_token() -> None:
     _clear_loaded_integration_modules()
     importlib.import_module(f"custom_components.{DOMAIN}")
     config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         entry = _build_mock_entry(
             host="reconfigure-retry-old.local",
@@ -3387,7 +3521,7 @@ async def test_reconfigure_flow_rejects_target_used_by_another_entry() -> None:
     _clear_loaded_integration_modules()
     importlib.import_module(f"custom_components.{DOMAIN}")
     config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         existing = _build_mock_entry(
             host="already-used-dhe.local",
@@ -3443,7 +3577,7 @@ async def test_repair_pairing_button_calls_client_when_enabled_with_real_hass_fi
     """Enable the disabled-by-default repair button and press it through HA."""
     _clear_loaded_integration_modules()
     integration = importlib.import_module(f"custom_components.{DOMAIN}")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         client = _FixtureDHEClient()
         client.available = False
@@ -3504,7 +3638,7 @@ async def test_bridge_temperature_maximum_button_calls_client_when_enabled_with_
     _clear_loaded_integration_modules()
     integration = importlib.import_module(f"custom_components.{DOMAIN}")
     protocol = importlib.import_module(f"custom_components.{DOMAIN}.protocol")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         client = _FixtureDHEClient()
         entry = _build_mock_entry(
@@ -3585,7 +3719,7 @@ async def test_entity_registry_ids_survive_reload_with_real_hass_fixture() -> No
     """Reload an entry and verify HA keeps the same entity registry IDs."""
     _clear_loaded_integration_modules()
     integration = importlib.import_module(f"custom_components.{DOMAIN}")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         first_client = _FixtureDHEClient()
         second_client = _FixtureDHEClient(last_setpoint=41.0)
@@ -3640,7 +3774,7 @@ async def test_runtime_callbacks_update_sensor_states_with_real_hass_fixture() -
     _clear_loaded_integration_modules()
     integration = importlib.import_module(f"custom_components.{DOMAIN}")
     protocol = importlib.import_module(f"custom_components.{DOMAIN}.protocol")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         client = _FixtureDHEClient()
         entry = _build_mock_entry(
@@ -3700,7 +3834,7 @@ async def test_unavailable_runtime_blocks_controls_except_repair_button() -> Non
     _clear_loaded_integration_modules()
     integration = importlib.import_module(f"custom_components.{DOMAIN}")
     protocol = importlib.import_module(f"custom_components.{DOMAIN}.protocol")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         client = _FixtureDHEClient()
         weather_location = {
@@ -3828,7 +3962,7 @@ async def test_availability_updates_climate_state_with_real_hass_fixture() -> No
     """Verify runtime availability callbacks update HA entity state."""
     _clear_loaded_integration_modules()
     integration = importlib.import_module(f"custom_components.{DOMAIN}")
-    async with async_test_home_assistant() as hass:
+    async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         client = _FixtureDHEClient()
         entry = _build_mock_entry(

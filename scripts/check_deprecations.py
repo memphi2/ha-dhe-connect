@@ -86,6 +86,10 @@ PATTERNS = (
         re.compile(r"\basync_update_reload_and_abort\s*[(]"),
         "Use async_update_entry/update listeners or async_update_and_abort instead of async_update_reload_and_abort().",
     ),
+    DeprecatedPattern(
+        re.compile(r"\bnative_unit_of_measurement\s*=\s*PERCENTAGE\b"),
+        "Use the literal '%' unit instead of deprecated PERCENTAGE for native unit of measurement.",
+    ),
 )
 
 
