@@ -4050,6 +4050,7 @@ async def _assert_entry_setup_and_unload(
     assert start_task.done()
     assert getattr(entry, "runtime_data", None) is None
     assert not hass.services.has_service(DOMAIN, "search_weather_location")
+    assert all(not callbacks for callbacks in client.callbacks.values())
 
 
 def _build_mock_entry(

@@ -131,6 +131,49 @@ def _write_repository_files_fixture(
     )
 
 
+def _write_lts_policy_fixture(root: Path) -> None:
+    version = check_integration.MIN_HOMEASSISTANT_VERSION
+    aiohttp = check_integration.AIOHTTP_CONSTRAINT
+    python_version = check_integration.VALIDATION_PYTHON_VERSION
+    (root / "README.md").write_text(
+        (
+            "# README\n\n"
+            f"- Minimum supported Home Assistant version: `{version}`\n"
+        ),
+        encoding="utf-8",
+    )
+    docs = root / "docs"
+    docs.mkdir(parents=True, exist_ok=True)
+    (docs / "validation.md").write_text(
+        (
+            "# Validation\n\n"
+            "## LTS Compatibility Matrix\n\n"
+            "| Surface | Current release gate |\n"
+            "|---|---|\n"
+            f"| Minimum supported Home Assistant version | `{version}` |\n"
+            f"| Baseline Home Assistant fixture | `homeassistant=={version}` |\n"
+            f"| Python validation runtime | `{python_version}` |\n"
+            f"| Runtime dependency floor | `aiohttp{aiohttp}` |\n"
+            f"| HACS metadata | `hacs.json` declares `homeassistant: {version}` |\n"
+        ),
+        encoding="utf-8",
+    )
+    (root / "requirements.txt").write_text(
+        f"aiohttp{aiohttp}\nhomeassistant=={version}\n",
+        encoding="utf-8",
+    )
+    (root / "hacs.json").write_text(
+        json.dumps(
+            {
+                "name": "DHE Connect",
+                "homeassistant": version,
+                "render_readme": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 class TestCheckIntegration(unittest.TestCase):
     """Validate repository guard helpers."""
 
@@ -143,6 +186,8 @@ class TestCheckIntegration(unittest.TestCase):
                 steps:
                   - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
                   - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+                    with:
+                      python-version: "3.14"
                   - uses: hacs/action@dcb30e72781db3f207d5236b861172774ab0b485
                   - uses: home-assistant/actions/hassfest@f6f29a7ee3fa0eccadf3620a7b9ee00ab54ec03b
                   - run: python -m pip install -r requirements.txt
@@ -450,6 +495,88 @@ class TestCheckIntegration(unittest.TestCase):
                 self.assertRaises(SystemExit),
             ):
                 check_integration.check_repository_files("1.3.2")
+
+    def test_hacs_accepts_declared_minimum_homeassistant_version(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "hacs.json").write_text(
+                json.dumps(
+                    {
+                        "name": "DHE Connect",
+                        "homeassistant": check_integration.MIN_HOMEASSISTANT_VERSION,
+                        "render_readme": True,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with patch.object(check_integration, "ROOT", root):
+                check_integration.check_hacs()
+
+    def test_hacs_rejects_stale_minimum_homeassistant_version(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "hacs.json").write_text(
+                json.dumps(
+                    {
+                        "name": "DHE Connect",
+                        "homeassistant": "2026.5.0",
+                        "render_readme": True,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with (
+                patch.object(check_integration, "ROOT", root),
+                redirect_stderr(StringIO()),
+                self.assertRaises(SystemExit),
+            ):
+                check_integration.check_hacs()
+
+    def test_lts_policy_accepts_matching_support_baseline(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            _write_lts_policy_fixture(root)
+
+            with patch.object(check_integration, "ROOT", root):
+                check_integration.check_lts_compatibility_policy()
+
+    def test_lts_policy_rejects_stale_readme_baseline(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            _write_lts_policy_fixture(root)
+            (root / "README.md").write_text(
+                "- Minimum supported Home Assistant version: `2026.5.0`\n",
+                encoding="utf-8",
+            )
+
+            with (
+                patch.object(check_integration, "ROOT", root),
+                redirect_stderr(StringIO()),
+                self.assertRaises(SystemExit),
+            ):
+                check_integration.check_lts_compatibility_policy()
+
+    def test_lts_policy_rejects_stale_validation_matrix(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            _write_lts_policy_fixture(root)
+            validation = root / "docs" / "validation.md"
+            validation.write_text(
+                validation.read_text(encoding="utf-8").replace(
+                    "homeassistant==2026.6.0",
+                    "homeassistant==2026.5.0",
+                ),
+                encoding="utf-8",
+            )
+
+            with (
+                patch.object(check_integration, "ROOT", root),
+                redirect_stderr(StringIO()),
+                self.assertRaises(SystemExit),
+            ):
+                check_integration.check_lts_compatibility_policy()
 
 
 if __name__ == "__main__":
