@@ -5,6 +5,17 @@ This document defines the active validation gate for this repository.
 It is version-neutral by design and should not include stale snapshots from
 older branches.
 
+## LTS Compatibility Matrix
+
+| Surface | Current release gate |
+|---|---|
+| Minimum supported Home Assistant version | `2026.6.0` |
+| Baseline Home Assistant fixture | `homeassistant==2026.6.0` |
+| Home Assistant drift check | Monthly scheduled and manual latest-HA validation |
+| Python validation runtime | `3.14` |
+| Runtime dependency floor | `aiohttp>=3.13.5,<4` |
+| HACS metadata | `hacs.json` declares `homeassistant: 2026.6.0` |
+
 ## Release Validation Command Set
 
 Run this before opening/finalizing release-prep PRs:

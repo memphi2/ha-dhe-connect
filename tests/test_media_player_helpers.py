@@ -429,6 +429,25 @@ class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
         self.assertIn("favorites", player._unrecorded_attributes)
         self.assertEqual(first_signature, player._radio_write_signature())
 
+    def test_radio_source_fallback_is_bounded_without_favorites(self) -> None:
+        radio = _load_component_module("radio_mapping")
+        sources: dict[str, dict[str, object]] = {}
+
+        for station_id in range(radio.MAX_FALLBACK_SOURCE_OPTIONS + 10):
+            sources = radio.source_option_map_for_state(
+                {
+                    "station": {
+                        "Id": station_id,
+                        "Name": f"Station {station_id}",
+                    }
+                },
+                sources,
+            )
+
+        self.assertEqual(len(sources), radio.MAX_FALLBACK_SOURCE_OPTIONS)
+        self.assertIn("Station 25", sources)
+        self.assertNotIn("Station 0", sources)
+
 
 if __name__ == "__main__":
     unittest.main()

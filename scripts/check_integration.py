@@ -16,6 +16,9 @@ TRANSLATIONS = INTEGRATION / "translations"
 FIXTURE_ROOT = ROOT / "tests" / "fixtures"
 REPLAY_FIXTURE_NAME = "dhe_protocol_replay_sanitized.json"
 CLIENT_MODULE_MAX_BYTES = 50 * 1024
+MIN_HOMEASSISTANT_VERSION = "2026.6.0"
+VALIDATION_PYTHON_VERSION = "3.14"
+AIOHTTP_CONSTRAINT = ">=3.13.5,<4"
 SILVER_RULES = {
     # Bronze
     "action-setup",
@@ -68,8 +71,8 @@ NODE24_VALIDATION_ACTION_PINS = {
     "actions/setup-python": {"a309ff8b426b58ec0e2a45f0f869d46889d02405"},
 }
 VALIDATION_DEPENDENCY_MINIMUMS = {
-    "aiohttp": ">=3.13.5,<4",
-    "homeassistant": "==2026.6.0",
+    "aiohttp": AIOHTTP_CONSTRAINT,
+    "homeassistant": f"=={MIN_HOMEASSISTANT_VERSION}",
     "mypy": ">=1.20,<2",
     "pytest": "==9.0.3",
     "pytest-cov": "==7.1.0",
@@ -203,6 +206,11 @@ def check_hacs() -> None:
     hacs = _load_json(ROOT / "hacs.json")
     if hacs.get("name") != "DHE Connect":
         _fail("hacs.json name does not match the integration name")
+    if hacs.get("homeassistant") != MIN_HOMEASSISTANT_VERSION:
+        _fail(
+            "hacs.json homeassistant minimum must match the validated support baseline "
+            f"{MIN_HOMEASSISTANT_VERSION}"
+        )
     if hacs.get("render_readme") is not True:
         _fail("hacs.json render_readme must be true")
 
@@ -246,6 +254,40 @@ def check_repository_files(version: str) -> None:
         _fail("README is missing removal instructions")
     if (ROOT / "info.md").exists():
         _fail("legacy info.md release notes must not be restored; use CHANGELOG.md")
+
+
+def check_lts_compatibility_policy() -> None:
+    """Ensure documented LTS support boundaries match release-gate inputs."""
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    validation = (ROOT / "docs" / "validation.md").read_text(encoding="utf-8")
+    requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
+    hacs = _load_json(ROOT / "hacs.json")
+
+    expected_readme_line = (
+        f"Minimum supported Home Assistant version: `{MIN_HOMEASSISTANT_VERSION}`"
+    )
+    if expected_readme_line not in readme:
+        _fail("README minimum supported Home Assistant version is stale")
+    if f"homeassistant=={MIN_HOMEASSISTANT_VERSION}" not in requirements:
+        _fail("requirements.txt Home Assistant baseline is stale")
+    if f"aiohttp{AIOHTTP_CONSTRAINT}" not in requirements:
+        _fail("requirements.txt aiohttp runtime floor is stale")
+    if hacs.get("homeassistant") != MIN_HOMEASSISTANT_VERSION:
+        _fail("hacs.json Home Assistant minimum is stale")
+
+    expected_validation_rows = (
+        f"| Minimum supported Home Assistant version | `{MIN_HOMEASSISTANT_VERSION}` |",
+        f"| Baseline Home Assistant fixture | `homeassistant=={MIN_HOMEASSISTANT_VERSION}` |",
+        f"| Python validation runtime | `{VALIDATION_PYTHON_VERSION}` |",
+        f"| Runtime dependency floor | `aiohttp{AIOHTTP_CONSTRAINT}` |",
+        (
+            "| HACS metadata | `hacs.json` declares "
+            f"`homeassistant: {MIN_HOMEASSISTANT_VERSION}` |"
+        ),
+    )
+    for row in expected_validation_rows:
+        if row not in validation:
+            _fail(f"docs/validation.md LTS matrix is missing or stale: {row}")
 
 
 def check_gold_evidence_docs() -> None:
@@ -373,6 +415,11 @@ def check_github_actions() -> None:
         _fail("validation workflow must run scripts/check_translation_keys.py")
     if "python scripts/check_release_consistency.py" not in text:
         _fail("validation workflow must run scripts/check_release_consistency.py")
+    if f'python-version: "{VALIDATION_PYTHON_VERSION}"' not in text:
+        _fail(
+            "validation workflow Python version must match the documented "
+            f"LTS runtime {VALIDATION_PYTHON_VERSION}"
+        )
     if "cron: \"0 4 1 * *\"" not in text:
         _fail("validation workflow must keep monthly scheduled validation enabled")
     if "uses: hacs/action@" not in text:
@@ -512,6 +559,7 @@ def main() -> None:
     version = check_manifest()
     check_hacs()
     check_repository_files(version)
+    check_lts_compatibility_policy()
     check_gold_evidence_docs()
     check_quality_scale()
     check_replay_fixtures()

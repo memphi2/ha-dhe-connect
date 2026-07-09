@@ -6,6 +6,9 @@ from collections import Counter
 from typing import Any
 
 
+MAX_FALLBACK_SOURCE_OPTIONS = 16
+
+
 def radio_attributes(state: dict[str, Any]) -> dict[str, Any]:
     """Build Home Assistant media-player attributes from DHE radio state."""
     station = state.get("station")
@@ -107,6 +110,9 @@ def _merge_current_station(
         elif station_name(source_station) == current_station_name:
             continue
         merged.append(dict(source_station))
+
+    if len(merged) >= MAX_FALLBACK_SOURCE_OPTIONS:
+        merged = merged[-(MAX_FALLBACK_SOURCE_OPTIONS - 1) :]
 
     merged.append(dict(station))
     return merged
