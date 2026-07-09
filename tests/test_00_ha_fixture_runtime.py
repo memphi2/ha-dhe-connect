@@ -95,6 +95,27 @@ def _get_test_source_ip(*_args: Any, **_kwargs: Any) -> str:
     return "127.0.0.1"
 
 
+async def _async_load_registry_compat(
+    hass: HomeAssistant,
+    registry_module: Any,
+    registry_cls: type[Any],
+) -> None:
+    """Load registries across HA versions with explicit async_get setup."""
+    try:
+        await registry_module.async_load(hass)
+        return
+    except RuntimeError as err:
+        if (
+            registry_module.DATA_REGISTRY in hass.data
+            or "registry not set up" not in str(err)
+        ):
+            raise
+
+    registry = registry_cls(hass)
+    hass.data[registry_module.DATA_REGISTRY] = registry
+    await registry.async_load()
+
+
 async def _async_load_test_registries(hass: HomeAssistant) -> None:
     """Load the HA registries needed by entity platforms without floor storage."""
     with (
@@ -125,12 +146,12 @@ async def _async_load_test_registries(hass: HomeAssistant) -> None:
         ),
         patch("homeassistant.helpers.restore_state.start.async_at_start"),
     ):
-        await ar.async_load(hass)
-        await cr.async_load(hass)
-        await dr.async_load(hass)
-        await er.async_load(hass)
-        await ir.async_load(hass)
-        await lr.async_load(hass)
+        await _async_load_registry_compat(hass, ar, ar.AreaRegistry)
+        await _async_load_registry_compat(hass, cr, cr.CategoryRegistry)
+        await _async_load_registry_compat(hass, dr, dr.DeviceRegistry)
+        await _async_load_registry_compat(hass, er, er.EntityRegistry)
+        await _async_load_registry_compat(hass, ir, ir.IssueRegistry)
+        await _async_load_registry_compat(hass, lr, lr.LabelRegistry)
         await rs.async_load(hass)
     hass.data[bootstrap.DATA_REGISTRIES_LOADED] = None
 
