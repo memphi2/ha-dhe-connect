@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -73,6 +73,8 @@ class DHEConnectRuntimeData:
     client: DHEClient
     name: str
     start_task: asyncio.Task[Any] | None = None
+    reauth_clear_task: asyncio.Task[Any] | None = None
+    connected_cleanup_task: asyncio.Task[Any] | None = None
 
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
@@ -158,6 +160,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _async_register_reauth_trigger(hass, entry, client)
     runtime.start_task = _start_client_background(hass, entry, client)
     entry.async_on_unload(task_cancel_callback(runtime.start_task))
+    entry.async_on_unload(_runtime_task_cancel_callback(runtime, "reauth_clear_task"))
+    entry.async_on_unload(
+        _runtime_task_cancel_callback(runtime, "connected_cleanup_task")
+    )
     async_delete_repair_issues(hass, entry.entry_id)
     _async_clear_config_entry_reauth(hass, entry)
     _async_schedule_config_entry_reauth_clear(hass, entry)
@@ -359,6 +365,42 @@ def _start_client_background(
             create_task(hass, client.start(), "stiebel_dhe_connect_start"),
         )
     return create_background_task(hass, client.start(), "stiebel_dhe_connect_start")
+
+
+def _runtime_task_cancel_callback(
+    runtime: DHEConnectRuntimeData,
+    task_attr: str,
+) -> Callable[[], None]:
+    """Return a stable unload callback for a replaceable runtime task slot."""
+
+    def _cancel_runtime_task() -> None:
+        task = getattr(runtime, task_attr, None)
+        if task is not None and not task.done():
+            task.cancel()
+
+    return _cancel_runtime_task
+
+
+def _track_runtime_task(
+    runtime: DHEConnectRuntimeData,
+    task_attr: str,
+    task: asyncio.Task[Any],
+    label: str,
+) -> None:
+    """Keep only the latest scheduled runtime task referenced by the entry."""
+    setattr(runtime, task_attr, task)
+
+    def _clear_runtime_task(done_task: asyncio.Task[Any]) -> None:
+        if getattr(runtime, task_attr, None) is done_task:
+            setattr(runtime, task_attr, None)
+        try:
+            done_task.result()
+        except asyncio.CancelledError:
+            return
+        except Exception:  # noqa: BLE001
+            _LOGGER.debug("DHE %s task failed", label, exc_info=True)
+
+    task.add_done_callback(_clear_runtime_task)
 
 
 def _async_register_reauth_trigger(
@@ -587,12 +629,20 @@ def _async_schedule_config_entry_reauth_clear(
     entry: ConfigEntry,
 ) -> None:
     """Schedule a delayed cleanup for generic HA reauth leftovers."""
+    runtime = getattr(entry, "runtime_data", None)
+    if isinstance(runtime, DHEConnectRuntimeData):
+        task = runtime.reauth_clear_task
+        if task is not None and not task.done():
+            return
     task = create_background_task(
         hass,
         _async_clear_config_entry_reauth_delayed(hass, entry),
         name="stiebel_dhe_connect_clear_stale_reauth",
     )
-    entry.async_on_unload(task_cancel_callback(task))
+    if isinstance(runtime, DHEConnectRuntimeData):
+        _track_runtime_task(runtime, "reauth_clear_task", task, "stale reauth cleanup")
+    else:
+        entry.async_on_unload(task_cancel_callback(task))
 
 
 async def _async_clear_config_entry_reauth_delayed(
@@ -612,12 +662,25 @@ def _async_schedule_connected_issue_cleanup(
     client: DHEClient,
 ) -> None:
     """Schedule stale Repairs cleanup once the runtime is truly connected."""
+    runtime = getattr(entry, "runtime_data", None)
+    if isinstance(runtime, DHEConnectRuntimeData):
+        task = runtime.connected_cleanup_task
+        if task is not None and not task.done():
+            return
     task = create_background_task(
         hass,
         _async_clear_issues_when_connected(hass, entry, client),
         name="stiebel_dhe_connect_clear_connected_issues",
     )
-    entry.async_on_unload(task_cancel_callback(task))
+    if isinstance(runtime, DHEConnectRuntimeData):
+        _track_runtime_task(
+            runtime,
+            "connected_cleanup_task",
+            task,
+            "connected issue cleanup",
+        )
+    else:
+        entry.async_on_unload(task_cancel_callback(task))
 
 
 async def _async_clear_issues_when_connected(

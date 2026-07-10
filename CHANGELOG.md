@@ -14,6 +14,8 @@ Local maintenance version for the next release cycle after v2.0.5.
 - Coalesce connected-state and auth-failure diagnostic cleanup scheduling so
   high-frequency runtime diagnostics cannot create unbounded Home Assistant
   background tasks.
+- Track delayed cleanup tasks in replaceable runtime slots instead of retaining
+  one unload callback per scheduled task.
 
 ## v2.0.5 - 2026-07-09
 

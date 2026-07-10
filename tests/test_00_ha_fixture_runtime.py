@@ -1288,6 +1288,39 @@ async def test_auth_failure_diagnostics_schedule_one_reauth_clear_task_per_phase
         await hass.async_block_till_done()
 
 
+async def test_cleanup_schedulers_reuse_runtime_task_slots() -> None:
+    """Cleanup schedulers should not retain a new unload callback per task."""
+    _clear_loaded_integration_modules()
+    integration = importlib.import_module(f"custom_components.{DOMAIN}")
+    async with _async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        client = _FixtureDHEClient()
+        entry = _build_mock_entry(
+            host=client.host,
+            port=client.port,
+            name="Runtime Task Slot DHE",
+            unique_id="runtime-task-slot-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+        runtime = integration.DHEConnectRuntimeData(client=client, name=entry.title)
+        integration.set_runtime_data(entry, runtime)
+
+        integration._async_schedule_connected_issue_cleanup(hass, entry, client)
+        connected_cleanup_task = runtime.connected_cleanup_task
+        assert connected_cleanup_task is not None
+        integration._async_schedule_connected_issue_cleanup(hass, entry, client)
+        assert runtime.connected_cleanup_task is connected_cleanup_task
+
+        integration._async_schedule_config_entry_reauth_clear(hass, entry)
+        reauth_clear_task = runtime.reauth_clear_task
+        assert reauth_clear_task is not None
+        integration._async_schedule_config_entry_reauth_clear(hass, entry)
+        assert runtime.reauth_clear_task is reauth_clear_task
+
+        await integration.cancel_task_if_pending(connected_cleanup_task)
+        await integration.cancel_task_if_pending(reauth_clear_task)
+
+
 async def test_multiple_entries_keep_services_and_unique_ids_separate() -> None:
     """Load two DHE entries and verify service lifetime plus entity IDs."""
     _clear_loaded_integration_modules()
