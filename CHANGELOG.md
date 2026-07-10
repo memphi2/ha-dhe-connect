@@ -4,6 +4,10 @@
 
 - No changes yet.
 
+## v2.0.7 - 2026-07-10
+
+Local maintenance version for the next release cycle after v2.0.6.
+
 ## v2.0.6 - 2026-07-09
 
 Local maintenance version for the next release cycle after v2.0.5.
