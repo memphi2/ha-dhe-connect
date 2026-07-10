@@ -8,6 +8,13 @@
 
 Local maintenance version for the next release cycle after v2.0.5.
 
+- Avoid creating idle weather forecast-listener tasks when no Home Assistant
+  forecast listeners are registered, and coalesce concurrent forecast listener
+  notifications into one follow-up task.
+- Coalesce connected-state and auth-failure diagnostic cleanup scheduling so
+  high-frequency runtime diagnostics cannot create unbounded Home Assistant
+  background tasks.
+
 ## v2.0.5 - 2026-07-09
 
 Maintenance release for long-term Home Assistant compatibility and runtime

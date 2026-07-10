@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 import importlib.util
 from pathlib import Path
@@ -97,7 +98,7 @@ def _load_weather_module():
     return _load_component_module("weather")
 
 
-def _weather_state() -> dict:
+def _weather_state(*, tmax: float = 32.0) -> dict:
     location = {"Name": "Las Vegas", "Country": "USA", "LocationId": "ID=1"}
     return {
         "location": location,
@@ -106,7 +107,7 @@ def _weather_state() -> dict:
             {
                 "date": "2026-05-16",
                 "icon_id_day": 1,
-                "tmax": 32.0,
+                "tmax": tmax,
                 "tmin": 21.0,
             }
         ],
@@ -136,6 +137,7 @@ class TestWeatherEntityWrites(unittest.TestCase):
         listener_updates: list[tuple[str, ...]] = []
         entity.async_write_ha_state = lambda: writes.append(entity._attr_condition)
         entity.async_update_listeners = lambda value: listener_updates.append(value)
+        entity._forecast_listeners = {"daily": {lambda _forecast: None}}
 
         entity._handle_weather_update(_weather_state())
         entity._handle_weather_update(_weather_state())
@@ -145,6 +147,123 @@ class TestWeatherEntityWrites(unittest.TestCase):
         self.assertEqual(writes, ["sunny", "sunny"])
         self.assertEqual(listener_updates, [("daily",)])
         self.assertFalse(entity._attr_available)
+
+    def test_weather_entity_skips_listener_task_without_forecast_listeners(self) -> None:
+        weather_module = _load_weather_module()
+        state = _weather_state()
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            device_identifier = None
+            available = True
+            last_weather_state = state
+
+        class _FakeHass:
+            def __init__(self) -> None:
+                self.tasks: list[asyncio.Task[object]] = []
+
+            def async_create_task(
+                self,
+                coro: object,
+                *,
+                name: str | None = None,
+            ) -> asyncio.Task[object]:
+                task = asyncio.create_task(coro, name=name)
+                self.tasks.append(task)
+                return task
+
+        async def _run() -> None:
+            hass = _FakeHass()
+            entity = weather_module.StiebelDHEWeather(
+                entry_id="test-entry",
+                name="Test DHE",
+                client=_FakeClient(),
+            )
+            entity.hass = hass
+            entity.async_write_ha_state = lambda: None
+            entity._forecast_listeners = {
+                "daily": set(),
+                "hourly": set(),
+                "twice_daily": set(),
+            }
+            listener_updates: list[tuple[str, ...]] = []
+
+            async def _async_update_listeners(value: tuple[str, ...]) -> None:
+                listener_updates.append(value)
+
+            entity.async_update_listeners = _async_update_listeners
+
+            entity._handle_weather_update(_weather_state())
+
+            self.assertEqual(hass.tasks, [])
+            self.assertEqual(listener_updates, [])
+
+        asyncio.run(_run())
+
+    def test_weather_entity_coalesces_concurrent_listener_tasks(self) -> None:
+        weather_module = _load_weather_module()
+        state = _weather_state()
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            device_identifier = None
+            available = True
+            last_weather_state = state
+
+        class _FakeHass:
+            def __init__(self) -> None:
+                self.tasks: list[asyncio.Task[object]] = []
+
+            def async_create_task(
+                self,
+                coro: object,
+                *,
+                name: str | None = None,
+            ) -> asyncio.Task[object]:
+                task = asyncio.create_task(coro, name=name)
+                self.tasks.append(task)
+                return task
+
+        async def _run() -> None:
+            hass = _FakeHass()
+            release = asyncio.Event()
+            listener_updates: list[tuple[str, ...]] = []
+            entity = weather_module.StiebelDHEWeather(
+                entry_id="test-entry",
+                name="Test DHE",
+                client=_FakeClient(),
+            )
+            entity.hass = hass
+            entity.async_write_ha_state = lambda: None
+            entity._forecast_listeners = {"daily": {lambda _forecast: None}}
+
+            async def _async_update_listeners(value: tuple[str, ...]) -> None:
+                listener_updates.append(value)
+                await release.wait()
+
+            entity.async_update_listeners = _async_update_listeners
+
+            entity._handle_weather_update(_weather_state())
+            await asyncio.sleep(0)
+            entity._handle_weather_update(_weather_state(tmax=33.0))
+            entity._handle_weather_update(_weather_state(tmax=34.0))
+
+            self.assertEqual(len(hass.tasks), 1)
+            self.assertTrue(entity._forecast_listener_update_pending)
+
+            release.set()
+            await asyncio.gather(*hass.tasks)
+            await asyncio.sleep(0)
+            await asyncio.gather(*hass.tasks)
+
+            self.assertEqual(len(hass.tasks), 2)
+            self.assertEqual(listener_updates, [("daily",), ("daily",)])
+            self.assertIsNone(entity._forecast_listener_update_task)
+            self.assertFalse(entity._forecast_listener_update_pending)
+
+        asyncio.run(_run())
 
     def test_weather_write_signature_ignores_unrecorded_list_payloads(self) -> None:
         weather_module = _load_weather_module()

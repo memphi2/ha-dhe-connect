@@ -368,6 +368,8 @@ def _async_register_reauth_trigger(
 ) -> None:
     """Create at most one active DHE repair issue from runtime diagnostics."""
     active_issue_type: str | None = None
+    connected_cleanup_scheduled = False
+    reauth_clear_scheduled = False
     entry_name = str(
         merged_entry_data(entry).get(CONF_NAME, entry.title or DEFAULT_NAME)
     ).strip() or DEFAULT_NAME
@@ -396,24 +398,46 @@ def _async_register_reauth_trigger(
         active_issue_type = issue_type
 
     @callback
+    def _schedule_connected_cleanup_once() -> None:
+        nonlocal connected_cleanup_scheduled
+        if connected_cleanup_scheduled:
+            return
+        connected_cleanup_scheduled = True
+        _async_schedule_connected_issue_cleanup(hass, entry, client)
+
+    @callback
+    def _schedule_reauth_clear_once() -> None:
+        nonlocal reauth_clear_scheduled
+        if reauth_clear_scheduled:
+            return
+        reauth_clear_scheduled = True
+        _async_schedule_config_entry_reauth_clear(hass, entry)
+
+    @callback
     def _handle_diagnostic_update(state: dict[str, Any]) -> None:
-        nonlocal active_issue_type
-        if state.get("connection_state") == "connected":
+        nonlocal active_issue_type, connected_cleanup_scheduled, reauth_clear_scheduled
+        connection_state = state.get("connection_state")
+        auth_failure = (
+            state.get("auth_failure") is True or connection_state == "auth_failed"
+        )
+        if connection_state != "connected":
+            connected_cleanup_scheduled = False
+        if not auth_failure:
+            reauth_clear_scheduled = False
+
+        if connection_state == "connected":
             active_issue_type = None
             async_delete_repair_issues(hass, entry.entry_id)
             _async_clear_config_entry_reauth(hass, entry)
             _async_clear_stale_sensor_statistic_issues(hass, entry)
-            _async_schedule_connected_issue_cleanup(hass, entry, client)
+            _schedule_connected_cleanup_once()
             return
 
-        if (
-            state.get("auth_failure") is True
-            or state.get("connection_state") == "auth_failed"
-        ):
+        if auth_failure:
             issue_type = _auth_repair_issue_type(state)
             _create_issue(issue_type)
             _async_clear_config_entry_reauth(hass, entry)
-            _async_schedule_config_entry_reauth_clear(hass, entry)
+            _schedule_reauth_clear_once()
             return
 
         runtime_issue_type = _runtime_connectivity_issue_type(entry, client, state)
