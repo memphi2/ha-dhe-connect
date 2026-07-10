@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import inspect
+import logging
 from importlib import import_module
 from typing import TYPE_CHECKING, Any, cast
 
@@ -22,9 +24,12 @@ from . import weather_mapping as weather_model
 from .runtime_helpers import get_runtime_data
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable
+
     from homeassistant.components.weather import Forecast
 
 PARALLEL_UPDATES = 0
+_LOGGER = logging.getLogger(__name__)
 
 
 def _weather_feature_value(name: str, fallback: int = 0) -> Any:
@@ -91,6 +96,8 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
         self._forecast: list[Forecast] = []
         self._have_weather_state = False
         self._last_written_weather_signature: tuple[Any, ...] | None = None
+        self._forecast_listener_update_task: asyncio.Task[Any] | None = None
+        self._forecast_listener_update_pending = False
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE weather updates."""
@@ -100,6 +107,7 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
         self.async_on_remove(
             self._client.add_availability_callback(self._handle_availability_update)
         )
+        self.async_on_remove(self._cancel_forecast_listener_update)
         self._apply_weather_state(self._client.last_weather_state)
 
     async def async_forecast_daily(self) -> list[Forecast] | None:
@@ -152,18 +160,71 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
 
     def _schedule_forecast_listener_update(self) -> None:
         update_listeners = getattr(self, "async_update_listeners", None)
-        if update_listeners is None:
+        if update_listeners is None or not self._has_forecast_listeners():
+            self._forecast_listener_update_pending = False
             return
+
+        task = self._forecast_listener_update_task
+        if task is not None and not task.done():
+            self._forecast_listener_update_pending = True
+            return
+
+        self._forecast_listener_update_pending = False
         try:
             result = update_listeners(("daily",))
         except TypeError:  # pragma: no cover - older HA compatibility
             result = update_listeners()
         if inspect.isawaitable(result):
-            create_background_task(
+            task = create_background_task(
                 self.hass,
-                result,
+                self._async_run_forecast_listener_update(result),
                 "stiebel_dhe_connect_weather_listener_update",
             )
+            self._forecast_listener_update_task = task
+            task.add_done_callback(self._handle_forecast_listener_update_done)
+
+    def _has_forecast_listeners(self) -> bool:
+        """Return whether HA has any forecast listeners to notify."""
+        listeners = getattr(self, "_forecast_listeners", None)
+        if listeners is None:
+            return True
+        values = getattr(listeners, "values", None)
+        if not callable(values):
+            return True
+        return any(bool(listener_set) for listener_set in values())
+
+    async def _async_run_forecast_listener_update(
+        self,
+        update: "Awaitable[Any]",
+    ) -> None:
+        """Run one HA forecast-listener update task."""
+        await update
+
+    def _handle_forecast_listener_update_done(
+        self,
+        done_task: asyncio.Task[Any],
+    ) -> None:
+        """Clear forecast-listener task state and coalesce pending updates."""
+        if self._forecast_listener_update_task is done_task:
+            self._forecast_listener_update_task = None
+        try:
+            done_task.result()
+        except asyncio.CancelledError:
+            return
+        except Exception:  # noqa: BLE001
+            _LOGGER.debug("DHE weather forecast listener update failed", exc_info=True)
+
+        if self._forecast_listener_update_pending:
+            self._forecast_listener_update_pending = False
+            self._schedule_forecast_listener_update()
+
+    def _cancel_forecast_listener_update(self) -> None:
+        """Cancel a pending forecast-listener update when the entity is removed."""
+        self._forecast_listener_update_pending = False
+        task = self._forecast_listener_update_task
+        self._forecast_listener_update_task = None
+        if task is not None and not task.done():
+            task.cancel()
 
     def _apply_weather_state(self, state: dict[str, Any]) -> None:
         if not state:

@@ -1183,6 +1183,111 @@ async def test_runtime_connected_deletes_stale_reauth_issues() -> None:
         await hass.async_block_till_done()
 
 
+async def test_connected_diagnostics_schedule_one_cleanup_task_per_connected_phase() -> None:
+    """Repeated connected diagnostics must not create unbounded cleanup tasks."""
+    _clear_loaded_integration_modules()
+    integration = importlib.import_module(f"custom_components.{DOMAIN}")
+    async with _async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        client = _FixtureDHEClient()
+        entry = _build_mock_entry(
+            host=client.host,
+            port=client.port,
+            name="Connected Task Guard DHE",
+            unique_id="connected-task-guard-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+
+        with (
+            patch.object(integration, "DHEClient", return_value=client),
+            patch.object(integration, "_async_can_connect", AsyncMock(return_value=True)),
+            patch.object(integration, "_async_schedule_connected_issue_cleanup") as schedule_cleanup,
+        ):
+            assert await hass.config_entries.async_setup(entry.entry_id)
+            await hass.async_block_till_done()
+
+            schedule_cleanup.reset_mock()
+            client.emit_diagnostic(
+                {"connection_state": "connected", "message_count": 1}
+            )
+            client.emit_diagnostic(
+                {"connection_state": "connected", "message_count": 2}
+            )
+            client.emit_diagnostic(
+                {"connection_state": "connected", "message_count": 3}
+            )
+            await hass.async_block_till_done()
+
+            assert schedule_cleanup.call_count == 1
+
+            client.emit_diagnostic(
+                {
+                    "connection_state": "reconnecting",
+                    "last_reconnect_reason": "ServerDisconnectedError: socket closed",
+                }
+            )
+            client.emit_diagnostic(
+                {"connection_state": "connected", "message_count": 4}
+            )
+            await hass.async_block_till_done()
+
+            assert schedule_cleanup.call_count == 2
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
+
+async def test_auth_failure_diagnostics_schedule_one_reauth_clear_task_per_phase() -> None:
+    """Repeated auth-failure diagnostics must not create unbounded cleanup tasks."""
+    _clear_loaded_integration_modules()
+    integration = importlib.import_module(f"custom_components.{DOMAIN}")
+    async with _async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+        client = _FixtureDHEClient()
+        entry = _build_mock_entry(
+            host=client.host,
+            port=client.port,
+            name="Auth Task Guard DHE",
+            unique_id="auth-task-guard-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+
+        with (
+            patch.object(integration, "DHEClient", return_value=client),
+            patch.object(integration, "_async_can_connect", AsyncMock(return_value=True)),
+            patch.object(integration, "_async_schedule_config_entry_reauth_clear") as schedule_reauth_clear,
+        ):
+            assert await hass.config_entries.async_setup(entry.entry_id)
+            await hass.async_block_till_done()
+
+            schedule_reauth_clear.reset_mock()
+            client.emit_diagnostic({"connection_state": "auth_failed"})
+            client.emit_diagnostic(
+                {"connection_state": "auth_failed", "auth_failure": True}
+            )
+            client.emit_diagnostic(
+                {
+                    "connection_state": "auth_failed",
+                    "auth_failure": True,
+                    "message_count": 1,
+                }
+            )
+            await hass.async_block_till_done()
+
+            assert schedule_reauth_clear.call_count == 1
+
+            client.emit_diagnostic({"connection_state": "initializing"})
+            client.emit_diagnostic(
+                {"connection_state": "auth_failed", "auth_failure": True}
+            )
+            await hass.async_block_till_done()
+
+            assert schedule_reauth_clear.call_count == 2
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
+
 async def test_multiple_entries_keep_services_and_unique_ids_separate() -> None:
     """Load two DHE entries and verify service lifetime plus entity IDs."""
     _clear_loaded_integration_modules()
