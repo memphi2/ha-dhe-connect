@@ -4,6 +4,10 @@
 
 - No changes yet.
 
+## v2.0.8 - 2026-08-22
+
+Local maintenance version for the next release cycle after v2.0.7.
+
 ## v2.0.7 - 2026-08-22
 
 Maintenance release for DHE token persistence and migration hardening.
