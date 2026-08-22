@@ -2,13 +2,17 @@
 
 ## Unreleased
 
+- No changes yet.
+
+## v2.0.7 - 2026-08-22
+
+Maintenance release for DHE token persistence and migration hardening.
+
 - Store DHE pairing tokens in config-entry data, migrate well-formed legacy
   token files on setup/retarget, and delete the old per-target token files
   after migration.
-
-## v2.0.7 - 2026-07-10
-
-Local maintenance version for the next release cycle after v2.0.6.
+- Prefer a destination target's legacy token when retargeting if both old and
+  new target token files exist.
 
 ## v2.0.6 - 2026-07-09
 
