@@ -88,6 +88,7 @@ def _load_client():
     _load_component_module("client_runtime_media")
     _load_component_module("client_runtime")
     _load_component_module("client_web_version")
+    _load_component_module("token_storage")
     _load_component_module("client_transport_helpers")
     _load_component_module("client_transport_auth")
     _load_component_module("client_transport")
@@ -1106,6 +1107,7 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
 
     async def test_save_token_creates_restrictive_file(self) -> None:
         client_module = _load_client()
+        token_storage = _load_component_module("token_storage")
         DHEClient = client_module.DHEClient
 
         class _FakeHass:
@@ -1118,6 +1120,10 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             client.token_path = os.path.join(temp_dir, "token.txt")
+            client._token_store = token_storage.LegacyFileTokenStore(
+                client.hass,
+                client.token_path,
+            )
             await DHEClient._save_token(client, "super-secret-token")
 
             with open(client.token_path, encoding="utf-8") as file:

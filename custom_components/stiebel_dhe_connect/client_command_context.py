@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .client_connection_supervisor import DHEConnectionSupervisor
+    from .token_storage import DHETokenStore
 
 _T = TypeVar("_T")
 
@@ -361,6 +362,7 @@ class DHEClientTransportContext(Protocol):
     _socketio_message_id: int
     _stopped: asyncio.Event
     _token: str | None
+    _token_store: DHETokenStore
     _url_host: str
     _websocket_upgrade_failures: int
 

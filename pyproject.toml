@@ -79,6 +79,7 @@ files = [
     "custom_components/stiebel_dhe_connect/switch.py",
     "custom_components/stiebel_dhe_connect/text.py",
     "custom_components/stiebel_dhe_connect/token_file_helpers.py",
+    "custom_components/stiebel_dhe_connect/token_storage.py",
     "custom_components/stiebel_dhe_connect/wellness_programs.py",
     "custom_components/stiebel_dhe_connect/weather.py",
     "custom_components/stiebel_dhe_connect/weather_mapping.py",

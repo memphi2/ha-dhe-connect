@@ -110,17 +110,16 @@ The setup flow supports:
 Zeroconf usually requires mDNS visibility in the local subnet/VLAN or an
 explicit relay setup across subnets.
 
-Each DHE uses its own token file:
-
-```text
-/config/.storage/stiebel_dhe_connect_token_<host>_<port>.txt
-```
+The local DHE pairing token is stored in the Home Assistant config entry.
+Legacy per-target token files from older versions are migrated into the config
+entry and deleted automatically.
 
 ## Security Notes
 
 - Use only on trusted local networks.
 - Do not expose the DHE web interface to the internet.
-- Treat Home Assistant backups/config mounts as sensitive.
+- Treat Home Assistant backups/config mounts as sensitive; config entries
+  include local pairing tokens.
 - Do not publish tokens, private hosts or private IPs.
 
 See [SECURITY.md](SECURITY.md).

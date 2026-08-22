@@ -480,8 +480,8 @@ evidence:
     reconfiguration-flow:
       implementation: >
         Reconfigure updates the existing config entry, validates reachability
-        when host or port changes and preserves the existing local token for the
-        new target.
+        when host or port changes and preserves the existing config-entry
+        token.
       tests: >
         HA fixture reconfigure tests cover unchanged options, changed target
         token preservation and failed reachability paths.

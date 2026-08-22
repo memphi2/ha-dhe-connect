@@ -50,11 +50,9 @@ kein mDNS-Relay aktiv ist.
 
 Der Config Entry wird erst nach erfolgreichem Pairing angelegt.
 
-Token-Datei pro DHE-Ziel:
-
-```text
-/config/.storage/stiebel_dhe_connect_token_<host>_<port>.txt
-```
+Das DHE-Pairing-Token wird im Home-Assistant-Config-Entry gespeichert. Alte
+zielbezogene Token-Dateien aus frueheren Versionen werden automatisch in den
+Config Entry uebernommen und danach geloescht.
 
 Bei Token-/Pairing-Problemen zuerst den deaktivierten `Repair pairing` Button
 aktivieren und nutzen.

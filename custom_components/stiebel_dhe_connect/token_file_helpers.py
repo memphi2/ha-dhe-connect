@@ -1,4 +1,4 @@
-"""Helpers for deterministic and bounded token file paths."""
+"""Helpers for deterministic and bounded legacy token file paths."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ def _bounded_host_component(host: str) -> str:
 
 
 def token_file_for_target(host: str, port: int) -> str:
-    """Return per-target token path under Home Assistant .storage."""
+    """Return the legacy per-target token path under Home Assistant .storage."""
     safe_host = _bounded_host_component(host)
     return f".storage/stiebel_dhe_connect_token_{safe_host}_{port}.txt"
 

@@ -300,6 +300,7 @@ def _install_fake_integration_modules() -> None:
     fake_const.DEFAULT_NAME = "DHE"
     fake_const.DEFAULT_PORT = 80
     fake_const.DOMAIN = "stiebel_dhe_connect"
+    fake_const.CONF_TOKEN = "token"
     sys.modules["custom_components.stiebel_dhe_connect.const"] = fake_const
 
     fake_entity_state = types.ModuleType(
@@ -1275,7 +1276,7 @@ class TestSetupScanConfigFlow(
         self.flow._pending_setup_data = {
             self.config_flow.CONF_HOST: "192.0.2.124",
             self.config_flow.CONF_PORT: 8443,
-            "token_file": "token.txt",
+            "_token_store": object(),
         }
         self.flow._setup_scan.candidates = [
             types.SimpleNamespace(host="192.0.2.124", port=8443, evidence=("scan",))

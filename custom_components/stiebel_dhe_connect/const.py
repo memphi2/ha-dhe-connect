@@ -6,6 +6,8 @@ from homeassistant.const import Platform
 
 DOMAIN = "stiebel_dhe_connect"
 
+CONF_TOKEN = "token"
+
 DEFAULT_NAME = "DHE Connect"
 DEFAULT_PORT = 8443
 

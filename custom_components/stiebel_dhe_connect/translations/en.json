@@ -62,7 +62,7 @@
       },
       "reconfigure": {
         "title": "Reconfigure DHE Connect",
-        "description": "Update the DHE host, port, device name and physical Tmax jumper position. If host or port changes, Home Assistant checks that the new target is reachable and preserves the existing local token.",
+        "description": "Update the DHE host, port, device name and physical Tmax jumper position. If host or port changes, Home Assistant checks that the new target is reachable and preserves the stored config-entry token.",
         "data": {
           "host": "IP address or hostname",
           "port": "Port",
@@ -210,7 +210,7 @@
       },
       "connection": {
         "title": "Configure connection/device",
-        "description": "Change IP address, port, device name and physical Tmax jumper position. Host or port changes keep the existing local token and are checked for reachability before saving.",
+        "description": "Change IP address, port, device name and physical Tmax jumper position. Host or port changes keep the stored config-entry token and are checked for reachability before saving.",
         "data": {
           "host": "IP address or hostname",
           "port": "Port",

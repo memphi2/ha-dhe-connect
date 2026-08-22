@@ -19,6 +19,7 @@ from .token_file_helpers import (
     stale_unconfigured_token_paths,
     token_file_for_target,
 )
+from .token_storage import DHETokenStore
 
 SETUP_PAIRING_TIMEOUT_SECONDS = 180.0
 
@@ -103,6 +104,7 @@ async def validate_setup_pairing(
     port: int,
     token_file: str,
     *,
+    token_store: DHETokenStore | None = None,
     client_factory: Callable[..., DHEClient] = DHEClient,
     error_mapper: Callable[[Exception, str], str] = map_pairing_error,
     clear_setup_token_files: Callable[[HomeAssistant, str, int, str], Awaitable[None]]
@@ -116,6 +118,7 @@ async def validate_setup_pairing(
         port=port,
         token_file=token_file,
         name="Home Assistant",
+        token_store=token_store,
     )
     try:
         await probe_client.validate_setup_authentication(

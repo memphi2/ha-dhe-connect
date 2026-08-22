@@ -105,6 +105,7 @@ class TestConfigEntryDiagnostics(unittest.TestCase):
                 "host": private_host,
                 "port": 8443,
                 "name": private_name,
+                "token": private_token,
                 "token_file": ".storage/stiebel_dhe_connect_token_secret.txt",
                 "scan_network_address": private_subnet,
                 "scan_netmask": "255.255.255.0",

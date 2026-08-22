@@ -214,7 +214,7 @@ Wellness programs are triggered by writing the program ID and then sending ODB I
 |---|---|---|
 | Reset brush timer | `assign:ste.app.brushTimer:reset` | Resets brush timer remaining time to the configured duration and turns activation off; disabled by default |
 | Reset shower timer | `assign:ste.app.showerTimer:reset` | Resets shower timer remaining time to the configured duration and turns activation off; disabled by default |
-| Repair pairing | local token reset and reconnect | Deletes the stored DHE token, starts a fresh pairing attempt and asks the user to confirm pairing on the DHE; disabled by default |
+| Repair pairing | stored token reset and reconnect | Deletes the stored DHE token, starts a fresh pairing attempt and asks the user to confirm pairing on the DHE; disabled by default |
 | Disconnect radio pairing | `assign:ste.app.radio:paired` with `false` | Sends the observed DHE radio pairing disconnect action |
 | Bridge maximum temperature (5 min) | `assign:ste.common.temperature:maxOverride` with `true` | Triggers the native DHE temporary maximum bridge for 5 minutes; enabled by default |
 | Temperature memory 1-12 | ODB ID `66` command | Sends the temperature stored in the matching memory slot; slots 3 to 12 disabled by default |

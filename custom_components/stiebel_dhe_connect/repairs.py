@@ -20,7 +20,6 @@ from .repair_issues import (
     async_delete_repair_issues,
     repair_issue_id,
 )
-from .token_file_helpers import token_file_for_target
 
 _PAIRING_FIX_FLOW_ISSUES = frozenset(
     {
@@ -31,7 +30,7 @@ _PAIRING_FIX_FLOW_ISSUES = frozenset(
 
 
 class PairingRequiredRepairFlow(RepairsFlow):
-    """Repair a DHE entry by requesting and validating a fresh local token."""
+    """Repair a DHE entry by requesting and validating a fresh pairing token."""
 
     def __init__(self, entry: ConfigEntry) -> None:
         super().__init__()
@@ -69,7 +68,7 @@ class PairingRequiredRepairFlow(RepairsFlow):
                         self.hass,
                         host,
                         port,
-                        token_file_for_target(host, port),
+                        entry=current_entry,
                     )
                 )
                 if pairing_result.error_key is None:

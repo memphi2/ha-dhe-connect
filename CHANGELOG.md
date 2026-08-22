@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-- No changes yet.
+- Store DHE pairing tokens in config-entry data, migrate well-formed legacy
+  token files on setup/retarget, and delete the old per-target token files
+  after migration.
 
 ## v2.0.7 - 2026-07-10
 

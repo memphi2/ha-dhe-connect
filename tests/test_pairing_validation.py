@@ -25,6 +25,7 @@ def _load_pairing_validation():
     _load_component_module("config_entry_helpers")
     _load_component_module("config_flow_discovery")
     _load_component_module("token_file_helpers")
+    _load_component_module("token_storage")
     return _load_component_module("pairing_validation")
 
 
@@ -147,13 +148,16 @@ class TestPairingValidation(unittest.IsolatedAsyncioTestCase):
 
     async def test_validate_setup_pairing_returns_mac_unique_id(self) -> None:
         module = self.module
+        token_storage = _load_component_module("token_storage")
+        token_store = token_storage.InMemoryTokenStore()
+        captured_kwargs: dict[str, object] = {}
 
         class _SuccessfulClient:
             diagnostic_state: dict[str, object] = {}
             last_device_info = {"wlan_mac": "AA-BB-CC-DD-EE-FF"}
 
-            def __init__(self, **_kwargs) -> None:
-                pass
+            def __init__(self, **kwargs) -> None:
+                captured_kwargs.update(kwargs)
 
             async def validate_setup_authentication(self, *, timeout_seconds: float) -> None:
                 self.timeout_seconds = timeout_seconds
@@ -163,12 +167,14 @@ class TestPairingValidation(unittest.IsolatedAsyncioTestCase):
             "dhe.local",
             8443,
             ".storage/token.txt",
+            token_store=token_store,
             client_factory=_SuccessfulClient,
             clear_setup_token_files=lambda *_args: _noop_async(),
         )
 
         self.assertIsNone(result.error_key)
         self.assertEqual(result.unique_id, "aa:bb:cc:dd:ee:ff")
+        self.assertIs(captured_kwargs["token_store"], token_store)
 
     async def test_validate_setup_pairing_ignores_non_dict_device_info(self) -> None:
         module = self.module

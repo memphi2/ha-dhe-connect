@@ -87,6 +87,11 @@ from .protocol import (
     RADIO_CATALOG_FIELDS,
     RADIO_PATH,
 )
+from .token_storage import (
+    DHETokenStore,
+    InMemoryTokenStore,
+    LegacyFileTokenStore,
+)
 
 _LOGGER = logging.getLogger(__name__)
 DEVICE_INFO_REQUEST_TIMEOUT_SECONDS = 5.0
@@ -106,7 +111,14 @@ class DHEClient(
     """Persistent Engine.IO v3 WebSocket client for DHE Connect."""
 
     def __init__(
-        self, hass: HomeAssistant, host: str, port: int, token_file: str, name: str
+        self,
+        hass: HomeAssistant,
+        host: str,
+        port: int,
+        token_file: str | None,
+        name: str,
+        *,
+        token_store: DHETokenStore | None = None,
     ) -> None:
         self.hass = hass
         self.host = _normalize_host(host)
@@ -115,9 +127,18 @@ class DHEClient(
         self.name = name
         self.device_identifier: str | None = None
         self.base_url = f"http://{self._url_host}:{self.port}"
-        self.token_path = (
-            token_file if os.path.isabs(token_file) else hass.config.path(token_file)
-        )
+        if token_file is None:
+            self.token_path = ""
+        elif os.path.isabs(token_file):
+            self.token_path = token_file
+        else:
+            self.token_path = hass.config.path(token_file)
+        if token_store is not None:
+            self._token_store = token_store
+        elif token_file is None:
+            self._token_store = InMemoryTokenStore()
+        else:
+            self._token_store = LegacyFileTokenStore(hass, token_file)
         self._owns_session = False
         try:
             self._session = async_get_clientsession(hass)

@@ -645,6 +645,72 @@ async def test_entry_reload_restarts_client_with_real_hass_fixture() -> None:
         assert not hass.services.has_service(DOMAIN, "search_weather_location")
 
 
+async def test_token_only_config_entry_update_does_not_reload_entry() -> None:
+    """Persisting a refreshed token must not restart an otherwise loaded entry."""
+    _clear_loaded_integration_modules()
+    integration = importlib.import_module(f"custom_components.{DOMAIN}")
+    async with _async_test_home_assistant() as hass:
+        entry = _build_mock_entry(
+            host="token-reload.local",
+            port=DEFAULT_PORT,
+            name="Token Reload Fixture DHE",
+            unique_id="token-reload-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+        runtime = integration.DHEConnectRuntimeData(
+            client=_FixtureDHEClient(),
+            name=entry.title,
+            entry_reload_signature=integration._entry_reload_signature(entry),
+        )
+        integration.set_runtime_data(entry, runtime)
+
+        hass.config_entries.async_update_entry(
+            entry,
+            data={
+                **dict(entry.data),
+                "token": "updated-token-value-0001",
+            },
+        )
+        reload_entry = AsyncMock(return_value=True)
+        with patch.object(hass.config_entries, "async_reload", reload_entry):
+            await integration._async_update_listener(hass, entry)
+
+        reload_entry.assert_not_awaited()
+
+
+async def test_runtime_relevant_config_entry_update_reloads_entry() -> None:
+    """Changing runtime data still reloads a loaded entry."""
+    _clear_loaded_integration_modules()
+    integration = importlib.import_module(f"custom_components.{DOMAIN}")
+    async with _async_test_home_assistant() as hass:
+        entry = _build_mock_entry(
+            host="reload-old.local",
+            port=DEFAULT_PORT,
+            name="Reload Old Fixture DHE",
+            unique_id="reload-old-fixture-dhe",
+        )
+        entry.add_to_hass(hass)
+        runtime = integration.DHEConnectRuntimeData(
+            client=_FixtureDHEClient(),
+            name=entry.title,
+            entry_reload_signature=integration._entry_reload_signature(entry),
+        )
+        integration.set_runtime_data(entry, runtime)
+
+        hass.config_entries.async_update_entry(
+            entry,
+            data={
+                **dict(entry.data),
+                CONF_HOST: "reload-new.local",
+            },
+        )
+        reload_entry = AsyncMock(return_value=True)
+        with patch.object(hass.config_entries, "async_reload", reload_entry):
+            await integration._async_update_listener(hass, entry)
+
+        reload_entry.assert_awaited_once_with(entry.entry_id)
+
+
 async def test_runtime_device_info_updates_ha_device_model_and_firmware() -> None:
     """Expose DHE device type and firmware version in HA's device registry."""
     _clear_loaded_integration_modules()
@@ -1047,7 +1113,8 @@ async def test_runtime_stored_token_pairing_prompt_creates_single_repair_issue()
                     "entry_id": entry.entry_id,
                 },
             )
-            assert token_file.read_text(encoding="utf-8") == STORED_TOKEN
+            assert entry.data["token"] == STORED_TOKEN
+            assert not token_file.exists()
 
             assert await hass.config_entries.async_unload(entry.entry_id)
             await hass.async_block_till_done()
@@ -3169,7 +3236,7 @@ async def test_zeroconf_flow_aborts_matching_flow_already_in_progress() -> None:
         assert second["reason"] == "already_in_progress"
 
 
-async def test_options_connection_flow_preserves_token_for_changed_target() -> None:
+async def test_options_connection_flow_migrates_legacy_token_for_changed_target() -> None:
     """Retarget options without forcing a fresh DHE pairing."""
     _clear_loaded_integration_modules()
     importlib.import_module(f"custom_components.{DOMAIN}")
@@ -3190,7 +3257,7 @@ async def test_options_connection_flow_preserves_token_for_changed_target() -> N
             hass.config.path(config_flow.token_file_for_target("new-dhe.local", DEFAULT_PORT))
         )
         old_token_path.parent.mkdir(parents=True, exist_ok=True)
-        old_token_path.write_text("existing-token", encoding="utf-8")
+        old_token_path.write_text("existing-token-value-0001", encoding="utf-8")
 
         can_connect = AsyncMock(return_value=True)
         validate_pairing = AsyncMock(return_value=config_flow.SetupPairingResult())
@@ -3230,7 +3297,9 @@ async def test_options_connection_flow_preserves_token_for_changed_target() -> N
             CONF_NAME: "New Fixture DHE",
             config_flow.CONF_INTERNAL_SCALD_PROTECTION: "55",
         }
-        assert new_token_path.read_text(encoding="utf-8") == "existing-token"
+        assert entry.data["token"] == "existing-token-value-0001"
+        assert not old_token_path.exists()
+        assert not new_token_path.exists()
         validate_pairing.assert_not_awaited()
 
 
@@ -3259,7 +3328,10 @@ async def test_reconfigure_flow_updates_connection_without_new_entry_with_real_h
             )
         )
         old_token_path.parent.mkdir(parents=True, exist_ok=True)
-        old_token_path.write_text("existing-reconfigure-token", encoding="utf-8")
+        old_token_path.write_text(
+            "existing-reconfigure-token-0001",
+            encoding="utf-8",
+        )
 
         can_connect = AsyncMock(return_value=True)
         validate_pairing = AsyncMock(return_value=config_flow.SetupPairingResult())
@@ -3299,7 +3371,9 @@ async def test_reconfigure_flow_updates_connection_without_new_entry_with_real_h
         assert entry.options[CONF_PORT] == DEFAULT_PORT
         assert entry.options[CONF_NAME] == "Reconfigure New DHE"
         assert entry.options[config_flow.CONF_INTERNAL_SCALD_PROTECTION] == "55"
-        assert new_token_path.read_text(encoding="utf-8") == "existing-reconfigure-token"
+        assert entry.data["token"] == "existing-reconfigure-token-0001"
+        assert not old_token_path.exists()
+        assert not new_token_path.exists()
         validate_pairing.assert_not_awaited()
 
 
@@ -3624,7 +3698,7 @@ async def test_reconfigure_flow_keeps_entered_values_when_new_target_is_unreacha
 
 
 async def test_reconfigure_flow_changes_target_without_existing_token() -> None:
-    """Allow target changes even when there is no local token file to preserve."""
+    """Allow target changes even when there is no legacy token file to migrate."""
     _clear_loaded_integration_modules()
     importlib.import_module(f"custom_components.{DOMAIN}")
     config_flow = importlib.import_module(f"custom_components.{DOMAIN}.config_flow")

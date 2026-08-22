@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import contextlib
 import json
 import logging
-import os
 import re
-import stat
 import time
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
@@ -18,9 +15,12 @@ from .client_diagnostics import summarize_diagnostic_value as _summarize_diagnos
 from .client_types import DHEEvent, DHESession
 from .engineio_helpers import balanced_json_array as _balanced_json_array
 from .protocol import NS
+from .token_storage import token_is_well_formed
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
+
+    from .token_storage import DHETokenStore
 
 _LOGGER = logging.getLogger(__name__)
 _SOCKETIO_EVENT_FRAME_RE = re.compile(r"42(?:/1\.0\.0,)?\d*")
@@ -36,6 +36,7 @@ class DHEClientTransportHelpersMixin:
         token_path: str
         _socketio_message_id: int
         _token: str | None
+        _token_store: DHETokenStore
         _url_host: str
 
     def _poll_url(
@@ -156,14 +157,8 @@ class DHEClientTransportHelpersMixin:
         if self._token:
             return self._token
 
-        def _read() -> str:
-            if not os.path.exists(self.token_path):
-                return ""
-            with open(self.token_path, encoding="utf-8") as file:
-                return file.read().strip()
-
-        token = await self.hass.async_add_executor_job(_read)
-        if token and (len(token) < 20 or any(ch.isspace() for ch in token)):
+        token = await self._token_store.async_load_token()
+        if token and not token_is_well_formed(token):
             _LOGGER.warning("Ignoring malformed stored DHE token")
             token = ""
         self._token = token
@@ -171,29 +166,8 @@ class DHEClientTransportHelpersMixin:
 
     async def _save_token(self, token: str) -> None:
         self._token = token
-
-        def _write() -> None:
-            token_dir = os.path.dirname(self.token_path)
-            os.makedirs(token_dir, exist_ok=True)
-            tmp_path = f"{self.token_path}.tmp"
-            file_descriptor = os.open(
-                tmp_path,
-                os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
-                stat.S_IRUSR | stat.S_IWUSR,
-            )
-            with os.fdopen(file_descriptor, "w", encoding="utf-8") as file:
-                file.write(token)
-            with contextlib.suppress(OSError):
-                os.chmod(tmp_path, stat.S_IRUSR | stat.S_IWUSR)
-            os.replace(tmp_path, self.token_path)
-
-        await self.hass.async_add_executor_job(_write)
+        await self._token_store.async_save_token(token)
 
     async def _clear_token(self) -> None:
         self._token = ""
-
-        def _delete() -> None:
-            with contextlib.suppress(FileNotFoundError):
-                os.remove(self.token_path)
-
-        await self.hass.async_add_executor_job(_delete)
+        await self._token_store.async_clear_token()

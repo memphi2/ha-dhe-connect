@@ -83,6 +83,7 @@ from .discovery_state import (
 from .connection_helpers import normalize_host, target_changed, validate_port
 from .client import DHEClient
 from .const import (
+    CONF_TOKEN,
     DEFAULT_NAME,
     DEFAULT_PORT,
     DOMAIN,
@@ -122,6 +123,12 @@ from .setup_scan import (
     setup_scan_mode_options,
 )
 from .token_file_helpers import token_file_for_target
+from .token_storage import (
+    ConfigEntryTokenStore,
+    DHETokenStore,
+    InMemoryTokenStore,
+    token_is_well_formed,
+)
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -225,10 +232,10 @@ async def _async_preserve_token_for_retarget(
     entry: config_entries.ConfigEntry,
     connection_data: Mapping[str, Any],
 ) -> None:
-    """Copy existing token files when a configured DHE target changes."""
+    """Move legacy token files into the config entry before retargeting."""
     if await _async_preserve_token_for_retarget_impl(hass, entry, connection_data):
         _LOGGER.debug(
-            "Preserved existing DHE token while reconfiguring target for entry=%s",
+            "Migrated legacy DHE token while reconfiguring target for entry=%s",
             entry.entry_id,
         )
 
@@ -269,6 +276,8 @@ async def _validate_setup_pairing(
     host: str,
     port: int,
     token_file: str,
+    *,
+    token_store: DHETokenStore | None = None,
 ) -> SetupPairingResult:
     """Validate a DHE pairing attempt using patch-friendly local dependencies."""
     return await _validate_setup_pairing_fn(
@@ -276,6 +285,7 @@ async def _validate_setup_pairing(
         host,
         port,
         token_file,
+        token_store=token_store,
         client_factory=lambda **kwargs: DHEClient(**kwargs),
         error_mapper=map_pairing_error,
         clear_setup_token_files=_async_clear_setup_token_files,
@@ -295,10 +305,18 @@ async def validate_setup_pairing_for_repair(
     hass: HomeAssistant,
     host: str,
     port: int,
-    token_file: str,
+    token_file: str | None = None,
+    *,
+    entry: config_entries.ConfigEntry | None = None,
 ) -> SetupPairingResult:
     """Validate repair pairing through the shared setup-pairing path."""
-    return await _validate_setup_pairing(hass, host, port, token_file)
+    return await _validate_setup_pairing(
+        hass,
+        host,
+        port,
+        token_file or token_file_for_target(host, port),
+        token_store=ConfigEntryTokenStore(hass, entry) if entry is not None else None,
+    )
 
 
 async def _async_record_discovery_safely(
@@ -521,7 +539,7 @@ class StiebelDHEConnectConfigFlow(
         host: str,
         port: int,
         name: str,
-        token_file: str,
+        token_store: DHETokenStore | None = None,
         internal_scald_protection: str | None = None,
         discovery_record: DiscoveryRecord | None = None,
     ) -> None:
@@ -530,7 +548,7 @@ class StiebelDHEConnectConfigFlow(
             CONF_HOST: host,
             CONF_PORT: port,
             CONF_NAME: name,
-            "token_file": token_file,
+            "_token_store": token_store or InMemoryTokenStore(),
         }
         if internal_scald_protection is not None:
             self._pending_setup_data[CONF_INTERNAL_SCALD_PROTECTION] = (
@@ -580,7 +598,6 @@ class StiebelDHEConnectConfigFlow(
             host=host,
             port=port,
             name=name,
-            token_file=token_file_for_target(host, port),
             discovery_record=discovery_record,
         )
         return await self.async_step_zeroconf_confirm()
@@ -1021,7 +1038,6 @@ class StiebelDHEConnectConfigFlow(
                         host=host,
                         port=port,
                         name=str(data[CONF_NAME]),
-                        token_file=token_file_for_target(host, port),
                         internal_scald_protection=str(data[CONF_INTERNAL_SCALD_PROTECTION]),
                     )
                     return await self.async_step_pairing_confirm()
@@ -1044,9 +1060,9 @@ class StiebelDHEConnectConfigFlow(
         try:
             host = normalize_host(str(setup_data[CONF_HOST]))
             port = validate_port(setup_data[CONF_PORT])
-            token_file = str(setup_data["token_file"])
         except (KeyError, TypeError, ValueError):
             return SetupPairingResult(error_key="pairing_failed")
+        token_store = setup_data.get("_token_store")
         if require_connectivity_check and not await _can_connect(self.hass, host, port):
             return SetupPairingResult(error_key="cannot_connect")
         return _coerce_setup_pairing_result(
@@ -1054,7 +1070,10 @@ class StiebelDHEConnectConfigFlow(
                 self.hass,
                 host,
                 port,
-                token_file,
+                token_file_for_target(host, port),
+                token_store=token_store
+                if isinstance(token_store, DHETokenStore)
+                else None,
             )
         )
 
@@ -1078,13 +1097,17 @@ class StiebelDHEConnectConfigFlow(
                     self._abort_if_unique_id_configured()
                 self._pending_setup_data = None
                 discovery_record = setup_data.pop("_discovery_record", None)
+                token_store = setup_data.pop("_token_store", None)
+                if isinstance(token_store, DHETokenStore):
+                    token = await token_store.async_load_token()
+                    if token_is_well_formed(token):
+                        setup_data[CONF_TOKEN] = token
                 if discovery_record is not None:
                     await _async_record_discovery_safely(
                         self.hass,
                         discovery_record,
                         result="created",
                     )
-                setup_data.pop("token_file", None)
                 return self.async_create_entry(
                     title=setup_data[CONF_NAME],
                     data=setup_data,
@@ -1120,7 +1143,7 @@ class StiebelDHEConnectConfigFlow(
             host=host,
             port=port,
             name=name,
-            token_file=token_file_for_target(host, port),
+            token_store=ConfigEntryTokenStore(self.hass, entry),
             internal_scald_protection=internal_scald_protection,
         )
         return await self.async_step_reauth_confirm()

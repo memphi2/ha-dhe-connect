@@ -28,6 +28,7 @@ from .config_entry_helpers import merged_entry_data, entry_target
 from .connection_helpers import normalize_host, validate_port
 from .connection_probe import async_can_connect as _async_can_connect
 from .const import (
+    CONF_TOKEN,
     DEFAULT_NAME,
     DEFAULT_PORT,
     DOMAIN,
@@ -54,8 +55,13 @@ from .services import (
     async_unregister_services as _async_unregister_services,
 )
 from .token_file_helpers import token_file_for_target
+from .token_storage import ConfigEntryTokenStore, async_migrate_legacy_token_files
 
 _LOGGER = logging.getLogger(__name__)
+_EntryReloadSignature = tuple[
+    tuple[tuple[str, str], ...],
+    tuple[tuple[str, str], ...],
+]
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 STALE_SENSOR_STATISTIC_TRANSLATION_KEYS = frozenset(
@@ -72,6 +78,7 @@ class DHEConnectRuntimeData:
 
     client: DHEClient
     name: str
+    entry_reload_signature: _EntryReloadSignature = ((), ())
     start_task: asyncio.Task[Any] | None = None
     reauth_clear_task: asyncio.Task[Any] | None = None
     connected_cleanup_task: asyncio.Task[Any] | None = None
@@ -100,12 +107,6 @@ def _entry_display_name(entry: ConfigEntry, data: Mapping[str, Any]) -> str:
     return str(data.get(CONF_NAME, entry.title or DEFAULT_NAME)).strip() or DEFAULT_NAME
 
 
-def _token_file_for_entry(entry: ConfigEntry) -> str:
-    """Return token file path for a config entry target."""
-    host, port = _entry_target_or_raise(entry)
-    return token_file_for_target(host, port)
-
-
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up DHE Connect from a config entry."""
     data = merged_entry_data(entry)
@@ -123,9 +124,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         raise ConfigEntryNotReady("Could not connect to DHE before setup")
     host, port = reachable_target
+    await async_migrate_legacy_token_files(
+        hass,
+        entry,
+        _legacy_token_files_for_entry(entry, target, reachable_target),
+    )
+    data = merged_entry_data(entry)
     name = _entry_display_name(entry, data)
 
-    token_file = _token_file_for_entry(entry)
+    token_file = token_file_for_target(host, port)
 
     client = DHEClient(
         hass=hass,
@@ -133,12 +140,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         port=port,
         token_file=token_file,
         name="Home Assistant",
+        token_store=ConfigEntryTokenStore(hass, entry),
     )
     client.device_identifier = _device_identifier_for_entry(entry)
 
     runtime = DHEConnectRuntimeData(
         client=client,
         name=name,
+        entry_reload_signature=_entry_reload_signature(entry),
     )
     set_runtime_data(entry, runtime)
 
@@ -348,8 +357,48 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload entry when options change."""
+    """Reload entry when runtime-relevant entry data or options change."""
+    signature = _entry_reload_signature(entry)
+    runtime = getattr(entry, "runtime_data", None)
+    if isinstance(runtime, DHEConnectRuntimeData):
+        if runtime.entry_reload_signature == signature:
+            return
+        runtime.entry_reload_signature = signature
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+def _entry_reload_signature(entry: ConfigEntry) -> _EntryReloadSignature:
+    """Return the config-entry fields that require a runtime reload."""
+    data = {
+        key: value
+        for key, value in dict(getattr(entry, "data", {}) or {}).items()
+        if key != CONF_TOKEN
+    }
+    return (_mapping_signature(data), _mapping_signature(entry.options))
+
+
+def _mapping_signature(mapping: Mapping[str, Any]) -> tuple[tuple[str, str], ...]:
+    """Return a stable comparable signature for mapping values."""
+    return tuple(sorted((str(key), repr(value)) for key, value in mapping.items()))
+
+
+def _legacy_token_files_for_entry(
+    entry: ConfigEntry,
+    primary_target: tuple[str, int],
+    reachable_target: tuple[str, int],
+) -> tuple[str, ...]:
+    """Return legacy token files that may belong to a config entry."""
+    targets = [reachable_target]
+    targets.extend(_entry_setup_target_candidates(entry, primary_target))
+    token_files: list[str] = []
+    seen: set[str] = set()
+    for host, port in targets:
+        token_file = token_file_for_target(host, port)
+        if token_file in seen:
+            continue
+        seen.add(token_file)
+        token_files.append(token_file)
+    return tuple(token_files)
 
 
 def _start_client_background(

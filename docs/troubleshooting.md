@@ -80,22 +80,19 @@ reauthentication flow and creates a fixable Repairs issue. Follow either the
 reauthentication form or the Repairs form, then confirm the new pairing request
 on the DHE display. The integration reloads after successful pairing and login.
 
-Manual token deletion is only a fallback when Home Assistant cannot load the
-integration far enough to expose the repair button. Token files are stored under:
-
-```text
-/config/.storage/stiebel_dhe_connect_token_<host>_<port>.txt
-```
-
-With multiple DHE devices, delete only the token file for the affected host and
-port. Never paste token files, `.storage` contents or raw diagnostics into public
-issues.
+Manual token-file deletion should no longer be needed. The integration stores
+the DHE pairing token in the Home Assistant config entry; legacy per-target token
+files from older versions are migrated into the entry and deleted
+automatically. If Home Assistant cannot load the integration far enough to
+expose the repair button, prefer removing and re-adding only the affected
+config entry over editing `.storage` by hand. Never paste tokens, `.storage`
+contents or raw diagnostics into public issues.
 
 ## Pairing Required Again
 
-Pairing is required again when the DHE no longer accepts the stored local token
+Pairing is required again when the DHE no longer accepts the stored config-entry token
 or after device-side pairing state was reset. A Home Assistant host/port
-Reconfigure keeps the existing local token and only leads to repair pairing if
+Reconfigure keeps the existing config-entry token and only leads to repair pairing if
 the DHE rejects that token after reload.
 The integration does not create a config entry until pairing and login both
 succeed.
@@ -145,8 +142,10 @@ If the DHE address changes, use Home Assistant's Reconfigure action for the
 DHE Connect config entry. Reconfigure updates the existing config entry instead
 of creating a replacement, so entity IDs and unique IDs stay stable. When the
 configured host or port changes, Home Assistant checks that the new target is
-reachable and copies the existing local token to the new target path. A fresh
-pairing is only needed later if the DHE rejects that token.
+reachable and keeps the existing config-entry token. Any legacy
+per-target token file found during retargeting is migrated into the config
+entry and removed. A fresh pairing is only needed later if the DHE rejects that
+token.
 If the configured target cannot be reached during setup/retry, Home Assistant
 raises `Configured DHE host is unreachable`.
 

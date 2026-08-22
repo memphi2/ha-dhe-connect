@@ -62,7 +62,7 @@
       },
       "reconfigure": {
         "title": "DHE Connect neu konfigurieren",
-        "description": "DHE-Host, Port, Gerätenamen und physische Tmax-Jumperposition aktualisieren. Wenn sich Host oder Port ändern, prüft Home Assistant die Erreichbarkeit des neuen Ziels und behält das bestehende lokale Token bei.",
+        "description": "DHE-Host, Port, Gerätenamen und physische Tmax-Jumperposition aktualisieren. Wenn sich Host oder Port ändern, prüft Home Assistant die Erreichbarkeit des neuen Ziels und behält das im Config-Entry gespeicherte Token bei.",
         "data": {
           "host": "IP-Adresse oder Hostname",
           "port": "Port",
@@ -210,7 +210,7 @@
       },
       "connection": {
         "title": "Verbindung/Gerät konfigurieren",
-        "description": "IP-Adresse, Port, Gerätename und physische Tmax-Jumperposition ändern. Host- oder Port-Änderungen behalten das bestehende lokale Token bei und werden vor dem Speichern auf Erreichbarkeit geprüft.",
+        "description": "IP-Adresse, Port, Gerätename und physische Tmax-Jumperposition ändern. Host- oder Port-Änderungen behalten das im Config-Entry gespeicherte Token bei und werden vor dem Speichern auf Erreichbarkeit geprüft.",
         "data": {
           "host": "IP-Adresse oder Hostname",
           "port": "Port",
