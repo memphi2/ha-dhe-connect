@@ -81,7 +81,7 @@ VALIDATION_DEPENDENCY_MINIMUMS = {
 VALIDATION_NO_DEPS_DEPENDENCIES = {
     # pytest-homeassistant-custom-component 0.13.335 still declares a Home
     # Assistant transitive pin that differs from the HA 2026.6 fixture.
-    "pytest-homeassistant-custom-component": ">=0.13.335,<0.14",
+    "pytest-homeassistant-custom-component": "==0.13.335",
 }
 _ACTION_REF_RE = re.compile(r"^\s*(?:-\s*)?uses:\s*([^@\s]+)@([^\s#]+)", re.MULTILINE)
 _MAJOR_VERSION_REF_RE = re.compile(r"^v(?P<major>\d+)(?:\.|$)")

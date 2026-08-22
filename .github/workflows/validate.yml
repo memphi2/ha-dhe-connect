@@ -55,7 +55,7 @@ jobs:
       - name: Install Home Assistant test fixture helper
         # The helper metadata still declares a Home Assistant transitive pin
         # that differs from the HA 2026.6 fixture. Keep that pin isolated.
-        run: python -m pip install --no-deps "pytest-homeassistant-custom-component>=0.13.335,<0.14"
+        run: python -m pip install --no-deps "pytest-homeassistant-custom-component==0.13.335"
 
       - name: Run unit tests
         run: python -m pytest -q
@@ -102,7 +102,7 @@ jobs:
       - name: Install Home Assistant test fixture helper
         # The helper metadata still declares a Home Assistant transitive pin
         # that differs from the pinned baseline fixture. Keep that pin isolated.
-        run: python -m pip install --no-deps "pytest-homeassistant-custom-component>=0.13.335,<0.14"
+        run: python -m pip install --no-deps "pytest-homeassistant-custom-component==0.13.335"
 
       - name: Upgrade to latest Home Assistant
         run: python -m pip install --upgrade homeassistant
