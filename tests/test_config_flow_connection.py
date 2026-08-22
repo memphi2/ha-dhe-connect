@@ -118,6 +118,36 @@ async def test_async_preserve_token_for_retarget_migrates_existing_token(
     assert not new_token.exists()
 
 
+async def test_async_preserve_token_for_retarget_prefers_new_target_token(
+    tmp_path,
+) -> None:
+    hass = _FakeHass(tmp_path)
+    entry = _fake_entry()
+    old_token = Path(
+        hass.config.path(token_file_for_target("old-dhe.local", DEFAULT_PORT))
+    )
+    new_token = Path(
+        hass.config.path(token_file_for_target("new-dhe.local", DEFAULT_PORT))
+    )
+    old_token.parent.mkdir(parents=True, exist_ok=True)
+    old_token.write_text("old-target-token-value-0001", encoding="utf-8")
+    new_token.write_text("new-target-token-value-0001", encoding="utf-8")
+
+    migrated = await async_preserve_token_for_retarget(
+        hass,
+        entry,
+        {
+            CONF_HOST: "new-dhe.local",
+            CONF_PORT: DEFAULT_PORT,
+        },
+    )
+
+    assert migrated is True
+    assert entry.data["token"] == "new-target-token-value-0001"
+    assert not old_token.exists()
+    assert not new_token.exists()
+
+
 async def test_async_preserve_token_for_retarget_deletes_stale_files_when_token_exists(
     tmp_path,
 ) -> None:

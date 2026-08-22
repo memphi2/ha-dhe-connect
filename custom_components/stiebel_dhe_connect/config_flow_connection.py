@@ -53,8 +53,8 @@ async def async_preserve_token_for_retarget(
         hass,
         entry,
         (
-            token_file_for_target(old_host, old_port),
             token_file_for_target(new_host, new_port),
+            token_file_for_target(old_host, old_port),
         ),
     )
     if not migrated:
