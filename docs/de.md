@@ -12,18 +12,18 @@ Die Detaildokumentation bleibt in den englischen Seiten:
 
 ## Installation (HACS)
 
+[![DHE Connect direkt in HACS oeffnen](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=memphi2&repository=ha-dhe-connect&category=integration)
+
 1. HACS -> `Integrations`
-2. `Custom repositories`
-3. Repository URL:
+2. Nach `DHE Connect` suchen
+3. Repository oeffnen und `Download` auswaehlen
+4. Home Assistant neu starten
+5. Integration unter `Einstellungen -> Geraete & Dienste` hinzufuegen
 
-   ```text
-   https://github.com/memphi2/ha-dhe-connect
-   ```
-
-4. Kategorie `Integration`
-5. `DHE Connect` installieren
-6. Home Assistant neu starten
-7. Integration in `Einstellungen -> Geraete & Dienste` hinzufuegen
+`DHE Connect` ist im HACS-Standardkatalog enthalten. Das Hinzufuegen als
+benutzerdefiniertes Repository ist nicht mehr erforderlich. Bereits auf diesem
+Weg installierte Versionen erhalten weiterhin Updates und muessen nicht neu
+installiert werden.
 
 ## Manuelle Installation
 
