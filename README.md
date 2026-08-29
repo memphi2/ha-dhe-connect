@@ -3,7 +3,7 @@
 [![Validate](https://github.com/memphi2/ha-dhe-connect/actions/workflows/validate.yml/badge.svg)](https://github.com/memphi2/ha-dhe-connect/actions/workflows/validate.yml)
 [![Quality](https://img.shields.io/badge/Quality-HA%20QS%20Platinum%20Track-0366d6?style=flat-square)](custom_components/stiebel_dhe_connect/quality_scale.yaml)
 [![GitHub Release](https://img.shields.io/github/v/tag/memphi2/ha-dhe-connect?sort=semver&label=release)](https://github.com/memphi2/ha-dhe-connect/releases)
-[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://www.hacs.xyz/)
+[![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://www.hacs.xyz/)
 [![License MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Unofficial local Home Assistant integration for compatible DHE Connect
@@ -66,21 +66,20 @@ More automation examples and practical scenarios:
 
 ## Installation
 
-### HACS custom repository
+### HACS (recommended)
+
+[![Open your Home Assistant instance and open this repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=memphi2&repository=ha-dhe-connect&category=integration)
 
 1. Open HACS.
 2. Go to `Integrations`.
-3. Open `Custom repositories`.
-4. Add:
+3. Search for `DHE Connect`.
+4. Open the repository and select `Download`.
+5. Restart Home Assistant.
+6. Add `DHE Connect` from `Settings` -> `Devices & services`.
 
-   ```text
-   https://github.com/memphi2/ha-dhe-connect
-   ```
-
-5. Category: `Integration`.
-6. Install `DHE Connect`.
-7. Restart Home Assistant.
-8. Add from `Settings` -> `Devices & services`.
+`DHE Connect` is included in the default HACS catalog; adding a custom
+repository is no longer required. Existing custom-repository installations can
+continue to receive updates without being reinstalled.
 
 ### Manual installation
 
