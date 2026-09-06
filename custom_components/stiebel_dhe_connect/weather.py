@@ -99,7 +99,7 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
         self._last_written_weather_signature: tuple[Any, ...] | None = None
         self._forecast_listener_update_task: asyncio.Task[Any] | None = None
         self._forecast_listener_update_pending = False
-        self._active_forecast_subscriptions: set[ForecastType] = set()
+        self._forecast_subscription_counts: dict[ForecastType, int] = {}
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE weather updates."""
@@ -119,12 +119,18 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
     @callback
     def _async_subscription_started(self, forecast_type: ForecastType) -> None:
         """Track an active Home Assistant forecast subscription."""
-        self._active_forecast_subscriptions.add(forecast_type)
+        self._forecast_subscription_counts[forecast_type] = (
+            self._forecast_subscription_counts.get(forecast_type, 0) + 1
+        )
 
     @callback
     def _async_subscription_ended(self, forecast_type: ForecastType) -> None:
         """Stop tracking a Home Assistant forecast subscription."""
-        self._active_forecast_subscriptions.discard(forecast_type)
+        remaining = self._forecast_subscription_counts.get(forecast_type, 0) - 1
+        if remaining > 0:
+            self._forecast_subscription_counts[forecast_type] = remaining
+            return
+        self._forecast_subscription_counts.pop(forecast_type, None)
         if forecast_type == "daily":
             self._forecast_listener_update_pending = False
 
@@ -199,7 +205,7 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
 
     def _has_forecast_listeners(self) -> bool:
         """Return whether HA has any forecast listeners to notify."""
-        return "daily" in self._active_forecast_subscriptions
+        return self._forecast_subscription_counts.get("daily", 0) > 0
 
     async def _async_run_forecast_listener_update(
         self,

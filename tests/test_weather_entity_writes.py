@@ -279,8 +279,12 @@ class TestWeatherEntityWrites(unittest.TestCase):
 
         self.assertFalse(entity._has_forecast_listeners())
         entity._async_subscription_started("daily")
+        entity._async_subscription_started("daily")
         self.assertTrue(entity._has_forecast_listeners())
         entity._forecast_listener_update_pending = True
+        entity._async_subscription_ended("daily")
+        self.assertTrue(entity._has_forecast_listeners())
+        self.assertTrue(entity._forecast_listener_update_pending)
         entity._async_subscription_ended("daily")
         self.assertFalse(entity._has_forecast_listeners())
         self.assertFalse(entity._forecast_listener_update_pending)
