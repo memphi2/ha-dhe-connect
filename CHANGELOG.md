@@ -4,6 +4,10 @@
 
 - No changes yet.
 
+## v2.0.9 - 2026-09-06
+
+Local maintenance version for the next release cycle after v2.0.8.
+
 ## v2.0.8 - 2026-09-06
 
 Maintenance release for standard HACS installation and long-term Home Assistant
