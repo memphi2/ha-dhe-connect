@@ -4,14 +4,15 @@
 
 - No changes yet.
 
-## v2.0.8 - 2026-08-22
+## v2.0.8 - 2026-09-06
 
-Local maintenance version for the next release cycle after v2.0.7.
+Maintenance release for standard HACS installation and long-term Home Assistant
+weather compatibility.
 
 - Document installation from the default HACS catalog after the repository was
   accepted into HACS, replacing the obsolete custom-repository setup steps.
-- Track active weather forecast subscriptions through Home Assistant's weather
-  lifecycle hooks instead of reading its private forecast-listener container.
+- Keep weather forecast updates idle-efficient while using Home Assistant's
+  supported subscription lifecycle instead of private listener state.
 
 ## v2.0.7 - 2026-08-22
 
