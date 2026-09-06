@@ -6,7 +6,7 @@ import asyncio
 import inspect
 import logging
 from importlib import import_module
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from homeassistant.components.weather import WeatherEntity
 
@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 
 PARALLEL_UPDATES = 0
 _LOGGER = logging.getLogger(__name__)
+ForecastType = Literal["daily", "hourly", "twice_daily"]
 
 
 def _weather_feature_value(name: str, fallback: int = 0) -> Any:
@@ -98,6 +99,7 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
         self._last_written_weather_signature: tuple[Any, ...] | None = None
         self._forecast_listener_update_task: asyncio.Task[Any] | None = None
         self._forecast_listener_update_pending = False
+        self._active_forecast_subscriptions: set[ForecastType] = set()
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE weather updates."""
@@ -113,6 +115,18 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
     async def async_forecast_daily(self) -> list[Forecast] | None:
         """Return daily weather forecast."""
         return list(self._forecast) if self._forecast else None
+
+    @callback
+    def _async_subscription_started(self, forecast_type: ForecastType) -> None:
+        """Track an active Home Assistant forecast subscription."""
+        self._active_forecast_subscriptions.add(forecast_type)
+
+    @callback
+    def _async_subscription_ended(self, forecast_type: ForecastType) -> None:
+        """Stop tracking a Home Assistant forecast subscription."""
+        self._active_forecast_subscriptions.discard(forecast_type)
+        if forecast_type == "daily":
+            self._forecast_listener_update_pending = False
 
     @callback
     def _handle_weather_update(self, state: dict[str, Any]) -> None:
@@ -185,13 +199,7 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
 
     def _has_forecast_listeners(self) -> bool:
         """Return whether HA has any forecast listeners to notify."""
-        listeners = getattr(self, "_forecast_listeners", None)
-        if listeners is None:
-            return True
-        values = getattr(listeners, "values", None)
-        if not callable(values):
-            return True
-        return any(bool(listener_set) for listener_set in values())
+        return "daily" in self._active_forecast_subscriptions
 
     async def _async_run_forecast_listener_update(
         self,

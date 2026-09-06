@@ -10,6 +10,8 @@ Local maintenance version for the next release cycle after v2.0.7.
 
 - Document installation from the default HACS catalog after the repository was
   accepted into HACS, replacing the obsolete custom-repository setup steps.
+- Track active weather forecast subscriptions through Home Assistant's weather
+  lifecycle hooks instead of reading its private forecast-listener container.
 
 ## v2.0.7 - 2026-08-22
 

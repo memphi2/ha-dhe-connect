@@ -137,7 +137,7 @@ class TestWeatherEntityWrites(unittest.TestCase):
         listener_updates: list[tuple[str, ...]] = []
         entity.async_write_ha_state = lambda: writes.append(entity._attr_condition)
         entity.async_update_listeners = lambda value: listener_updates.append(value)
-        entity._forecast_listeners = {"daily": {lambda _forecast: None}}
+        entity._async_subscription_started("daily")
 
         entity._handle_weather_update(_weather_state())
         entity._handle_weather_update(_weather_state())
@@ -182,11 +182,6 @@ class TestWeatherEntityWrites(unittest.TestCase):
             )
             entity.hass = hass
             entity.async_write_ha_state = lambda: None
-            entity._forecast_listeners = {
-                "daily": set(),
-                "hourly": set(),
-                "twice_daily": set(),
-            }
             listener_updates: list[tuple[str, ...]] = []
 
             async def _async_update_listeners(value: tuple[str, ...]) -> None:
@@ -237,7 +232,7 @@ class TestWeatherEntityWrites(unittest.TestCase):
             )
             entity.hass = hass
             entity.async_write_ha_state = lambda: None
-            entity._forecast_listeners = {"daily": {lambda _forecast: None}}
+            entity._async_subscription_started("daily")
 
             async def _async_update_listeners(value: tuple[str, ...]) -> None:
                 listener_updates.append(value)
@@ -264,6 +259,31 @@ class TestWeatherEntityWrites(unittest.TestCase):
             self.assertFalse(entity._forecast_listener_update_pending)
 
         asyncio.run(_run())
+
+    def test_weather_entity_tracks_forecast_subscription_lifecycle(self) -> None:
+        weather_module = _load_weather_module()
+        state = _weather_state()
+
+        class _FakeClient:
+            host = "127.0.0.1"
+            port = 8443
+            device_identifier = None
+            available = True
+            last_weather_state = state
+
+        entity = weather_module.StiebelDHEWeather(
+            entry_id="test-entry",
+            name="Test DHE",
+            client=_FakeClient(),
+        )
+
+        self.assertFalse(entity._has_forecast_listeners())
+        entity._async_subscription_started("daily")
+        self.assertTrue(entity._has_forecast_listeners())
+        entity._forecast_listener_update_pending = True
+        entity._async_subscription_ended("daily")
+        self.assertFalse(entity._has_forecast_listeners())
+        self.assertFalse(entity._forecast_listener_update_pending)
 
     def test_weather_write_signature_ignores_unrecorded_list_payloads(self) -> None:
         weather_module = _load_weather_module()
