@@ -102,7 +102,8 @@ def build_device_info(
 class StiebelDHEEntityMixin:
     """Small shared initializer for DHE entities."""
 
-    _attr_device_info: DeviceInfo | None
+    # Home Assistant's private device-info attribute type varies by core version.
+    _attr_device_info: Any
     _attr_suggested_object_id: str | None
     _attr_unique_id: str | None
     _client: Any
