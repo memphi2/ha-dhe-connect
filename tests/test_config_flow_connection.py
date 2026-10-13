@@ -13,7 +13,9 @@ from custom_components.stiebel_dhe_connect.config_flow_connection import (
     connection_options_for_entry,
 )
 from custom_components.stiebel_dhe_connect.const import DEFAULT_PORT
-from custom_components.stiebel_dhe_connect.token_file_helpers import token_file_for_target
+from custom_components.stiebel_dhe_connect.token_file_helpers import (
+    token_file_for_target,
+)
 
 
 class _FakeConfig:

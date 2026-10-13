@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol, cast
 
-import voluptuous as vol
-
+import probatio as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 
@@ -14,9 +13,17 @@ from .client_types import DHEError
 from .config_entry_helpers import merged_entry_data
 from .config_flow_mapping import (
     filter_radio_results_by_text as _filter_radio_results_by_text,
+)
+from .config_flow_mapping import (
     radio_catalog_options as _radio_catalog_options,
+)
+from .config_flow_mapping import (
     radio_result_options as _radio_result_options,
+)
+from .config_flow_mapping import (
     weather_country_options as _weather_country_options,
+)
+from .config_flow_mapping import (
     weather_result_options as _weather_result_options,
 )
 from .config_flow_schemas import (
@@ -33,12 +40,26 @@ from .config_flow_schemas import (
     RADIO_CATALOG_SEARCH_TYPES,
     RADIO_FILTER_SEARCH_TYPES,
     RADIO_SEARCH_TYPES,
+)
+from .config_flow_schemas import (
     device_settings_defaults as _device_settings_defaults,
+)
+from .config_flow_schemas import (
     device_settings_schema as _device_settings_schema,
+)
+from .config_flow_schemas import (
     optional_float as _optional_float,
+)
+from .config_flow_schemas import (
     radio_catalog_schema as _radio_catalog_schema,
+)
+from .config_flow_schemas import (
     radio_search_type_schema as _radio_search_type_schema,
+)
+from .config_flow_schemas import (
     schema as _schema,
+)
+from .config_flow_schemas import (
     weather_search_schema as _weather_search_schema,
 )
 from .connection_helpers import target_changed
@@ -69,7 +90,7 @@ class _OptionsFlowClient(Protocol):
     async def search_weather_locations(
         self,
         name: str,
-        country_id: int | float | str,
+        country_id: float | str,
     ) -> list[WeatherLocationPayload]: ...
 
     async def list_weather_favorites(self) -> list[WeatherLocationPayload]: ...

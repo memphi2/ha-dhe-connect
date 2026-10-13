@@ -8,12 +8,11 @@ helper modules where line coverage is a stable signal.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from pathlib import Path
 import subprocess
 import sys
-from typing import Sequence
-
+from collections.abc import Sequence
+from dataclasses import dataclass
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 COVERAGE_TARGET = "custom_components/stiebel_dhe_connect"
@@ -159,7 +158,7 @@ EXCLUDED_COVERAGE_FILES: tuple[CoverageExclusion, ...] = (
     ),
     CoverageExclusion(
         "custom_components/stiebel_dhe_connect/config_flow_schemas.py",
-        "Home Assistant voluptuous schema glue covered by flow tests.",
+        "Home Assistant probatio schema glue covered by flow tests.",
     ),
     CoverageExclusion(
         "custom_components/stiebel_dhe_connect/config_flow_setup.py",

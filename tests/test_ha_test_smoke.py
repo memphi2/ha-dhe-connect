@@ -2,22 +2,21 @@
 
 from __future__ import annotations
 
-from contextlib import closing
-from contextlib import redirect_stdout
 import io
 import json
-from pathlib import Path
 import sqlite3
 import sys
 import tempfile
 import unittest
+from contextlib import closing, redirect_stdout
+from pathlib import Path
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts import ha_test_smoke  # noqa: E402
+from scripts import ha_test_smoke
 
 
 def _write_json(path: Path, payload: dict) -> None:
@@ -916,7 +915,7 @@ class TestHaTestSmoke(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             config = Path(temp_dir)
             (config / "home-assistant.log").write_text(
-                "\n".join(
+                "\n".join(  # noqa: FLY002
                     [
                         "2026-05-16 ERROR [homeassistant] Error doing job",
                         "Traceback (most recent call last):",
@@ -936,7 +935,7 @@ class TestHaTestSmoke(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             config = Path(temp_dir)
             (config / "home-assistant.log").write_text(
-                "\n".join(
+                "\n".join(  # noqa: FLY002
                     [
                         "2026-05-16 ERROR [homeassistant.components.mqtt] boom",
                         "2026-05-16 INFO custom_components.stiebel_dhe_connect ready",

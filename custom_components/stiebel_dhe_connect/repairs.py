@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-import voluptuous as vol
-
-from homeassistant import data_entry_flow
-from homeassistant.components.repairs import RepairsFlow
+import probatio as vol
+from homeassistant.components.repairs import RepairsFlow, RepairsFlowResult
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
-from homeassistant.core import HomeAssistant
 from homeassistant.const import CONF_HOST, CONF_PORT
+from homeassistant.core import HomeAssistant
 
 from . import config_flow
 from .config_entry_helpers import entry_target
+from .config_flow_discovery import (
+    coerce_setup_pairing_result as _coerce_setup_pairing_result,
+)
 from .const import DOMAIN
-from .config_flow_discovery import coerce_setup_pairing_result as _coerce_setup_pairing_result
 from .repair_issues import (
     PAIRING_REQUIRED_ISSUE,
     TOKEN_INVALID_ISSUE,
@@ -39,14 +39,14 @@ class PairingRequiredRepairFlow(RepairsFlow):
     async def async_step_init(
         self,
         user_input: dict[str, str] | None = None,
-    ) -> data_entry_flow.FlowResult:
+    ) -> RepairsFlowResult:
         """Start the repair confirmation step."""
         return await self.async_step_confirm()
 
     async def async_step_confirm(
         self,
         user_input: dict[str, str] | None = None,
-    ) -> data_entry_flow.FlowResult:
+    ) -> RepairsFlowResult:
         """Request pairing and validate the new token when submitted."""
         current_entry = self.hass.config_entries.async_get_entry(self._entry.entry_id)
         if current_entry is None or current_entry.domain != DOMAIN:
@@ -101,7 +101,7 @@ class MissingEntryRepairFlow(RepairsFlow):
     async def async_step_init(
         self,
         user_input: dict[str, str] | None = None,
-    ) -> data_entry_flow.FlowResult:
+    ) -> RepairsFlowResult:
         """Abort stale repair issue."""
         del user_input
         return self.async_abort(reason="entry_not_found")

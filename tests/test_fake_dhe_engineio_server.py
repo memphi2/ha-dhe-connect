@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 import functools
 import json
-from pathlib import Path
 import sys
 import tempfile
-from typing import Any
 import unittest
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from pathlib import Path
+from types import TracebackType
+from typing import Any, Self
 from unittest.mock import AsyncMock, Mock, patch
 
 import aiohttp
@@ -91,7 +92,7 @@ class FakeDHEEngineIOServer:
     def base_url(self) -> str:
         return f"http://{self.host}:{self.port}"
 
-    async def __aenter__(self) -> FakeDHEEngineIOServer:
+    async def __aenter__(self) -> Self:
         self.websocket_upgraded = asyncio.Event()
         self.packet_posted = asyncio.Event()
         app = web.Application()
@@ -109,7 +110,7 @@ class FakeDHEEngineIOServer:
         self,
         _exc_type: type[BaseException] | None,
         _exc: BaseException | None,
-        _traceback: Any,
+        _traceback: TracebackType | None,
     ) -> None:
         if self._runner is not None:
             await self._runner.cleanup()
@@ -1085,7 +1086,7 @@ class TestFakeDHEEngineIOServer(unittest.IsolatedAsyncioTestCase):
         async with (
             FakeDHEEngineIOServer(protocol_module.NS) as server,
             _connected_fake_client(client_module, server) as (
-                DHEClient,
+                _DHEClient,
                 client,
                 ctx,
             ),

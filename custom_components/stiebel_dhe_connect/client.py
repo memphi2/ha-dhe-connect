@@ -10,30 +10,35 @@ import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-import aiohttp
 
 from .async_helpers import cancel_task_if_pending
+from .client_callbacks import DHEClientCallbacksMixin
 from .client_command_runner import DHEClientCommandRunnerMixin
 from .client_commands import DHEClientCommandsMixin
-from .client_callbacks import DHEClientCallbacksMixin
 from .client_connection_state import DHEClientConnectionStateMixin
-from .client_constants import DEFAULT_NOMINAL_POWER_KW
-from .client_constants import RUNTIME_STALE_PROBE_GRACE_SECONDS
-from .client_constants import RUNTIME_STALE_WATCHDOG_SECONDS
-from .client_constants import RUNTIME_STARTUP_PROOF_TIMEOUT_SECONDS
+from .client_connection_supervisor import DHEConnectionSupervisor
+from .client_constants import (
+    DEFAULT_NOMINAL_POWER_KW,
+    RUNTIME_STALE_PROBE_GRACE_SECONDS,
+    RUNTIME_STALE_WATCHDOG_SECONDS,
+    RUNTIME_STARTUP_PROOF_TIMEOUT_SECONDS,
+)
 from .client_diagnostics import diagnostic_error as _diagnostic_error
 from .client_errors import (
     DHE_TRANSPORT_EXCEPTIONS as _DHE_TRANSPORT_EXCEPTIONS,
+)
+from .client_errors import (
     runtime_transport_error_or_raise as _runtime_transport_error_or_raise,
+)
+from .client_errors import (
     suppress_transport_errors as _suppress_transport_errors,
 )
 from .client_pairing import DHEClientPairingMixin
-from .client_connection_supervisor import DHEConnectionSupervisor
 from .client_runtime import DHEClientRuntimeMixin
 from .client_transport import DHEClientTransportMixin
-from .client_web_version import DHEClientWebVersionMixin
 from .client_types import (
     AvailabilityCallback,
     DHEAuthError,
@@ -50,6 +55,7 @@ from .client_types import (
     WeatherCallback,
     WellnessProgramsCallback,
 )
+from .client_web_version import DHEClientWebVersionMixin
 
 if TYPE_CHECKING:
     from .client_command_context import (
@@ -61,7 +67,11 @@ if TYPE_CHECKING:
     )
 from .connection_helpers import (
     host_for_url as _host_for_url,
+)
+from .connection_helpers import (
     normalize_host as _normalize_host,
+)
+from .connection_helpers import (
     validate_port as _validate_port,
 )
 from .protocol import (
@@ -440,7 +450,7 @@ class DHEClient(
 
     async def _run_loop(self) -> None:
         while not self._stopped.is_set():
-            try:  # noqa: PERF203
+            try:
                 self._ctx = await self._open_authenticated_session()
                 self._record_session_connected()
                 self._cancel_reconnect_grace_timer()
@@ -466,7 +476,7 @@ class DHEClient(
                         self._clear_stale_runtime_probe()
                         continue
                     await self._maybe_recover_stale_runtime(current_ctx)
-            except asyncio.CancelledError:  # noqa: PERF203
+            except asyncio.CancelledError:
                 raise
             except DHEAuthError as err:
                 if await self._handle_auth_failure(err):
@@ -559,7 +569,7 @@ class DHEClient(
                 ctx,
                 reason=(
                     "Runtime stale watchdog: no device data after watchdog probe "
-                    f"for {int(round(last_age))}s"
+                    f"for {round(last_age)}s"
                 ),
             )
             return

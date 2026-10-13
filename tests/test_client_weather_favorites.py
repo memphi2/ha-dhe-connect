@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import importlib.util
+import os
 import stat
 import sys
 import tempfile
-import unittest
-from unittest.mock import AsyncMock, Mock
-import importlib.util
-import os
-from pathlib import Path
 import types
+import unittest
+from pathlib import Path
+from typing import Self
+from unittest.mock import AsyncMock, Mock
 
 ROOT = Path(__file__).resolve().parents[1]
 COMPONENT_DIR = ROOT / "custom_components" / "stiebel_dhe_connect"
@@ -889,7 +890,7 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         class _DecodeFailureResponse:
             status = 200
 
-            async def __aenter__(self) -> "_DecodeFailureResponse":
+            async def __aenter__(self) -> Self:
                 return self
 
             async def __aexit__(self, *_args: object) -> None:
@@ -1126,8 +1127,11 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
             )
             await DHEClient._save_token(client, "super-secret-token")
 
-            with open(client.token_path, encoding="utf-8") as file:
-                self.assertEqual(file.read(), "super-secret-token")
+            token_contents = await asyncio.to_thread(
+                Path(client.token_path).read_text,
+                encoding="utf-8",
+            )
+            self.assertEqual(token_contents, "super-secret-token")
 
             if os.name == "posix":
                 mode = stat.S_IMODE(os.stat(client.token_path).st_mode)
@@ -1723,8 +1727,10 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         events = DHEClient._parse_socketio_events(
             client,
             [
-                '42/1.0.0,["message",{"text":"bad",}]'
-                '42/1.0.0,["message",{"command":"ok","value":1}]',
+                (
+                    '42/1.0.0,["message",{"text":"bad",}]'
+                    '42/1.0.0,["message",{"command":"ok","value":1}]'
+                ),
             ],
         )
 

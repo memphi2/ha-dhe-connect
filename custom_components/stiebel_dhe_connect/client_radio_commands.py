@@ -8,23 +8,27 @@ from typing import Any
 from .client_command_context import command_context as _command_context
 from .client_mapping import (
     radio_station_in_list as _radio_station_in_list,
+)
+from .client_mapping import (
     radio_station_input_id as _radio_station_input_id,
 )
 from .client_types import DHEError, DHESession
 from .client_value_helpers import clamp as _clamp
 from .flow_helpers import (
     request_generation_and_wait as _request_generation_and_wait,
+)
+from .flow_helpers import (
     wait_for_or_refresh as _wait_for_or_refresh,
 )
 from .protocol import (
     RADIO_ASSIGN_COMMANDS,
     RADIO_CATALOG_GET_COMMANDS,
-    RADIO_FAVORITES_GET_COMMAND,
     RADIO_FAVORITE_ASSIGN_COMMAND,
+    RADIO_FAVORITES_GET_COMMAND,
     RADIO_PATH,
-    RADIO_STATIONS_GET_COMMAND,
     RADIO_STATION_ASSIGN_COMMAND,
     RADIO_STATION_SEARCH_FIELDS,
+    RADIO_STATIONS_GET_COMMAND,
 )
 
 

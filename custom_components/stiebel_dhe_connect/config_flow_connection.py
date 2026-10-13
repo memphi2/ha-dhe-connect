@@ -6,8 +6,8 @@ import logging
 from collections.abc import Mapping
 from typing import Any
 
-from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant import config_entries
+from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
 
 from .config_entry_helpers import entry_target as _entry_target

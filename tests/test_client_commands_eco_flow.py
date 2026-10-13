@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import importlib.util
-from pathlib import Path
 import types
 import unittest
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 ROOT = Path(__file__).resolve().parents[1]

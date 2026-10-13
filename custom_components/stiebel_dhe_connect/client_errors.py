@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 from contextlib import contextmanager
-import re
 
 import aiohttp
 
 from .client_types import DHEError
-
 
 DHE_COMMAND_EXCEPTIONS = (
     DHEError,

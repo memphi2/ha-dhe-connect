@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import importlib.util
+import unittest
 from dataclasses import dataclass
 from pathlib import Path
-import unittest
-
 
 ROOT = Path(__file__).resolve().parents[1]
 ENTITY_HELPERS = (

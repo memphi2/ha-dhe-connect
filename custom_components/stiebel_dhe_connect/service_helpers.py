@@ -26,7 +26,7 @@ class WeatherServiceClient(Protocol):
     def search_weather_locations(
         self,
         name: str,
-        country_id: int | float | str,
+        country_id: float | str,
     ) -> Awaitable[list[dict[str, Any]]]:
         """Search weather locations on the DHE."""
 

@@ -5,13 +5,12 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 import json
-from ipaddress import ip_network
 import sys
 import types
-from pathlib import Path
 import unittest
+from ipaddress import ip_network
+from pathlib import Path
 from unittest.mock import AsyncMock
-
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_FLOW_PATH = (
@@ -67,11 +66,11 @@ def _install_fake_homeassistant() -> None:
 
     class _ConfigFlowBase:
         @classmethod
-        def __init_subclass__(cls, **kwargs):  # noqa: ANN204
+        def __init_subclass__(cls, **kwargs):
             return super().__init_subclass__()
 
-        def add_suggested_values_to_schema(self, data_schema, suggested_values):  # noqa: ANN001, ANN201
-            import copy  # noqa: PLC0415
+        def add_suggested_values_to_schema(self, data_schema, suggested_values):
+            import copy
 
             schema = {}
             for key, val in data_schema.schema.items():
@@ -108,7 +107,7 @@ def _install_fake_homeassistant() -> None:
     fake_issue_registry.async_create_issue = _async_create_issue
     fake_issue_registry.async_delete_issue = _async_delete_issue
 
-    async def async_get_clientsession(*args, **kwargs):  # noqa: ANN001
+    async def async_get_clientsession(*args, **kwargs):
         return None
 
     fake_aiohttp_client.async_get_clientsession = async_get_clientsession
@@ -124,13 +123,13 @@ def _install_fake_homeassistant() -> None:
     sys.modules["homeassistant.helpers.issue_registry"] = fake_issue_registry
 
 
-def _install_fake_voluptuous() -> None:
-    """Install a tiny voluptuous substitute for tests without dependency."""
+def _install_fake_probatio() -> None:
+    """Install a tiny probatio substitute for tests without dependency."""
 
-    if "voluptuous" in sys.modules:
+    if "probatio" in sys.modules:
         return
 
-    voluptuous = types.ModuleType("voluptuous")
+    probatio = types.ModuleType("probatio")
 
     class _Marker:
         def __init__(self, *args: object, **kwargs: object) -> None:
@@ -153,11 +152,11 @@ def _install_fake_voluptuous() -> None:
         def __call__(self, value: object) -> object:
             return value
 
-    voluptuous.Required = Required
-    voluptuous.Optional = Optional
-    voluptuous.In = In
-    voluptuous.Schema = Schema
-    sys.modules["voluptuous"] = voluptuous
+    probatio.Required = Required
+    probatio.Optional = Optional
+    probatio.In = In
+    probatio.Schema = Schema
+    sys.modules["probatio"] = probatio
 
 
 def _schema_keys(schema: object) -> set[str]:
@@ -245,19 +244,19 @@ def _install_fake_integration_modules() -> None:
     fake_entry_helpers = types.ModuleType(
         "custom_components.stiebel_dhe_connect.config_entry_helpers",
     )
-    def _fake_merged_entry_data(entry):  # noqa: ANN001, ANN202
+    def _fake_merged_entry_data(entry):
         data = dict(getattr(entry, "data", {}))
         data.update(getattr(entry, "options", {}))
         return data
 
-    def _fake_entry_target(entry):  # noqa: ANN001, ANN202
+    def _fake_entry_target(entry):
         data = _fake_merged_entry_data(entry)
         host = data.get("host")
         if host is None:
             return None
         return str(host), int(data.get("port", 80))
 
-    def _fake_is_target_used_by_other_entry(  # noqa: ANN001, ANN202
+    def _fake_is_target_used_by_other_entry(
         hass,
         host,
         port,
@@ -344,7 +343,7 @@ def _install_fake_integration_modules() -> None:
 
 
 def _load_config_flow():
-    _install_fake_voluptuous()
+    _install_fake_probatio()
     _install_fake_homeassistant()
     _install_fake_integration_modules()
 
@@ -556,12 +555,12 @@ class TestConnectionOptionsConnectivity(
             def __init__(self, entries: list[types.SimpleNamespace]) -> None:
                 self._entries = entries
 
-            def async_entries(self, _domain: str):  # noqa: ANN001
+            def async_entries(self, _domain: str):
                 return self._entries
 
         self.flow.config_entry = self.config_entry
 
-        async def _async_add_executor_job(func, *args):  # noqa: ANN001
+        async def _async_add_executor_job(func, *args):
             return func(*args)
 
         self.flow.hass = types.SimpleNamespace(
@@ -682,7 +681,7 @@ class TestSetupScanConfigFlow(
                 self.progress: list[dict[str, object]] = []
                 self.aborted: list[str] = []
 
-            def async_progress_by_handler(self, _domain: str):  # noqa: ANN001
+            def async_progress_by_handler(self, _domain: str):
                 return list(self.progress)
 
             def async_abort(self, flow_id: str) -> None:
@@ -692,18 +691,18 @@ class TestSetupScanConfigFlow(
             def __init__(self, flow_manager: _FlowManager) -> None:
                 self.flow = flow_manager
 
-            def async_entries(self, _domain: str):  # noqa: ANN001
+            def async_entries(self, _domain: str):
                 return []
 
         self._flow_manager = _FlowManager()
         self._tasks: list[asyncio.Task] = []
 
-        def _create_task(coro):  # noqa: ANN001
+        def _create_task(coro):
             task = asyncio.create_task(coro)
             self._tasks.append(task)
             return task
 
-        async def _add_executor_job(func, *args):  # noqa: ANN001
+        async def _add_executor_job(func, *args):
             return func(*args)
 
         self.flow.hass = types.SimpleNamespace(

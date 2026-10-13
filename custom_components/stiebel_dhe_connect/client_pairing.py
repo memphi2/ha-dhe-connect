@@ -10,11 +10,17 @@ from homeassistant.components import persistent_notification
 
 from .client_diagnostics import (
     diagnostic_error as _diagnostic_error,
+)
+from .client_diagnostics import (
     diagnostic_timestamp as _diagnostic_timestamp,
+)
+from .client_diagnostics import (
     summarize_diagnostic_value as _summarize_diagnostic_value,
 )
 from .pairing_helpers import (
     pairing_notification_text,
+)
+from .pairing_helpers import (
     pairing_result_success as _pairing_result_success,
 )
 

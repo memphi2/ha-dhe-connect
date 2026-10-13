@@ -16,11 +16,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        # actions/checkout v6.0.2
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        # actions/checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: HACS validation
-        uses: hacs/action@dcb30e72781db3f207d5236b861172774ab0b485
+        uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
         with:
           category: integration
 
@@ -29,33 +29,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        # actions/checkout v6.0.2
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        # actions/checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Hassfest
-        uses: home-assistant/actions/hassfest@f6f29a7ee3fa0eccadf3620a7b9ee00ab54ec03b
+        uses: home-assistant/actions/hassfest@50baf3a307f87100cf550d4ae127746595030d5d
 
   repository:
     name: Repository checks
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        # actions/checkout v6.0.2
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        # actions/checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Set up Python
-        # actions/setup-python v6.2.0
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+        # actions/setup-python v7.0.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: "3.14"
 
       - name: Install repository check dependencies
         run: python -m pip install -r requirements.txt
-
-      - name: Install Home Assistant test fixture helper
-        # The helper metadata still declares a Home Assistant transitive pin
-        # that differs from the HA 2026.6 fixture. Keep that pin isolated.
-        run: python -m pip install --no-deps "pytest-homeassistant-custom-component==0.13.335"
 
       - name: Run unit tests
         run: python -m pytest -q
@@ -87,22 +82,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        # actions/checkout v6.0.2
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        # actions/checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Set up Python
-        # actions/setup-python v6.2.0
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+        # actions/setup-python v7.0.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: "3.14"
 
       - name: Install baseline repository check dependencies
         run: python -m pip install -r requirements.txt
-
-      - name: Install Home Assistant test fixture helper
-        # The helper metadata still declares a Home Assistant transitive pin
-        # that differs from the pinned baseline fixture. Keep that pin isolated.
-        run: python -m pip install --no-deps "pytest-homeassistant-custom-component==0.13.335"
 
       - name: Upgrade to latest Home Assistant
         run: python -m pip install --upgrade homeassistant

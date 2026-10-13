@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
 import json
-from pathlib import Path
 import re
 import subprocess
 import sys
-from typing import Any, Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 try:
     from scripts.ha_test_redaction import redact_sensitive_text
@@ -113,15 +114,19 @@ PROPRIETARY_VENDOR_CONTENT_PATTERNS = (
     ),
 )
 HISTORY_SENSITIVE_REGEXES_GIT = (
-    r"(10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}"
-    r"|192\.168\.[0-9]{1,3}\.[0-9]{1,3}"
-    r"|172\.((1[6-9])|(2[0-9])|(3[0-1]))\.[0-9]{1,3}\.[0-9]{1,3})",
+    (
+        r"(10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}"
+        r"|192\.168\.[0-9]{1,3}\.[0-9]{1,3}"
+        r"|172\.((1[6-9])|(2[0-9])|(3[0-1]))\.[0-9]{1,3}\.[0-9]{1,3})"
+    ),
     r"--username[[:space:]]+[A-Za-z0-9._][A-Za-z0-9._]*",
 )
 HISTORY_SENSITIVE_REGEXES_PYTHON = (
-    r"\b(?:10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}"
-    r"|192\.168\.[0-9]{1,3}\.[0-9]{1,3}"
-    r"|172\.(?:1[6-9]|2[0-9]|3[0-1])\.[0-9]{1,3}\.[0-9]{1,3})\b",
+    (
+        r"\b(?:10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}"
+        r"|192\.168\.[0-9]{1,3}\.[0-9]{1,3}"
+        r"|172\.(?:1[6-9]|2[0-9]|3[0-1])\.[0-9]{1,3}\.[0-9]{1,3})\b"
+    ),
     r"--username\s+[A-Za-z0-9._][A-Za-z0-9._]*",
 )
 SAFE_HISTORY_MARKER_SNIPPETS = (

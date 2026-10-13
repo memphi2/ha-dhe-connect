@@ -2,32 +2,34 @@
 
 from __future__ import annotations
 
-from contextlib import redirect_stderr
 import json
-from io import StringIO
-from pathlib import Path
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr
+from io import StringIO
+from pathlib import Path
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts import check_integration  # noqa: E402
+from scripts import check_integration
 
 VALIDATION_INSTALL_STEPS = """
 	                  - run: python -m pip install -r requirements.txt
-	                  - run: python -m pip install --no-deps "pytest-homeassistant-custom-component==0.13.335"
 """
 VALIDATION_REQUIREMENTS_TEXT = """
-aiohttp>=3.13.5,<4
-homeassistant==2026.6.0
-mypy>=1.20,<2
+aiohttp>=3.14.4,<4
+homeassistant==2026.10.1
+mypy>=2.4,<3
+probatio==0.13.0
 pytest==9.0.3
+pytest-homeassistant-custom-component==0.13.372
 pytest-cov==7.1.0
-ruff>=0.15,<0.16
+ruff>=0.17,<0.18
+zeroconf==0.151.5
 """
 
 
@@ -153,7 +155,8 @@ def _write_lts_policy_fixture(root: Path) -> None:
             f"| Minimum supported Home Assistant version | `{version}` |\n"
             f"| Baseline Home Assistant fixture | `homeassistant=={version}` |\n"
             f"| Python validation runtime | `{python_version}` |\n"
-            f"| Runtime dependency floor | `aiohttp{aiohttp}` |\n"
+            "| Runtime dependency baseline | "
+            f"`aiohttp{aiohttp}`, `probatio==0.13.0`, `zeroconf==0.151.5` |\n"
             f"| HACS metadata | `hacs.json` declares `homeassistant: {version}` |\n"
         ),
         encoding="utf-8",
@@ -184,14 +187,13 @@ class TestCheckIntegration(unittest.TestCase):
                 root,
                 """
                 steps:
-                  - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-                  - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+                  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+                  - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
                     with:
                       python-version: "3.14"
-                  - uses: hacs/action@dcb30e72781db3f207d5236b861172774ab0b485
-                  - uses: home-assistant/actions/hassfest@f6f29a7ee3fa0eccadf3620a7b9ee00ab54ec03b
+                  - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
+                  - uses: home-assistant/actions/hassfest@50baf3a307f87100cf550d4ae127746595030d5d
                   - run: python -m pip install -r requirements.txt
-	                  - run: python -m pip install --no-deps "pytest-homeassistant-custom-component==0.13.335"
                   - run: python scripts/check_deprecations.py
                   - run: python scripts/check_privacy_markers.py
                   - run: python scripts/check_translation_keys.py
@@ -211,10 +213,10 @@ class TestCheckIntegration(unittest.TestCase):
                 root,
                 """
                 steps:
-                  - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-                  - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
-                  - uses: hacs/action@dcb30e72781db3f207d5236b861172774ab0b485
-                  - uses: home-assistant/actions/hassfest@f6f29a7ee3fa0eccadf3620a7b9ee00ab54ec03b
+                  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+                  - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+                  - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
+                  - uses: home-assistant/actions/hassfest@50baf3a307f87100cf550d4ae127746595030d5d
 """ + VALIDATION_INSTALL_STEPS + """
                 """,
             )
@@ -231,10 +233,10 @@ class TestCheckIntegration(unittest.TestCase):
                 root,
                 """
                 steps:
-                  - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-                  - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
-                  - uses: hacs/action@dcb30e72781db3f207d5236b861172774ab0b485
-                  - uses: home-assistant/actions/hassfest@f6f29a7ee3fa0eccadf3620a7b9ee00ab54ec03b
+                  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+                  - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+                  - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
+                  - uses: home-assistant/actions/hassfest@50baf3a307f87100cf550d4ae127746595030d5d
 """ + VALIDATION_INSTALL_STEPS + """
                   - run: python scripts/check_deprecations.py
                   - run: python scripts/check_release_consistency.py
@@ -253,10 +255,10 @@ class TestCheckIntegration(unittest.TestCase):
                 root,
                 """
                 steps:
-                  - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-                  - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
-                  - uses: hacs/action@dcb30e72781db3f207d5236b861172774ab0b485
-                  - uses: home-assistant/actions/hassfest@f6f29a7ee3fa0eccadf3620a7b9ee00ab54ec03b
+                  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+                  - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+                  - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
+                  - uses: home-assistant/actions/hassfest@50baf3a307f87100cf550d4ae127746595030d5d
 """ + VALIDATION_INSTALL_STEPS + """
                   - run: python scripts/check_deprecations.py
                   - run: python scripts/check_privacy_markers.py
@@ -269,24 +271,31 @@ class TestCheckIntegration(unittest.TestCase):
             ), self.assertRaises(SystemExit):
                 check_integration.check_github_actions()
 
-    def test_github_actions_requires_fixture_helper_no_deps(self) -> None:
+    def test_github_actions_rejects_stale_fixture_helper(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             _write_validate_workflow(
                 root,
                 """
                 steps:
-                  - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-                  - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
-                  - uses: hacs/action@dcb30e72781db3f207d5236b861172774ab0b485
-                  - uses: home-assistant/actions/hassfest@f6f29a7ee3fa0eccadf3620a7b9ee00ab54ec03b
+                  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+                  - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+                  - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
+                  - uses: home-assistant/actions/hassfest@50baf3a307f87100cf550d4ae127746595030d5d
                   - run: python -m pip install -r requirements.txt
-	                  - run: python -m pip install "pytest-homeassistant-custom-component==0.13.335"
                   - run: python scripts/check_deprecations.py
                   - run: python scripts/check_privacy_markers.py
                   - run: python scripts/check_translation_keys.py
                   - run: python scripts/check_release_consistency.py
                 """,
+            )
+            requirements = root / "requirements.txt"
+            requirements.write_text(
+                requirements.read_text(encoding="utf-8").replace(
+                    "pytest-homeassistant-custom-component==0.13.372",
+                    "pytest-homeassistant-custom-component==0.13.371",
+                ),
+                encoding="utf-8",
             )
 
             with patch.object(check_integration, "ROOT", root), redirect_stderr(
@@ -303,8 +312,8 @@ class TestCheckIntegration(unittest.TestCase):
                 steps:
                   - uses: actions/checkout@v4
                   - uses: actions/setup-python@v5
-                  - uses: hacs/action@dcb30e72781db3f207d5236b861172774ab0b485
-                  - uses: home-assistant/actions/hassfest@f6f29a7ee3fa0eccadf3620a7b9ee00ab54ec03b
+                  - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
+                  - uses: home-assistant/actions/hassfest@50baf3a307f87100cf550d4ae127746595030d5d
                 """,
             )
 
@@ -320,8 +329,8 @@ class TestCheckIntegration(unittest.TestCase):
                 root,
                 """
                 steps:
-                  - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-                  - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+                  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+                  - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
                   - uses: hacs/action@main
                   - uses: home-assistant/actions/hassfest@master
                 """,
@@ -341,11 +350,11 @@ class TestCheckIntegration(unittest.TestCase):
                 root,
                 """
                 steps:
-                  - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-                  - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+                  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+                  - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
                   - uses: hacs/action@main
-                  - uses: hacs/action@dcb30e72781db3f207d5236b861172774ab0b485
-                  - uses: home-assistant/actions/hassfest@f6f29a7ee3fa0eccadf3620a7b9ee00ab54ec03b
+                  - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
+                  - uses: home-assistant/actions/hassfest@50baf3a307f87100cf550d4ae127746595030d5d
                 """,
             )
 
@@ -565,8 +574,8 @@ class TestCheckIntegration(unittest.TestCase):
             validation = root / "docs" / "validation.md"
             validation.write_text(
                 validation.read_text(encoding="utf-8").replace(
-                    "homeassistant==2026.6.0",
-                    "homeassistant==2026.5.0",
+                    "homeassistant==2026.10.1",
+                    "homeassistant==2026.9.4",
                 ),
                 encoding="utf-8",
             )

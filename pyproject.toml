@@ -89,3 +89,7 @@ files = [
 addopts = "-p no:homeassistant -p no:pytest_github_actions_annotate_failures"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff.lint.per-file-ignores]
+# Test doubles intentionally expose mutable class-level state to mimic HA clients.
+"tests/**" = ["RUF012"]

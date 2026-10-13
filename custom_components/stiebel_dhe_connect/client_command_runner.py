@@ -10,6 +10,8 @@ from .client_constants import COMMAND_RETRY_ATTEMPTS, COMMAND_RETRY_DELAY_SECOND
 from .client_diagnostics import diagnostic_error as _diagnostic_error
 from .client_errors import (
     DHE_COMMAND_EXCEPTIONS as _DHE_COMMAND_EXCEPTIONS,
+)
+from .client_errors import (
     runtime_transport_error_or_raise as _runtime_transport_error_or_raise,
 )
 from .client_types import DHEError, DHESession
@@ -57,13 +59,13 @@ class DHEClientCommandRunnerMixin:
         async with client._command_lock:
             for attempt in range(COMMAND_RETRY_ATTEMPTS):
                 command_error: Exception
-                try:  # noqa: PERF203
+                try:
                     await client._ensure_ready(timeout=timeout)
                     ctx = client._ctx
                     if ctx is None:
                         raise DHEError("DHE session is not connected")
                     return await operation(ctx)
-                except _DHE_COMMAND_EXCEPTIONS as err:  # noqa: PERF203
+                except _DHE_COMMAND_EXCEPTIONS as err:
                     command_error = err
                 except RuntimeError as err:
                     command_error = _runtime_transport_error_or_raise(err)

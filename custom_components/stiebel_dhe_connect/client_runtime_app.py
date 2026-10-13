@@ -7,12 +7,13 @@ from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, Any
 
 from .client_types import MeasurementCallback, MeasurementValue
-from .device_info_helpers import product_id_prefix as _product_id_prefix
-
 from .client_value_helpers import (
     raw_to_bool as _raw_to_bool,
+)
+from .client_value_helpers import (
     raw_to_float as _raw_to_float,
 )
+from .device_info_helpers import product_id_prefix as _product_id_prefix
 from .protocol import (
     APP_SETTING_SET_COMMAND_IDS,
     BRUSH_TIMER_PATH,
@@ -34,13 +35,15 @@ from .protocol import (
     LAST_USAGE_SET_COMMAND,
     SAVING_MONITOR_SENSOR_FIELDS,
     SHOWER_TIMER_PATH,
+    TEMPERATURE_MAX_OVERRIDE_COMMANDS,
     TEMPERATURE_MEMORY_ID_TO_MEASUREMENT,
     TIMER_DEFAULT_DURATIONS,
     TIMER_PATH_IDS,
-    TEMPERATURE_MAX_OVERRIDE_COMMANDS,
     WELLNESS_PROGRAMS_SET_COMMAND,
 )
-from .wellness_programs import normalize_wellness_programs as _normalize_wellness_programs
+from .wellness_programs import (
+    normalize_wellness_programs as _normalize_wellness_programs,
+)
 
 
 def _update_optional_device_text(
@@ -268,15 +271,15 @@ class DHEClientRuntimeAppMixin:
                 return
             field_groups = ((category, field_ids),)
 
-        for category, field_ids in field_groups:
-            values = self._last_saving_monitor_values.get(category)
+        for field_category, field_ids in field_groups:
+            values = self._last_saving_monitor_values.get(field_category)
             if not isinstance(values, dict):
                 continue
             for field, measurement_id in field_ids.items():
                 value = values.get(field)
                 if value is not None:
                     self._update_saving_monitor_sensor(
-                        measurement_id, value, category, field
+                        measurement_id, value, field_category, field
                     )
 
     def _update_saving_monitor_sensor(

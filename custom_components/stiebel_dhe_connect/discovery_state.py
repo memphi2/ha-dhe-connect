@@ -461,7 +461,7 @@ def _hass_data(hass: HomeAssistant) -> dict[str, Any]:
         return data
     data = {}
     try:
-        setattr(hass, "data", data)
+        setattr(hass, "data", data)  # noqa: B010
     except (AttributeError, TypeError):
         return {}
     return data
@@ -713,13 +713,10 @@ def _is_ip_address(value: str) -> bool:
 
 def _device_label(value: str) -> str:
     text = _normalize_text(value).lower()
-    if text.endswith(_DHE_SERVICE_SUFFIX):
-        text = text[: -len(_DHE_SERVICE_SUFFIX)]
-    if text.endswith(".local"):
-        text = text[:-6]
+    text = text.removesuffix(_DHE_SERVICE_SUFFIX)
+    text = text.removesuffix(".local")
     for prefix in ("dhe connect ", "stiebel ", "ste "):
-        if text.startswith(prefix):
-            text = text[len(prefix) :]
+        text = text.removeprefix(prefix)
     return "".join(ch for ch in text if ch.isalnum())
 
 

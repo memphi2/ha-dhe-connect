@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 
 from custom_components.stiebel_dhe_connect.config_flow_setup import (

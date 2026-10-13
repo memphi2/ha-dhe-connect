@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import importlib.util
-from pathlib import Path
 import unittest
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CONNECTION_HELPERS = (
@@ -52,9 +51,11 @@ class TestConnectionHelpers(unittest.TestCase):
             "http://dhe-connect.local/?token=secret",
             "http://dhe-connect.local/#fragment",
         ):
-            with self.subTest(host=host):
-                with self.assertRaisesRegex(ValueError, "invalid_host"):
-                    self.helpers.normalize_host(host)
+            with (
+                self.subTest(host=host),
+                self.assertRaisesRegex(ValueError, "invalid_host"),
+            ):
+                self.helpers.normalize_host(host)
 
     def test_normalize_host_rejects_bracketed_ipv6_url_with_port(self) -> None:
         with self.assertRaisesRegex(ValueError, "embedded_port_not_supported"):
@@ -69,9 +70,8 @@ class TestConnectionHelpers(unittest.TestCase):
 
     def test_normalize_host_rejects_empty_and_invalid_characters(self) -> None:
         for host in (" ", "dhe/local", "dhe?local", "dhe@local", r"dhe\\local"):
-            with self.subTest(host=host):
-                with self.assertRaises(ValueError):
-                    self.helpers.normalize_host(host)
+            with self.subTest(host=host), self.assertRaises(ValueError):
+                self.helpers.normalize_host(host)
 
     def test_host_for_url_wraps_ipv6(self) -> None:
         self.assertEqual(self.helpers.host_for_url("2001:db8::1"), "[2001:db8::1]")
@@ -130,9 +130,11 @@ class TestConnectionHelpers(unittest.TestCase):
 
     def test_validate_port_rejects_out_of_range(self) -> None:
         for port in (0, 65536):
-            with self.subTest(port=port):
-                with self.assertRaisesRegex(ValueError, "invalid_port"):
-                    self.helpers.validate_port(port)
+            with (
+                self.subTest(port=port),
+                self.assertRaisesRegex(ValueError, "invalid_port"),
+            ):
+                self.helpers.validate_port(port)
 
     def test_validate_port_rejects_negative_float(self) -> None:
         with self.assertRaises(ValueError):

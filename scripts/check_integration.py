@@ -9,16 +9,17 @@ import tomllib
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 INTEGRATION = ROOT / "custom_components" / "stiebel_dhe_connect"
 TRANSLATIONS = INTEGRATION / "translations"
 FIXTURE_ROOT = ROOT / "tests" / "fixtures"
 REPLAY_FIXTURE_NAME = "dhe_protocol_replay_sanitized.json"
 CLIENT_MODULE_MAX_BYTES = 50 * 1024
-MIN_HOMEASSISTANT_VERSION = "2026.6.0"
+MIN_HOMEASSISTANT_VERSION = "2026.10.1"
 VALIDATION_PYTHON_VERSION = "3.14"
-AIOHTTP_CONSTRAINT = ">=3.13.5,<4"
+AIOHTTP_CONSTRAINT = ">=3.14.4,<4"
+PROBATIO_CONSTRAINT = "==0.13.0"
+ZEROCONF_CONSTRAINT = "==0.151.5"
 SILVER_RULES = {
     # Bronze
     "action-setup",
@@ -61,27 +62,29 @@ PINNED_VALIDATION_ACTIONS = {
     "home-assistant/actions/hassfest",
 }
 NODE24_VALIDATION_ACTION_MAJORS = {
-    "actions/checkout": 6,
-    "actions/setup-python": 6,
+    "actions/checkout": 7,
+    "actions/setup-python": 7,
 }
-NODE24_VALIDATION_ACTION_PINS = {
-    # v6 tags resolved on 2026-05-20. Keep these in sync with
+VALIDATION_ACTION_PINS = {
+    # Stable refs resolved on 2026-10-13. Keep these in sync with
     # .github/workflows/validate.yml when refreshing action pins.
-    "actions/checkout": {"de0fac2e4500dabe0009e67214ff5f5447ce83dd"},
-    "actions/setup-python": {"a309ff8b426b58ec0e2a45f0f869d46889d02405"},
+    "actions/checkout": {"3d3c42e5aac5ba805825da76410c181273ba90b1"},
+    "actions/setup-python": {"5fda3b95a4ea91299a34e894583c3862153e4b97"},
+    "hacs/action": {"1ebf01c408f29afcb6406bd431bc98fd8cbb15aa"},
+    "home-assistant/actions/hassfest": {
+        "50baf3a307f87100cf550d4ae127746595030d5d"
+    },
 }
 VALIDATION_DEPENDENCY_MINIMUMS = {
     "aiohttp": AIOHTTP_CONSTRAINT,
     "homeassistant": f"=={MIN_HOMEASSISTANT_VERSION}",
-    "mypy": ">=1.20,<2",
+    "mypy": ">=2.4,<3",
+    "probatio": PROBATIO_CONSTRAINT,
     "pytest": "==9.0.3",
+    "pytest-homeassistant-custom-component": "==0.13.372",
     "pytest-cov": "==7.1.0",
-    "ruff": ">=0.15,<0.16",
-}
-VALIDATION_NO_DEPS_DEPENDENCIES = {
-    # pytest-homeassistant-custom-component 0.13.335 still declares a Home
-    # Assistant transitive pin that differs from the HA 2026.6 fixture.
-    "pytest-homeassistant-custom-component": "==0.13.335",
+    "ruff": ">=0.17,<0.18",
+    "zeroconf": ZEROCONF_CONSTRAINT,
 }
 _ACTION_REF_RE = re.compile(r"^\s*(?:-\s*)?uses:\s*([^@\s]+)@([^\s#]+)", re.MULTILINE)
 _MAJOR_VERSION_REF_RE = re.compile(r"^v(?P<major>\d+)(?:\.|$)")
@@ -279,7 +282,12 @@ def check_lts_compatibility_policy() -> None:
         f"| Minimum supported Home Assistant version | `{MIN_HOMEASSISTANT_VERSION}` |",
         f"| Baseline Home Assistant fixture | `homeassistant=={MIN_HOMEASSISTANT_VERSION}` |",
         f"| Python validation runtime | `{VALIDATION_PYTHON_VERSION}` |",
-        f"| Runtime dependency floor | `aiohttp{AIOHTTP_CONSTRAINT}` |",
+        (
+            "| Runtime dependency baseline | "
+            f"`aiohttp{AIOHTTP_CONSTRAINT}`, "
+            f"`probatio{PROBATIO_CONSTRAINT}`, "
+            f"`zeroconf{ZEROCONF_CONSTRAINT}` |"
+        ),
         (
             "| HACS metadata | `hacs.json` declares "
             f"`homeassistant: {MIN_HOMEASSISTANT_VERSION}` |"
@@ -394,13 +402,15 @@ def check_github_actions() -> None:
         for ref in refs:
             if not re.fullmatch(r"[0-9a-f]{40}", ref):
                 _fail(f"{action} must be pinned to a 40-character commit SHA")
+            if ref not in VALIDATION_ACTION_PINS.get(action, set()):
+                _fail(f"{action}@{ref} is not the current approved action pin")
     for action, minimum_major in sorted(NODE24_VALIDATION_ACTION_MAJORS.items()):
         refs = action_refs.get(action, [])
         if not refs:
             _fail(f"validation workflow is missing {action}")
         for ref in refs:
             if (
-                ref not in NODE24_VALIDATION_ACTION_PINS.get(action, set())
+                ref not in VALIDATION_ACTION_PINS.get(action, set())
                 and not _action_ref_has_minimum_major(ref, minimum_major)
             ):
                 _fail(
@@ -444,22 +454,6 @@ def check_github_actions() -> None:
             _fail(
                 "validation workflow must install current dependency floor "
                 f"{unquoted_requirement!r}"
-            )
-    for dependency, constraint in sorted(VALIDATION_NO_DEPS_DEPENDENCIES.items()):
-        requirement = f'"{dependency}{constraint}"'
-        if requirement not in text:
-            _fail(
-                "validation workflow must install current dependency floor "
-                f"{requirement}"
-            )
-        no_deps_install = re.compile(
-            r"python -m pip install[^\n]*--no-deps[^\n]*"
-            + re.escape(requirement)
-        )
-        if no_deps_install.search(text) is None:
-            _fail(
-                "validation workflow must install stale-metadata dependency "
-                f"{requirement} with --no-deps"
             )
     if (
         "--disable" + "-warnings" in text

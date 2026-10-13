@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-from pathlib import Path
 import re
 import tempfile
 import unittest
-from unittest.mock import Mock
+from pathlib import Path
 from typing import Any
+from unittest.mock import Mock
 
 try:
     from tests.test_client_weather_favorites import (
@@ -96,7 +96,7 @@ class TestSanitizedProtocolReplayFixtures(unittest.IsolatedAsyncioTestCase):
                 )
                 self.assertNotRegex(
                     text,
-                    re.compile(r"\b[0-9a-f]{2}(:[0-9a-f]{2}){5}\b", re.I),
+                    re.compile(r"\b[0-9a-f]{2}(:[0-9a-f]{2}){5}\b", re.IGNORECASE),
                 )
                 self.assertNotRegex(text, re.compile(r"\b[A-Za-z0-9_-]{32,}\b"))
                 self.assertNotIn("homeassistant", text.lower())

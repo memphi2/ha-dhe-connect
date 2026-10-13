@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass, field
-from typing import Any
 import sys
 import types
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from typing import Any, Self
 
 
 def ensure_homeassistant_stubs() -> None:
@@ -22,7 +22,7 @@ def ensure_homeassistant_stubs() -> None:
         return module
 
     class _Units(str):
-        def __new__(cls, value: str) -> _Units:
+        def __new__(cls, value: str) -> Self:
             return str.__new__(cls, value)
 
     def _ensure_constant(module: types.ModuleType, name: str, value: Any) -> None:

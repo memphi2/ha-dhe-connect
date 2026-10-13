@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-from ipaddress import ip_network
-from pathlib import Path
 import sys
 import unittest
+from ipaddress import ip_network
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from homeassistant.const import CONF_HOST, CONF_PORT  # noqa: E402
+from homeassistant.const import CONF_HOST, CONF_PORT
 
-from custom_components.stiebel_dhe_connect import setup_scan  # noqa: E402
+from custom_components.stiebel_dhe_connect import setup_scan
 
 
 class TestSetupScan(unittest.TestCase):

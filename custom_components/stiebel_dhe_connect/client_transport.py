@@ -14,10 +14,16 @@ import aiohttp
 
 from .client_constants import AUTH_POLL_TIMEOUT_SECONDS
 from .client_diagnostics import diagnostic_error as _diagnostic_error
-from .client_diagnostics import summarize_diagnostic_value as _summarize_diagnostic_value
+from .client_diagnostics import (
+    summarize_diagnostic_value as _summarize_diagnostic_value,
+)
 from .client_errors import (
     DHE_TRANSPORT_EXCEPTIONS as _DHE_TRANSPORT_EXCEPTIONS,
+)
+from .client_errors import (
     runtime_transport_error_or_raise as _runtime_transport_error_or_raise,
+)
+from .client_errors import (
     suppress_transport_errors as _suppress_transport_errors,
 )
 from .client_transport_auth import DHEClientTransportAuthMixin
@@ -32,7 +38,11 @@ from .client_types import (
 )
 from .engineio_helpers import (
     decode_engineio_payload as _decode_engineio_payload,
+)
+from .engineio_helpers import (
     engineio_ping_interval as _engineio_ping_interval,
+)
+from .engineio_helpers import (
     parse_engineio_open_payload as _parse_engineio_open_payload,
 )
 from .protocol import NS

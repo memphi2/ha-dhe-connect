@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import argparse
+import json
+import sqlite3
+import sys
+import time
 from collections import Counter, deque
 from collections.abc import Iterable, Mapping
 from contextlib import closing
 from dataclasses import dataclass
-import json
 from pathlib import Path
-import sqlite3
-import sys
-import time
 from typing import Any
 
 try:

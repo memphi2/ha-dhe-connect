@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from scripts import zeroconf_smoke
@@ -37,14 +37,14 @@ class TestZeroconfSmoke(unittest.TestCase):
 
     def test_run_smoke_reports_match_without_exposing_hosts(self) -> None:
         class _Zeroconf:
-            def get_service_info(self, _type, _name, timeout):  # noqa: ANN001
+            def get_service_info(self, _type, _name, timeout):
                 return SimpleNamespace(port=8443)
 
             def close(self) -> None:
                 pass
 
         class _Browser:
-            def __init__(self, zc, type_, *, listener):  # noqa: ANN001
+            def __init__(self, zc, type_, *, listener):
                 listener.add_service(zc, type_, "PrivateHost._ste-dhe._tcp.local.")
 
             def cancel(self) -> None:
@@ -66,14 +66,14 @@ class TestZeroconfSmoke(unittest.TestCase):
 
     def test_run_smoke_reports_wrong_port(self) -> None:
         class _Zeroconf:
-            def get_service_info(self, _type, _name, timeout):  # noqa: ANN001
+            def get_service_info(self, _type, _name, timeout):
                 return SimpleNamespace(port=9443)
 
             def close(self) -> None:
                 pass
 
         class _Browser:
-            def __init__(self, zc, type_, *, listener):  # noqa: ANN001
+            def __init__(self, zc, type_, *, listener):
                 listener.add_service(zc, type_, "PrivateHost._ste-dhe._tcp.local.")
 
             def cancel(self) -> None:

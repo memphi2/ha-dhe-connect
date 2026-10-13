@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import tempfile
 import types
 import unittest
+from pathlib import Path
 
 try:
     from tests.test_client_weather_favorites import (

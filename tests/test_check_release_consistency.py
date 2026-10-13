@@ -3,20 +3,19 @@
 from __future__ import annotations
 
 import json
-from io import StringIO
-from contextlib import redirect_stderr
-from pathlib import Path
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr
+from io import StringIO
+from pathlib import Path
 from unittest.mock import patch
-
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts import check_release_consistency  # noqa: E402
+from scripts import check_release_consistency
 
 
 def _write_release_fixture(

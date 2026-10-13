@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import importlib.util
-from pathlib import Path
 import unittest
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DIAGNOSTICS = (
@@ -79,7 +78,7 @@ class TestClientDiagnostics(unittest.TestCase):
 
     def test_diagnostic_error_redacts_auth_context(self) -> None:
         private_host = "192.168.50.20"
-        private_ten_host = ".".join(("10", "0", "0", "1"))
+        private_ten_host = ".".join(("10", "0", "0", "1"))  # noqa: FLY002
         local_host = "dhe-ja06.local"
         mac_address = "aa:bb:cc:dd:ee:ff"
         message = self.diagnostics.diagnostic_error(

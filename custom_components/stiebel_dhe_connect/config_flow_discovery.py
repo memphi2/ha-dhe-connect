@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from ipaddress import ip_address
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
+from ipaddress import ip_address
 from typing import Any
 
 from homeassistant.core import HomeAssistant

@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
-from pathlib import Path
 import unittest
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 FLOW_HELPERS = ROOT / "custom_components" / "stiebel_dhe_connect" / "flow_helpers.py"

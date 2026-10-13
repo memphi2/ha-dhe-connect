@@ -26,7 +26,7 @@ class TestHATestRedaction(unittest.TestCase):
         self.assertNotIn(private_host, text)
 
     def test_redacts_full_private_ten_host(self) -> None:
-        private_host = ".".join(("10", "0", "0", "1"))
+        private_host = ".".join(("10", "0", "0", "1"))  # noqa: FLY002
         text = redact_sensitive_text(f"http://{private_host}:8123/path")
 
         self.assertEqual(text, "http://<private-host>/path")

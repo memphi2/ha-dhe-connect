@@ -17,38 +17,60 @@ from .client_constants import (
 )
 from .client_diagnostics import (
     diagnostic_timestamp as _diagnostic_timestamp,
+)
+from .client_diagnostics import (
     summarize_diagnostic_value as _summarize_diagnostic_value,
+)
+from .client_diagnostics import (
     summarize_radio_value as _summarize_radio_value,
+)
+from .client_diagnostics import (
     summarize_weather_value as _summarize_weather_value,
 )
 from .client_mapping import (
     copy_json_like_value as _copy_json_like_value,
+)
+from .client_mapping import (
     device_status_key as _device_status_key,
+)
+from .client_mapping import (
     device_status_problem as _device_status_problem,
 )
 from .client_runtime_app import DHEClientRuntimeAppMixin
 from .client_runtime_media import DHEClientRuntimeMediaMixin
 from .client_types import (
+    ODB_READ_SOURCE_REQUESTED,
+    ODB_READ_SOURCE_RUNTIME,
     DHEError,
     DHEEvent,
     DHESession,
     DHESessionClosed,
     DiagnosticCallback,
+    MeasurementCallback,
     MeasurementValue,
-    ODB_READ_SOURCE_REQUESTED,
-    ODB_READ_SOURCE_RUNTIME,
     ODBReadSource,
     ODBValue,
-    MeasurementCallback,
     SetpointCallback,
 )
 from .client_value_helpers import (
     clamp as _clamp,
+)
+from .client_value_helpers import (
     raw_tenths_to_c as _raw_tenths_to_c,
+)
+from .client_value_helpers import (
     raw_to_bool as _raw_to_bool,
+)
+from .client_value_helpers import (
     raw_to_float as _raw_to_float,
+)
+from .client_value_helpers import (
     raw_to_water_heating_enabled as _raw_to_water_heating_enabled,
+)
+from .client_value_helpers import (
     should_publish_odb_readback as _should_publish_odb_readback,
+)
+from .client_value_helpers import (
     values_equal as _values_equal,
 )
 from .protocol import (
@@ -97,14 +119,20 @@ from .protocol import (
     RADIO_SET_COMMANDS,
     RADIO_STATIONS_SET_COMMAND,
     SAVING_MONITOR_COMMAND_IDS,
-    TEMPERATURE_MAX_OVERRIDE_COMMANDS,
     TEMP_MEMORY_ASSIGN_COMMAND,
     TEMP_MEMORY_SET_COMMAND,
+    TEMPERATURE_MAX_OVERRIDE_COMMANDS,
     WEATHER_ASSIGN_COMMANDS,
     WEATHER_SET_COMMANDS,
     WRITABLE_OPTION_IDS,
+)
+from .protocol import (
     normalize_odb_command as _normalize_odb_command,
+)
+from .protocol import (
     normalize_odb_error_code as _normalize_odb_error_code,
+)
+from .protocol import (
     odb_error_name as _odb_error_name,
 )
 
@@ -646,11 +674,9 @@ class DHEClientRuntimeMixin(DHEClientRuntimeMediaMixin, DHEClientRuntimeAppMixin
         """Return whether an app value is the readback for a recent request."""
         if self._consume_app_read_request(command):
             return True
-        if command.startswith("set:") and self._consume_app_read_request(
+        return command.startswith("set:") and self._consume_app_read_request(
             command.replace("set:", "get:", 1)
-        ):
-            return True
-        return False
+        )
 
     def _mark_app_read_requested(self, command: str) -> None:
         """Track explicit app reads until their first readback."""
@@ -952,7 +978,7 @@ class DHEClientRuntimeMixin(DHEClientRuntimeMediaMixin, DHEClientRuntimeAppMixin
         return _raw_to_float(raw_value)
 
     @staticmethod
-    def _raw_nominal_power_to_kw(raw: int | float) -> float:
+    def _raw_nominal_power_to_kw(raw: float) -> float:
         value = float(raw)
         if 12.0 <= value <= 36.0:
             return value
