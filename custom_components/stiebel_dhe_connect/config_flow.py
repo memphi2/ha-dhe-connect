@@ -8,23 +8,71 @@ from collections.abc import Callable, Mapping
 from typing import Any, cast
 
 import aiohttp
-import voluptuous as vol
-
+import probatio as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import issue_registry as ir
 
+from .client import DHEClient
+from .client_diagnostics import diagnostic_error as _diagnostic_error
+from .config_entry_helpers import entry_target as _entry_target
+from .config_entry_helpers import (
+    is_target_used_by_other_entry as _is_target_used_by_other_entry,
+)
+from .config_entry_helpers import merged_entry_data
+from .config_flow_connection import (
+    async_preserve_token_for_retarget as _async_preserve_token_for_retarget_impl,
+)
+from .config_flow_connection import (
+    connection_options_for_entry as _connection_options_for_entry_impl,
+)
+from .config_flow_discovery import (
+    FLOW_CONTEXT_DISCOVERED_HOST,
+    FLOW_CONTEXT_DISCOVERED_PORT,
+    FLOW_CONTEXT_DISCOVERY_NAME,
+    SETUP_MODE_MANUAL,
+    SETUP_MODE_SCAN,
+    SetupPairingResult,
+    ZeroconfSetupChoice,
+    zeroconf_setup_choice_key,
+)
+from .config_flow_discovery import (
+    coerce_setup_pairing_result as _coerce_setup_pairing_result,
+)
+from .config_flow_discovery import (
+    discovery_identity_candidates as _discovery_identity_candidates,
+)
+from .config_flow_discovery import (
+    discovery_info_name as _discovery_info_name,
+)
+from .config_flow_discovery import (
+    is_matching_flow_in_progress as _is_matching_flow_in_progress,
+)
+from .config_flow_discovery import (
+    normalize_mac as _normalize_discovery_mac,
+)
+from .config_flow_discovery import (
+    zeroconf_setup_choices_from_progress as _zeroconf_setup_choices_from_progress,
+)
+from .config_flow_scan_state import SetupScanState
 from .config_flow_schemas import (
     ATTR_CO2_EMISSION,
     ATTR_ELECTRICITY_PRICE,
     ATTR_WATER_PRICE,
+)
+from .config_flow_schemas import (
     apply_suggested_values_to_schema as _apply_suggested_values_to_schema,
+)
+from .config_flow_schemas import (
     device_settings_defaults as _device_settings_defaults,
+)
+from .config_flow_schemas import (
     internal_scald_protection_options as _internal_scald_protection_options,
+)
+from .config_flow_schemas import (
     schema as _schema,
 )
-from .config_flow_scan_state import SetupScanState
 from .config_flow_setup import (
     CONF_SCAN_AUTOMATICALLY,
     CONF_SCAN_CIDR,
@@ -34,73 +82,68 @@ from .config_flow_setup import (
     CONF_SCAN_SUBNET_MODE,
     CONF_SETUP_MODE,
     SETUP_SCAN_PROGRESS_ACTION,
+)
+from .config_flow_setup import (
     apply_validation_error as _apply_validation_error,
+)
+from .config_flow_setup import (
     connection_data_from_user_input as _connection_data_from_user_input,
+)
+from .config_flow_setup import (
     language_from_hass as _language_from_hass,
+)
+from .config_flow_setup import (
     required_scan_subnet as _required_scan_subnet,
+)
+from .config_flow_setup import (
     scan_subnet_cidr_input as _scan_subnet_cidr_input,
+)
+from .config_flow_setup import (
     scan_subnet_network_mask_error_field as _scan_subnet_network_mask_error_field,
+)
+from .config_flow_setup import (
     scan_subnet_network_mask_input as _scan_subnet_network_mask_input,
+)
+from .config_flow_setup import (
     scan_subnet_suggested_values as _scan_subnet_suggested_values,
+)
+from .config_flow_setup import (
     setup_mode_labels as _setup_mode_labels,
 )
-from .config_entry_helpers import merged_entry_data
-from .config_entry_helpers import entry_target as _entry_target
-from .config_entry_helpers import (
-    is_target_used_by_other_entry as _is_target_used_by_other_entry,
-)
-from .client_diagnostics import diagnostic_error as _diagnostic_error
-from .config_flow_discovery import (
-    FLOW_CONTEXT_DISCOVERED_HOST,
-    FLOW_CONTEXT_DISCOVERED_PORT,
-    FLOW_CONTEXT_DISCOVERY_NAME,
-    SETUP_MODE_MANUAL,
-    SETUP_MODE_SCAN,
-    SetupPairingResult,
-    ZeroconfSetupChoice,
-    coerce_setup_pairing_result as _coerce_setup_pairing_result,
-    discovery_identity_candidates as _discovery_identity_candidates,
-    discovery_info_name as _discovery_info_name,
-    is_matching_flow_in_progress as _is_matching_flow_in_progress,
-    normalize_mac as _normalize_discovery_mac,
-    zeroconf_setup_choice_key,
-    zeroconf_setup_choices_from_progress as _zeroconf_setup_choices_from_progress,
-)
-from .config_flow_connection import (
-    async_preserve_token_for_retarget as _async_preserve_token_for_retarget_impl,
-    connection_options_for_entry as _connection_options_for_entry_impl,
-)
-from .discovery_state import (
-    DISCOVERY_MIN_PROMPT_CONFIDENCE,
-    DiscoveryRecord,
-    async_load_discovery_cache as _async_load_discovery_cache,
-    async_recent_discovery_prompt_seen as _async_recent_discovery_prompt_seen,
-    async_record_discovery as _async_record_discovery,
-    async_record_scan_discoveries as _async_record_scan_discoveries,
-    cached_discovery_choices as _cached_discovery_choices,
-    zeroconf_discovery_record as _zeroconf_discovery_record,
-)
 from .connection_helpers import normalize_host, target_changed, validate_port
-from .client import DHEClient
 from .const import (
     CONF_TOKEN,
     DEFAULT_NAME,
     DEFAULT_PORT,
     DOMAIN,
 )
+from .discovery_state import (
+    DISCOVERY_MIN_PROMPT_CONFIDENCE,
+    DiscoveryRecord,
+)
+from .discovery_state import (
+    async_load_discovery_cache as _async_load_discovery_cache,
+)
+from .discovery_state import (
+    async_recent_discovery_prompt_seen as _async_recent_discovery_prompt_seen,
+)
+from .discovery_state import (
+    async_record_discovery as _async_record_discovery,
+)
+from .discovery_state import (
+    async_record_scan_discoveries as _async_record_scan_discoveries,
+)
+from .discovery_state import (
+    cached_discovery_choices as _cached_discovery_choices,
+)
+from .discovery_state import (
+    zeroconf_discovery_record as _zeroconf_discovery_record,
+)
 from .entity_state_helpers import (
     CONF_INTERNAL_SCALD_PROTECTION,
     INTERNAL_SCALD_PROTECTION_DEFAULT,
     INTERNAL_SCALD_PROTECTION_OPTIONS,
 )
-from .pairing_validation import (
-    _async_clear_setup_token_files as _validation_async_clear_setup_token_files,
-    can_connect as _can_connect,
-    validate_setup_pairing as _validate_setup_pairing_fn,
-)
-from .pairing_helpers import map_pairing_error
-from .repair_issues import DISCOVERY_CONFLICT_ISSUE, async_delete_pairing_issue
-from .runtime_helpers import get_runtime_data
 from .error_codes import (
     ALREADY_CONFIGURED,
     ALREADY_IN_PROGRESS,
@@ -112,6 +155,18 @@ from .error_codes import (
     LOW_CONFIDENCE_DISCOVERY,
     RECENTLY_DISCOVERED,
 )
+from .pairing_helpers import map_pairing_error
+from .pairing_validation import (
+    _async_clear_setup_token_files as _validation_async_clear_setup_token_files,
+)
+from .pairing_validation import (
+    can_connect as _can_connect,
+)
+from .pairing_validation import (
+    validate_setup_pairing as _validate_setup_pairing_fn,
+)
+from .repair_issues import DISCOVERY_CONFLICT_ISSUE, async_delete_pairing_issue
+from .runtime_helpers import get_runtime_data
 from .setup_scan import (
     SCAN_SUBNET_MODE_CIDR,
     SCAN_SUBNET_MODE_CURRENT,
@@ -130,7 +185,6 @@ from .token_storage import (
     token_is_well_formed,
 )
 
-
 _LOGGER = logging.getLogger(__name__)
 
 __all__ = [
@@ -139,11 +193,11 @@ __all__ = [
     "ATTR_WATER_PRICE",
     "StiebelDHEConnectConfigFlow",
     "_apply_validation_error",
+    "_async_preserve_token_for_retarget",
     "_can_connect",
     "_connection_data_from_user_input",
     "_connection_options_for_entry",
     "_device_settings_defaults",
-    "_async_preserve_token_for_retarget",
     "_is_target_used_by_other_entry",
 ]
 

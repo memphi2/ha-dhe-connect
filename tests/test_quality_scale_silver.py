@@ -10,7 +10,6 @@ import yaml
 
 from custom_components.stiebel_dhe_connect.const import DOMAIN, PLATFORMS
 
-
 ROOT = Path(__file__).resolve().parents[1]
 QUALITY_SCALE = ROOT / "custom_components" / DOMAIN / "quality_scale.yaml"
 BRONZE_RULES = {

@@ -8,7 +8,6 @@ import sys
 import tomllib
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 INTEGRATION_PACKAGE = ROOT / "custom_components" / "stiebel_dhe_connect"
 MYPY_CONFIG = ROOT / "pyproject.toml"
@@ -63,7 +62,7 @@ def main() -> int:
     if importlib.util.find_spec("mypy") is None:
         print(
             "ERROR: mypy is not installed. Install it with "
-            "`python -m pip install 'mypy>=1.20,<2'`.",
+            "`python -m pip install 'mypy>=2.4,<3'`.",
             file=sys.stderr,
         )
         return 1

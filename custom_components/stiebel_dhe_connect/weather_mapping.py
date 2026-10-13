@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import UTC, date as date_type, datetime, time as time_type, tzinfo
+from datetime import UTC, datetime, tzinfo
+from datetime import date as date_type
+from datetime import time as time_type
 from typing import Any
-
 
 DHE_WEATHER_ICON_CONDITIONS = {
     1: "sunny",

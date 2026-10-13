@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import time
+from dataclasses import dataclass
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -12,7 +12,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import UnitOfTime, EntityCategory
+from homeassistant.const import EntityCategory, UnitOfTime
 from homeassistant.core import callback
 
 from .client import DHEClient
@@ -132,7 +132,7 @@ class StiebelDHEErrorStatusSensor(StiebelDHEEntityMixin, SensorEntity):
     _attr_should_poll = False
     _attr_translation_key = "error_status"
     _attr_device_class = SensorDeviceClass.ENUM
-    _attr_options = list(ERROR_STATUS_OPTIONS)
+    _attr_options = list(ERROR_STATUS_OPTIONS)  # noqa: RUF012
     _attr_icon = "mdi:alert-octagon-outline"
     _unrecorded_attributes = frozenset({
         "inlet_temperature",

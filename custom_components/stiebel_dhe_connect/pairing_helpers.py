@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 CONNECTIVITY_ERROR_PARTS = (
     "connection refused",
     "cannot connect",

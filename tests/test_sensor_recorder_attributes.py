@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
-from pathlib import Path
-import types
 import sys
 import time
+import types
 import unittest
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 try:

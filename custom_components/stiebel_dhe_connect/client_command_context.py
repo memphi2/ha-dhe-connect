@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING, Any, Protocol, TypeVar, cast
 
 from .client_types import (
     AvailabilityCallback,
-    DiagnosticCallback,
     DHESession,
+    DiagnosticCallback,
     MeasurementCallback,
     MeasurementValue,
     ODBValue,

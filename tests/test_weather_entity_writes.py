@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
 import importlib.util
-from pathlib import Path
 import sys
 import types
 import unittest
+from datetime import UTC, datetime
+from pathlib import Path
 
 try:
     from tests.test_aiohttp_stubs import _ensure_aiohttp_stub

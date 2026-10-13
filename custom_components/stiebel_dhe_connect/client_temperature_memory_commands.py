@@ -12,7 +12,11 @@ from .client_constants import APP_COMMAND_CONFIRMATION_TIMEOUT
 from .client_types import DHEError, DHESession
 from .client_value_helpers import (
     build_temperature_memory_button_value as _build_temperature_memory_button_value,
+)
+from .client_value_helpers import (
     clamp as _clamp,
+)
+from .client_value_helpers import (
     round_to_half_c as _round_to_half_c,
 )
 from .protocol import (
@@ -20,12 +24,12 @@ from .protocol import (
     DEFAULT_TEMPERATURE_MEMORY_NAMES,
     ID_SETPOINT_REQUEST,
     ODB_ASSIGN_COMMAND,
+    TEMP_MEMORY_ASSIGN_COMMAND,
+    TEMP_MEMORY_GET_COMMAND,
     TEMPERATURE_MEMORY_ID_TO_MEASUREMENT,
     TEMPERATURE_MEMORY_MAX_SLOTS,
     TEMPERATURE_MEMORY_SLOT_IDS,
     TEMPERATURE_MEMORY_SLOT_MEASUREMENTS,
-    TEMP_MEMORY_ASSIGN_COMMAND,
-    TEMP_MEMORY_GET_COMMAND,
 )
 
 

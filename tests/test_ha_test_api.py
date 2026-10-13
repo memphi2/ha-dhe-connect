@@ -2,18 +2,19 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 import io
 import json
 import os
-from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stdout
-from unittest.mock import patch
 import urllib.error
+from contextlib import redirect_stdout
+from datetime import datetime
+from pathlib import Path
+from typing import Self
+from unittest.mock import patch
 
 from scripts import ha_test_api
 
@@ -1013,7 +1014,7 @@ class _FakeStateApi:
 class _FakeResponse:
     status = 200
 
-    def __enter__(self) -> "_FakeResponse":
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(

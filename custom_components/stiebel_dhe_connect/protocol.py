@@ -171,7 +171,7 @@ ODB_ERROR_CODES_CASEFOLD = {
 def normalize_odb_id(value: Any) -> int:
     """Return a numeric ODB ID from a raw ID or known debug name."""
     if isinstance(value, bool):
-        raise ValueError("boolean is not a valid ODB id")
+        raise ValueError("boolean is not a valid ODB id")  # noqa: TRY004
     if isinstance(value, int):
         odb_id = value
         if odb_id < 0:
@@ -196,7 +196,7 @@ def normalize_odb_id(value: Any) -> int:
 def normalize_odb_error_code(value: Any) -> int:
     """Return a numeric ODB error code from a raw code or DHE debug name."""
     if isinstance(value, bool):
-        raise ValueError("boolean is not a valid ODB error code")
+        raise ValueError("boolean is not a valid ODB error code")  # noqa: TRY004
     if isinstance(value, int):
         if value < 0:
             raise ValueError(f"negative ODB error code {value!r}")

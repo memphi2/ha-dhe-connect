@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import suppress
 import time
+from contextlib import suppress
 from typing import Any, cast
 
 from homeassistant.components.sensor import (
@@ -17,12 +17,12 @@ from homeassistant.const import EntityCategory, UnitOfTime
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .client import DHEClient
-from .client_types import DHEError, MeasurementValue
 from .async_helpers import create_background_task
+from .client import DHEClient
 from .client_mapping import (
     DEVICE_STATUS_SERVICE_REQUIRED as _DEVICE_STATUS_SERVICE_REQUIRED,
 )
+from .client_types import DHEError, MeasurementValue
 from .entity_helpers import StiebelDHEEntityMixin
 from .entity_state_helpers import (
     coerce_float,
@@ -39,17 +39,17 @@ from .protocol import (
     ODB_ZERO_REQUEST_READBACK_IGNORE_IDS,
 )
 from .runtime_helpers import get_runtime_data
-from .sensor_diagnostics import (
-    DIAGNOSTIC_SENSOR_DESCRIPTIONS,
-    StiebelDHEDiagnosticSensor,
-    StiebelDHEErrorStatusSensor,
-    StiebelDHEReconnectCountSensor,
-)
 from .sensor_descriptions import (
     DEFAULT_ENABLED_SENSOR_KEYS,
     SENSOR_DESCRIPTIONS,
     SENSOR_WRITE_FILTERS,
     StiebelDHESensorEntityDescription,
+)
+from .sensor_diagnostics import (
+    DIAGNOSTIC_SENSOR_DESCRIPTIONS,
+    StiebelDHEDiagnosticSensor,
+    StiebelDHEErrorStatusSensor,
+    StiebelDHEReconnectCountSensor,
 )
 
 PARALLEL_UPDATES = 0
@@ -60,11 +60,11 @@ __all__ = [
     "DEFAULT_ENABLED_SENSOR_KEYS",
     "DEVICE_STATUS_SERVICE_REQUIRED",
     "DIAGNOSTIC_SENSOR_DESCRIPTIONS",
-    "EntityCategory",
     "ID_DEVICE_STATUS",
     "ID_INLET_TEMPERATURE",
     "SENSOR_DESCRIPTIONS",
     "SENSOR_WRITE_FILTERS",
+    "EntityCategory",
     "SensorDeviceClass",
     "SensorStateClass",
     "StiebelDHEDiagnosticSensor",
@@ -295,9 +295,9 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
     def _measurement_attributes(self) -> dict[int, dict[str, Any]]:
         """Return cached per-ODB attributes for this client with test compatibility."""
         if hasattr(self._client, "_last_measurement_attributes"):
-            attributes = getattr(self._client, "_last_measurement_attributes")
+            attributes = self._client._last_measurement_attributes
         else:
-            attributes = getattr(self._client, "last_measurement_attributes")
+            attributes = self._client.last_measurement_attributes
         if isinstance(attributes, dict):
             return cast(dict[int, dict[str, Any]], attributes)
         return {}

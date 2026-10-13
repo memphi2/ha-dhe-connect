@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any
 
-
 MAX_FALLBACK_SOURCE_OPTIONS = 16
 
 

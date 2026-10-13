@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import contextlib
-from dataclasses import dataclass
 import time
 import urllib.error
+from dataclasses import dataclass
+from itertools import pairwise
 from typing import Any, Protocol
 
 DEFAULT_CLIMATE_ENTITY = "climate.dhe_connect_water_heating"
@@ -249,7 +250,7 @@ def _restore_radio(
         and isinstance(sources, list)
         and current_source in sources
     ):
-        with contextlib.suppress(Exception):  # noqa: BLE001
+        with contextlib.suppress(Exception):
             api.call_service(
                 access_token,
                 "media_player",
@@ -291,7 +292,7 @@ def _restore_climate_if_needed(
     climate_before_state: str,
 ) -> None:
     if climate_before_state == "off":
-        with contextlib.suppress(Exception):  # noqa: BLE001
+        with contextlib.suppress(Exception):
             api.call_service(
                 access_token,
                 "climate",
@@ -578,7 +579,7 @@ def _observe_timer_countdown(
             observed.append(seconds)
         time.sleep(1)
     descending_pairs = sum(
-        1 for left, right in zip(observed, observed[1:], strict=False) if right < left
+        1 for left, right in pairwise(observed) if right < left
     )
     results.append(
         ServiceSmokeResult(
@@ -724,7 +725,7 @@ def _restore_timer(
     duration_entity: str,
     original_duration: float | None,
 ) -> None:
-    with contextlib.suppress(Exception):  # noqa: BLE001
+    with contextlib.suppress(Exception):
         api.call_service(
             access_token,
             "switch",
@@ -732,7 +733,7 @@ def _restore_timer(
             {"entity_id": switch_entity},
         )
     if original_duration is not None:
-        with contextlib.suppress(Exception):  # noqa: BLE001
+        with contextlib.suppress(Exception):
             api.call_service(
                 access_token,
                 "number",
@@ -782,7 +783,7 @@ def result_prefix(result: ServiceSmokeResult) -> str:
 
 
 def _dhe_device_status(api: HomeAssistantApiLike, access_token: str) -> str | None:
-    with contextlib.suppress(Exception):  # noqa: BLE001
+    with contextlib.suppress(Exception):
         state = api.get_state(access_token, "sensor.dhe_connect_device_status")
         value = state.get("state")
         if isinstance(value, str):

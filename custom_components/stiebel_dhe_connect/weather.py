@@ -9,18 +9,17 @@ from importlib import import_module
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from homeassistant.components.weather import WeatherEntity
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
+from . import weather_mapping as weather_model
 from .async_helpers import create_background_task
 from .client import DHEClient
 from .entity_helpers import StiebelDHEEntityMixin
 from .entity_state_helpers import connected_and_ready, filtered_state_attributes
-from . import weather_mapping as weather_model
 from .runtime_helpers import get_runtime_data
 
 if TYPE_CHECKING:
@@ -40,7 +39,7 @@ def _weather_feature_value(name: str, fallback: int = 0) -> Any:
         "homeassistant.components.weather.const",
     ):
         try:
-            feature_cls = getattr(import_module(module_name), "WeatherEntityFeature")
+            feature_cls = import_module(module_name).WeatherEntityFeature
         except (AttributeError, ImportError):
             continue
         return getattr(feature_cls, name, fallback)
@@ -209,7 +208,7 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
 
     async def _async_run_forecast_listener_update(
         self,
-        update: "Awaitable[Any]",
+        update: Awaitable[Any],
     ) -> None:
         """Run one HA forecast-listener update task."""
         await update
@@ -225,7 +224,7 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
             done_task.result()
         except asyncio.CancelledError:
             return
-        except Exception:  # noqa: BLE001
+        except Exception:
             _LOGGER.debug("DHE weather forecast listener update failed", exc_info=True)
 
         if self._forecast_listener_update_pending:

@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import importlib.util
-from pathlib import Path
-import types
 import sys
+import types
 import unittest
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 try:
@@ -127,7 +127,7 @@ class TestSelectHelpers(unittest.IsolatedAsyncioTestCase):
             current_location=current,
         )
 
-        self.assertEqual(list(mapping.values())[0], current)
+        self.assertEqual(next(iter(mapping.values())), current)
         self.assertEqual(len(mapping), 2)
 
     def test_weather_select_skips_duplicate_state_writes(self) -> None:

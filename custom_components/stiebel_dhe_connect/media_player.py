@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from importlib import import_module
-from typing import TYPE_CHECKING
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.media_player import (
     MediaPlayerEntity,
 )
+
 if TYPE_CHECKING:
     from homeassistant.components.media_player.const import MediaPlayerState
 
@@ -17,6 +17,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
+from . import radio_mapping as radio
 from .action_error_helpers import (
     dhe_action_error,
     raise_if_dhe_unavailable,
@@ -26,7 +27,6 @@ from .client import DHEClient
 from .client_types import DHEError
 from .entity_helpers import StiebelDHEEntityMixin
 from .entity_state_helpers import connected_and_ready, filtered_state_attributes
-from . import radio_mapping as radio
 from .runtime_helpers import get_runtime_data
 
 PARALLEL_UPDATES = 0

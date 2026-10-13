@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 import sys
 import unittest
+from pathlib import Path
 
 from homeassistant.exceptions import HomeAssistantError
 
@@ -13,13 +13,13 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from custom_components.stiebel_dhe_connect.action_error_helpers import (  # noqa: E402
+from custom_components.stiebel_dhe_connect.action_error_helpers import (
     dhe_action_error,
     raise_if_dhe_unavailable,
     run_dhe_action,
     translated_homeassistant_error,
 )
-from custom_components.stiebel_dhe_connect.client_types import DHEError  # noqa: E402
+from custom_components.stiebel_dhe_connect.client_types import DHEError
 
 
 class _Client:

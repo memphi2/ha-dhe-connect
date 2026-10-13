@@ -3,25 +3,19 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator, Callable
-from contextlib import asynccontextmanager
 import datetime as dt
 import importlib
-from ipaddress import ip_address, ip_network
-from pathlib import Path
 import sys
 import types
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
+from ipaddress import ip_address, ip_network
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_homeassistant_custom_component
-from pytest_homeassistant_custom_component.common import (
-    MockConfigEntry,
-    StoreWithoutWriteLoad,
-    async_test_home_assistant as _ha_async_test_home_assistant,
-)
-
 from homeassistant import bootstrap, config_entries, loader
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
@@ -30,14 +24,32 @@ from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import (
     area_registry as ar,
+)
+from homeassistant.helpers import (
     category_registry as cr,
+)
+from homeassistant.helpers import (
     device_registry as dr,
+)
+from homeassistant.helpers import (
     entity_registry as er,
+)
+from homeassistant.helpers import (
     issue_registry as ir,
+)
+from homeassistant.helpers import (
     label_registry as lr,
+)
+from homeassistant.helpers import (
     restore_state as rs,
 )
-
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    StoreWithoutWriteLoad,
+)
+from pytest_homeassistant_custom_component.common import (
+    async_test_home_assistant as _ha_async_test_home_assistant,
+)
 
 pytestmark = pytest.mark.asyncio
 DOMAIN = "stiebel_dhe_connect"
@@ -50,15 +62,15 @@ if str(ROOT) not in sys.path:
 
 try:
     from tests.test_fake_dhe_engineio_server import (
-        FakeDHEEngineIOServer,
         PAIRING_TOKEN,
         STORED_TOKEN,
+        FakeDHEEngineIOServer,
     )
 except ModuleNotFoundError:
     from test_fake_dhe_engineio_server import (
-        FakeDHEEngineIOServer,
         PAIRING_TOKEN,
         STORED_TOKEN,
+        FakeDHEEngineIOServer,
     )
 
 
@@ -196,7 +208,7 @@ async def _async_test_home_assistant(
                 future: asyncio.Future[Any] = hass.loop.create_future()
                 try:
                     future.set_result(target(*args))
-                except BaseException as err:  # pragma: no cover - propagated by HA
+                except BaseException as err:  # noqa: BLE001  # pragma: no cover
                     future.set_exception(err)
                 return future
 
@@ -225,7 +237,7 @@ def _isolate_discovery_cache():
 
 
 def _schema_defaults(schema: Any) -> dict[str, Any]:
-    """Return voluptuous marker defaults from a flow schema."""
+    """Return probatio marker defaults from a flow schema."""
     defaults: dict[str, Any] = {}
     for marker in getattr(schema, "schema", {}):
         key = getattr(marker, "schema", None)
@@ -255,7 +267,7 @@ async def _ensure_network_loaded(hass: HomeAssistant) -> None:
         network_module = importlib.import_module(
             "homeassistant.components.network.network"
         )
-        async_get_network = getattr(network_module, "async_get_network")
+        async_get_network = network_module.async_get_network
     await async_get_network(hass)
 
 
@@ -318,10 +330,7 @@ class _FixtureDHEClient:
     async def start(self) -> None:
         """Mimic the long-running DHE background session."""
         self.start_called = True
-        try:
-            await self._stopped.wait()
-        except asyncio.CancelledError:
-            raise
+        await self._stopped.wait()
 
     async def stop(self) -> None:
         """Stop the fake background session."""
@@ -330,7 +339,7 @@ class _FixtureDHEClient:
 
     async def request_measurement_refresh(self, **_kwargs: Any) -> None:
         """Mock a measurement refresh request from the sensor runtime path."""
-        return None
+        return
 
     async def search_weather_locations(
         self,
@@ -551,9 +560,8 @@ async def test_entry_setup_raises_not_ready_when_target_unreachable() -> None:
             integration,
             "_async_can_connect",
             AsyncMock(return_value=False),
-        ):
-            with pytest.raises(ConfigEntryNotReady):
-                await integration.async_setup_entry(hass, entry)
+        ), pytest.raises(ConfigEntryNotReady):
+            await integration.async_setup_entry(hass, entry)
 
 
 async def test_entry_setup_falls_back_to_original_data_target() -> None:
@@ -4152,10 +4160,9 @@ async def test_unavailable_runtime_blocks_controls_except_repair_button() -> Non
             key: (state.state if (state := hass.states.get(entity_id)) else None)
             for key, entity_id in entity_ids.items()
         }
+        states = [hass.states.get(entity_id) for entity_id in entity_ids.values()]
         assert all(
-            (state := hass.states.get(entity_id)) is not None
-            and state.state == "unavailable"
-            for entity_id in entity_ids.values()
+            state is not None and state.state == "unavailable" for state in states
         ), offline_states
 
         blocked_calls = (

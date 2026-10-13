@@ -3,24 +3,20 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
-from datetime import datetime
 import http.client
 import json
 import os
-from pathlib import Path
-from tempfile import gettempdir
 import time
-from typing import Any
 import urllib.error
 import urllib.parse
 import urllib.request
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+from tempfile import gettempdir
+from typing import Any
 
 try:
-    from scripts.ha_test_redaction import (
-        format_redacted_exception,
-        redact_sensitive_text,
-    )
     from scripts.ha_test_api_smokes import (
         DEFAULT_CLIMATE_ENTITY,
         DEFAULT_RADIO_AUTO_OFF_SECONDS,
@@ -37,11 +33,11 @@ try:
         run_service_smoke,
         run_timer_smoke,
     )
-except ModuleNotFoundError:
-    from ha_test_redaction import (
+    from scripts.ha_test_redaction import (
         format_redacted_exception,
         redact_sensitive_text,
     )
+except ModuleNotFoundError:
     from ha_test_api_smokes import (
         DEFAULT_CLIMATE_ENTITY,
         DEFAULT_RADIO_AUTO_OFF_SECONDS,
@@ -58,6 +54,10 @@ except ModuleNotFoundError:
         run_service_smoke,
         run_timer_smoke,
     )
+    from ha_test_redaction import (
+        format_redacted_exception,
+        redact_sensitive_text,
+    )
 
 
 __all__ = [
@@ -70,8 +70,8 @@ __all__ = [
     "DEFAULT_TIMER_SMOKE_EXPIRY_GRACE_SECONDS",
     "DEFAULT_TIMER_SMOKE_OBSERVE_SECONDS",
     "DEFAULT_TIMER_SWITCH_ENTITY",
-    "HomeAssistantApi",
     "AuthToken",
+    "HomeAssistantApi",
     "TokenCleanupResult",
     "_timer_state_seconds",
     "cleanup_localhost_refresh_tokens",

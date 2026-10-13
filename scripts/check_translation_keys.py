@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 from typing import Final
-
 
 ROOT = Path(__file__).resolve().parents[1]
 TRANSLATIONS = ROOT / "custom_components" / "stiebel_dhe_connect" / "translations"

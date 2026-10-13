@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from ipaddress import IPv4Network
 from collections.abc import Mapping
+from ipaddress import IPv4Network
 from typing import Any
 
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT

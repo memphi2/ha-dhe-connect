@@ -32,7 +32,7 @@ def c_to_raw_tenths(value: float) -> int:
     return round(value * 10.0)
 
 
-def raw_tenths_to_c(value: int | float) -> float:
+def raw_tenths_to_c(value: float) -> float:
     """Decode a raw tenths value as Celsius."""
     return float(value) / 10.0
 

@@ -11,7 +11,9 @@ from urllib.parse import quote
 
 import aiohttp
 
-from .client_diagnostics import summarize_diagnostic_value as _summarize_diagnostic_value
+from .client_diagnostics import (
+    summarize_diagnostic_value as _summarize_diagnostic_value,
+)
 from .client_types import DHEEvent, DHESession
 from .engineio_helpers import balanced_json_array as _balanced_json_array
 from .protocol import NS

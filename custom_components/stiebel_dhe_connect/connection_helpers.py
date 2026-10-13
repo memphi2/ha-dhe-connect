@@ -9,16 +9,16 @@ from urllib.parse import SplitResult, urlsplit
 
 try:
     from .error_codes import (
-        EMPTY_HOST,
         EMBEDDED_PORT_NOT_SUPPORTED,
+        EMPTY_HOST,
         INVALID_HOST,
         INVALID_PORT,
         INVALID_SCHEME,
     )
 except ImportError:  # pragma: no cover - compatibility for direct module loading in tests
     from custom_components.stiebel_dhe_connect.error_codes import (
-        EMPTY_HOST,
         EMBEDDED_PORT_NOT_SUPPORTED,
+        EMPTY_HOST,
         INVALID_HOST,
         INVALID_PORT,
         INVALID_SCHEME,
@@ -99,9 +99,9 @@ def host_for_url(host: str) -> str:
 def validate_port(port: int | str) -> int:
     """Validate TCP port from UI input."""
     if isinstance(port, bool):
-        raise ValueError(INVALID_PORT)
+        raise ValueError(INVALID_PORT)  # noqa: TRY004
     if isinstance(port, float):
-        raise ValueError(INVALID_PORT)
+        raise ValueError(INVALID_PORT)  # noqa: TRY004
     port = int(port)
     if port < 1 or port > 65535:
         raise ValueError(INVALID_PORT)

@@ -105,9 +105,9 @@ class StiebelDHEBaseText(StiebelDHEEntityMixin, TextEntity, RestoreEntity):
     def _measurement_attributes(self) -> dict[int, dict[str, object]]:
         """Return per-ODB attributes for this client with test compatibility."""
         if hasattr(self._client, "_last_measurement_attributes"):
-            attributes = getattr(self._client, "_last_measurement_attributes")
+            attributes = self._client._last_measurement_attributes
         else:
-            attributes = getattr(self._client, "last_measurement_attributes")
+            attributes = self._client.last_measurement_attributes
         if isinstance(attributes, dict):
             return cast(dict[int, dict[str, object]], attributes)
         return {}

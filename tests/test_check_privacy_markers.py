@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 
 from scripts import check_privacy_markers
 
@@ -25,7 +25,7 @@ class TestCheckPrivacyMarkers(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "username.md"
             key = "HA_TEST_USERNAME"
-            value = "-".join(("real", "user"))
+            value = "-".join(("real", "user"))  # noqa: FLY002
             path.write_text(f"{key}={value}\n", encoding="utf-8")
             issues = check_privacy_markers.find_privacy_issues([path])
             self.assertEqual(len(issues), 1)
@@ -48,7 +48,7 @@ class TestCheckPrivacyMarkers(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "ip.md"
             key = "HA_TEST_URL"
-            host = ".".join(("10", "23", "45", "67"))
+            host = ".".join(("10", "23", "45", "67"))  # noqa: FLY002
             path.write_text(f"{key}=http://{host}:8123\n", encoding="utf-8")
             issues = check_privacy_markers.find_privacy_issues([path])
             self.assertEqual(len(issues), 1)

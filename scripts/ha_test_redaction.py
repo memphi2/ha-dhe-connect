@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 
-
 SECRET_VALUE_RE = re.compile(
     r"(?i)(access_token|refresh_token|password|code)"
     r"([\"']?\s*[:=]\s*[\"']?)"

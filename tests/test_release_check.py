@@ -2,20 +2,20 @@
 
 from __future__ import annotations
 
-from contextlib import redirect_stdout
-from io import StringIO
 import json
-from pathlib import Path
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
+from pathlib import Path
 from unittest.mock import ANY, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts import release_check  # noqa: E402
+from scripts import release_check
 
 
 def _write_release_files(root: Path, version: str) -> None:
@@ -365,7 +365,7 @@ class TestReleaseCheck(unittest.TestCase):
         self.assertNotIn(private_host, message)
 
     def test_result_line_redacts_auth_context(self) -> None:
-        private_host = ".".join(("192", "168", "0", "20"))
+        private_host = ".".join(("192", "168", "0", "20"))  # noqa: FLY002
         result = release_check.CheckResult(
             False,
             (
@@ -383,7 +383,7 @@ class TestReleaseCheck(unittest.TestCase):
         self.assertNotIn(private_host, line)
 
     def test_main_prints_redacted_result_messages(self) -> None:
-        private_host = ".".join(("10", "0", "0", "5"))
+        private_host = ".".join(("10", "0", "0", "5"))  # noqa: FLY002
         result = release_check.CheckResult(
             False,
             (
@@ -555,7 +555,7 @@ class TestReleaseCheck(unittest.TestCase):
                 with tempfile.TemporaryDirectory() as temp_dir:
                     root = Path(temp_dir)
 
-                    def _runner(args):
+                    def _runner(args, tracked_path=tracked_path):
                         self.assertEqual(
                             tuple(args),
                             ("git", "ls-files", "-z", "--cached"),

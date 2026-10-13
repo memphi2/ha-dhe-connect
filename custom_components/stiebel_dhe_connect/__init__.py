@@ -8,7 +8,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, cast
 
-from homeassistant.config_entries import ConfigEntry, ConfigFlowResult, SOURCE_REAUTH
+from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntry, ConfigFlowResult
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady
@@ -24,7 +24,7 @@ from .async_helpers import (
     task_cancel_callback,
 )
 from .client import DHEClient
-from .config_entry_helpers import merged_entry_data, entry_target
+from .config_entry_helpers import entry_target, merged_entry_data
 from .connection_helpers import normalize_host, validate_port
 from .connection_probe import async_can_connect as _async_can_connect
 from .const import (
@@ -37,8 +37,8 @@ from .const import (
 from .entity_helpers import device_registry_model, device_registry_sw_version
 from .protocol import ID_DEVICE_INFO
 from .repair_issues import (
-    DISCOVERY_CONFLICT_ISSUE,
     DEVICE_UNREACHABLE_ISSUE,
+    DISCOVERY_CONFLICT_ISSUE,
     HOST_CHANGED_OR_UNREACHABLE_ISSUE,
     PAIRING_REQUIRED_ISSUE,
     TOKEN_INVALID_ISSUE,
@@ -52,6 +52,8 @@ from .runtime_helpers import (
 )
 from .services import (
     async_register_services as _async_register_services,
+)
+from .services import (
     async_unregister_services as _async_unregister_services,
 )
 from .token_file_helpers import token_file_for_target
@@ -155,11 +157,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     except asyncio.CancelledError:
         raise
-    except Exception as err:
+    except Exception:
         _LOGGER.exception(
-            "Failed to initialize DHE platforms for entry=%s: %s",
+            "Failed to initialize DHE platforms for entry=%s",
             entry.entry_id,
-            err,
         )
         clear_runtime_data(entry)
         raise
@@ -446,7 +447,7 @@ def _track_runtime_task(
             done_task.result()
         except asyncio.CancelledError:
             return
-        except Exception:  # noqa: BLE001
+        except Exception:
             _LOGGER.debug("DHE %s task failed", label, exc_info=True)
 
     task.add_done_callback(_clear_runtime_task)

@@ -3,23 +3,22 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import socket
 from collections import deque
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from ipaddress import IPv4Address, IPv4Network, ip_address, ip_network
-import socket
 from typing import Any
-import logging
 
 import aiohttp
-
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .error_codes import INVALID_SCAN_SUBNET, SCAN_SUBNET_TOO_LARGE
-from .const import DEFAULT_PORT
 from .connection_helpers import host_for_url
+from .const import DEFAULT_PORT
+from .error_codes import INVALID_SCAN_SUBNET, SCAN_SUBNET_TOO_LARGE
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -134,7 +133,7 @@ def _parse_ipv4_network(text: str) -> IPv4Network:
         else:
             parsed_network = ip_network(text, strict=False)
     if not isinstance(parsed_network, IPv4Network):
-        raise ValueError(INVALID_SCAN_SUBNET)
+        raise ValueError(INVALID_SCAN_SUBNET)  # noqa: TRY004
     return parsed_network
 
 
@@ -209,7 +208,7 @@ def parse_scan_subnet(value: Any) -> IPv4Network | None:
         raise ValueError(INVALID_SCAN_SUBNET) from err
 
     if not isinstance(parsed_network, IPv4Network):
-        raise ValueError(INVALID_SCAN_SUBNET)
+        raise ValueError(INVALID_SCAN_SUBNET)  # noqa: TRY004
     if (
         not _is_rfc1918_network(parsed_network)
         or parsed_network.is_loopback
@@ -324,7 +323,7 @@ def local_ipv4_addresses_from_hass(hass: HomeAssistant) -> list[str]:
     internal_url = getattr(getattr(hass, "config", None), "internal_url", None)
     if internal_url:
         try:
-            from yarl import URL  # noqa: PLC0415
+            from yarl import URL
 
             host = URL(str(internal_url)).host
         except (TypeError, ValueError):

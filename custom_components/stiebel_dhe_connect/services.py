@@ -5,8 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, Protocol
 
-import voluptuous as vol
-
+import probatio as vol
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
 
@@ -21,8 +20,8 @@ from .service_helpers import (
     ATTR_NAME,
     ATTR_RESULT_NUMBER,
     WEATHER_RESULT_NUMBER_MAX,
-    service_result_number,
     select_weather_location,
+    service_result_number,
     weather_location_payload,
     weather_results_from_service_input,
 )

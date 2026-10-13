@@ -22,8 +22,8 @@ from .entity_helpers import (
 from .entity_state_helpers import switch_state_from_value
 from .protocol import (
     BRUSH_TIMER_PATH,
-    ID_CHILD_SAFETY_ACTIVE,
     ID_BRUSH_TIMER_ACTIVATION,
+    ID_CHILD_SAFETY_ACTIVE,
     ID_SHOWER_TIMER_ACTIVATION,
     SHOWER_TIMER_PATH,
     TEMPERATURE_MEMORY_SLOT_MEASUREMENTS,

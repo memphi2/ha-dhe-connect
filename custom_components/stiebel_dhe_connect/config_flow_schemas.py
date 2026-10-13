@@ -5,13 +5,14 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-import voluptuous as vol
-
+import probatio as vol
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import HomeAssistant
 
 from .config_flow_mapping import (
     default_radio_catalog_value as _default_radio_catalog_value,
+)
+from .config_flow_mapping import (
     default_weather_country_id as _default_weather_country_id,
 )
 from .const import DEFAULT_NAME, DEFAULT_PORT
@@ -20,14 +21,13 @@ from .entity_state_helpers import (
     INTERNAL_SCALD_PROTECTION_DEFAULT,
     normalize_internal_scald_protection,
 )
+from .error_codes import INVALID_RANGE
 from .protocol import (
     ID_CO2_EMISSION,
     ID_ELECTRICITY_PRICE,
     ID_WATER_PRICE,
 )
 from .service_helpers import WEATHER_RESULT_NUMBER_MAX
-
-from .error_codes import INVALID_RANGE
 
 ATTR_COUNTRY_ID = "country_id"
 ATTR_RADIO_SELECTION = "selection"

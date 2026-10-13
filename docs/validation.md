@@ -9,12 +9,12 @@ older branches.
 
 | Surface | Current release gate |
 |---|---|
-| Minimum supported Home Assistant version | `2026.6.0` |
-| Baseline Home Assistant fixture | `homeassistant==2026.6.0` |
+| Minimum supported Home Assistant version | `2026.10.1` |
+| Baseline Home Assistant fixture | `homeassistant==2026.10.1` |
 | Home Assistant drift check | Monthly scheduled and manual latest-HA validation |
 | Python validation runtime | `3.14` |
-| Runtime dependency floor | `aiohttp>=3.13.5,<4` |
-| HACS metadata | `hacs.json` declares `homeassistant: 2026.6.0` |
+| Runtime dependency baseline | `aiohttp>=3.14.4,<4`, `probatio==0.13.0`, `zeroconf==0.151.5` |
+| HACS metadata | `hacs.json` declares `homeassistant: 2026.10.1` |
 
 ## Release Validation Command Set
 

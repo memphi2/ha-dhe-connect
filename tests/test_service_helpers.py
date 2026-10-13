@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 import sys
 import unittest
+from pathlib import Path
 
 from homeassistant.exceptions import HomeAssistantError
 
@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from custom_components.stiebel_dhe_connect import service_helpers  # noqa: E402
+from custom_components.stiebel_dhe_connect import service_helpers
 
 
 class _WeatherClient:

@@ -4,9 +4,13 @@
 
 - No changes yet.
 
-## v2.0.9 - 2026-09-06
+## v2.0.9 - 2026-10-13
 
-Local maintenance version for the next release cycle after v2.0.8.
+Maintenance release for Home Assistant 2026.10 compatibility.
+
+- Require Home Assistant 2026.10.1 or newer.
+- Keep setup, options, repairs, and service actions compatible with Home
+  Assistant 2026.10's validation APIs.
 
 ## v2.0.8 - 2026-09-06
 

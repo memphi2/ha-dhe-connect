@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import types
+from typing import Self
 
 import aiohttp
 import pytest
@@ -15,7 +16,7 @@ class _FakeResponse:
         self.status = status
         self.read_called = False
 
-    async def __aenter__(self) -> "_FakeResponse":
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, *_args: object) -> None:

@@ -7,20 +7,28 @@ from typing import Any
 from .client_command_context import command_context as _command_context
 from .client_mapping import (
     copy_json_like_value as _copy_json_like_value,
+)
+from .client_mapping import (
     weather_location_has_id as _weather_location_has_id,
+)
+from .client_mapping import (
     weather_location_id as _weather_location_id,
+)
+from .client_mapping import (
     weather_location_in_list as _weather_location_in_list,
 )
 from .client_types import DHEError, DHESession
 from .client_value_helpers import raw_to_float as _raw_to_float
 from .flow_helpers import (
     request_generation_and_wait as _request_generation_and_wait,
+)
+from .flow_helpers import (
     wait_for_or_refresh as _wait_for_or_refresh,
 )
 from .protocol import (
     WEATHER_COUNTRIES_GET_COMMAND,
-    WEATHER_FAVORITES_GET_COMMAND,
     WEATHER_FAVORITE_ASSIGN_COMMAND,
+    WEATHER_FAVORITES_GET_COMMAND,
     WEATHER_FORECAST_GET_COMMAND,
     WEATHER_LOCATION_GET_COMMAND,
 )
@@ -32,7 +40,7 @@ class DHEClientWeatherCommandsMixin:
     async def search_weather_locations(
         self,
         name: str,
-        country_id: int | float | str,
+        country_id: float | str,
     ) -> list[dict[str, Any]]:
         requested_name = str(name).strip()
         if not requested_name:

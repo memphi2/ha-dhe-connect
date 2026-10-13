@@ -7,6 +7,7 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from .async_helpers import create_background_task
 from .client_types import (
     AvailabilityCallback,
     CallbackRemover,
@@ -20,7 +21,6 @@ from .client_types import (
     WeatherCallback,
     WellnessProgramsCallback,
 )
-from .async_helpers import create_background_task
 from .protocol import TEMPERATURE_MEMORY_SLOT_MEASUREMENTS
 
 if TYPE_CHECKING:
@@ -164,13 +164,16 @@ class DHEClientCallbacksMixin:
     ) -> None:
         try:
             callback(*args)
-        except Exception:  # noqa: BLE001
-            DHEClientCallbacksMixin._log_callback_exception(callback_name, callback)
+        except Exception as err:  # noqa: BLE001
+            DHEClientCallbacksMixin._log_callback_exception(
+                callback_name, callback, err
+            )
 
     @staticmethod
     def _log_callback_exception(
         callback_name: str,
         callback: Callable[..., None],
+        err: Exception,
     ) -> None:
         callback_label = getattr(callback, "__qualname__", None) or getattr(
             callback, "__name__", None
@@ -181,7 +184,7 @@ class DHEClientCallbacksMixin:
             "DHE %s callback raised an exception (%s)",
             callback_name,
             callback_label,
-            exc_info=True,
+            exc_info=(type(err), err, err.__traceback__),
         )
 
     def _create_background_task(self, coro: Any, name: str) -> asyncio.Task[Any]:

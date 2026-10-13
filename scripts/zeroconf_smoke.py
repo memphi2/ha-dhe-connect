@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass, field
 import threading
+from collections.abc import Sequence
+from dataclasses import dataclass, field
 from typing import Any
-from typing import Sequence
 
 try:
     from zeroconf import ServiceBrowser, ServiceListener, Zeroconf

@@ -7,7 +7,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Final, Literal
 
-
 DEFAULT_ENGINEIO_PING_INTERVAL_SECONDS = 25.0
 
 ODBValue = bool | float
