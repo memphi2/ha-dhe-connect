@@ -10,7 +10,7 @@ homeassistant==2026.10.1
 pytest-homeassistant-custom-component==0.13.372
 
 # Test tooling.
-pytest==9.0.3
+pytest==9.1.1
 pytest-cov==7.1.0
 
 # Quality gates.
