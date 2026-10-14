@@ -674,6 +674,32 @@ class TestHATestApi(unittest.TestCase):
 
         self.assertEqual(result, 1)
 
+    def test_main_does_not_print_missing_password_env_name(self) -> None:
+        output = io.StringIO()
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "ha_test_api.py",
+                    "--username",
+                    "test-user",
+                    "--password-env",
+                    "SENSITIVE_ENV_NAME",
+                ],
+            ),
+            redirect_stdout(output),
+        ):
+            result = ha_test_api.main()
+
+        self.assertEqual(result, 1)
+        self.assertEqual(
+            output.getvalue(),
+            "FAIL: HA password environment variable is not set\n",
+        )
+        self.assertNotIn("SENSITIVE_ENV_NAME", output.getvalue())
+
     def test_main_redacts_login_error_context(self) -> None:
         class _Api:
             def __init__(self, _url: str) -> None:
