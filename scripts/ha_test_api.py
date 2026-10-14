@@ -631,7 +631,7 @@ def main() -> int:
         print("FAIL: HA username is required via --username or HA_TEST_USERNAME")
         return 1
     if not access_token and not password:
-        print(f"FAIL: password env var {args.password_env!r} is not set")
+        print("FAIL: HA password environment variable is not set")
         return 1
 
     api = HomeAssistantApi(args.url)
