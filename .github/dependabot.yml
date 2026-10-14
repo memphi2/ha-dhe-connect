@@ -1,4 +1,12 @@
 version: 2
+#
+# Note on the Repository checks gate: scripts/check_integration.py keeps its own
+# allow-list of approved action SHAs (VALIDATION_ACTION_PINS) and of exact
+# dependency pins (VALIDATION_DEPENDENCY_MINIMUMS), and fails on anything that
+# does not match. That duplication is the point -- it stops a pin from moving
+# unnoticed -- but it also means a Dependabot pull request is red until the table
+# is updated in the same commit. Dependabot is the notification here, not the
+# merge button: take the bump, then carry the new SHA or pin into the guard.
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
