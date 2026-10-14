@@ -4,7 +4,7 @@
 
 - No changes yet.
 
-## v2.0.9 - 2026-10-13
+## v2.0.9 - 2026-10-14
 
 Maintenance release for Home Assistant 2026.10 compatibility.
 
