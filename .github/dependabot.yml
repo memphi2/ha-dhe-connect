@@ -42,9 +42,18 @@ updates:
       # These two are one pair: pytest-homeassistant-custom-component builds its
       # fixtures against a specific core release. Bumping either alone breaks the
       # test harness, so both move by hand after the next-ha job has proven it.
+      #
+      # Spelled as update-types rather than versions: ">=0" on purpose. A bare
+      # version range is ignored on the security path too, which would hide a
+      # Home Assistant advisory; naming the version-update types keeps routine
+      # bumps out while leaving security updates free to open a pull request.
       - dependency-name: "homeassistant"
-        versions:
-          - ">=0"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
       - dependency-name: "pytest-homeassistant-custom-component"
-        versions:
-          - ">=0"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
