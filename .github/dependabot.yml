@@ -1,0 +1,50 @@
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "05:00"
+      timezone: "Europe/Berlin"
+    open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "deps"
+
+  - package-ecosystem: "pip"
+    directory: "/"
+    # requirements.txt is the only pin set: the workflow installs from it
+    # directly, without a Home Assistant constraints file. A bump therefore
+    # lands in CI exactly as written here.
+    schedule:
+      interval: "monthly"
+      time: "05:30"
+      timezone: "Europe/Berlin"
+    open-pull-requests-limit: 3
+    groups:
+      python-patch-minor:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    commit-message:
+      prefix: "deps"
+    ignore:
+      # Python majors are compatibility work, not routine maintenance.
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
+      # These two are one pair: pytest-homeassistant-custom-component builds its
+      # fixtures against a specific core release. Bumping either alone breaks the
+      # test harness, so both move by hand after the next-ha job has proven it.
+      - dependency-name: "homeassistant"
+        versions:
+          - ">=0"
+      - dependency-name: "pytest-homeassistant-custom-component"
+        versions:
+          - ">=0"
