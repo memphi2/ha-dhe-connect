@@ -65,3 +65,18 @@ updates:
           - "version-update:semver-major"
           - "version-update:semver-minor"
           - "version-update:semver-patch"
+      # pytest and pytest-cov are not a free choice either:
+      # pytest-homeassistant-custom-component 0.13.372 requires exactly
+      # pytest==9.0.3 and pytest-cov==7.1.0, so a bump of either cannot be
+      # installed at all -- pip refuses with ResolutionImpossible. They move
+      # when the fixture moves, which is the entry above.
+      - dependency-name: "pytest"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
+      - dependency-name: "pytest-cov"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
