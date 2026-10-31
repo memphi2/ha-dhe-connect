@@ -187,12 +187,12 @@ class TestCheckIntegration(unittest.TestCase):
                 root,
                 """
                 steps:
-                  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-                  - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+                  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+                  - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
                     with:
                       python-version: "3.14"
                   - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
-                  - uses: home-assistant/actions/hassfest@50baf3a307f87100cf550d4ae127746595030d5d
+                  - uses: home-assistant/actions/hassfest@cd6f3635a740c84d8a14f6121a90068b8ece6bf6
                   - run: python -m pip install -r requirements.txt
                   - run: python scripts/check_deprecations.py
                   - run: python scripts/check_privacy_markers.py
@@ -206,6 +206,65 @@ class TestCheckIntegration(unittest.TestCase):
             with patch.object(check_integration, "ROOT", root):
                 check_integration.check_github_actions()
 
+    def test_github_actions_rejects_unapproved_action(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            _write_validate_workflow(
+                root,
+                """
+                steps:
+                  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+                  - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+                  - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
+                  - uses: home-assistant/actions/hassfest@50baf3a307f87100cf550d4ae127746595030d5d
+                  - uses: example/unapproved@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+                """,
+            )
+
+            with patch.object(check_integration, "ROOT", root), redirect_stderr(
+                StringIO()
+            ), self.assertRaises(SystemExit):
+                check_integration.check_github_actions()
+
+    def test_github_actions_rejects_inconsistent_action_pins(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            _write_validate_workflow(
+                root,
+                """
+                steps:
+                  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+                  - uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa # v7.0.1
+                  - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+                  - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
+                  - uses: home-assistant/actions/hassfest@50baf3a307f87100cf550d4ae127746595030d5d
+                """,
+            )
+
+            with patch.object(check_integration, "ROOT", root), redirect_stderr(
+                StringIO()
+            ), self.assertRaises(SystemExit):
+                check_integration.check_github_actions()
+
+    def test_github_actions_rejects_obsolete_action_release_comment(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            _write_validate_workflow(
+                root,
+                """
+                steps:
+                  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+                  - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v6.9.0
+                  - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
+                  - uses: home-assistant/actions/hassfest@50baf3a307f87100cf550d4ae127746595030d5d
+                """,
+            )
+
+            with patch.object(check_integration, "ROOT", root), redirect_stderr(
+                StringIO()
+            ), self.assertRaises(SystemExit):
+                check_integration.check_github_actions()
+
     def test_github_actions_requires_deprecation_guard(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -213,8 +272,8 @@ class TestCheckIntegration(unittest.TestCase):
                 root,
                 """
                 steps:
-                  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-                  - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+                  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+                  - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
                   - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
                   - uses: home-assistant/actions/hassfest@50baf3a307f87100cf550d4ae127746595030d5d
 """ + VALIDATION_INSTALL_STEPS + """
@@ -233,8 +292,8 @@ class TestCheckIntegration(unittest.TestCase):
                 root,
                 """
                 steps:
-                  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-                  - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+                  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+                  - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
                   - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
                   - uses: home-assistant/actions/hassfest@50baf3a307f87100cf550d4ae127746595030d5d
 """ + VALIDATION_INSTALL_STEPS + """
@@ -255,8 +314,8 @@ class TestCheckIntegration(unittest.TestCase):
                 root,
                 """
                 steps:
-                  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-                  - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+                  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+                  - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
                   - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
                   - uses: home-assistant/actions/hassfest@50baf3a307f87100cf550d4ae127746595030d5d
 """ + VALIDATION_INSTALL_STEPS + """
@@ -278,8 +337,8 @@ class TestCheckIntegration(unittest.TestCase):
                 root,
                 """
                 steps:
-                  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-                  - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+                  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+                  - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
                   - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
                   - uses: home-assistant/actions/hassfest@50baf3a307f87100cf550d4ae127746595030d5d
                   - run: python -m pip install -r requirements.txt
@@ -329,8 +388,8 @@ class TestCheckIntegration(unittest.TestCase):
                 root,
                 """
                 steps:
-                  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-                  - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+                  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+                  - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
                   - uses: hacs/action@main
                   - uses: home-assistant/actions/hassfest@master
                 """,
@@ -350,8 +409,8 @@ class TestCheckIntegration(unittest.TestCase):
                 root,
                 """
                 steps:
-                  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-                  - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+                  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+                  - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
                   - uses: hacs/action@main
                   - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
                   - uses: home-assistant/actions/hassfest@50baf3a307f87100cf550d4ae127746595030d5d
