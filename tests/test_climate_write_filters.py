@@ -110,7 +110,7 @@ class TestClimateWriteFilters(unittest.TestCase):
     ) -> None:
         climate_module = _load_climate_module()
         entity = _build_entity(climate_module)
-        entity._attr_target_temperature = 60.0
+        entity._attr_native_target_temperature = 60.0
 
         calls: list[str] = []
         entity.async_write_ha_state = lambda: calls.append("write")
@@ -162,7 +162,7 @@ class TestClimateWriteFilters(unittest.TestCase):
     ) -> None:
         climate_module = _load_climate_module()
         entity = _build_entity(climate_module)
-        entity._attr_target_temperature = 38.0
+        entity._attr_native_target_temperature = 38.0
 
         calls: list[str] = []
         entity.async_write_ha_state = lambda: calls.append("write")
@@ -179,7 +179,7 @@ class TestClimateWriteFilters(unittest.TestCase):
     def test_inlet_updates_write_while_target_remains_below_inlet(self) -> None:
         climate_module = _load_climate_module()
         entity = _build_entity(climate_module)
-        entity._attr_target_temperature = 38.0
+        entity._attr_native_target_temperature = 38.0
 
         calls: list[str] = []
         entity.async_write_ha_state = lambda: calls.append("write")
@@ -198,7 +198,7 @@ class TestClimateWriteFilters(unittest.TestCase):
     ) -> None:
         climate_module = _load_climate_module()
         entity = _build_entity(climate_module)
-        entity._attr_target_temperature = 38.0
+        entity._attr_native_target_temperature = 38.0
 
         calls: list[str] = []
         entity.async_write_ha_state = lambda: calls.append("write")
@@ -247,7 +247,7 @@ class TestClimateWriteFilters(unittest.TestCase):
         entity._handle_setpoint_update(39.0)
 
         self.assertEqual(len(calls), 2)
-        self.assertEqual(entity._attr_target_temperature, 39.0)
+        self.assertEqual(entity._attr_native_target_temperature, 39.0)
 
 
 class TestClimateHvacControls(unittest.IsolatedAsyncioTestCase):
@@ -258,7 +258,7 @@ class TestClimateHvacControls(unittest.IsolatedAsyncioTestCase):
         client = _FakeClimateClient()
         entity = _build_entity(climate_module, client)
         entity.async_write_ha_state = Mock()
-        entity._attr_target_temperature = 42.0
+        entity._attr_native_target_temperature = 42.0
         entity._water_heating_enabled = True
 
         await entity.async_turn_off()
@@ -267,7 +267,7 @@ class TestClimateHvacControls(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(client.heating_calls, [False, True])
         self.assertEqual(client.temperature_calls, [42.0])
         self.assertEqual(entity._attr_hvac_mode, climate_module.HVACMode.HEAT)
-        self.assertEqual(entity._attr_target_temperature, 42.0)
+        self.assertEqual(entity._attr_native_target_temperature, 42.0)
         self.assertEqual(entity.async_write_ha_state.call_count, 2)
 
     async def test_set_temperature_enables_heating_when_hvac_is_off(self) -> None:
@@ -283,7 +283,7 @@ class TestClimateHvacControls(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(client.heating_calls, [True])
         self.assertEqual(client.temperature_calls, [39.0])
         self.assertEqual(entity._attr_hvac_mode, climate_module.HVACMode.HEAT)
-        self.assertEqual(entity._attr_target_temperature, 39.0)
+        self.assertEqual(entity._attr_native_target_temperature, 39.0)
         entity.async_write_ha_state.assert_called_once()
 
     async def test_set_temperature_unavailable_raises_without_client_call(self) -> None:

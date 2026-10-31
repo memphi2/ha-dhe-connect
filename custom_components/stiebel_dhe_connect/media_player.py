@@ -131,6 +131,11 @@ class StiebelDHERadioMediaPlayer(
         self._sources_by_option: dict[str, dict[str, Any]] = {}
         self._last_written_radio_signature: tuple[Any, ...] | None = None
 
+    @callback
+    def async_entity_id_changed(self, old_entity_id: str) -> None:
+        """Keep device subscriptions active when the entity ID changes in place."""
+        super().async_entity_id_changed(old_entity_id)
+
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE radio updates."""
         self.async_on_remove(self._client.add_radio_callback(self._handle_radio_update))

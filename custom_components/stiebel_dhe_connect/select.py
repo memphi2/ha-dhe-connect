@@ -67,6 +67,11 @@ class StiebelDHEWeatherLocationSelect(StiebelDHEEntityMixin, SelectEntity):
         self._attr_extra_state_attributes = {"weather_path": "ste.app.weather"}
         self._last_written_select_signature: tuple[Any, ...] | None = None
 
+    @callback
+    def async_entity_id_changed(self, old_entity_id: str) -> None:
+        """Keep device subscriptions active when the entity ID changes in place."""
+        super().async_entity_id_changed(old_entity_id)
+
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE weather and availability updates."""
         self.async_on_remove(

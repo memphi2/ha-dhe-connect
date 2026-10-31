@@ -15,11 +15,8 @@ TRANSLATIONS = INTEGRATION / "translations"
 FIXTURE_ROOT = ROOT / "tests" / "fixtures"
 REPLAY_FIXTURE_NAME = "dhe_protocol_replay_sanitized.json"
 CLIENT_MODULE_MAX_BYTES = 50 * 1024
-MIN_HOMEASSISTANT_VERSION = "2026.10.1"
+MIN_HOMEASSISTANT_VERSION = "2026.11.0"
 VALIDATION_PYTHON_VERSION = "3.14"
-AIOHTTP_CONSTRAINT = ">=3.14.4,<4"
-PROBATIO_CONSTRAINT = "==0.13.0"
-ZEROCONF_CONSTRAINT = "==0.151.5"
 SILVER_RULES = {
     # Bronze
     "action-setup",
@@ -66,15 +63,9 @@ NODE24_VALIDATION_ACTION_MAJORS = {
     "actions/setup-python": 7,
 }
 VALIDATION_DEPENDENCY_MINIMUMS = {
-    "aiohttp": AIOHTTP_CONSTRAINT,
-    "homeassistant": f"=={MIN_HOMEASSISTANT_VERSION}",
     "mypy": ">=2.4,<3",
-    "probatio": PROBATIO_CONSTRAINT,
-    "pytest": "==9.0.3",
-    "pytest-homeassistant-custom-component": "==0.13.372",
-    "pytest-cov": "==7.1.0",
+    "pytest-cov": ">=7.1,<8",
     "ruff": ">=0.17,<0.18",
-    "zeroconf": ZEROCONF_CONSTRAINT,
 }
 _ACTION_REF_RE = re.compile(
     r"^\s*(?:-\s*)?uses:\s*([^@\s]+)@([^\s#]+)(?:\s+#\s*([^\s]+))?",
@@ -265,23 +256,17 @@ def check_lts_compatibility_policy() -> None:
     )
     if expected_readme_line not in readme:
         _fail("README minimum supported Home Assistant version is stale")
-    if f"homeassistant=={MIN_HOMEASSISTANT_VERSION}" not in requirements:
-        _fail("requirements.txt Home Assistant baseline is stale")
-    if f"aiohttp{AIOHTTP_CONSTRAINT}" not in requirements:
-        _fail("requirements.txt aiohttp runtime floor is stale")
+    if "-r requirements-ha.txt" not in requirements:
+        _fail("requirements.txt must use the central Home Assistant baseline")
+    check_homeassistant_baseline()
     if hacs.get("homeassistant") != MIN_HOMEASSISTANT_VERSION:
         _fail("hacs.json Home Assistant minimum is stale")
 
     expected_validation_rows = (
         f"| Minimum supported Home Assistant version | `{MIN_HOMEASSISTANT_VERSION}` |",
-        f"| Baseline Home Assistant fixture | `homeassistant=={MIN_HOMEASSISTANT_VERSION}` |",
+        "| Baseline Home Assistant fixture | `requirements-ha.txt` (core and matching test helpers) |",
         f"| Python validation runtime | `{VALIDATION_PYTHON_VERSION}` |",
-        (
-            "| Runtime dependency baseline | "
-            f"`aiohttp{AIOHTTP_CONSTRAINT}`, "
-            f"`probatio{PROBATIO_CONSTRAINT}`, "
-            f"`zeroconf{ZEROCONF_CONSTRAINT}` |"
-        ),
+        "| Runtime dependency baseline | Supplied by the pinned Home Assistant core |",
         (
             "| HACS metadata | `hacs.json` declares "
             f"`homeassistant: {MIN_HOMEASSISTANT_VERSION}` |"
@@ -290,6 +275,33 @@ def check_lts_compatibility_policy() -> None:
     for row in expected_validation_rows:
         if row not in validation:
             _fail(f"docs/validation.md LTS matrix is missing or stale: {row}")
+    for library in ("aiohttp", "probatio", "zeroconf"):
+        if re.search(rf"^{library}\s*[<>=!~]", requirements, re.MULTILINE):
+            _fail(f"requirements.txt must not duplicate Home Assistant's {library} pin")
+
+
+def check_homeassistant_baseline() -> None:
+    """Allow preview-to-stable pin updates without duplicating exact versions."""
+    path = ROOT / "requirements-ha.txt"
+    if not path.is_file():
+        _fail("central Home Assistant baseline requirements-ha.txt is missing")
+    requirements = [
+        line.strip()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    series = MIN_HOMEASSISTANT_VERSION.rsplit(".", 1)[0]
+    if len(requirements) != 2 or not re.fullmatch(
+        rf"homeassistant=={re.escape(series)}[.]\d+(?:(?:b|rc)\d+)?",
+        requirements[0],
+    ):
+        _fail("central HA baseline must pin core in the supported release series")
+    if not re.fullmatch(
+        r"pytest-home-assistant @ git\+https://github[.]com/home-assistant/core[.]git@"
+        r"[0-9a-f]{40}#subdirectory=packages/pytest-home-assistant",
+        requirements[1],
+    ):
+        _fail("central HA test helpers must be pinned to a full core commit SHA")
 
 
 def check_gold_evidence_docs() -> None:

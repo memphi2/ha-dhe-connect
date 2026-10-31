@@ -16,10 +16,14 @@ The integration uses the local DHE web interface only (no cloud relay).
 ## Status
 
 - Current version: `2.0.10`
-- Minimum supported Home Assistant version: `2026.10.1`
+- Minimum supported Home Assistant version: `2026.11.0`
 - Release channel: stable
 - Quality target: Home Assistant Quality Scale Platinum track for a custom integration
 - Support scope: stable tags are supported; private/dev branches are best-effort
+
+Home Assistant 2026.10 users must stay on DHE Connect v2.0.9. Development
+validation may use a preview while preparing a new HA release; stable DHE Connect
+releases require validation against stable Home Assistant.
 - Not an official Home Assistant Core certification
 
 ## Highlights

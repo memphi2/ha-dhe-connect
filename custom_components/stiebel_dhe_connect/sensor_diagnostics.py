@@ -110,6 +110,11 @@ class StiebelDHEReconnectCountSensor(StiebelDHEEntityMixin, SensorEntity):
         self._attr_available = True
         self._attr_native_value = client.reconnect_count
 
+    @callback
+    def async_entity_id_changed(self, old_entity_id: str) -> None:
+        """Keep device subscriptions active when the entity ID changes in place."""
+        super().async_entity_id_changed(old_entity_id)
+
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE reconnect updates and start the persistent session."""
         self.async_on_remove(
@@ -155,6 +160,11 @@ class StiebelDHEErrorStatusSensor(StiebelDHEEntityMixin, SensorEntity):
         self._last_written_status_signature: tuple[Any, ...] | None = None
         self._last_inlet_attribute_write_monotonic: float | None = None
         self._update_status()
+
+    @callback
+    def async_entity_id_changed(self, old_entity_id: str) -> None:
+        """Keep device subscriptions active when the entity ID changes in place."""
+        super().async_entity_id_changed(old_entity_id)
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to relevant DHE updates."""
@@ -318,6 +328,11 @@ class StiebelDHEDiagnosticSensor(StiebelDHEEntityMixin, SensorEntity):
         self._attr_native_value: int | float | str | None = None
         self._attr_extra_state_attributes: dict[str, Any] = {}
         self._last_written_diagnostic_signature: tuple[Any, ...] | None = None
+
+    @callback
+    def async_entity_id_changed(self, old_entity_id: str) -> None:
+        """Keep device subscriptions active when the entity ID changes in place."""
+        super().async_entity_id_changed(old_entity_id)
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to diagnostic updates."""

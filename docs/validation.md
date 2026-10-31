@@ -9,18 +9,40 @@ older branches.
 
 | Surface | Current release gate |
 |---|---|
-| Minimum supported Home Assistant version | `2026.10.1` |
-| Baseline Home Assistant fixture | `homeassistant==2026.10.1` |
+| Minimum supported Home Assistant version | `2026.11.0` |
+| Baseline Home Assistant fixture | `requirements-ha.txt` (core and matching test helpers) |
 | Home Assistant drift check | Monthly scheduled and manual latest-HA validation |
 | Python validation runtime | `3.14` |
-| Runtime dependency baseline | `aiohttp>=3.14.4,<4`, `probatio==0.13.0`, `zeroconf==0.151.5` |
-| HACS metadata | `hacs.json` declares `homeassistant: 2026.10.1` |
+| Runtime dependency baseline | Supplied by the pinned Home Assistant core |
+| HACS metadata | `hacs.json` declares `homeassistant: 2026.11.0` |
+
+## 2026.11 Release Readiness
+
+The minimum targets the final release, not a preview. Until it is published,
+`requirements-ha.txt` pins an available preview and the official test helpers
+from the same core revision. This is preparation, not stable-release validation.
+
+When 2026.11 is released, update only the two pins in `requirements-ha.txt` to
+the stable version and its matching core commit. Install `requirements.txt` in
+a clean environment, run `python -m pip check` and the full command set below.
+Do not publish v2.0.10 until that stable baseline passes. No API, minimum-version,
+translation or workflow changes should be needed solely to replace the preview.
+
+Do not duplicate HA's runtime pins in repository requirements or guards:
+`aiohttp`, `probatio` and `zeroconf` are installed transitively by core. This keeps
+their versions aligned when the central baseline changes.
+
+Temperature state uses the native climate API. Entity ID changes retain DHE
+callbacks in place. Config-entry setup/unload succeed with `None` and raise a
+config-entry exception on failure. Device metadata uses the 2026.11 `DeviceInfo`
+dataclass. Older HA versions require v2.0.9.
 
 ## Release Validation Command Set
 
 Run this before opening/finalizing release-prep PRs:
 
 ```bash
+python -m pip check
 python scripts/check_coverage.py
 python scripts/check_integration.py
 python scripts/check_translation_keys.py

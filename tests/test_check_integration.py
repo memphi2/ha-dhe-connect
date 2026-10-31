@@ -21,16 +21,17 @@ VALIDATION_INSTALL_STEPS = """
 	                  - run: python -m pip install -r requirements.txt
 """
 VALIDATION_REQUIREMENTS_TEXT = """
-aiohttp>=3.14.4,<4
-homeassistant==2026.10.1
+-r requirements-ha.txt
 mypy>=2.4,<3
-probatio==0.13.0
-pytest==9.0.3
-pytest-homeassistant-custom-component==0.13.372
-pytest-cov==7.1.0
+pytest-cov>=7.1,<8
 ruff>=0.17,<0.18
-zeroconf==0.151.5
 """
+VALIDATION_HA_REQUIREMENTS_TEXT = (
+    "homeassistant==2026.11.0b1\n"
+    "pytest-home-assistant @ git+https://github.com/home-assistant/core.git@"
+    "6cfd47af9851a1552ad6f58c926b5814689a9f1d"
+    "#subdirectory=packages/pytest-home-assistant\n"
+)
 
 
 def _write_validate_workflow(root: Path, content: str) -> None:
@@ -47,6 +48,9 @@ def _write_validate_workflow(root: Path, content: str) -> None:
         encoding="utf-8",
     )
     (root / "requirements.txt").write_text(VALIDATION_REQUIREMENTS_TEXT, encoding="utf-8")
+    (root / "requirements-ha.txt").write_text(
+        VALIDATION_HA_REQUIREMENTS_TEXT, encoding="utf-8"
+    )
 
 
 def _write_type_gate_fixture(root: Path, files: list[str]) -> None:
@@ -135,7 +139,6 @@ def _write_repository_files_fixture(
 
 def _write_lts_policy_fixture(root: Path) -> None:
     version = check_integration.MIN_HOMEASSISTANT_VERSION
-    aiohttp = check_integration.AIOHTTP_CONSTRAINT
     python_version = check_integration.VALIDATION_PYTHON_VERSION
     (root / "README.md").write_text(
         (
@@ -153,17 +156,19 @@ def _write_lts_policy_fixture(root: Path) -> None:
             "| Surface | Current release gate |\n"
             "|---|---|\n"
             f"| Minimum supported Home Assistant version | `{version}` |\n"
-            f"| Baseline Home Assistant fixture | `homeassistant=={version}` |\n"
+            "| Baseline Home Assistant fixture | `requirements-ha.txt` (core and matching test helpers) |\n"
             f"| Python validation runtime | `{python_version}` |\n"
-            "| Runtime dependency baseline | "
-            f"`aiohttp{aiohttp}`, `probatio==0.13.0`, `zeroconf==0.151.5` |\n"
+            "| Runtime dependency baseline | Supplied by the pinned Home Assistant core |\n"
             f"| HACS metadata | `hacs.json` declares `homeassistant: {version}` |\n"
         ),
         encoding="utf-8",
     )
     (root / "requirements.txt").write_text(
-        f"aiohttp{aiohttp}\nhomeassistant=={version}\n",
+        "-r requirements-ha.txt\n",
         encoding="utf-8",
+    )
+    (root / "requirements-ha.txt").write_text(
+        VALIDATION_HA_REQUIREMENTS_TEXT, encoding="utf-8"
     )
     (root / "hacs.json").write_text(
         json.dumps(
@@ -179,6 +184,36 @@ def _write_lts_policy_fixture(root: Path) -> None:
 
 class TestCheckIntegration(unittest.TestCase):
     """Validate repository guard helpers."""
+
+    def test_ha_baseline_accepts_preview_and_stable_without_other_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            for version in ("2026.11.0b1", "2026.11.0rc1", "2026.11.0", "2026.11.4"):
+                with self.subTest(version=version):
+                    (root / "requirements-ha.txt").write_text(
+                        VALIDATION_HA_REQUIREMENTS_TEXT.replace("2026.11.0b1", version),
+                        encoding="utf-8",
+                    )
+                    with patch.object(check_integration, "ROOT", root):
+                        check_integration.check_homeassistant_baseline()
+
+    def test_ha_baseline_rejects_old_series_and_floating_helpers(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            for bad in (
+                VALIDATION_HA_REQUIREMENTS_TEXT.replace("2026.11.0b1", "2026.10.4"),
+                VALIDATION_HA_REQUIREMENTS_TEXT.replace("2026.11.0b1", "2026.12.0"),
+                VALIDATION_HA_REQUIREMENTS_TEXT.replace(
+                    "6cfd47af9851a1552ad6f58c926b5814689a9f1d", "dev"
+                ),
+            ):
+                with self.subTest(requirements=bad):
+                    (root / "requirements-ha.txt").write_text(bad, encoding="utf-8")
+                    with (
+                        patch.object(check_integration, "ROOT", root),
+                        redirect_stderr(StringIO()), self.assertRaises(SystemExit),
+                    ):
+                        check_integration.check_homeassistant_baseline()
 
     def test_github_actions_accepts_pinned_validation_actions(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -330,7 +365,7 @@ class TestCheckIntegration(unittest.TestCase):
             ), self.assertRaises(SystemExit):
                 check_integration.check_github_actions()
 
-    def test_github_actions_rejects_stale_fixture_helper(self) -> None:
+    def test_github_actions_rejects_stale_tool_dependency(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             _write_validate_workflow(
@@ -351,8 +386,8 @@ class TestCheckIntegration(unittest.TestCase):
             requirements = root / "requirements.txt"
             requirements.write_text(
                 requirements.read_text(encoding="utf-8").replace(
-                    "pytest-homeassistant-custom-component==0.13.372",
-                    "pytest-homeassistant-custom-component==0.13.371",
+                    "mypy>=2.4,<3",
+                    "mypy>=2.3,<3",
                 ),
                 encoding="utf-8",
             )
@@ -610,6 +645,24 @@ class TestCheckIntegration(unittest.TestCase):
             with patch.object(check_integration, "ROOT", root):
                 check_integration.check_lts_compatibility_policy()
 
+    def test_lts_policy_rejects_duplicated_ha_runtime_pins(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            for library in ("aiohttp", "probatio", "zeroconf"):
+                with self.subTest(library=library):
+                    _write_lts_policy_fixture(root)
+                    (root / "requirements.txt").write_text(
+                        f"-r requirements-ha.txt\n{library}==0.0.0\n",
+                        encoding="utf-8",
+                    )
+                    stderr = StringIO()
+                    with (
+                        patch.object(check_integration, "ROOT", root),
+                        redirect_stderr(stderr), self.assertRaises(SystemExit),
+                    ):
+                        check_integration.check_lts_compatibility_policy()
+                    self.assertIn("must not duplicate", stderr.getvalue())
+
     def test_lts_policy_rejects_stale_readme_baseline(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -633,8 +686,8 @@ class TestCheckIntegration(unittest.TestCase):
             validation = root / "docs" / "validation.md"
             validation.write_text(
                 validation.read_text(encoding="utf-8").replace(
-                    "homeassistant==2026.10.1",
-                    "homeassistant==2026.9.4",
+                    "`requirements-ha.txt`",
+                    "`outdated-requirements.txt`",
                 ),
                 encoding="utf-8",
             )

@@ -39,8 +39,6 @@ from .runtime_helpers import get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 0
-_CLIMATE_FEATURE_TURN_ON = getattr(ClimateEntityFeature, "TURN_ON", 0)
-_CLIMATE_FEATURE_TURN_OFF = getattr(ClimateEntityFeature, "TURN_OFF", 0)
 
 
 async def async_setup_entry(
@@ -66,11 +64,11 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
     # Keep explicit turn_on/turn_off handling under integration control.
     _enable_turn_on_off_backwards_compatibility = False
     _attr_has_entity_name = True
-    _attr_temperature_unit = UnitOfTemperature.CELSIUS
+    _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_supported_features = (
         ClimateEntityFeature.TARGET_TEMPERATURE
-        | _CLIMATE_FEATURE_TURN_ON
-        | _CLIMATE_FEATURE_TURN_OFF
+        | ClimateEntityFeature.TURN_ON
+        | ClimateEntityFeature.TURN_OFF
     )
     _attr_hvac_modes = [HVACMode.HEAT, HVACMode.OFF]  # noqa: RUF012
     _attr_hvac_mode = HVACMode.HEAT
@@ -97,8 +95,7 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
             name=name,
             client=client,
         )
-        self._attr_target_temperature: float | None = None
-        self._attr_current_temperature: float | None = None
+        self._attr_native_target_temperature: float | None = None
         self._attr_available = False
         self._connection_state = "starting"
         self._inlet_temperature: float | None = None
@@ -132,11 +129,16 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
         if (
             target_below_inlet
             and self._inlet_temperature is not None
-            and self._attr_target_temperature is not None
+            and self._attr_native_target_temperature is not None
         ):
             self._attr_extra_state_attributes["inlet_minus_setpoint"] = round(
-                self._inlet_temperature - self._attr_target_temperature, 2
+                self._inlet_temperature - self._attr_native_target_temperature, 2
             )
+
+    @callback
+    def async_entity_id_changed(self, old_entity_id: str) -> None:
+        """Keep device subscriptions active when the entity ID changes in place."""
+        super().async_entity_id_changed(old_entity_id)
 
     async def async_added_to_hass(self) -> None:
         """Start persistent DHE connection and subscribe to value updates."""
@@ -156,7 +158,7 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
         self._sync_hvac_mode_from_measurements()
         self._sync_max_temperature_from_measurements()
         if self._client.last_setpoint is not None:
-            self._attr_target_temperature = self._client.last_setpoint
+            self._attr_native_target_temperature = self._client.last_setpoint
             self._attr_available = self._client.available
             self._connection_state = (
                 "connected" if self._client.available else "unavailable"
@@ -166,7 +168,7 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
     @callback
     def _handle_setpoint_update(self, value: float) -> None:
         """Handle setpoint updates from the persistent client."""
-        self._attr_target_temperature = value
+        self._attr_native_target_temperature = value
         if self._attr_hvac_mode != HVACMode.OFF:
             self._target_before_heating_off = value
         self._attr_available = True
@@ -241,8 +243,7 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
             self._attr_available,
             self._connection_state,
             self._attr_hvac_mode,
-            self._attr_target_temperature,
-            self._attr_current_temperature,
+            self._attr_native_target_temperature,
             self._attr_max_temp,
             self._water_heating_enabled,
             self._child_safety_active,
@@ -323,9 +324,9 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
 
     def _target_below_inlet(self) -> bool:
         """Return True when the configured target is below current inlet temperature."""
-        if self._attr_target_temperature is None or self._inlet_temperature is None:
+        if self._attr_native_target_temperature is None or self._inlet_temperature is None:
             return False
-        return self._attr_target_temperature < self._inlet_temperature
+        return self._attr_native_target_temperature < self._inlet_temperature
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         """Set target temperature and update state from write readback."""
@@ -352,8 +353,8 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
                 )
                 if not self._water_heating_enabled:
                     raise DHEError("Could not enable DHE heating before setting temperature")
-            self._attr_target_temperature = await self._client.set_temperature(temperature)
-            self._target_before_heating_off = self._attr_target_temperature
+            self._attr_native_target_temperature = await self._client.set_temperature(temperature)
+            self._target_before_heating_off = self._attr_native_target_temperature
             self._attr_available = True
             self._connection_state = "connected"
             self._write_climate_state(force=True)
@@ -363,8 +364,8 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set HVAC mode on the DHE climate entity."""
         if hvac_mode == HVACMode.OFF:
-            if self._attr_target_temperature is not None:
-                self._target_before_heating_off = self._attr_target_temperature
+            if self._attr_native_target_temperature is not None:
+                self._target_before_heating_off = self._attr_native_target_temperature
             try:
                 raise_if_dhe_unavailable(
                     self._client,
@@ -396,7 +397,7 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
             if self._water_heating_enabled:
                 restore_target = self._target_before_heating_off
                 if restore_target is None:
-                    restore_target = self._attr_target_temperature or self._client.last_setpoint
+                    restore_target = self._attr_native_target_temperature or self._client.last_setpoint
                 if restore_target is not None:
                     restore_target = clamp_temperature(
                         restore_target,
@@ -405,10 +406,10 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
                     )
                 if restore_target is not None:
                     try:
-                        self._attr_target_temperature = await self._client.set_temperature(
+                        self._attr_native_target_temperature = await self._client.set_temperature(
                             float(restore_target)
                         )
-                        self._target_before_heating_off = self._attr_target_temperature
+                        self._target_before_heating_off = self._attr_native_target_temperature
                     except DHEError as err:
                         _LOGGER.warning(
                             "DHE heating enabled, but could not restore previous target temperature: %s",

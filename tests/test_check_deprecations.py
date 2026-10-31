@@ -22,6 +22,20 @@ class TestCheckDeprecations(unittest.TestCase):
 
             self.assertEqual(check_deprecations.find_deprecation_issues([path]), [])
 
+    def test_climate_temperature_api_rejects_legacy_not_step(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "climate.py"
+            path.write_text(
+                "_attr_temperature_unit = unit\n"
+                "self._attr_target_temperature = 40\n"
+                "value = self._attr_current_temperature\n"
+                "self._attr_target_temperature_step = 0.5\n"
+                "self._attr_native_target_temperature = 40\n",
+                encoding="utf-8",
+            )
+            issues = check_deprecations.find_deprecation_issues([path])
+        self.assertEqual(len(issues), 3)
+
     def test_rejects_deprecated_asyncio_helper(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "bad.py"

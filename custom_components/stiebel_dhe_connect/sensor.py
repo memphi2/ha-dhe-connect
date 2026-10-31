@@ -192,6 +192,11 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
         self._timer_remaining_base_minutes: float | None = None
         self._timer_remaining_base_monotonic: float | None = None
 
+    @callback
+    def async_entity_id_changed(self, old_entity_id: str) -> None:
+        """Keep device subscriptions active when the entity ID changes in place."""
+        super().async_entity_id_changed(old_entity_id)
+
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE measurements and start the persistent session."""
         self.async_on_remove(

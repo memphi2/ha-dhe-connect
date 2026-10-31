@@ -207,6 +207,17 @@ def load_manifest_version(root: Path) -> str:
     return str(manifest.get("version", "")).strip()
 
 
+def check_stable_homeassistant_baseline(root: Path) -> CheckResult:
+    """Reject publishing a stable integration validated only against an HA preview."""
+    path = root / "requirements-ha.txt"
+    if not path.is_file():
+        return CheckResult(False, "stable HA validation baseline is missing")
+    match = re.search(r"^homeassistant==([^\s#]+)$", path.read_text(encoding="utf-8"), re.MULTILINE)
+    if match is None or not re.fullmatch(r"\d+[.]\d+[.]\d+", match.group(1)):
+        return CheckResult(False, "stable release requires stable HA pins in requirements-ha.txt")
+    return CheckResult(True, f"stable HA validation baseline: {match.group(1)}")
+
+
 def check_version_files(
     root: Path,
     version: str,
@@ -832,6 +843,8 @@ def collect_results(args: argparse.Namespace, runner: Runner) -> list[CheckResul
         version,
         require_empty_unreleased=args.expect_tag != "skip",
     )
+    if args.expect_tag != "skip":
+        results.append(check_stable_homeassistant_baseline(ROOT))
     if not args.allow_dirty:
         results.append(check_clean_tree(runner))
     results.extend(

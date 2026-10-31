@@ -44,9 +44,8 @@ updates:
       - dependency-name: "*"
         update-types:
           - "version-update:semver-major"
-      # These two are one pair: pytest-homeassistant-custom-component builds its
-      # fixtures against a specific core release. Bumping either alone breaks the
-      # test harness, so both move by hand after the next-ha job has proven it.
+      # Core and the official pytest-home-assistant helpers move together in
+      # requirements-ha.txt after validation against the matching core revision.
       #
       # Spelled as update-types rather than versions: ">=0" on purpose. A bare
       # version range is ignored on the security path too, which would hide a
@@ -57,35 +56,9 @@ updates:
           - "version-update:semver-major"
           - "version-update:semver-minor"
           - "version-update:semver-patch"
-      - dependency-name: "pytest-homeassistant-custom-component"
+      - dependency-name: "pytest-home-assistant"
         update-types:
           - "version-update:semver-major"
           - "version-update:semver-minor"
           - "version-update:semver-patch"
-      # The four below are not a free choice: the pinned Home Assistant and
-      # its test fixture require exact versions of them, so a bump of any one
-      # cannot be installed at all -- pip answers ResolutionImpossible before
-      # a gate runs. They move when their dictating package moves, which is an
-      # entry above.
-      #   pytest==9.0.3, pytest-cov==7.1.0  <- pytest-homeassistant-custom-component 0.13.372
-      #   aiohttp==3.14.4, zeroconf==0.151.5 <- homeassistant 2026.10.1
-      - dependency-name: "pytest"
-        update-types:
-          - "version-update:semver-major"
-          - "version-update:semver-minor"
-          - "version-update:semver-patch"
-      - dependency-name: "pytest-cov"
-        update-types:
-          - "version-update:semver-major"
-          - "version-update:semver-minor"
-          - "version-update:semver-patch"
-      - dependency-name: "aiohttp"
-        update-types:
-          - "version-update:semver-major"
-          - "version-update:semver-minor"
-          - "version-update:semver-patch"
-      - dependency-name: "zeroconf"
-        update-types:
-          - "version-update:semver-major"
-          - "version-update:semver-minor"
-          - "version-update:semver-patch"
+      # HA runtime dependencies and pytest are transitive, not independent pins.

@@ -11,7 +11,7 @@ from typing import Any, cast
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntry, ConfigFlowResult
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
@@ -109,7 +109,7 @@ def _entry_display_name(entry: ConfigEntry, data: Mapping[str, Any]) -> str:
     return str(data.get(CONF_NAME, entry.title or DEFAULT_NAME)).strip() or DEFAULT_NAME
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Set up DHE Connect from a config entry."""
     data = merged_entry_data(entry)
     target = _entry_target_or_raise(entry)
@@ -180,7 +180,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _async_schedule_connected_issue_cleanup(hass, entry, client)
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
-    return True
 
 
 async def _async_first_reachable_entry_target(
@@ -339,7 +338,7 @@ def _async_clear_stale_sensor_statistic_issues(
         )
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Unload a config entry."""
     runtime = getattr(entry, "runtime_data", None)
     unloaded_result = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
@@ -354,7 +353,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if not any(iter_loaded_runtime_data(hass)):
             _async_unregister_services(hass)
 
-    return unloaded
+    if not unloaded:
+        raise ConfigEntryError("Could not unload DHE platforms")
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:

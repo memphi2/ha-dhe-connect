@@ -2,7 +2,12 @@
 
 ## Unreleased
 
-- No changes yet.
+- Require Home Assistant 2026.11.0; use v2.0.9 on older installations.
+- Use native climate temperature attributes without legacy compatibility code.
+- Keep entity subscriptions active across in-place entity ID changes.
+- Use exception-based config-entry setup and unload results.
+- Construct device metadata with Home Assistant's DeviceInfo dataclass.
+- Centralize the HA core and test-helper baseline in requirements-ha.txt.
 
 ## v2.0.10 - 2026-10-14
 

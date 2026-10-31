@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.device_registry import ChildDeviceInfo, DeviceInfo
 
 DOMAIN = "stiebel_dhe_connect"
 DEFAULT_DEVICE_MODEL = "DHE Connect"
@@ -89,21 +88,20 @@ def build_device_info(
     """Build a consistent Home Assistant device_info payload."""
     identifiers = {(DOMAIN, stable_identifier or f"{host}:{port}")}
 
-    device_info: DeviceInfo = {
-        "identifiers": identifiers,
-        "model": device_registry_model(runtime_device_info),
-        "name": name,
-    }
+    device_info = DeviceInfo(
+        identifiers=identifiers,
+        model=device_registry_model(runtime_device_info),
+        name=name,
+    )
     if sw_version := device_registry_sw_version(runtime_device_info):
-        device_info["sw_version"] = sw_version
+        device_info.sw_version = sw_version
     return device_info
 
 
 class StiebelDHEEntityMixin:
     """Small shared initializer for DHE entities."""
 
-    # Home Assistant's private device-info attribute type varies by core version.
-    _attr_device_info: Any
+    _attr_device_info: DeviceInfo | ChildDeviceInfo | None
     _attr_suggested_object_id: str | None
     _attr_unique_id: str | None
     _client: Any

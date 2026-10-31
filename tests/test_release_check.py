@@ -57,6 +57,16 @@ def _write_release_files(root: Path, version: str) -> None:
 class TestReleaseCheck(unittest.TestCase):
     """Validate release-check behavior without running external commands."""
 
+    def test_stable_release_rejects_ha_preview_pins(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            path = root / "requirements-ha.txt"
+            for version, expected in (("2026.11.0b1", False), ("2026.11.0rc1", False), ("2026.11.0", True)):
+                with self.subTest(version=version):
+                    path.write_text(f"homeassistant=={version}\n", encoding="utf-8")
+                    result = release_check.check_stable_homeassistant_baseline(root)
+                    self.assertEqual(result.ok, expected)
+
     def test_version_files_accept_matching_release_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

@@ -48,6 +48,9 @@ jobs:
       - name: Install repository check dependencies
         run: python -m pip install -r requirements.txt
 
+      - name: Verify installed dependency compatibility
+        run: python -m pip check
+
       - name: Run unit tests
         run: python -m pytest -q
 
@@ -90,6 +93,9 @@ jobs:
 
       - name: Upgrade to latest Home Assistant
         run: python -m pip install --upgrade homeassistant
+
+      - name: Verify installed dependency compatibility
+        run: python -m pip check
 
       - name: Show Home Assistant version
         run: python -c "import homeassistant.const as const; print(const.__version__)"

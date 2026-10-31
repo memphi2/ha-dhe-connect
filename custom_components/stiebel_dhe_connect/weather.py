@@ -100,6 +100,11 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
         self._forecast_listener_update_pending = False
         self._forecast_subscription_counts: dict[ForecastType, int] = {}
 
+    @callback
+    def async_entity_id_changed(self, old_entity_id: str) -> None:
+        """Keep device subscriptions active when the entity ID changes in place."""
+        super().async_entity_id_changed(old_entity_id)
+
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE weather updates."""
         self.async_on_remove(
