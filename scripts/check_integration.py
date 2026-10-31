@@ -55,7 +55,7 @@ GOLD_CORE_RULES = {
     "reconfiguration-flow",
     "repair-issues",
 }
-PINNED_VALIDATION_ACTIONS = {
+REQUIRED_VALIDATION_ACTIONS = {
     "actions/checkout",
     "actions/setup-python",
     "hacs/action",
@@ -64,16 +64,6 @@ PINNED_VALIDATION_ACTIONS = {
 NODE24_VALIDATION_ACTION_MAJORS = {
     "actions/checkout": 7,
     "actions/setup-python": 7,
-}
-VALIDATION_ACTION_PINS = {
-    # Stable refs resolved on 2026-10-13. Keep these in sync with
-    # .github/workflows/validate.yml when refreshing action pins.
-    "actions/checkout": {"3d3c42e5aac5ba805825da76410c181273ba90b1"},
-    "actions/setup-python": {"5fda3b95a4ea91299a34e894583c3862153e4b97"},
-    "hacs/action": {"1ebf01c408f29afcb6406bd431bc98fd8cbb15aa"},
-    "home-assistant/actions/hassfest": {
-        "50baf3a307f87100cf550d4ae127746595030d5d"
-    },
 }
 VALIDATION_DEPENDENCY_MINIMUMS = {
     "aiohttp": AIOHTTP_CONSTRAINT,
@@ -86,7 +76,11 @@ VALIDATION_DEPENDENCY_MINIMUMS = {
     "ruff": ">=0.17,<0.18",
     "zeroconf": ZEROCONF_CONSTRAINT,
 }
-_ACTION_REF_RE = re.compile(r"^\s*(?:-\s*)?uses:\s*([^@\s]+)@([^\s#]+)", re.MULTILINE)
+_ACTION_REF_RE = re.compile(
+    r"^\s*(?:-\s*)?uses:\s*([^@\s]+)@([^\s#]+)(?:\s+#\s*([^\s]+))?",
+    re.MULTILINE,
+)
+_USES_LINE_RE = re.compile(r"^\s*(?:-\s*)?uses:\s*\S+", re.MULTILINE)
 _MAJOR_VERSION_REF_RE = re.compile(r"^v(?P<major>\d+)(?:\.|$)")
 _MARKDOWN_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 README_REQUIRED_DOC_LINKS = {
@@ -388,11 +382,17 @@ def check_github_actions() -> None:
     if not workflow.exists():
         _fail("validation workflow is missing")
     text = workflow.read_text(encoding="utf-8")
-    action_refs = _workflow_action_refs(text)
+    action_uses = _workflow_action_uses(text)
+    if len(action_uses) != len(_USES_LINE_RE.findall(text)):
+        _fail("every validation workflow action must use repository@ref syntax")
+    action_refs = _workflow_action_refs(action_uses)
     refs_by_action: dict[str, list[str]] = {
-        action: action_refs.get(action, []) for action in PINNED_VALIDATION_ACTIONS
+        action: action_refs.get(action, []) for action in REQUIRED_VALIDATION_ACTIONS
     }
 
+    unexpected = sorted(set(action_refs) - REQUIRED_VALIDATION_ACTIONS)
+    if unexpected:
+        _fail(f"validation workflow uses unapproved actions: {', '.join(unexpected)}")
     missing = sorted(
         action for action, refs in refs_by_action.items() if not refs
     )
@@ -402,20 +402,15 @@ def check_github_actions() -> None:
         for ref in refs:
             if not re.fullmatch(r"[0-9a-f]{40}", ref):
                 _fail(f"{action} must be pinned to a 40-character commit SHA")
-            if ref not in VALIDATION_ACTION_PINS.get(action, set()):
-                _fail(f"{action}@{ref} is not the current approved action pin")
+        if len(set(refs)) != 1:
+            _fail(f"all {action} uses must share the same commit SHA")
     for action, minimum_major in sorted(NODE24_VALIDATION_ACTION_MAJORS.items()):
-        refs = action_refs.get(action, [])
-        if not refs:
-            _fail(f"validation workflow is missing {action}")
-        for ref in refs:
-            if (
-                ref not in VALIDATION_ACTION_PINS.get(action, set())
-                and not _action_ref_has_minimum_major(ref, minimum_major)
-            ):
+        uses = [(ref, label) for name, ref, label in action_uses if name == action]
+        for ref, label in uses:
+            if not _action_ref_has_minimum_major(label or ref, minimum_major):
                 _fail(
-                    f"{action}@{ref} must be v{minimum_major} or newer "
-                    "to avoid GitHub Actions Node.js 20 runtime warnings"
+                    f"{action}@{ref} must have a v{minimum_major} or newer "
+                    "release comment to avoid obsolete Node.js runtimes"
                 )
     if "python scripts/check_deprecations.py" not in text:
         _fail("validation workflow must run scripts/check_deprecations.py")
@@ -462,10 +457,20 @@ def check_github_actions() -> None:
         _fail("validation workflow must not suppress deprecation warnings")
 
 
-def _workflow_action_refs(text: str) -> dict[str, list[str]]:
+def _workflow_action_uses(text: str) -> list[tuple[str, str, str | None]]:
+    """Return action names, refs, and optional release comments from a workflow."""
+    return [
+        (action, ref, label or None)
+        for action, ref, label in _ACTION_REF_RE.findall(text)
+    ]
+
+
+def _workflow_action_refs(
+    action_uses: list[tuple[str, str, str | None]],
+) -> dict[str, list[str]]:
     """Return workflow action refs grouped by action name."""
     refs: dict[str, list[str]] = {}
-    for action, ref in _ACTION_REF_RE.findall(text):
+    for action, ref, _label in action_uses:
         refs.setdefault(action, []).append(ref)
     return refs
 
