@@ -12,6 +12,12 @@
 
 ### Fixes
 
+- Reject non-finite temperature commands before enabling heating, and ignore
+  malformed numeric telemetry without terminating the runtime session.
+- Release session state and pending commands even when the runtime task fails.
+- Publish changed radio favorite IDs while keeping their payload out of recorder.
+- Refuse HTTP and WebSocket redirects, bound response sizes, omit HTTP error
+  bodies, and remove session identifiers from diagnostic entity attributes.
 - Require fresh device values after reconnecting before restoring availability,
   and expire the reconnect grace period while startup confirmation is pending.
 - Clear stale authentication errors after a successful runtime recovery.
@@ -23,6 +29,10 @@
 
 ### Maintenance
 
+- Verify recorder filtering against real SQLite rows and organize HA/client tests
+  into focused suites with shared fixtures.
+- Correct countdown and memory-control examples, document migration scope and
+  asset provenance, and direct security reports to private GitHub advisories.
 - Centralize paired HA core/test-helper baselines and test both supported APIs.
 - Verify installed core/helper provenance and resolve matching latest-HA pairs.
 - Gate lifecycle/reconnect/idle task and memory growth with a loopback soak test.

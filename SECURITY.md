@@ -22,10 +22,18 @@ the integration does not create a separate token file for normal operation.
 Treat that storage and all backups containing it as credentials. Never share raw
 config-entry storage, and do not edit it manually.
 
-Legacy per-target, entry-id and shared token files are migration inputs only.
-Setup and retargeting migrate a usable legacy token into the config entry, then
-delete the legacy files. Deleting an old file after migration does not clear the
-active token in the config entry.
+Only legacy per-target files generated for a host and port are migration inputs:
+`.storage/stiebel_dhe_connect_token_<normalized-host>_<port>.txt`. Setup checks
+the reachable target and the entry's configured target candidates. Retargeting
+checks the destination before the old target. An existing well-formed config-entry
+token takes precedence; otherwise the first well-formed candidate is stored.
+The listed legacy files are then removed, including malformed candidates.
+Deleting an old file does not clear the active token in the config entry.
+
+Entry-ID-based or shared files from private/development snapshots are not
+automatically imported. Use the pairing recovery flow for those installations.
+Setup can separately clean up unconfigured files matching the legacy per-target
+filename prefix; that cleanup is not a migration of their contents.
 
 Use `Repair pairing` or the fixable pairing/token issue in Repairs to request a
 fresh pairing. The pairing procedure may require confirmation on the DHE.

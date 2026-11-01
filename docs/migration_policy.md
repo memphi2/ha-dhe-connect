@@ -15,8 +15,11 @@ This document defines migration expectations for the v2 release line.
 - No silent data rewrites for unknown legacy states.
 - No automatic token or config storage rewrites without explicit migration
   design and tests.
-- v2.0.7 explicitly migrates well-formed legacy DHE token files into
-  config-entry data during setup or retargeting, then deletes the legacy files.
+- Since v2.0.7, setup and retargeting explicitly migrate well-formed per-target
+  host/port token files into config-entry data, then remove the candidate files.
+  Existing config-entry tokens take precedence; retargeting prefers the new
+  target's file over the old target's file. Entry-ID-based and shared files from
+  private/dev snapshots are not imported. See [token handling](../SECURITY.md#token-handling).
 
 ## When Upgrades Fail From Old Private/Dev States
 

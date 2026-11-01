@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import json
 import re
+import struct
 import unittest
 from html.parser import HTMLParser
 from pathlib import Path
@@ -39,6 +40,34 @@ def _yaml_examples():
 
 
 class DocumentationTests(unittest.TestCase):
+    def test_asset_inventory_matches_bundled_png_files(self):
+        expected = {
+            "assets/dhe-connect-card.png": (610, 568),
+            "custom_components/stiebel_dhe_connect/brand/icon.png": (256, 256),
+            "custom_components/stiebel_dhe_connect/brand/icon@2x.png": (512, 512),
+        }
+        actual = {
+            str(path.relative_to(ROOT))
+            for directory in (ROOT / "assets", ROOT / "custom_components/stiebel_dhe_connect/brand")
+            for path in directory.glob("*.png")
+        }
+        self.assertEqual(actual, expected.keys())
+        legal = (ROOT / "docs/legal.md").read_text()
+        self.assertIn("[MIT license](../LICENSE)", legal)
+        for name, dimensions in expected.items():
+            with self.subTest(asset=name), (ROOT / name).open("rb") as image:
+                header = image.read(24)
+                self.assertEqual(header[:8], b"\x89PNG\r\n\x1a\n")
+                self.assertEqual(struct.unpack(">II", header[16:24]), dimensions)
+                self.assertIn(f"`{name}`", legal)
+
+    def test_token_migration_documentation_is_limited_to_target_files(self):
+        text = (ROOT / "SECURITY.md").read_text()
+        self.assertIn("Only legacy per-target files", text)
+        self.assertIn("Entry-ID-based or shared files", text)
+        self.assertIn("are not\nautomatically imported", text)
+        self.assertNotIn("entry-id and shared token files are migration inputs", text)
+
     def test_security_reports_use_private_advisories(self):
         text = (ROOT / "SECURITY.md").read_text()
         self.assertIn("https://github.com/memphi2/ha-dhe-connect/security/advisories/new", text)
