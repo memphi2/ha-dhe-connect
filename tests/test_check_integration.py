@@ -44,6 +44,7 @@ def _write_validate_workflow(root: Path, content: str) -> None:
             "    - cron: \"0 4 1 * *\"\n"
             "  workflow_dispatch:\n\n"
             + content
+            if "jobs:" not in content else content
         ),
         encoding="utf-8",
     )
@@ -297,27 +298,40 @@ class TestCheckIntegration(unittest.TestCase):
             root = Path(temp_dir)
             _write_validate_workflow(
                 root,
-                """
-                steps:
-                  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-                  - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-                    with:
-                      python-version: "3.14"
-                  - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
-                  - uses: home-assistant/actions/hassfest@cd6f3635a740c84d8a14f6121a90068b8ece6bf6
-                  - run: python -m pip install -r requirements.txt
-                  - run: python scripts/check_deprecations.py
-                  - run: python scripts/check_privacy_markers.py
-                  - run: python scripts/check_translation_keys.py
-                  - run: python scripts/check_release_consistency.py
-                  - if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-                    run: python scripts/ha_baseline.py --resolve-latest /tmp/requirements-ha-latest.txt
-                  - run: python -m pip install --upgrade -r /tmp/requirements-ha-latest.txt
-                """,
+                (ROOT / ".github/workflows/validate.yml").read_text(encoding="utf-8"),
             )
 
             with patch.object(check_integration, "ROOT", root):
                 check_integration.check_github_actions()
+
+    def test_workflow_guards_require_executable_checks_in_each_test_job(self) -> None:
+        original = (ROOT / ".github/workflows/validate.yml").read_text(encoding="utf-8")
+        for job in ("repository", "home-assistant-latest"):
+            for command in ("python scripts/check_coverage.py", "python -m pip check"):
+                for replacement in (f"run: true # {command}", f"if: false\n        run: {command}", f"continue-on-error: true\n        run: {command}"):
+                    with self.subTest(job=job, command=command, replacement=replacement), tempfile.TemporaryDirectory() as temp_dir:
+                        root = Path(temp_dir)
+                        before, after = original.split(f"  {job}:", 1)
+                        modified = before + f"  {job}:" + after.replace(f"run: {command}", replacement, 1)
+                        _write_validate_workflow(root, modified)
+                        with patch.object(check_integration, "ROOT", root), redirect_stderr(StringIO()), self.assertRaisesRegex(SystemExit, "1"):
+                            check_integration.check_github_actions()
+
+    def test_workflow_requires_baseline_verification_and_active_jobs(self) -> None:
+        original = (ROOT / ".github/workflows/validate.yml").read_text(encoding="utf-8")
+        for old, new in (
+            ("run: python scripts/ha_baseline.py\n", "run: true # python scripts/ha_baseline.py\n"),
+            ("run: python scripts/ha_baseline.py --requirements", "run: echo python scripts/ha_baseline.py --requirements"),
+            ("  repository:\n", "  repository:\n    if: false\n"),
+            ("  hacs:\n", "  hacs:\n    if: false\n"),
+            ("  hassfest:\n", "  hassfest:\n    continue-on-error: true\n"),
+            ("  push:\n", "  # push:\n"),
+        ):
+            with self.subTest(old=old), tempfile.TemporaryDirectory() as temp_dir:
+                root = Path(temp_dir)
+                _write_validate_workflow(root, original.replace(old, new, 1))
+                with patch.object(check_integration, "ROOT", root), redirect_stderr(StringIO()), self.assertRaises(SystemExit):
+                    check_integration.check_github_actions()
 
     def test_github_actions_rejects_unapproved_action(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

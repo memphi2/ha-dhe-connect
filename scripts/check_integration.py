@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 import sys
 import tomllib
 import unittest
 from pathlib import Path
 
+import yaml
 from packaging.requirements import InvalidRequirement, Requirement
 from packaging.specifiers import SpecifierSet
 from packaging.utils import canonicalize_name
@@ -471,6 +473,91 @@ def check_github_actions() -> None:
         or "ignore::" + "DeprecationWarning" in text
     ):
         _fail("validation workflow must not suppress deprecation warnings")
+    _check_workflow_execution(text, action_uses)
+
+
+def _check_workflow_execution(text: str, action_uses: list[tuple[str, str, str | None]]) -> None:
+    """Validate executable job/step structure, not strings in comments or names."""
+    try:
+        workflow = yaml.load(text, Loader=yaml.BaseLoader)
+    except yaml.YAMLError:
+        _fail("validation workflow must be valid YAML")
+    if not isinstance(workflow, dict) or not isinstance(workflow.get("jobs"), dict):
+        _fail("validation workflow must define jobs")
+    triggers = workflow.get("on", {})
+    if (
+        not isinstance(triggers, dict)
+        or not {"push", "pull_request", "workflow_dispatch", "schedule"} <= triggers.keys()
+        or {"cron": "0 4 1 * *"} not in (triggers.get("schedule") or [])
+    ):
+        _fail("validation workflow must enable push, PR, dispatch and monthly schedule triggers")
+    jobs = workflow["jobs"]
+    actual_uses = []
+    common_commands = (
+        "python -m pip install -r requirements.txt",
+        "python -m pip check",
+        "python scripts/check_coverage.py",
+        "python scripts/check_deprecations.py",
+        "python scripts/check_privacy_markers.py",
+        "python scripts/check_integration.py",
+        "python scripts/check_translation_keys.py",
+        "python scripts/check_release_consistency.py",
+        "python scripts/check_typing.py",
+        "python -m ruff check custom_components/stiebel_dhe_connect tests scripts",
+    )
+    for name in ("hacs", "hassfest", "repository", "home-assistant-latest"):
+        job = jobs.get(name)
+        if not isinstance(job, dict):
+            _fail(f"validation workflow is missing job {name}")
+        expected_condition = (
+            "github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'"
+            if name == "home-assistant-latest" else None
+        )
+        if job.get("if") != expected_condition or job.get("continue-on-error", "false") != "false":
+            _fail(f"{name}: validation job must run on its required events and fail on errors")
+        steps = job.get("steps")
+        if not isinstance(steps, list) or not all(isinstance(step, dict) for step in steps):
+            _fail(f"{name}: validation steps must be a list of mappings")
+        active_steps = [step for step in steps if "if" not in step and step.get("continue-on-error", "false") == "false"]
+        for step in steps:
+            if "uses" in step:
+                actual_uses.append(step["uses"])
+        active_uses = [step["uses"].split("@")[0] for step in active_steps if isinstance(step.get("uses"), str)]
+        if "actions/checkout" not in active_uses:
+            _fail(f"{name}: checkout must run unconditionally")
+        if name in ("hacs", "hassfest"):
+            required_action = "hacs/action" if name == "hacs" else "home-assistant/actions/hassfest"
+            if required_action not in active_uses:
+                _fail(f"{name}: required validation action must run unconditionally")
+            continue
+        if not any(
+            step.get("uses", "").startswith("actions/setup-python@")
+            and step.get("with", {}).get("python-version") == VALIDATION_PYTHON_VERSION
+            for step in active_steps
+        ):
+            _fail(f"{name}: Python setup must use {VALIDATION_PYTHON_VERSION}")
+        commands = []
+        for step in active_steps:
+            if isinstance(step.get("run"), str):
+                try:
+                    commands.append(shlex.split(step["run"], comments=True))
+                except ValueError:
+                    _fail(f"{name}: invalid shell command")
+        required_commands = list(common_commands)
+        if name == "repository":
+            required_commands.append("python scripts/ha_baseline.py")
+        else:
+            required_commands.extend((
+                "python scripts/ha_baseline.py --resolve-latest /tmp/requirements-ha-latest.txt",
+                "python -m pip install --upgrade -r /tmp/requirements-ha-latest.txt",
+                "python scripts/ha_baseline.py --requirements /tmp/requirements-ha-latest.txt",
+                "python scripts/check_runtime_soak.py --cycles 30 --idle-seconds 60",
+            ))
+        for command in required_commands:
+            if shlex.split(command) not in commands:
+                _fail(f"{name}: missing unconditional command: {command}")
+    if sorted(actual_uses) != sorted(f"{name}@{ref}" for name, ref, _ in action_uses):
+        _fail("validation action pins must correspond to executable job steps")
 
 
 def check_validation_dependencies(text: str) -> None:
