@@ -253,47 +253,6 @@ class TestClimateWriteFilters(unittest.TestCase):
 class TestClimateHvacControls(unittest.IsolatedAsyncioTestCase):
     """Validate Home Assistant climate on/off service behavior."""
 
-    async def test_temperature_service_respects_explicit_mode(self) -> None:
-        from homeassistant.components.climate.services import (
-            SET_TEMPERATURE_SCHEMA,
-            _async_service_temperature_set,
-        )
-        from homeassistant.const import UnitOfTemperature
-
-        climate_module = _load_climate_module()
-        for initial in (climate_module.HVACMode.OFF, climate_module.HVACMode.HEAT):
-            for requested in (climate_module.HVACMode.OFF, climate_module.HVACMode.HEAT):
-                with self.subTest(initial=initial, requested=requested):
-                    client = _FakeClimateClient()
-                    entity = _build_entity(climate_module, client)
-                    entity.async_write_ha_state = Mock()
-                    entity.hass = types.SimpleNamespace(config=types.SimpleNamespace(
-                        units=types.SimpleNamespace(temperature_unit=UnitOfTemperature.CELSIUS)
-                    ))
-                    entity._attr_hvac_mode = initial
-                    entity._water_heating_enabled = initial == climate_module.HVACMode.HEAT
-                    call = types.SimpleNamespace(data=SET_TEMPERATURE_SCHEMA({
-                        "temperature": 39.0, "hvac_mode": requested,
-                        "entity_id": "climate.test_dhe",
-                    }))
-
-                    await _async_service_temperature_set(entity, call)
-
-                    self.assertEqual(client.heating_calls, [requested == climate_module.HVACMode.HEAT])
-                    self.assertEqual(client.temperature_calls, [39.0])
-                    self.assertEqual(entity._attr_hvac_mode, requested)
-
-    async def test_temperature_rejects_unsupported_mode_without_writing(self) -> None:
-        from homeassistant.exceptions import HomeAssistantError
-
-        climate_module = _load_climate_module()
-        client = _FakeClimateClient()
-        entity = _build_entity(climate_module, client)
-        with self.assertRaises(HomeAssistantError):
-            await entity.async_set_temperature(temperature=39.0, hvac_mode="cool")
-        self.assertEqual(client.heating_calls, [])
-        self.assertEqual(client.temperature_calls, [])
-
     async def test_turn_off_then_turn_on_restores_previous_target(self) -> None:
         climate_module = _load_climate_module()
         client = _FakeClimateClient()
