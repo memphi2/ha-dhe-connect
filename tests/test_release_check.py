@@ -320,7 +320,7 @@ class TestReleaseCheck(unittest.TestCase):
         def _runner(args):
             self.assertEqual(
                 tuple(args),
-                ("gh", "release", "view", "v1.3.2", "--json", "tagName,isDraft"),
+                ("gh", "release", "view", "v1.3.2", "--json", "tagName,isDraft,isPrerelease"),
             )
             return release_check.CommandResult(
                 args=tuple(args),
@@ -352,13 +352,53 @@ class TestReleaseCheck(unittest.TestCase):
             return release_check.CommandResult(
                 args=tuple(args),
                 returncode=0,
-                stdout='{"tagName":"v1.3.2","isDraft":false}',
+                stdout='{"tagName":"v1.3.2","isDraft":false,"isPrerelease":false}',
                 stderr="",
             )
 
         result = release_check.check_github_release("1.3.2", "present", _runner)
 
         self.assertTrue(result.ok)
+
+    def test_release_gate_rejects_drafts_prereleases_wrong_tags_and_invalid_json(self) -> None:
+        for payload in (
+            {"tagName": "v1.3.2", "isDraft": True, "isPrerelease": False},
+            {"tagName": "v1.3.2", "isDraft": False, "isPrerelease": True},
+            {"tagName": "v1.3.3", "isDraft": False, "isPrerelease": False},
+            {"tagName": "v1.3.2"}, [], None,
+        ):
+            with self.subTest(payload=payload):
+                runner = lambda args, payload=payload: release_check.CommandResult(tuple(args), 0, json.dumps(payload), "")
+                self.assertFalse(release_check.check_github_release("1.3.2", "present", runner).ok)
+        runner = lambda args: release_check.CommandResult(tuple(args), 0, '{"tagName":"v1.3.2","isDraft":true}', "")
+        self.assertFalse(release_check.check_github_release("1.3.2", "absent", runner).ok)
+
+    def test_github_tag_resolves_lightweight_and_annotated_tags(self) -> None:
+        for annotated in (False, True):
+            for matches in (False, True):
+                with self.subTest(annotated=annotated, matches=matches):
+                    calls = []
+                    def runner(args, calls=calls, annotated=annotated, matches=matches):
+                        calls.append(tuple(args))
+                        if args[0] == "git":
+                            output = "a" * 40
+                        else:
+                            is_tag = annotated and "/ref/" in args[-1]
+                            output = json.dumps({"object": {
+                                "type": "tag" if is_tag else "commit",
+                                "sha": "c" * 40 if is_tag else ("a" if matches else "b") * 40,
+                            }})
+                        return release_check.CommandResult(tuple(args), 0, output, "")
+                    self.assertEqual(release_check.check_github_tag_matches_head("1.3.2", runner).ok, matches)
+                    self.assertEqual(len(calls), 3 if annotated else 2)
+
+    def test_github_tag_fails_closed_on_lookup_error_or_invalid_target(self) -> None:
+        for code, payload in ((1, "unavailable"), (0, "[]"), (0, '{"object":{"type":"tree","sha":"' + "a" * 40 + '"}}')):
+            def runner(args, code=code, payload=payload):
+                if args[0] == "git":
+                    return release_check.CommandResult(tuple(args), 0, "a" * 40, "")
+                return release_check.CommandResult(tuple(args), code, payload, "")
+            self.assertFalse(release_check.check_github_tag_matches_head("1.3.2", runner).ok)
 
     def test_run_command_reports_missing_executable_without_traceback(self) -> None:
         with patch(
@@ -1186,7 +1226,7 @@ class TestReleaseCheck(unittest.TestCase):
 
         def _runner(command):
             commands.append(tuple(command))
-            if tuple(command) == ("gh", "release", "view", "v1.3.2", "--json", "tagName,isDraft"):
+            if tuple(command) == ("gh", "release", "view", "v1.3.2", "--json", "tagName,isDraft,isPrerelease"):
                 return release_check.CommandResult(
                     args=tuple(command),
                     returncode=1,

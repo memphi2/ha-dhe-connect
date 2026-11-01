@@ -245,6 +245,11 @@ After publication:
 python scripts/release_check.py --expect-tag present --expect-github-release present --require-current-tag
 ```
 
+The published-release check rejects drafts, prereleases and mismatched tag names.
+It resolves the tag directly through the GitHub API, including annotated tags,
+and requires its commit to match local HEAD. A matching local tag alone is not
+proof that the same commit was published.
+
 ## Security Hygiene
 
 - Do not publish tokens, private hosts, private IPs or credentials.

@@ -400,12 +400,20 @@ def check_github_release(version: str, expectation: str, runner: Runner) -> Chec
     tag = f"{TAG_PREFIX}{version}"
     if expectation == "skip":
         return CheckResult(True, f"GitHub release check skipped for {tag}")
-    result = runner(["gh", "release", "view", tag, "--json", "tagName,isDraft"])
+    result = runner(["gh", "release", "view", tag, "--json", "tagName,isDraft,isPrerelease"])
     exists = _gh_release_view_reports_existing(result)
     missing = _gh_release_view_reports_missing(result)
     if not exists and not missing:
         return CheckResult(False, _command_failed_message(result))
     expected = expectation == "present"
+    if expected and exists:
+        payload = json.loads(result.stdout)
+        if (
+            payload.get("tagName") != tag
+            or payload.get("isDraft") is not False
+            or payload.get("isPrerelease") is not False
+        ):
+            return CheckResult(False, f"GitHub release {tag} is not a published stable release")
     return CheckResult(
         exists == expected,
         f"GitHub release {tag} is {'present' if exists else 'absent'}",
@@ -420,7 +428,36 @@ def _gh_release_view_reports_existing(result: CommandResult) -> bool:
         payload = json.loads(result.stdout or "{}")
     except json.JSONDecodeError:
         return False
-    return bool(payload.get("tagName"))
+    return isinstance(payload, dict) and isinstance(payload.get("tagName"), str) and bool(payload["tagName"])
+
+
+def check_github_tag_matches_head(version: str, runner: Runner) -> CheckResult:
+    """Resolve the actual GitHub tag, including annotated tags, to its commit."""
+    tag = f"{TAG_PREFIX}{version}"
+    head = runner(["git", "rev-parse", "HEAD"])
+    if head.returncode != 0:
+        return CheckResult(False, _command_failed_message(head))
+    endpoint = f"repos/{{owner}}/{{repo}}/git/ref/tags/{tag}"
+    for _ in range(8):
+        result = runner(["gh", "api", endpoint])
+        if result.returncode != 0:
+            return CheckResult(False, _command_failed_message(result))
+        try:
+            payload = json.loads(result.stdout)
+            target = payload["object"]
+            sha = target["sha"]
+            kind = target["type"]
+            if not isinstance(sha, str) or not re.fullmatch(r"[0-9a-f]{40}", sha):
+                raise ValueError("invalid GitHub object SHA")
+        except (ValueError, KeyError, TypeError):
+            return CheckResult(False, f"cannot resolve GitHub tag {tag}")
+        if kind == "commit":
+            matches = sha == head.stdout.strip()
+            return CheckResult(matches, f"GitHub tag {tag} {'matches' if matches else 'does not match'} HEAD ({sha[:12]})")
+        if kind != "tag":
+            break
+        endpoint = f"repos/{{owner}}/{{repo}}/git/tags/{sha}"
+    return CheckResult(False, f"GitHub tag {tag} did not resolve to a commit")
 
 
 def _gh_release_view_reports_missing(result: CommandResult) -> bool:
@@ -874,6 +911,8 @@ def collect_results(args: argparse.Namespace, runner: Runner) -> list[CheckResul
         results.append(scan_git_history_for_sensitive_literals(runner))
     if args.require_current_tag:
         results.append(check_head_matches_tag(version, runner))
+    if args.expect_github_release == "present":
+        results.append(check_github_tag_matches_head(version, runner))
 
     if args.run_local_checks:
         results.extend(
