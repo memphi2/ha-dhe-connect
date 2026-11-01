@@ -563,20 +563,29 @@ def _check_workflow_execution(text: str, action_uses: list[tuple[str, str, str |
 def check_validation_dependencies(text: str) -> None:
     """Allow tool-floor updates inside reviewed bounds, not arbitrary upgrades."""
     requirements: dict[str, Requirement] = {}
+    allowed_dependencies = set(VALIDATION_DEPENDENCY_MINIMUMS) | set(VALIDATION_TOOL_BOUNDS)
+    baseline_includes = 0
     for line in text.splitlines():
         line = line.strip()
-        if not line or line.startswith(("#", "-r ")):
+        if not line or line.startswith("#"):
+            continue
+        if line == "-r requirements-ha.txt":
+            baseline_includes += 1
             continue
         try:
             requirement = Requirement(line)
         except InvalidRequirement:
             _fail("requirements.txt contains an invalid requirement")
         name = canonicalize_name(requirement.name)
+        if name not in allowed_dependencies:
+            _fail(f"requirements.txt contains unreviewed direct dependency {name!r}")
         if name in requirements:
             _fail(f"requirements.txt contains duplicate dependency {name!r}")
         if requirement.url or requirement.marker or requirement.extras:
             _fail(f"validation dependency {name!r} must be unconditional and from the index")
         requirements[name] = requirement
+    if baseline_includes != 1:
+        _fail("requirements.txt must include '-r requirements-ha.txt' exactly once")
     for dependency, constraint in sorted(VALIDATION_DEPENDENCY_MINIMUMS.items()):
         requirement = requirements.get(dependency)
         if requirement is None or requirement.specifier != SpecifierSet(constraint):

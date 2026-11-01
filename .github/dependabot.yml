@@ -4,17 +4,19 @@ version: 2
 # consistent refs, and supported release comments directly from the workflow.
 # Dependabot can therefore update action pins without a duplicated SHA table.
 # Python tool floors may increase inside the reviewed version bounds.
+# Routine updates are quarterly; security updates are enabled separately in
+# repository settings and do not wait for this schedule or its PR limit.
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "quarterly"
       time: "05:00"
       timezone: "Europe/Berlin"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 1
     groups:
       github-actions:
+        applies-to: "version-updates"
         patterns:
           - "*"
     commit-message:
@@ -22,16 +24,16 @@ updates:
 
   - package-ecosystem: "pip"
     directory: "/"
-    # requirements.txt is the only pin set: the workflow installs from it
-    # directly, without a Home Assistant constraints file. A bump therefore
-    # lands in CI exactly as written here.
+    # CI installs requirements.txt and its central requirements-ha.txt include,
+    # without a separate constraints file overriding the reviewed requirements.
     schedule:
-      interval: "monthly"
+      interval: "quarterly"
       time: "05:30"
       timezone: "Europe/Berlin"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 1
     groups:
       python-patch-minor:
+        applies-to: "version-updates"
         patterns:
           - "*"
         update-types:

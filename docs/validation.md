@@ -27,11 +27,32 @@ for Marketplace discovery; it does not change HA entity domains. `hacs.json`
 and the CI check named `HACS` remain correct technical names for the shared
 catalog format and validator.
 
+## Dependency Maintenance
+
+Routine Dependabot version updates run quarterly for GitHub Actions and Python,
+with one grouped PR per ecosystem and at most one open version-update PR per
+ecosystem. Python major updates remain manual compatibility work. The monthly
+latest-HA drift check remains enabled; it validates compatibility without
+opening dependency-update PRs.
+
+Dependabot security alerts and automatic security-update PRs must stay enabled
+in the repository settings. Security updates are reviewed promptly, independently
+of the quarterly schedule and version-update PR limit; they are not automatically
+merged. See the [Dependabot options reference](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference).
+The repository must receive the configuration on its default branch before the
+new version-update schedule takes effect.
+
 Dependabot may raise stable mypy and Ruff minimums inside the reviewed ranges
 (`>=2.4,<3` and `>=0.17,<0.18`). The guard parses requirements semantically;
 lowered/missing/widened bounds, conditional requirements and prerelease bounds
 still fail. Core and its matching test helpers move together in the central
 baseline, rather than as independent tool updates.
+
+`requirements.txt` admits only `mypy`, `ruff`, `pytest-cov` and exactly one
+`-r requirements-ha.txt` include. CI rejects additional direct dependencies,
+extra requirement/constraint includes and duplicated entries. The central HA
+file contains only core and its matching test helpers. Runtime dependencies
+and pytest remain supplied by that pair rather than independently maintained.
 
 ## Marketplace Branding
 

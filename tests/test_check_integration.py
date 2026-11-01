@@ -11,6 +11,8 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -281,6 +283,62 @@ class TestCheckIntegration(unittest.TestCase):
                 self.assertRaises(SystemExit),
             ):
                 check_integration.check_validation_dependencies(text)
+
+    def test_validation_dependencies_reject_unreviewed_direct_requirements(self) -> None:
+        for dependency in (
+            "aiohttp>=3.14,<4", "probatio==0.13.0", "zeroconf==0.151.5",
+            "pytest==9.0.3", "homeassistant==2026.11.0",
+            "pytest-homeassistant-custom-component==0.13.372", "requests",
+            "AIOHTTP", "pytest_home_assistant",
+        ):
+            with (
+                self.subTest(dependency=dependency),
+                redirect_stderr(StringIO()),
+                self.assertRaises(SystemExit),
+            ):
+                check_integration.check_validation_dependencies(
+                    VALIDATION_REQUIREMENTS_TEXT + dependency + "\n"
+                )
+
+    def test_validation_dependencies_require_only_the_central_baseline_include(self) -> None:
+        for include in (
+            "", "# -r requirements-ha.txt", "-r unreviewed.txt",
+            "-r requirements-ha.txt\n-r unreviewed.txt",
+            "-r requirements-ha.txt\n-r requirements-ha.txt",
+            "-r requirements-ha.txt\n-c constraints.txt",
+            "-r requirements-ha.txt\n--requirement=unreviewed.txt",
+        ):
+            with (
+                self.subTest(include=include),
+                redirect_stderr(StringIO()),
+                self.assertRaises(SystemExit),
+            ):
+                check_integration.check_validation_dependencies(
+                    VALIDATION_REQUIREMENTS_TEXT.replace("-r requirements-ha.txt", include)
+                )
+
+    def test_dependabot_keeps_quarterly_grouped_version_updates(self) -> None:
+        config = yaml.safe_load((ROOT / ".github/dependabot.yml").read_text(encoding="utf-8"))
+        self.assertEqual(config["version"], 2)
+        self.assertEqual(len(config["updates"]), 2)
+        updates = {entry["package-ecosystem"]: entry for entry in config["updates"]}
+        self.assertEqual(set(updates), {"github-actions", "pip"})
+        for ecosystem, entry in updates.items():
+            with self.subTest(ecosystem=ecosystem):
+                self.assertEqual(entry["directory"], "/")
+                self.assertEqual(entry["schedule"]["interval"], "quarterly")
+                self.assertNotIn("day", entry["schedule"])
+                self.assertEqual(entry["open-pull-requests-limit"], 1)
+                self.assertNotIn("target-branch", entry)
+                groups = list(entry["groups"].values())
+                self.assertEqual(len(groups), 1)
+                self.assertEqual(groups[0]["applies-to"], "version-updates")
+                self.assertEqual(groups[0]["patterns"], ["*"])
+                for ignored in entry.get("ignore", []):
+                    self.assertNotIn("versions", ignored)
+                    self.assertTrue(ignored.get("update-types"))
+        python_group = next(iter(updates["pip"]["groups"].values()))
+        self.assertEqual(set(python_group["update-types"]), {"minor", "patch"})
 
     def test_validation_ruff_bounds_do_not_allow_unsupported_minor(self) -> None:
         for invalid in (">=0.16,<0.18", ">=0.17,<0.19", ">=0.17.3", ">=0.18,<0.18"):
