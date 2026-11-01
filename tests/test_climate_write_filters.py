@@ -253,6 +253,21 @@ class TestClimateWriteFilters(unittest.TestCase):
 class TestClimateHvacControls(unittest.IsolatedAsyncioTestCase):
     """Validate Home Assistant climate on/off service behavior."""
 
+    async def test_invalid_temperature_never_enables_heating(self) -> None:
+        from homeassistant.exceptions import HomeAssistantError
+
+        climate_module = _load_climate_module()
+        client = _FakeClimateClient()
+        entity = _build_entity(climate_module, client)
+        entity._attr_hvac_mode = climate_module.HVACMode.OFF
+        entity._water_heating_enabled = False
+        for value in ("nan", "inf", "-inf", float("nan"), float("inf"), None, True, 10**400):
+            with self.subTest(value=value), self.assertRaises(HomeAssistantError):
+                await entity.async_set_temperature(temperature=value)
+        self.assertEqual(client.heating_calls, [])
+        self.assertEqual(client.temperature_calls, [])
+
+
     async def test_turn_off_then_turn_on_restores_previous_target(self) -> None:
         climate_module = _load_climate_module()
         client = _FakeClimateClient()

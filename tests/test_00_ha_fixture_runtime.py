@@ -529,6 +529,35 @@ class _FixtureDHEClient:
         return lambda: self.callbacks["wellness_programs"].remove(callback_fn)
 
 
+@pytest.mark.parametrize("temperature", ["nan", "inf", "-inf"])
+async def test_climate_service_rejects_nonfinite_temperature(temperature: str) -> None:
+    """HA's service schema must not turn invalid input into a heating command."""
+    from homeassistant.components.climate import HVACMode
+    from homeassistant.components.climate.services import (
+        SET_TEMPERATURE_SCHEMA,
+        _async_service_temperature_set,
+    )
+    from homeassistant.util.unit_system import METRIC_SYSTEM
+
+    _clear_loaded_integration_modules()
+    module = importlib.import_module(f"custom_components.{DOMAIN}.climate")
+    client = types.SimpleNamespace(
+        host="example.invalid", port=8443, available=True, last_device_info={},
+        set_temperature=AsyncMock(), set_water_heating_enabled=AsyncMock(),
+    )
+    entity = module.StiebelDHEClimate(
+        types.SimpleNamespace(data={}, options={}), "finite-test", "Test", client,
+    )
+    entity.hass = types.SimpleNamespace(config=types.SimpleNamespace(units=METRIC_SYSTEM))
+    entity._attr_hvac_mode = HVACMode.OFF
+    entity._water_heating_enabled = False
+    data = SET_TEMPERATURE_SCHEMA({"entity_id": "climate.test", "temperature": temperature})
+    with pytest.raises(HomeAssistantError):
+        await _async_service_temperature_set(entity, types.SimpleNamespace(data=data))
+    client.set_temperature.assert_not_called()
+    client.set_water_heating_enabled.assert_not_called()
+
+
 async def test_entity_id_changes_keep_subscriptions_and_native_climate_state(
     caplog: pytest.LogCaptureFixture,
 ) -> None:

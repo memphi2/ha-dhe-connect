@@ -69,6 +69,8 @@ class DHEClientCommandsMixin(
         return next_address
 
     async def set_temperature(self, temperature: float) -> float:
+        if not math.isfinite(temperature):
+            raise DHEError("Temperature must be a finite number")
         requested = _round_to_half_c(_clamp(float(temperature), 20.0, 60.0))
         client = _command_context(self)
 

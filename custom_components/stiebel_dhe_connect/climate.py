@@ -356,7 +356,10 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
             maximum=self._attr_max_temp,
         )
         if temperature is None:
-            return
+            raise translated_homeassistant_error(
+                "Temperature must be a finite number",
+                translation_key="dhe_invalid_temperature",
+            )
 
         try:
             raise_if_dhe_unavailable(

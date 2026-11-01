@@ -103,6 +103,13 @@ def _load_protocol():
 class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
     """Validate weather-favorite toggle safeguards."""
 
+    async def test_nonfinite_temperature_is_rejected_before_transport(self) -> None:
+        module = _load_client()
+        client = module.DHEClient.__new__(module.DHEClient)
+        for value in (float("nan"), float("inf"), float("-inf")):
+            with self.subTest(value=value), self.assertRaisesRegex(module.DHEError, "finite"):
+                await client.set_temperature(value)
+
     async def test_restart_after_reauth_restarts_running_client_with_fresh_token(
         self,
     ) -> None:
