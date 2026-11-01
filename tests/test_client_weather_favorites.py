@@ -2186,6 +2186,38 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
             )
         )
 
+    async def test_reconnect_grace_timer_preserves_ready_or_stopped_client(self) -> None:
+        client_module = _load_client()
+        DHEClient = client_module.DHEClient
+
+        for ready, stopped in ((True, False), (False, True)):
+            with self.subTest(ready=ready, stopped=stopped):
+                monotonic = Mock(return_value=0.0)
+                client = DHEClient.__new__(DHEClient)
+                client._ctx = object()
+                client._ready = asyncio.Event()
+                client._stopped = asyncio.Event()
+                if ready:
+                    client._ready.set()
+                if stopped:
+                    client._stopped.set()
+                client._available = True
+                client._availability_callbacks = set()
+                client._notify_callbacks = Mock()
+                client._connection_supervisor = client_module.DHEConnectionSupervisor(
+                    grace_period=15.0,
+                    monotonic=monotonic,
+                )
+                client._connection_supervisor.mark_disconnected()
+                monotonic.return_value = 15.0
+                client._reconnect_grace_task = asyncio.current_task()
+
+                await client._expire_reconnect_grace_after(0)
+
+                self.assertTrue(client.available)
+                client._notify_callbacks.assert_not_called()
+                self.assertIsNone(client._reconnect_grace_task)
+
     async def test_stale_reconnect_grace_timer_does_not_clear_new_timer(self) -> None:
         client_module = _load_client()
         DHEClient = client_module.DHEClient

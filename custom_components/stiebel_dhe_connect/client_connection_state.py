@@ -108,8 +108,7 @@ class DHEClientConnectionStateMixin:
         try:
             await asyncio.sleep(delay)
             if (
-                self._ctx is None
-                and not self._ready.is_set()
+                not self._ready.is_set()
                 and not self._stopped.is_set()
                 and self._connection_supervisor.should_mark_unavailable
             ):

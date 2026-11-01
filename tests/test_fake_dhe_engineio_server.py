@@ -11,7 +11,7 @@ import unittest
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from types import TracebackType
+from types import SimpleNamespace, TracebackType
 from typing import Any, Self
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -781,6 +781,105 @@ class TestFakeDHEEngineIOServer(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(saved_token, PAIRING_TOKEN)
         self.assertEqual(connected_state, "connected")
         self.assertTrue(available)
+
+    async def test_reconnect_grace_expires_before_delayed_startup_proof(self) -> None:
+        client_module = _load_client()
+        protocol_module = _load_protocol()
+        state_module = sys.modules[f"{PACKAGE_NAME}.client_connection_state"]
+        now = 0.0
+        grace_deadline = asyncio.Event()
+        reconnecting = asyncio.Event()
+        initializing = asyncio.Event()
+        availability: list[bool] = []
+
+        async def wait_for_grace_deadline(delay: float) -> None:
+            self.assertEqual(delay, 15.0)
+            await grace_deadline.wait()
+
+        def observe_diagnostics(state: dict[str, Any]) -> None:
+            if state.get("connection_state") == "reconnecting":
+                reconnecting.set()
+            elif state.get("connection_state") == "initializing":
+                initializing.set()
+
+        startup_value = {
+            "command": protocol_module.ODB_SET_COMMAND,
+            "value": {"id": protocol_module.ID_DEVICE_STATUS, "value": 1},
+        }
+        # Advance only the reconnect deadline, leaving real transport I/O intact.
+        timer_asyncio = SimpleNamespace(
+            sleep=wait_for_grace_deadline,
+            current_task=asyncio.current_task,
+            CancelledError=asyncio.CancelledError,
+        )
+        async with (
+            FakeDHEEngineIOServer(protocol_module.NS) as server,
+            aiohttp.ClientSession() as session,
+        ):
+            with (
+                patch.object(client_module, "async_get_clientsession", return_value=session),
+                patch.object(state_module, "asyncio", timer_asyncio),
+            ):
+                client = client_module.DHEClient(
+                    _FakeHass(asyncio.get_running_loop()),
+                    server.host,
+                    server.port,
+                    ".storage/test-token",
+                    "DHE",
+                )
+                client._token = STORED_TOKEN
+                client._connection_supervisor = client_module.DHEConnectionSupervisor(
+                    base_delay=0,
+                    max_delay=0,
+                    grace_period=15.0,
+                    monotonic=lambda: now,
+                )
+                client.add_availability_callback(availability.append)
+                client.add_diagnostic_callback(observe_diagnostics)
+                server.queue_authentication()
+                server.queue_event("message", startup_value)
+                try:
+                    await client.start()
+                    await asyncio.wait_for(client._ready.wait(), timeout=2)
+                    previous_ctx = client._ctx
+                    initializing.clear()
+
+                    await server.close_active_websockets()
+                    await asyncio.wait_for(reconnecting.wait(), timeout=2)
+                    now = 12.0
+                    server.queue_authentication()
+                    await asyncio.wait_for(initializing.wait(), timeout=2)
+                    self.assertIsNotNone(client._ctx)
+                    self.assertIsNot(client._ctx, previous_ctx)
+                    self.assertFalse(client._ready.is_set())
+                    self.assertFalse(client._has_runtime_startup_proof())
+                    self.assertTrue(client.available)
+                    grace_task = client._reconnect_grace_task
+                    self.assertIsNotNone(grace_task)
+
+                    now = 15.0
+                    grace_deadline.set()
+                    await asyncio.wait_for(asyncio.shield(grace_task), timeout=2)
+                    self.assertFalse(client.available)
+                    self.assertIsNone(client._reconnect_grace_task)
+                    self.assertEqual(client.diagnostic_state["connection_state"], "initializing")
+                    self.assertNotIn("auth_failure", client.diagnostic_state)
+
+                    now = 18.0
+                    server.queue_event("message", startup_value)
+                    await server._send_queued_websocket_packets(server.websockets[-1])
+                    await asyncio.wait_for(client._ready.wait(), timeout=2)
+                    self.assertTrue(client.available)
+                    self.assertEqual(client.diagnostic_state["connection_state"], "connected")
+                    self.assertEqual(availability, [False, True, False, True])
+                    self.assertEqual(
+                        client._connection_supervisor.diagnostic_state()[
+                            "last_successful_reconnect_duration_seconds"
+                        ],
+                        18.0,
+                    )
+                finally:
+                    await client.stop()
 
     async def test_stored_token_auth_session_close_is_auth_failure(self) -> None:
         client_module = _load_client()
