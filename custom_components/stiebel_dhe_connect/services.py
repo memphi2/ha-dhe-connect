@@ -32,21 +32,37 @@ SERVICE_TOGGLE_WEATHER_FAVORITE = "toggle_weather_favorite"
 SERVICE_REMOVE_WEATHER_FAVORITE = "remove_weather_favorite"
 SERVICE_SELECT_WEATHER_LOCATION = "select_weather_location"
 
+
+def _service_integer(value: Any) -> int:
+    """Accept whole numbers without silently truncating a requested index."""
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        raise vol.Invalid("expected an integer")
+    try:
+        result = int(value)
+    except (ValueError, OverflowError) as err:
+        raise vol.Invalid("expected an integer") from err
+    if isinstance(value, float) and value != result:
+        raise vol.Invalid("expected an integer")
+    return result
+
+
+WEATHER_COUNTRY_ID = vol.All(_service_integer, vol.Range(min=1, max=9999))
+
 WEATHER_SEARCH_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_NAME): cv.string,
-        vol.Required(ATTR_COUNTRY_ID): vol.Coerce(int),
+        vol.Required(ATTR_COUNTRY_ID): WEATHER_COUNTRY_ID,
         vol.Optional(ATTR_ENTRY_ID): cv.string,
     }
 )
 WEATHER_LOCATION_ACTION_SCHEMA = vol.Schema(
     {
         vol.Optional(ATTR_NAME): cv.string,
-        vol.Optional(ATTR_COUNTRY_ID): vol.Coerce(int),
+        vol.Optional(ATTR_COUNTRY_ID): WEATHER_COUNTRY_ID,
         vol.Optional(ATTR_LOCATION_ID): cv.string,
         vol.Optional(ATTR_ENTRY_ID): cv.string,
         vol.Optional(ATTR_RESULT_NUMBER, default=1): vol.All(
-            vol.Coerce(int),
+            _service_integer,
             vol.Range(min=1, max=WEATHER_RESULT_NUMBER_MAX),
         ),
     }
