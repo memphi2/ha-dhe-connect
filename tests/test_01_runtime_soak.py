@@ -19,7 +19,7 @@ from homeassistant import loader
 from scripts.check_runtime_soak import LIMITS, PHASES, sample_errors
 
 try:
-    from tests.test_00_ha_fixture_runtime import (
+    from tests.ha_test_support import (
         DOMAIN,
         _async_test_home_assistant,
         _build_mock_entry,
@@ -32,7 +32,7 @@ try:
         _decode_length_prefixed_packets,
     )
 except ModuleNotFoundError:
-    from test_00_ha_fixture_runtime import (
+    from ha_test_support import (
         DOMAIN,
         _async_test_home_assistant,
         _build_mock_entry,

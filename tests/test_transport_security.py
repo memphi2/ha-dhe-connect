@@ -12,7 +12,7 @@ import aiohttp
 import pytest
 from aiohttp import web
 
-from tests.test_client_weather_favorites import _load_client
+from tests.client_test_support import _load_client
 
 
 @asynccontextmanager

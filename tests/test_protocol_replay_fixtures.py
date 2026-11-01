@@ -12,12 +12,12 @@ from typing import Any
 from unittest.mock import Mock
 
 try:
-    from tests.test_client_weather_favorites import (
+    from tests.client_test_support import (
         _load_client,
         _load_component_module,
     )
 except ModuleNotFoundError:
-    from test_client_weather_favorites import (
+    from client_test_support import (
         _load_client,
         _load_component_module,
     )

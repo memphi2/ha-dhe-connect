@@ -16,7 +16,7 @@ from homeassistant.helpers import entity_platform, entity_registry
 from homeassistant.helpers.recorder import async_initialize_recorder
 from homeassistant.setup import async_setup_component
 
-from tests.test_00_ha_fixture_runtime import (
+from tests.ha_test_support import (
     DOMAIN,
     _async_test_home_assistant,
     _build_mock_entry,

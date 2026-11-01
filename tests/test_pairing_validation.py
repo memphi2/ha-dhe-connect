@@ -9,12 +9,12 @@ import unittest
 from pathlib import Path
 
 try:
-    from tests.test_client_weather_favorites import (
+    from tests.client_test_support import (
         _load_client,
         _load_component_module,
     )
 except ModuleNotFoundError:
-    from test_client_weather_favorites import (  # type: ignore[no-redef]
+    from client_test_support import (  # type: ignore[no-redef]
         _load_client,
         _load_component_module,
     )

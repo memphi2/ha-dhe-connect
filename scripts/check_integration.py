@@ -723,6 +723,8 @@ def check_compile() -> None:
 
 
 def check_unit_tests() -> None:
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
     suite = unittest.defaultTestLoader.discover(str(ROOT / "tests"))
     result = unittest.TextTestRunner(stream=sys.stdout, verbosity=1).run(suite)
     if not result.wasSuccessful():

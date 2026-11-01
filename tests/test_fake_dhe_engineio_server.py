@@ -19,13 +19,13 @@ import aiohttp
 from aiohttp import web
 
 try:
-    from tests.test_client_weather_favorites import (
+    from tests.client_test_support import (
         _load_client,
         _load_component_module,
         _load_protocol,
     )
 except ModuleNotFoundError:
-    from test_client_weather_favorites import (
+    from client_test_support import (
         _load_client,
         _load_component_module,
         _load_protocol,

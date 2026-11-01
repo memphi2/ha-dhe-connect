@@ -19,6 +19,19 @@ if str(ROOT) not in sys.path:
 
 from scripts import check_integration
 
+
+class TestUnitTestEntryPoint(unittest.TestCase):
+    def test_direct_script_exposes_shared_test_support_modules(self):
+        with (
+            patch.object(sys, "path", []),
+            patch.object(unittest.defaultTestLoader, "discover") as discover,
+            patch.object(unittest, "TextTestRunner") as runner,
+        ):
+            check_integration.check_unit_tests()
+            self.assertEqual(sys.path[0], str(ROOT))
+            discover.assert_called_once_with(str(ROOT / "tests"))
+            runner.return_value.run.assert_called_once_with(discover.return_value)
+
 VALIDATION_INSTALL_STEPS = """
 	                  - run: python -m pip install -r requirements.txt
 """

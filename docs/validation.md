@@ -17,6 +17,14 @@ payloads, and optional countdown writes. No user database or physical DHE is
 accessed. These regression checks complement, but do not replace, live database
 growth measurements.
 
+Real HA fixture tests are split into connection, discovery, repairs, runtime and
+services modules (`tests/test_00_ha_fixture_*.py`). Shared HA setup lives in
+`tests/ha_test_support.py`; stub-compatible client loading lives in
+`tests/client_test_support.py`. Client regressions are grouped into catalogs,
+commands, sessions and telemetry. Keep helpers in support modules rather than
+importing them from a test collection module. The `test_00_` prefix keeps real HA
+fixture tests ahead of tests that temporarily load stub-backed modules.
+
 | Surface | Current release gate |
 |---|---|
 | Minimum supported Home Assistant version | `2026.10.4` |

@@ -7,9 +7,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 try:
-    from tests.test_client_weather_favorites import _load_component_module
+    from tests.client_test_support import _load_component_module
 except ModuleNotFoundError:
-    from test_client_weather_favorites import _load_component_module
+    from client_test_support import _load_component_module
 
 
 class _FakeConfig:
