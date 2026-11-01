@@ -32,6 +32,18 @@ Do not duplicate HA's runtime pins in repository requirements or guards:
 `aiohttp`, `probatio` and `zeroconf` are installed transitively by core. This keeps
 their versions aligned when the central baseline changes.
 
+`scripts/ha_baseline.py` verifies the installed HA version and the test helpers'
+VCS origin and commit against the chosen requirements file. The drift job
+resolves core and helpers from the same release tag into a temporary file, then
+installs and verifies both. Stable releases are preferred; while preparing an
+unreleased baseline, only previews of that same series are eligible. It never
+downgrades to the preceding stable HA series or edits the pinned baseline.
+
+The publication gate additionally rejects prereleases and checks that the
+helper commit matches the stable core release tag on GitHub. An unavailable
+tag or mismatched installed environment fails the gate, rather than accepting
+the requirement text as evidence of a tested release.
+
 Temperature state uses the native climate API. Entity ID changes retain DHE
 callbacks in place. Config-entry setup/unload succeed with `None` and raise a
 config-entry exception on failure. Device metadata uses the 2026.11 `DeviceInfo`
@@ -43,6 +55,7 @@ Run this before opening/finalizing release-prep PRs:
 
 ```bash
 python -m pip check
+python scripts/ha_baseline.py
 python scripts/check_coverage.py
 python scripts/check_integration.py
 python scripts/check_translation_keys.py

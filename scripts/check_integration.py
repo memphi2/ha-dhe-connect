@@ -445,8 +445,10 @@ def check_github_actions() -> None:
         _fail("validation workflow must keep scheduled Hassfest validation enabled")
     if "github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'" not in text:
         _fail("latest Home Assistant drift check must run on schedule and workflow_dispatch")
-    if "python -m pip install --upgrade homeassistant" not in text:
-        _fail("validation workflow must include a latest Home Assistant drift check")
+    if "python scripts/ha_baseline.py --resolve-latest /tmp/requirements-ha-latest.txt" not in text:
+        _fail("validation workflow must resolve a matching latest Home Assistant pair")
+    if "python -m pip install --upgrade -r /tmp/requirements-ha-latest.txt" not in text:
+        _fail("validation workflow must install the matching latest Home Assistant pair")
     requirements_text = ""
     if "python -m pip install -r requirements.txt" in text:
         requirements_path = ROOT / "requirements.txt"

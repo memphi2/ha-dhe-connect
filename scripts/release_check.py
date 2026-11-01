@@ -13,8 +13,18 @@ from pathlib import Path
 from typing import Any
 
 try:
+    from scripts.ha_baseline import (
+        installed_baseline_errors,
+        read_baseline,
+        resolve_core_commit,
+    )
     from scripts.ha_test_redaction import redact_sensitive_text
 except ModuleNotFoundError:
+    from ha_baseline import (
+        installed_baseline_errors,
+        read_baseline,
+        resolve_core_commit,
+    )
     from ha_test_redaction import redact_sensitive_text
 
 
@@ -209,13 +219,18 @@ def load_manifest_version(root: Path) -> str:
 
 def check_stable_homeassistant_baseline(root: Path) -> CheckResult:
     """Reject publishing a stable integration validated only against an HA preview."""
-    path = root / "requirements-ha.txt"
-    if not path.is_file():
-        return CheckResult(False, "stable HA validation baseline is missing")
-    match = re.search(r"^homeassistant==([^\s#]+)$", path.read_text(encoding="utf-8"), re.MULTILINE)
-    if match is None or not re.fullmatch(r"\d+[.]\d+[.]\d+", match.group(1)):
-        return CheckResult(False, "stable release requires stable HA pins in requirements-ha.txt")
-    return CheckResult(True, f"stable HA validation baseline: {match.group(1)}")
+    try:
+        baseline = read_baseline(root / "requirements-ha.txt")
+        if baseline.version.is_prerelease or baseline.version.is_devrelease:
+            return CheckResult(False, "stable release requires stable HA pins in requirements-ha.txt")
+        errors = installed_baseline_errors(baseline)
+        if errors:
+            return CheckResult(False, "; ".join(errors))
+        if resolve_core_commit(baseline.version) != baseline.commit:
+            return CheckResult(False, "HA test-helper commit does not match the stable release tag")
+        return CheckResult(True, f"stable HA validation baseline verified: {baseline.version}")
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        return CheckResult(False, f"cannot verify HA baseline ({type(error).__name__})")
 
 
 def check_version_files(
@@ -863,6 +878,8 @@ def collect_results(args: argparse.Namespace, runner: Runner) -> list[CheckResul
     if args.run_local_checks:
         results.extend(
             (
+                check_command([sys.executable, "-m", "pip", "check"], runner),
+                check_command([sys.executable, "scripts/ha_baseline.py"], runner),
                 check_command(
                     [sys.executable, "-m", "pytest", "tests/test_diagnostics.py", "-q"],
                     runner,

@@ -234,7 +234,8 @@ class TestCheckIntegration(unittest.TestCase):
                   - run: python scripts/check_translation_keys.py
                   - run: python scripts/check_release_consistency.py
                   - if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-                    run: python -m pip install --upgrade homeassistant
+                    run: python scripts/ha_baseline.py --resolve-latest /tmp/requirements-ha-latest.txt
+                  - run: python -m pip install --upgrade -r /tmp/requirements-ha-latest.txt
                 """,
             )
 

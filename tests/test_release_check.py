@@ -63,9 +63,35 @@ class TestReleaseCheck(unittest.TestCase):
             path = root / "requirements-ha.txt"
             for version, expected in (("2026.11.0b1", False), ("2026.11.0rc1", False), ("2026.11.0", True)):
                 with self.subTest(version=version):
-                    path.write_text(f"homeassistant=={version}\n", encoding="utf-8")
-                    result = release_check.check_stable_homeassistant_baseline(root)
+                    path.write_text(
+                        f"homeassistant=={version}\n"
+                        "pytest-home-assistant @ git+https://github.com/home-assistant/core.git@"
+                        + "a" * 40 + "#subdirectory=packages/pytest-home-assistant\n",
+                        encoding="utf-8",
+                    )
+                    with (
+                        patch.object(release_check, "installed_baseline_errors", return_value=[]),
+                        patch.object(release_check, "resolve_core_commit", return_value="a" * 40),
+                    ):
+                        result = release_check.check_stable_homeassistant_baseline(root)
                     self.assertEqual(result.ok, expected)
+
+    def test_stable_release_rejects_wrong_installed_pair_and_mismatched_tag(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "requirements-ha.txt").write_text(
+                "homeassistant==2026.11.0\n"
+                "pytest-home-assistant @ git+https://github.com/home-assistant/core.git@"
+                + "a" * 40 + "#subdirectory=packages/pytest-home-assistant\n",
+                encoding="utf-8",
+            )
+            with patch.object(release_check, "installed_baseline_errors", return_value=["wrong installed HA"]):
+                self.assertFalse(release_check.check_stable_homeassistant_baseline(root).ok)
+            with (
+                patch.object(release_check, "installed_baseline_errors", return_value=[]),
+                patch.object(release_check, "resolve_core_commit", return_value="b" * 40),
+            ):
+                self.assertFalse(release_check.check_stable_homeassistant_baseline(root).ok)
 
     def test_version_files_accept_matching_release_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
