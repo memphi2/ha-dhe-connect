@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from homeassistant import loader
 
-from scripts.check_runtime_soak import LIMITS, sample_errors
+from scripts.check_runtime_soak import LIMITS, PHASES, sample_errors
 
 try:
     from tests.test_00_ha_fixture_runtime import (
@@ -140,7 +140,7 @@ def _trim_server_history(server):
 
 @pytest.mark.asyncio
 async def test_runtime_soak(caplog):
-    """Every cycle uses a fresh real client and tears down all HA platforms."""
+    """Measure both complete lifecycles and repeated reconnects on one client."""
     cycles = int(os.environ.get("DHE_SOAK_CYCLES", "3"))
     idle_seconds = float(os.environ.get("DHE_SOAK_IDLE_SECONDS", "0.5"))
     # Pytest's log history must not become the measured source of retention.
@@ -204,6 +204,18 @@ async def test_runtime_soak(caplog):
                                 _snapshot("reconnected", client, references[:-1])
                             )
                         if cycle == cycles + 1:
+                            for reconnect in range(cycles + 2):
+                                previous_ctx = client._ctx
+                                await server.close_active_websockets()
+                                await _wait_connected(client, previous_ctx)
+                                del previous_ctx
+                                await hass.async_block_till_done()
+                                assert entry.runtime_data.client is client
+                                _trim_server_history(server)
+                                if reconnect >= 2:
+                                    samples.append(_snapshot(
+                                        "same_client_reconnected", client, references[:-1]
+                                    ))
                             deadline = hass.loop.time() + idle_seconds
                             while True:
                                 _trim_server_history(server)
@@ -231,6 +243,7 @@ async def test_runtime_soak(caplog):
         report = {
             "cycles": cycles,
             "warmup_cycles": 2,
+            "same_client_reconnects": cycles + 2,
             "idle_seconds": idle_seconds,
             "limits": LIMITS,
             "errors": errors,
@@ -246,7 +259,7 @@ async def test_runtime_soak(caplog):
                         ]
                     )
                 }
-                for phase in ("connected", "reconnected", "idle", "unloaded")
+                for phase in PHASES
             },
             "samples": samples,
         }

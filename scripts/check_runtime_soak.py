@@ -13,6 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MIB = 1024 * 1024
+PHASES = ("connected", "reconnected", "same_client_reconnected", "idle", "unloaded")
 LIMITS = {
     "tasks": 2,
     "owned_tasks": 0,
@@ -27,7 +28,7 @@ LIMITS = {
 def sample_errors(samples: list[dict[str, int | str | None]]) -> list[str]:
     """Compare like-for-like phases after warmup, without tolerating leftovers."""
     errors = []
-    for phase in ("connected", "reconnected", "idle", "unloaded"):
+    for phase in PHASES:
         group = [sample for sample in samples if sample["phase"] == phase]
         if len(group) < 2:
             errors.append(f"{phase}: fewer than two samples")
@@ -95,7 +96,9 @@ def main(argv: list[str] | None = None) -> int:
             if result.returncode == 0 and (
                 data.get("errors")
                 or data.get("cycles") != args.cycles
+                or data.get("same_client_reconnects") != args.cycles + 2
                 or data.get("idle_seconds") != args.idle_seconds
+                or sample_errors(data.get("samples", []))
             ):
                 print(
                     "FAIL: soak report does not match the requested run",

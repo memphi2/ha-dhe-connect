@@ -116,8 +116,11 @@ python scripts/release_check.py --run-local-checks --allow-dirty --expect-tag sk
 
 The regular pytest suite includes a short soak using real HA entity platforms
 and the real DHE HTTP/WebSocket client against a local fake device. Two warmup
-cycles precede measurements of three setup/unload and reconnect cycles plus
-idle sampling. No physical device or running HA installation is accessed.
+cycles precede measurements of three setup/unload cycles. A separate phase
+reconnects the same live client repeatedly, without unloading or replacing it,
+with two reconnect warmups followed by the requested number of samples. Idle
+sampling follows on that same client. Executor and import work use HA's real
+worker threads. No physical device or running HA installation is accessed.
 
 For a longer isolated run with numeric, credential-free evidence:
 

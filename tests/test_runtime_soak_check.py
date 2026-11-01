@@ -11,14 +11,14 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from scripts.check_runtime_soak import LIMITS, main, sample_errors
+from scripts.check_runtime_soak import LIMITS, PHASES, main, sample_errors
 
 
 class RuntimeSoakCheckTests(unittest.TestCase):
     def _samples(self):
         return [
             {"phase": phase, **dict.fromkeys(LIMITS, 0), "retained_clients": 0}
-            for phase in ("connected", "reconnected", "idle", "unloaded")
+            for phase in PHASES
             for _ in range(2)
         ]
 
@@ -43,6 +43,16 @@ class RuntimeSoakCheckTests(unittest.TestCase):
 
     def test_missing_samples_fail(self):
         self.assertTrue(sample_errors([]))
+        self.assertTrue(sample_errors([
+            sample for sample in self._samples()
+            if sample["phase"] != "same_client_reconnected"
+        ]))
+
+    def test_same_client_growth_is_rejected(self):
+        samples = self._samples()
+        same_client = [sample for sample in samples if sample["phase"] == "same_client_reconnected"]
+        same_client[-1]["callbacks"] = 1
+        self.assertIn("same_client_reconnected: callbacks growth exceeds 0", sample_errors(samples))
 
     def test_optional_rss_and_invalid_metrics(self):
         samples = self._samples()
@@ -84,7 +94,7 @@ class RuntimeSoakCheckTests(unittest.TestCase):
                 self.assertEqual(env["DHE_SOAK_REPORT"], str(report))
                 report.write_text(
                     json.dumps(
-                        {"cycles": 3, "idle_seconds": 0.5, "errors": [], "samples": []}
+                        {"cycles": 3, "same_client_reconnects": 5, "idle_seconds": 0.5, "errors": [], "samples": self._samples()}
                     ),
                     encoding="utf-8",
                 )
