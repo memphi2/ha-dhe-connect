@@ -334,6 +334,11 @@ Maintainer commands and sanitized evidence export are documented once in
 [mounted recorder checks](validation.md#mounted-home-assistant-smoke); task and
 allocation regression checks are in [runtime soak](validation.md#loopback-runtime-soak).
 
+Recorder attribute exclusions remove payloads from stored attributes; they do
+not prevent a state row when a live attribute changes. For example, a changed
+radio favorite ID must update the dashboard even though the favorites list is
+excluded from storage. Identical repeated updates are suppressed separately.
+
 Expected operational writers during water use include current flow, current
 power, live temperature, consumption and saving-monitor entities. Unexpected idle
 writers should be investigated from the top-writer list printed by the smoke

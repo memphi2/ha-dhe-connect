@@ -10,6 +10,13 @@ The commands here are development/release checks, not a user setup requirement.
 
 ## LTS Compatibility Matrix
 
+The normal pytest suite includes `tests/test_00_recorder_runtime.py`, which
+starts the real HA recorder against a temporary SQLite database. It checks idle
+deduplication, jitter flushes, zero crossings, live catalog updates with excluded
+payloads, and optional countdown writes. No user database or physical DHE is
+accessed. These regression checks complement, but do not replace, live database
+growth measurements.
+
 | Surface | Current release gate |
 |---|---|
 | Minimum supported Home Assistant version | `2026.10.4` |
