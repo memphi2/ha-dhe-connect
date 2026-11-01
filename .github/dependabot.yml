@@ -3,7 +3,7 @@ version: 2
 # scripts/check_integration.py validates the action names, full-length SHA pins,
 # consistent refs, and supported release comments directly from the workflow.
 # Dependabot can therefore update action pins without a duplicated SHA table.
-# Exact Python dependency floors remain guarded separately.
+# Python tool floors may increase inside the reviewed version bounds.
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"

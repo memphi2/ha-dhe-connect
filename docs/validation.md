@@ -2,6 +2,13 @@
 
 This document defines the active validation gate for this repository.
 
+Dependabot can raise the stable mypy and Ruff minimum versions inside the
+reviewed ranges (`>=2.4,<3` and `>=0.17,<0.18`). The dependency guard parses
+requirements semantically instead of requiring the old floor as literal text.
+Removing a bound, lowering the minimum, allowing a new major/minor outside the
+reviewed range, conditional requirements and prerelease bounds still fail.
+HA and its matching runtime/test pins remain exact baseline changes.
+
 It is version-neutral by design and should not include stale snapshots from
 older branches.
 

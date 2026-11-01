@@ -234,6 +234,59 @@ class TestCheckIntegration(unittest.TestCase):
                     ):
                         check_integration.check_homeassistant_baseline()
 
+    def test_validation_tool_floor_updates_within_supported_bounds(self) -> None:
+        for dependency, versions in (
+            ("mypy", (">=2.4.1,<3", ">=2.5,<3", ">=2.4.1,<2.5", "<3.0,>=2.4.1")),
+            ("ruff", (">=0.17.3,<0.18", "<0.18, >=0.17.3")),
+        ):
+            original = next(line for line in VALIDATION_REQUIREMENTS_TEXT.splitlines()
+                            if line.startswith(dependency))
+            for version in versions:
+                with self.subTest(dependency=dependency, version=version):
+                    check_integration.check_validation_dependencies(
+                        VALIDATION_REQUIREMENTS_TEXT.replace(original, dependency + version)
+                    )
+
+    def test_validation_tool_bounds_reject_unsafe_or_conditional_requirements(self) -> None:
+        for invalid in (
+            "mypy>=2.3,<3", "mypy>=2.4,<4", "mypy>=2.4", "mypy==2.4.1",
+            "mypy>=3,<3", "mypy>=2.4rc1,<3", "mypy>=2.4,<3rc1",
+            "mypy>=2.4+local,<3", "mypy>=2.4,<3; python_version<'3.14'",
+            "mypy[extra]>=2.4,<3", "mypy @ https://example.com/mypy.whl",
+            "mypy>=2.4,<3,!=2.4.1", "# mypy>=2.4,<3", "not a requirement",
+        ):
+            with (
+                self.subTest(invalid=invalid),
+                redirect_stderr(StringIO()),
+                self.assertRaises(SystemExit),
+            ):
+                check_integration.check_validation_dependencies(
+                    VALIDATION_REQUIREMENTS_TEXT.replace("mypy>=2.4,<3", invalid)
+                )
+
+    def test_validation_dependencies_reject_duplicates_and_comment_only_pins(self) -> None:
+        for text in (
+            VALIDATION_REQUIREMENTS_TEXT + "mypy>=2.4.1,<3\n",
+            VALIDATION_REQUIREMENTS_TEXT.replace("pytest-cov>=7.1,<8", "# pytest-cov>=7.1,<8"),
+        ):
+            with (
+                self.subTest(text=text),
+                redirect_stderr(StringIO()),
+                self.assertRaises(SystemExit),
+            ):
+                check_integration.check_validation_dependencies(text)
+
+    def test_validation_ruff_bounds_do_not_allow_unsupported_minor(self) -> None:
+        for invalid in (">=0.16,<0.18", ">=0.17,<0.19", ">=0.17.3", ">=0.18,<0.18"):
+            with (
+                self.subTest(invalid=invalid),
+                redirect_stderr(StringIO()),
+                self.assertRaises(SystemExit),
+            ):
+                check_integration.check_validation_dependencies(
+                    VALIDATION_REQUIREMENTS_TEXT.replace("ruff>=0.17,<0.18", "ruff" + invalid)
+                )
+
     def test_github_actions_accepts_pinned_validation_actions(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
