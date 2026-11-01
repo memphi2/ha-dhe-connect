@@ -73,6 +73,34 @@ For intentional in-progress worktrees:
 python scripts/release_check.py --run-local-checks --allow-dirty --expect-tag skip --expect-github-release skip
 ```
 
+## Loopback Runtime Soak
+
+The regular pytest suite includes a short soak using real HA entity platforms
+and the real DHE HTTP/WebSocket client against a local fake device. Two warmup
+cycles precede measurements of three setup/unload and reconnect cycles plus
+idle sampling. No physical device or running HA installation is accessed.
+
+For a longer isolated run with numeric, credential-free evidence:
+
+```bash
+python scripts/check_runtime_soak.py --cycles 30 --idle-seconds 60 --json-output /tmp/dhe-soak.json
+```
+
+The report records pending tasks, scheduled timer handles, callback counts,
+weak references to unloaded clients, traced allocations attributed to the
+integration, total traced allocations, and current RSS where `/proc` is
+available. Fake-server packet histories are cleared before sampling. The gate
+compares equal lifecycle phases after warmup: callbacks and integration task
+counts must not grow; total tasks/timers allow two transient entries. Unload
+must leave no integration tasks, callbacks or retained clients. Memory growth
+limits are 512 KiB integration allocations, 8 MiB total traced allocations and
+32 MiB RSS. These deliberately bounded regression checks do not prove that a
+real device/firmware remains leak-free over days. Longer idle windows can be
+requested with `--idle-seconds`.
+
+The monthly/manual latest-HA job also runs the longer isolated command above
+(without keeping a JSON artifact); its numeric summary is written to the job log.
+
 ## Optional Live/Lab Gates
 
 These checks depend on local infrastructure and are not universal CI gates.

@@ -114,6 +114,9 @@ jobs:
       - name: Run unit tests
         run: python -m pytest -q
 
+      - name: Run isolated runtime soak
+        run: python scripts/check_runtime_soak.py --cycles 30 --idle-seconds 60
+
       - name: Run deprecation guard
         run: python scripts/check_deprecations.py
 

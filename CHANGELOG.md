@@ -8,6 +8,10 @@
 - Use exception-based config-entry setup and unload results.
 - Construct device metadata with Home Assistant's DeviceInfo dataclass.
 - Centralize the HA core and test-helper baseline in requirements-ha.txt.
+- Document config-entry token storage and device-side revocation accurately.
+- Bind Repairs to their config entry and prevent recreation after its removal.
+- Verify installed core/helper provenance and resolve matching latest-HA pairs.
+- Gate lifecycle/reconnect/idle task and memory growth with a loopback soak test.
 
 ## v2.0.10 - 2026-10-14
 
