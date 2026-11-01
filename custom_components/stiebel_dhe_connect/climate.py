@@ -6,7 +6,11 @@ import logging
 from typing import Any
 
 from homeassistant.components.climate import ClimateEntity
-from homeassistant.components.climate.const import ClimateEntityFeature, HVACMode
+from homeassistant.components.climate.const import (
+    ATTR_HVAC_MODE,
+    ClimateEntityFeature,
+    HVACMode,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
@@ -341,18 +345,33 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
         if temperature is None:
             return
 
+        requested_mode = kwargs.get(ATTR_HVAC_MODE)
+        if requested_mode not in (None, HVACMode.OFF, HVACMode.HEAT):
+            raise translated_homeassistant_error(
+                f"Unsupported HVAC mode: {requested_mode}",
+                translation_key="dhe_unsupported_hvac_mode",
+                translation_placeholders={"hvac_mode": str(requested_mode)},
+            )
+
         try:
             raise_if_dhe_unavailable(
                 self._client,
                 "DHE is unavailable; cannot set water heating temperature",
             )
-            if self._attr_hvac_mode == HVACMode.OFF or self._water_heating_enabled is False:
-                self._water_heating_enabled = await self._client.set_water_heating_enabled(True)
+            if (
+                requested_mode is not None
+                or self._attr_hvac_mode == HVACMode.OFF
+                or self._water_heating_enabled is False
+            ):
+                requested_heating = requested_mode != HVACMode.OFF
+                self._water_heating_enabled = await self._client.set_water_heating_enabled(
+                    requested_heating
+                )
                 self._attr_hvac_mode = (
                     HVACMode.HEAT if self._water_heating_enabled else HVACMode.OFF
                 )
-                if not self._water_heating_enabled:
-                    raise DHEError("Could not enable DHE heating before setting temperature")
+                if self._water_heating_enabled != requested_heating:
+                    raise DHEError("Could not set DHE heating mode before setting temperature")
             self._attr_native_target_temperature = await self._client.set_temperature(temperature)
             self._target_before_heating_off = self._attr_native_target_temperature
             self._attr_available = True
