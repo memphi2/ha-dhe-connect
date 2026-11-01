@@ -60,7 +60,10 @@ Der Standardport ist `8443`.
 
 Ein Config Entry wird erst nach erfolgreichem Pairing und Login angelegt.
 Das Token liegt im Home-Assistant-Config-Entry. Alte Token-Dateien werden bei
-der Migration uebernommen und danach geloescht. `.storage` nicht von Hand aendern.
+der Migration uebernommen. Gueltige Quelldateien bleiben bis zum naechsten
+HA-Start erhalten, der das gespeicherte Token samt Migrationsvermerk wieder
+einliest; erst dann werden sie geloescht. Ein Integrations-Reload reicht dafuer
+nicht aus. `.storage` nicht von Hand aendern.
 
 Bei einem abgelehnten Token zuerst das passende Problem unter
 `Einstellungen` -> `System` -> `Reparaturen` bearbeiten. Falls kein Problem

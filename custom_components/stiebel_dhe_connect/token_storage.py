@@ -12,9 +12,32 @@ from typing import Protocol, runtime_checkable
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_TOKEN
+from .const import CONF_TOKEN, DOMAIN
+from .token_file_helpers import TOKEN_FILE_PREFIX, TOKEN_FILE_SUFFIX
 
 _LOGGER = logging.getLogger(__name__)
+CONF_LEGACY_TOKEN_FILES = "legacy_token_files"
+_PENDING_MIGRATIONS = f"{DOMAIN}_pending_token_migrations"
+
+
+def legacy_token_paths(hass: HomeAssistant, entry: ConfigEntry) -> tuple[str, ...]:
+    """Return migration source paths, restricted to legacy storage filenames."""
+    names = entry.data.get(CONF_LEGACY_TOKEN_FILES, [])
+    if not isinstance(names, list):
+        return ()
+    return tuple(
+        hass.config.path(os.path.join(".storage", name))
+        for name in names
+        if isinstance(name, str)
+        and os.path.basename(name) == name
+        and name.startswith(TOKEN_FILE_PREFIX)
+        and name.endswith(TOKEN_FILE_SUFFIX)
+    )
+
+
+def _defer_migration_cleanup(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """A token changed in this process has not yet survived a HA restart."""
+    hass.data.setdefault(_PENDING_MIGRATIONS, set()).add(entry.entry_id)
 
 
 @runtime_checkable
@@ -128,6 +151,8 @@ class ConfigEntryTokenStore:
 
     async def async_clear_token(self) -> None:
         """Remove the token from the config entry."""
+        for path in legacy_token_paths(self.hass, self.entry):
+            await LegacyFileTokenStore(self.hass, path).async_clear_token()
         _async_update_entry_token(self.hass, self.entry, "")
 
 
@@ -140,8 +165,12 @@ def _async_update_entry_token(
     data = dict(getattr(entry, "data", {}) or {})
     if token:
         data[CONF_TOKEN] = token
+        if CONF_LEGACY_TOKEN_FILES in data:
+            _defer_migration_cleanup(hass, entry)
     else:
         data.pop(CONF_TOKEN, None)
+        data.pop(CONF_LEGACY_TOKEN_FILES, None)
+        hass.data.get(_PENDING_MIGRATIONS, set()).discard(entry.entry_id)
     if data == dict(getattr(entry, "data", {}) or {}):
         return False
     return bool(hass.config_entries.async_update_entry(entry, data=data))
@@ -152,7 +181,7 @@ async def async_migrate_legacy_token_file(
     entry: ConfigEntry,
     token_file: str,
 ) -> bool:
-    """Move one legacy token file into config-entry data, then delete the file."""
+    """Import one legacy token, retaining its source until a later HA start."""
     return await async_migrate_legacy_token_files(hass, entry, (token_file,))
 
 
@@ -161,31 +190,49 @@ async def async_migrate_legacy_token_files(
     entry: ConfigEntry,
     token_files: Iterable[str],
 ) -> bool:
-    """Move legacy token files into config-entry data, then delete old files."""
-    stores = _legacy_file_stores(hass, token_files)
+    """Import tokens and remove sources only after a persisted migration reload."""
+    pending_paths = legacy_token_paths(hass, entry)
+    stores = _legacy_file_stores(hass, (*token_files, *pending_paths))
     if not stores:
         return False
 
     has_entry_token = token_is_well_formed(_entry_token(entry))
-    migrated = False
-    if not has_entry_token:
-        entry_store = ConfigEntryTokenStore(hass, entry)
+    if (
+        has_entry_token
+        and pending_paths
+        and entry.entry_id not in hass.data.get(_PENDING_MIGRATIONS, set())
+    ):
+        # This marker and token were loaded from disk, not set by this process.
         for store in stores:
-            token = await store.async_load_token()
-            if not token:
-                continue
-            if not token_is_well_formed(token):
+            await store.async_clear_token()
+        data = dict(entry.data)
+        data.pop(CONF_LEGACY_TOKEN_FILES, None)
+        hass.config_entries.async_update_entry(entry, data=data)
+        return False
+
+    migrated = False
+    data = dict(entry.data)
+    retained_names: list[str] = []
+    for store in stores:
+        token = await store.async_load_token()
+        if not token_is_well_formed(token):
+            if token:
                 _LOGGER.warning(
                     "Ignoring malformed legacy DHE token while migrating entry=%s",
                     getattr(entry, "entry_id", "unknown"),
                 )
-                continue
-            await entry_store.async_save_token(token)
+            await store.async_clear_token()
+            continue
+        retained_names.append(os.path.basename(store.token_path))
+        if not has_entry_token:
+            data[CONF_TOKEN] = token
+            has_entry_token = True
             migrated = True
-            break
-
-    for store in stores:
-        await store.async_clear_token()
+    if retained_names:
+        data[CONF_LEGACY_TOKEN_FILES] = retained_names
+        _defer_migration_cleanup(hass, entry)
+        if data != dict(entry.data):
+            hass.config_entries.async_update_entry(entry, data=data)
     return migrated
 
 

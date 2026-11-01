@@ -332,6 +332,8 @@ def _install_fake_integration_modules() -> None:
         "custom_components.stiebel_dhe_connect.token_file_helpers",
     )
     fake_tokens.stale_unconfigured_token_paths = lambda *_args, **_kwargs: []
+    fake_tokens.TOKEN_FILE_PREFIX = "stiebel_dhe_connect_token_"
+    fake_tokens.TOKEN_FILE_SUFFIX = ".txt"
     fake_tokens.token_file_for_target = lambda host, port: f"token_{host}_{port}.json"
 
     sys.modules["custom_components.stiebel_dhe_connect.token_file_helpers"] = fake_tokens

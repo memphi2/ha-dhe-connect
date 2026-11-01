@@ -27,7 +27,14 @@ Only legacy per-target files generated for a host and port are migration inputs:
 the reachable target and the entry's configured target candidates. Retargeting
 checks the destination before the old target. An existing well-formed config-entry
 token takes precedence; otherwise the first well-formed candidate is stored.
-The listed legacy files are then removed, including malformed candidates.
+Well-formed source files are retained until the next Home Assistant start loads
+both the token and a migration marker from the persisted config entry. An
+integration reload alone does not delete them. This avoids losing the last
+durable token if HA crashes before its delayed config-entry write. The marker
+contains only legacy filenames, not a second token, and is removed after cleanup.
+Pending sources remain protected from unrelated setup cleanup. Malformed
+candidates can be removed immediately; explicit pairing recovery also clears
+pending sources so they cannot restore a deliberately removed credential.
 Deleting an old file does not clear the active token in the config entry.
 
 Entry-ID-based or shared files from private/development snapshots are not

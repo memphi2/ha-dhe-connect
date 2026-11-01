@@ -5,6 +5,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
+
+import pytest
 
 try:
     from tests.client_test_support import _load_component_module
@@ -38,6 +41,7 @@ class _FakeConfigEntries:
 
 class _FakeHass:
     def __init__(self, base_path: Path) -> None:
+        self.data = {}
         self.config = _FakeConfig(base_path)
         self.config_entries = _FakeConfigEntries()
 
@@ -67,7 +71,7 @@ async def test_config_entry_token_store_saves_and_clears_token(tmp_path) -> None
     assert "token" not in entry.data
 
 
-async def test_migrate_legacy_token_file_moves_token_and_deletes_file(tmp_path) -> None:
+async def test_migration_retains_source_through_reload_until_next_ha_start(tmp_path) -> None:
     token_storage = _module()
     hass = _FakeHass(tmp_path)
     entry = SimpleNamespace(entry_id="entry-1", data={"host": "dhe.local"})
@@ -85,10 +89,18 @@ async def test_migrate_legacy_token_file_moves_token_and_deletes_file(tmp_path) 
 
     assert migrated is True
     assert entry.data["token"] == "legacy-token-value-000001"
+    assert legacy_file.exists()
+    assert entry.data[token_storage.CONF_LEGACY_TOKEN_FILES] == [legacy_file.name]
+    assert not await token_storage.async_migrate_legacy_token_files(hass, entry, ())
+    assert legacy_file.exists()
+
+    restarted_hass = _FakeHass(tmp_path)
+    assert not await token_storage.async_migrate_legacy_token_files(restarted_hass, entry, ())
     assert not legacy_file.exists()
+    assert token_storage.CONF_LEGACY_TOKEN_FILES not in entry.data
 
 
-async def test_migrate_legacy_token_file_deletes_file_when_entry_token_exists(
+async def test_existing_token_also_defers_legacy_deletion_until_restart(
     tmp_path,
 ) -> None:
     token_storage = _module()
@@ -111,8 +123,11 @@ async def test_migrate_legacy_token_file_deletes_file_when_entry_token_exists(
 
     assert migrated is False
     assert entry.data["token"] == "entry-token-value-000001"
+    assert legacy_file.exists()
+    assert len(hass.config_entries.update_calls) == 1
+
+    await token_storage.async_migrate_legacy_token_files(_FakeHass(tmp_path), entry, ())
     assert not legacy_file.exists()
-    assert hass.config_entries.update_calls == []
 
 
 async def test_migrate_legacy_token_file_ignores_malformed_token(tmp_path) -> None:
@@ -134,3 +149,94 @@ async def test_migrate_legacy_token_file_ignores_malformed_token(tmp_path) -> No
     assert migrated is False
     assert "token" not in entry.data
     assert not legacy_file.exists()
+
+
+async def test_failed_config_entry_update_retains_source(tmp_path) -> None:
+    module = _module()
+    hass = _FakeHass(tmp_path)
+    entry = SimpleNamespace(entry_id="entry-1", data={})
+    path = ".storage/stiebel_dhe_connect_token_dhe_8443.txt"
+    source = module.LegacyFileTokenStore(hass, path)
+    await source.async_save_token("legacy-token-value-000001")
+    with (
+        patch.object(hass.config_entries, "async_update_entry", side_effect=RuntimeError),
+        pytest.raises(RuntimeError),
+    ):
+        await module.async_migrate_legacy_token_file(hass, entry, path)
+    assert Path(source.token_path).exists()
+
+
+async def test_crash_before_persistence_can_repeat_migration(tmp_path) -> None:
+    module = _module()
+    path = ".storage/stiebel_dhe_connect_token_dhe_8443.txt"
+    hass = _FakeHass(tmp_path)
+    source = module.LegacyFileTokenStore(hass, path)
+    await source.async_save_token("legacy-token-value-000001")
+    for restarted_hass in (hass, _FakeHass(tmp_path)):
+        # Disk still contains the original entry, not the changed in-memory data.
+        entry = SimpleNamespace(entry_id="entry-1", data={"host": "dhe.local"})
+        assert await module.async_migrate_legacy_token_file(restarted_hass, entry, path)
+        assert entry.data["token"] == "legacy-token-value-000001"
+        assert Path(source.token_path).exists()
+
+
+async def test_failed_cleanup_keeps_marker_for_retry(tmp_path) -> None:
+    module = _module()
+    hass = _FakeHass(tmp_path)
+    path = ".storage/stiebel_dhe_connect_token_dhe_8443.txt"
+    entry = SimpleNamespace(entry_id="entry-1", data={
+        "token": "existing-token-value-0001",
+        module.CONF_LEGACY_TOKEN_FILES: [Path(path).name],
+    })
+    await module.LegacyFileTokenStore(hass, path).async_save_token("legacy-token-value-000001")
+    with (
+        patch.object(module.os, "remove", side_effect=PermissionError),
+        pytest.raises(PermissionError),
+    ):
+        await module.async_migrate_legacy_token_files(hass, entry, ())
+    assert module.CONF_LEGACY_TOKEN_FILES in entry.data
+    assert Path(hass.config.path(path)).exists()
+    await module.async_migrate_legacy_token_files(hass, entry, ())
+    assert module.CONF_LEGACY_TOKEN_FILES not in entry.data
+
+
+async def test_pairing_clear_removes_pending_sources_and_cannot_reimport(tmp_path) -> None:
+    module = _module()
+    hass = _FakeHass(tmp_path)
+    entry = SimpleNamespace(entry_id="entry-1", data={})
+    path = ".storage/stiebel_dhe_connect_token_dhe_8443.txt"
+    source = module.LegacyFileTokenStore(hass, path)
+    await source.async_save_token("legacy-token-value-000001")
+    await module.async_migrate_legacy_token_file(hass, entry, path)
+    await module.ConfigEntryTokenStore(hass, entry).async_clear_token()
+    assert not Path(source.token_path).exists()
+    assert "token" not in entry.data
+    assert module.CONF_LEGACY_TOKEN_FILES not in entry.data
+    assert not await module.async_migrate_legacy_token_file(_FakeHass(tmp_path), entry, path)
+
+
+async def test_token_change_after_restart_defers_pending_cleanup_again(tmp_path) -> None:
+    module = _module()
+    hass = _FakeHass(tmp_path)
+    path = ".storage/stiebel_dhe_connect_token_dhe_8443.txt"
+    entry = SimpleNamespace(entry_id="entry-1", data={
+        "token": "existing-token-value-0001",
+        module.CONF_LEGACY_TOKEN_FILES: [Path(path).name],
+    })
+    await module.LegacyFileTokenStore(hass, path).async_save_token("legacy-token-value-000001")
+    await module.ConfigEntryTokenStore(hass, entry).async_save_token("new-entry-token-value-0001")
+    await module.async_migrate_legacy_token_files(hass, entry, ())
+    assert Path(hass.config.path(path)).exists()
+    assert entry.data["token"] == "new-entry-token-value-0001"
+
+
+def test_migration_marker_cannot_delete_unrelated_or_outside_files(tmp_path) -> None:
+    module = _module()
+    hass = _FakeHass(tmp_path)
+    entry = SimpleNamespace(data={module.CONF_LEGACY_TOKEN_FILES: [
+        "../stiebel_dhe_connect_token_outside.txt", "/tmp/stiebel_dhe_connect_token_bad.txt",
+        "core.config_entries", "stiebel_dhe_connect_token_ok.txt", None,
+    ]})
+    assert module.legacy_token_paths(hass, entry) == (
+        hass.config.path(".storage/stiebel_dhe_connect_token_ok.txt"),
+    )

@@ -438,7 +438,8 @@ async def test_runtime_stored_token_pairing_prompt_creates_single_repair_issue()
                 },
             )
             assert entry.data["token"] == STORED_TOKEN
-            assert not token_file.exists()
+            assert token_file.exists()
+            assert entry.data["legacy_token_files"] == [token_file.name]
 
             assert await hass.config_entries.async_unload(entry.entry_id)
             await hass.async_block_till_done()

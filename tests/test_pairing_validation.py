@@ -95,7 +95,8 @@ class TestPairingValidation(unittest.IsolatedAsyncioTestCase):
             storage.mkdir()
             configured_entry = types.SimpleNamespace(
                 entry_id="configured",
-                data={"host": "configured.local", "port": 8443},
+                data={"host": "configured.local", "port": 8443,
+                      "legacy_token_files": ["stiebel_dhe_connect_token_previous.local_8443.txt"]},
                 options={},
             )
             hass = _FakeHass(root, [configured_entry])
@@ -105,7 +106,8 @@ class TestPairingValidation(unittest.IsolatedAsyncioTestCase):
             )
             keep_path = storage / "stiebel_dhe_connect_token_configured.local_8443.txt"
             unrelated_path = storage / "other.txt"
-            for path in (*remove_paths, keep_path, unrelated_path):
+            pending_path = storage / configured_entry.data["legacy_token_files"][0]
+            for path in (*remove_paths, keep_path, unrelated_path, pending_path):
                 path.write_text("token", encoding="utf-8")
 
             await self.module._async_clear_setup_token_files(
@@ -119,6 +121,7 @@ class TestPairingValidation(unittest.IsolatedAsyncioTestCase):
                 self.assertFalse(path.exists(), path)
             self.assertTrue(keep_path.exists())
             self.assertTrue(unrelated_path.exists())
+            self.assertTrue(pending_path.exists())
 
     async def test_validate_setup_pairing_maps_validation_errors(self) -> None:
         module = self.module

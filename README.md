@@ -125,7 +125,8 @@ explicit relay setup across subnets.
 
 The local DHE pairing token is stored in the Home Assistant config entry.
 Legacy per-target token files from older versions are migrated into the config
-entry and deleted automatically.
+entry. Valid source files are deleted automatically on a later HA start, once
+the persisted token and migration marker have been loaded successfully.
 
 ## Security Notes
 

@@ -12,6 +12,8 @@
 
 ### Fixes
 
+- Retain legacy token sources until the migrated config entry has survived a HA
+  restart; protect pending sources during setup cleanup and pairing recovery.
 - Reject non-finite cost and emission settings before any device write.
 - Apply redirect, compression and response-size protection to setup reachability
   checks as well as the persistent device transport.

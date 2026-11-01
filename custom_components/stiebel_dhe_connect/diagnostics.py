@@ -47,6 +47,7 @@ TO_REDACT = {
     "ip",
     "ip_address",
     "key",
+    "legacy_token_files",
     "local_ip",
     "mac",
     "base_url",

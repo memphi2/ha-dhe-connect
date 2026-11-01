@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -18,6 +19,7 @@ from homeassistant.data_entry_flow import FlowResultType
 from tests.ha_test_support import (
     DEFAULT_PORT,
     DOMAIN,
+    MockConfigEntry,
     _async_test_home_assistant,
     _build_mock_entry,
     _clear_loaded_integration_modules,
@@ -27,6 +29,40 @@ from tests.ha_test_support import (
 )
 
 pytestmark = pytest.mark.asyncio
+
+
+async def test_token_migration_only_deletes_sources_after_persisted_restart(tmp_path) -> None:
+    _clear_loaded_integration_modules()
+    storage = importlib.import_module(f"custom_components.{DOMAIN}.token_storage")
+    path = ".storage/stiebel_dhe_connect_token_audit_8443.txt"
+    token = "synthetic-migration-token-000001"
+    disk_path = tmp_path / ".storage/core.config_entries"
+    async with _async_test_home_assistant(config_dir=str(tmp_path)) as hass:
+        entry = _build_mock_entry(host="audit.invalid", port=8443, name="Audit", unique_id="audit")
+        entry.add_to_hass(hass)
+        source = storage.LegacyFileTokenStore(hass, path)
+        await source.async_save_token(token)
+        # Simulate a crash window: no config-entry write may complete yet.
+        with patch.object(hass.config_entries, "_async_schedule_save"):
+            assert await storage.async_migrate_legacy_token_file(hass, entry, path)
+            assert not disk_path.exists()
+            assert Path(source.token_path).exists()
+            assert entry.data["token"] == token
+            assert not await storage.async_migrate_legacy_token_files(hass, entry, ())
+            assert Path(source.token_path).exists()
+        # Exercise the actual HA delayed persistence and final-write lifecycle.
+        hass.config_entries.async_update_entry(entry, title="Saved audit")
+
+    persisted = json.loads(disk_path.read_text())["data"]["entries"][0]
+    assert persisted["data"]["token"] == token
+    assert persisted["data"][storage.CONF_LEGACY_TOKEN_FILES]
+    async with _async_test_home_assistant(config_dir=str(tmp_path)) as hass:
+        restored = MockConfigEntry(domain=DOMAIN, data=persisted["data"], entry_id=entry.entry_id)
+        restored.add_to_hass(hass)
+        assert not await storage.async_migrate_legacy_token_files(hass, restored, ())
+        assert not Path(source.token_path).exists()
+        assert restored.data["token"] == token
+        assert storage.CONF_LEGACY_TOKEN_FILES not in restored.data
 
 
 async def test_config_flow_creates_entry_after_pairing_with_real_hass_fixture() -> None:
@@ -188,7 +224,7 @@ async def test_options_connection_flow_migrates_legacy_token_for_changed_target(
             config_flow.CONF_INTERNAL_SCALD_PROTECTION: "55",
         }
         assert entry.data["token"] == "existing-token-value-0001"
-        assert not old_token_path.exists()
+        assert old_token_path.exists()
         assert not new_token_path.exists()
         validate_pairing.assert_not_awaited()
 
@@ -263,7 +299,7 @@ async def test_reconfigure_flow_updates_connection_without_new_entry_with_real_h
         assert entry.options[CONF_NAME] == "Reconfigure New DHE"
         assert entry.options[config_flow.CONF_INTERNAL_SCALD_PROTECTION] == "55"
         assert entry.data["token"] == "existing-reconfigure-token-0001"
-        assert not old_token_path.exists()
+        assert old_token_path.exists()
         assert not new_token_path.exists()
         validate_pairing.assert_not_awaited()
 

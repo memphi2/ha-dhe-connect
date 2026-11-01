@@ -60,8 +60,9 @@ integration reloads after successful pairing and login.
 
 Manual token-file deletion should no longer be needed. The integration stores
 the DHE pairing token in the Home Assistant config entry; legacy per-target token
-files from older versions are migrated into the entry and deleted
-automatically. If the integration cannot load far enough to expose Repairs or
+files from older versions are migrated into the entry. Valid sources are retained
+until the next HA start confirms the persisted migration; reloading the integration
+alone does not remove them. If the integration cannot load far enough to expose Repairs or
 the button, first check the HA minimum, installed files, completed restart and
 setup error in the log. Do not delete a working config entry as a routine
 troubleshooting step, and never edit `.storage` or paste its contents into issues.
@@ -113,7 +114,8 @@ of creating a replacement, so entity IDs and unique IDs stay stable. When the
 configured host or port changes, Home Assistant checks that the new target is
 reachable and keeps the existing config-entry token. Any legacy
 per-target token file found during retargeting is migrated into the config
-entry and removed. A fresh pairing is only needed later if the DHE rejects that
+entry; valid source files are removed after a later HA start confirms persistence.
+A fresh pairing is only needed later if the DHE rejects that
 token.
 If the configured target cannot be reached during setup/retry, Home Assistant
 raises `Configured DHE host is unreachable`.

@@ -16,7 +16,9 @@ This document defines migration expectations for the v2 release line.
 - No automatic token or config storage rewrites without explicit migration
   design and tests.
 - Since v2.0.7, setup and retargeting explicitly migrate well-formed per-target
-  host/port token files into config-entry data, then remove the candidate files.
+  host/port token files into config-entry data. From v2.0.10, valid source files
+  are retained until a later HA start loads the persisted migration marker and
+  token; an integration reload is not enough to confirm persistence.
   Existing config-entry tokens take precedence; retargeting prefers the new
   target's file over the old target's file. Entry-ID-based and shared files from
   private/dev snapshots are not imported. See [token handling](../SECURITY.md#token-handling).
