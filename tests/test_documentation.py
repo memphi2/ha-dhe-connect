@@ -122,3 +122,23 @@ class DocumentationTests(unittest.TestCase):
             )
         )
         self.assertIn(trigger["to"], options)
+
+    def test_countdown_example_matches_formatted_duration(self):
+        from tests.test_entity_state_helpers import _load_entity_state_helpers
+
+        helpers = _load_entity_state_helpers()
+        example = next(
+            example for _, _, example in _yaml_examples()
+            if isinstance(example, dict)
+            and example.get("alias") == "DHE shower countdown reaches zero"
+        )
+        trigger = example["triggers"][0]
+        self.assertEqual(trigger["from"], helpers.format_minutes_duration(1 / 60))
+        self.assertEqual(trigger["to"], helpers.format_minutes_duration(0))
+        self.assertNotIn("conditions", example)
+
+    def test_memory_docs_use_entity_actions(self):
+        text = (ROOT / "docs/troubleshooting.md").read_text()
+        for action in ("button.press", "number.set_value", "text.set_value"):
+            self.assertIn(action, text)
+        self.assertNotIn("memory services should include", text)

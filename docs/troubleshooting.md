@@ -437,8 +437,11 @@ has probably not created that slot yet. Either keep unused slots disabled or
 create/write the slot from Home Assistant or the DHE UI before relying on its
 entities.
 
-When multiple devices are configured, memory services should include `entry_id`
-if the target device is not otherwise unambiguous.
+Memory slots use standard entity actions: `button.press` to recall a preset,
+`number.set_value` to edit its temperature, and `text.set_value` to rename it.
+Select the slot entity belonging to the intended device as the `entity_id`
+target. There are no integration-specific memory services or `entry_id`
+parameters for these actions.
 
 ## Debug Logs
 

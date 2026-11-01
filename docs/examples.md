@@ -6,23 +6,27 @@ action with your own mobile-app action. See the [entity reference](entities.md)
 for diagnostic states and available controls. Import each automation as its own
 automation; dashboard snippets belong in a dashboard, not `automations.yaml`.
 
-## Shower Timer Finished Notification
+## Shower Countdown Reaches Zero
+
+Enable the optional shower timer remaining sensor first. Its state is `m:ss`,
+not a numeric count. This example detects the local countdown's last second;
+it is not a device-confirmed completion event. A stop, reload, disconnection or
+device reset before that transition can prevent the notification. The display
+resets to the configured duration afterwards, so do not recheck the timer switch
+or the current sensor state in an action condition.
 
 ```yaml
-alias: DHE shower timer finished
+alias: DHE shower countdown reaches zero
 triggers:
   - trigger: state
     entity_id: sensor.dhe_connect_shower_timer_remaining
-    to: "0"
-conditions:
-  - condition: state
-    entity_id: switch.dhe_connect_shower_timer
-    state: "on"
+    from: "0:01"
+    to: "0:00"
 actions:
   - action: notify.mobile_app_phone
     data:
       title: DHE
-      message: Shower timer finished.
+      message: Shower countdown reached zero.
 mode: single
 ```
 
