@@ -17,6 +17,13 @@ payloads, and optional countdown writes. No user database or physical DHE is
 accessed. These regression checks complement, but do not replace, live database
 growth measurements.
 
+Discovery observations update the bounded in-memory cache immediately. Disk
+writes are coalesced over a five-second window with one pending timer/write;
+regular HA shutdown flushes the latest dirty snapshot. A failed write is retried
+on a later observation or shutdown, not in an idle retry loop. An abrupt process
+exit can lose the last discovery observations, but not pairing credentials or
+config entries; the discovery cache is only a temporary setup aid.
+
 Real HA fixture tests are split into connection, discovery, repairs, runtime and
 services modules (`tests/test_00_ha_fixture_*.py`). Shared HA setup lives in
 `tests/ha_test_support.py`; stub-compatible client loading lives in

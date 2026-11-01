@@ -35,6 +35,7 @@
 
 ### Maintenance
 
+- Coalesce discovery-cache disk writes and flush pending changes at HA shutdown.
 - Verify recorder filtering against real SQLite rows and organize HA/client tests
   into focused suites with shared fixtures.
 - Correct countdown and memory-control examples, document migration scope and

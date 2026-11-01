@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 import types
 from ipaddress import ip_network
 from typing import Any
@@ -36,6 +37,27 @@ from tests.ha_test_support import (
 )
 
 pytestmark = pytest.mark.asyncio
+
+
+async def test_ha_shutdown_flushes_coalesced_discovery_cache(tmp_path) -> None:
+    _clear_loaded_integration_modules()
+    discovery = importlib.import_module(f"custom_components.{DOMAIN}.discovery_state")
+    record = discovery.DiscoveryRecord(
+        source="scan", key="device", host="192.0.2.1", port=8443,
+        name="Test", confidence=80, preferred_identity_source="scan_host",
+    )
+    path = tmp_path / discovery.DISCOVERY_CACHE_FILE
+    async with _async_test_home_assistant(config_dir=str(tmp_path)) as hass:
+        for _ in range(100):
+            await discovery.async_record_discovery(hass, record)
+        writer = hass.data[discovery.DISCOVERY_WRITER_KEY]
+        assert writer.handle is not None
+        assert writer.task is None
+        assert not path.exists()
+    assert writer.handle is None
+    assert writer.task is None
+    assert not writer.dirty
+    assert json.loads(path.read_text())["records"]["device"]["seen_count"] == 100
 
 
 @pytest.fixture

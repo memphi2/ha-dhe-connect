@@ -11,7 +11,7 @@ import threading
 import types
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 COMPONENT_DIR = ROOT / "custom_components" / "stiebel_dhe_connect"
@@ -71,6 +71,11 @@ class _FakeHass:
         self.config = _FakeConfig(root)
         self.data: dict[str, object] = {}
         self.executor_job_count = 0
+        self.shutdown_callbacks = []
+        self.bus = types.SimpleNamespace(async_listen_once=lambda _event, callback: self.shutdown_callbacks.append(callback))
+
+    def async_create_background_task(self, coro, name):
+        return asyncio.create_task(coro, name=name)
 
     def async_add_executor_job(self, func, *args):
         self.executor_job_count += 1
@@ -100,6 +105,10 @@ class TestDiscoveryState(unittest.TestCase):
                 self.discovery.async_record_discovery(hass, record)
                 for record in records for _ in range(3)
             ))
+            self.assertEqual(hass.executor_job_count, 1)
+            self.assertEqual(len(hass.shutdown_callbacks), 1)
+            await self.discovery.async_flush_discovery_cache(hass)
+            self.assertEqual(hass.executor_job_count, 2)
             persisted = json.loads((root / self.discovery.DISCOVERY_CACHE_FILE).read_text())
             self.assertEqual(len(persisted["records"]), 20)
             self.assertTrue(all(item["seen_count"] == 3 for item in persisted["records"].values()))
@@ -128,11 +137,17 @@ class TestDiscoveryState(unittest.TestCase):
                 preferred_identity_source="scan_host",
             ) for index in range(2)]
             with patch.object(self.discovery.json, "dump", side_effect=slow_dump):
-                first = asyncio.create_task(self.discovery.async_record_discovery(hass, records[0]))
+                await self.discovery.async_record_discovery(hass, records[0])
+                first = asyncio.create_task(self.discovery.async_flush_discovery_cache(hass))
                 try:
                     self.assertTrue(await asyncio.to_thread(started.wait, 3))
                     first.cancel()
-                    second = asyncio.create_task(self.discovery.async_record_discovery(hass, records[1]))
+                    async def update_and_flush():
+                        result = await self.discovery.async_record_discovery(hass, records[1])
+                        await self.discovery.async_flush_discovery_cache(hass)
+                        return result
+
+                    second = asyncio.create_task(update_and_flush())
                     await asyncio.sleep(0)
                     self.assertFalse(first.done())
                     self.assertFalse(second.done())
@@ -143,6 +158,66 @@ class TestDiscoveryState(unittest.TestCase):
             self.assertIsInstance(results[1], dict)
             persisted = json.loads((root / self.discovery.DISCOVERY_CACHE_FILE).read_text())
             self.assertEqual(len(persisted["records"]), 2)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            asyncio.run(run(Path(temp_dir)))
+
+    def test_burst_uses_one_timer_and_shutdown_flushes_the_latest_state(self) -> None:
+        async def run(root):
+            hass = _FakeHass(root)
+            record = self.discovery.DiscoveryRecord(
+                source="scan", key="device", host="192.0.2.1", port=8443,
+                name="Test", confidence=80, preferred_identity_source="scan_host",
+            )
+            with patch.object(self.discovery, "DISCOVERY_SAVE_DELAY_SECONDS", 0.01):
+                await self.discovery.async_record_discovery(hass, record)
+                writer = hass.data[self.discovery.DISCOVERY_WRITER_KEY]
+                timer = writer.handle
+                for _ in range(499):
+                    await self.discovery.async_record_discovery(hass, record)
+                    self.assertIs(writer.handle, timer)
+                self.assertEqual(hass.executor_job_count, 1)
+                await asyncio.sleep(0.03)
+                if writer.task:
+                    await writer.task
+                self.assertIsNone(writer.handle)
+                self.assertIsNone(writer.task)
+                self.assertEqual(hass.executor_job_count, 2)
+                await self.discovery.async_record_discovery(hass, record)
+                await hass.shutdown_callbacks[0](None)
+                self.assertIsNone(writer.handle)
+                self.assertIsNone(writer.task)
+                self.assertFalse(writer.dirty)
+                saved = json.loads((root / self.discovery.DISCOVERY_CACHE_FILE).read_text())
+                self.assertEqual(saved["records"]["device"]["seen_count"], 501)
+                await asyncio.sleep(0.03)
+                self.assertEqual(hass.executor_job_count, 3)
+                self.assertEqual(len(hass.shutdown_callbacks), 1)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            asyncio.run(run(Path(temp_dir)))
+
+    def test_failed_deferred_write_waits_for_observation_or_shutdown_to_retry(self) -> None:
+        async def run(root):
+            hass = _FakeHass(root)
+            record = self.discovery.DiscoveryRecord(
+                source="scan", key="device", host="192.0.2.1", port=8443,
+                name="Test", confidence=80, preferred_identity_source="scan_host",
+            )
+            with (
+                patch.object(self.discovery, "DISCOVERY_SAVE_DELAY_SECONDS", 0.01),
+                patch.object(self.discovery, "_async_save_discovery_cache", AsyncMock(side_effect=OSError)) as save,
+            ):
+                await self.discovery.async_record_discovery(hass, record)
+                await asyncio.sleep(0.05)
+                writer = hass.data[self.discovery.DISCOVERY_WRITER_KEY]
+                self.assertTrue(writer.dirty)
+                self.assertIsNone(writer.handle)
+                self.assertIsNone(writer.task)
+                save.assert_awaited_once()
+            await hass.shutdown_callbacks[0](None)
+            self.assertFalse(writer.dirty)
+            self.assertTrue((root / self.discovery.DISCOVERY_CACHE_FILE).exists())
 
         with tempfile.TemporaryDirectory() as temp_dir:
             asyncio.run(run(Path(temp_dir)))
@@ -214,6 +289,7 @@ class TestDiscoveryState(unittest.TestCase):
             )
 
             cache_path = root / self.discovery.DISCOVERY_CACHE_FILE
+            asyncio.run(self.discovery.async_flush_discovery_cache(hass))
             self.assertTrue(cache_path.exists())
             cached_payload = json.loads(cache_path.read_text(encoding="utf-8"))
             self.assertEqual(cached_payload["version"], 1)
@@ -357,6 +433,8 @@ class TestDiscoveryState(unittest.TestCase):
 
             payload = asyncio.run(self.discovery.async_load_discovery_cache(hass))
             self.assertEqual(len(payload["records"]), 3)
+            self.assertEqual(hass.executor_job_count, 1)
+            asyncio.run(self.discovery.async_flush_discovery_cache(hass))
             self.assertEqual(hass.executor_job_count, 2)
 
     def test_empty_scan_discoveries_do_not_create_cache_file(self) -> None:

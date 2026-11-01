@@ -65,6 +65,7 @@ def _install_fake_homeassistant() -> None:
     fake_homeassistant.const.CONF_PORT = "port"
     fake_homeassistant.const.MAJOR_VERSION = 2026
     fake_homeassistant.const.MINOR_VERSION = 11
+    fake_homeassistant.const.EVENT_HOMEASSISTANT_FINAL_WRITE = "final_write"
 
     class _ConfigFlowBase:
         @classmethod
@@ -721,6 +722,7 @@ class TestSetupScanConfigFlow(
         self.flow.hass = types.SimpleNamespace(
             async_add_executor_job=_add_executor_job,
             async_create_task=_create_task,
+            bus=types.SimpleNamespace(async_listen_once=lambda *_args: None),
             config=types.SimpleNamespace(language="en"),
             config_entries=_ConfigEntries(self._flow_manager),
         )
