@@ -1,8 +1,8 @@
 # Known Limitations
 
 - Local network only: no cloud relay and no remote vendor API path.
-- This integration line requires Home Assistant `2026.11.0` or newer. Use
-  integration `v2.0.9` on older HA installations; see [installation.md](installation.md).
+- This integration line requires Home Assistant `2026.10.4` or newer. Older HA
+  installations need a release with a matching minimum; see [installation.md](installation.md).
 - Discovery depends on mDNS visibility. Across VLANs/subnets, router mDNS
   reflection/relay must be configured.
 - Setup subnet scan is intentionally limited to private IPv4 ranges and bounded

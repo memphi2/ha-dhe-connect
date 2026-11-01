@@ -14,6 +14,8 @@ from typing import Any
 
 try:
     from scripts.ha_baseline import (
+        API_URL,
+        fetch_json,
         installed_baseline_errors,
         read_baseline,
         resolve_core_commit,
@@ -21,6 +23,8 @@ try:
     from scripts.ha_test_redaction import redact_sensitive_text
 except ModuleNotFoundError:
     from ha_baseline import (
+        API_URL,
+        fetch_json,
         installed_baseline_errors,
         read_baseline,
         resolve_core_commit,
@@ -228,6 +232,16 @@ def check_stable_homeassistant_baseline(root: Path) -> CheckResult:
             return CheckResult(False, "; ".join(errors))
         if resolve_core_commit(baseline.version) != baseline.commit:
             return CheckResult(False, "HA test-helper commit does not match the stable release tag")
+        release = fetch_json(f"{API_URL}/releases/tags/{baseline.version}")
+        if (
+            not isinstance(release, dict)
+            or release.get("tag_name") != str(baseline.version)
+            or release.get("draft") is not False
+            or release.get("prerelease") is not False
+            or not isinstance(release.get("published_at"), str)
+            or not release["published_at"].strip()
+        ):
+            return CheckResult(False, "HA baseline is not a published stable GitHub release")
         return CheckResult(True, f"stable HA validation baseline verified: {baseline.version}")
     except (OSError, ValueError, KeyError, TypeError) as error:
         return CheckResult(False, f"cannot verify HA baseline ({type(error).__name__})")

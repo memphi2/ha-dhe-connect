@@ -39,6 +39,7 @@ from .entity_helpers import (
     device_registry_model,
     device_registry_sw_version,
 )
+from .ha_compat import HA_2026_11
 from .protocol import ID_DEVICE_INFO
 from .repair_issues import (
     DEVICE_UNREACHABLE_ISSUE,
@@ -113,7 +114,7 @@ def _entry_display_name(entry: ConfigEntry, data: Mapping[str, Any]) -> str:
     return str(data.get(CONF_NAME, entry.title or DEFAULT_NAME)).strip() or DEFAULT_NAME
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool | None:
     """Set up DHE Connect from a config entry."""
     data = merged_entry_data(entry)
     target = _entry_target_or_raise(entry)
@@ -184,6 +185,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     _async_schedule_connected_issue_cleanup(hass, entry, client)
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
+    return None if HA_2026_11 else True
 
 
 async def _async_first_reachable_entry_target(
@@ -342,7 +344,7 @@ def _async_clear_stale_sensor_statistic_issues(
         )
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool | None:
     """Unload a config entry."""
     runtime = getattr(entry, "runtime_data", None)
     unloaded_result = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
@@ -358,7 +360,15 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
             _async_unregister_services(hass)
 
     if not unloaded:
-        raise ConfigEntryError("Could not unload DHE platforms")
+        if HA_2026_11:
+            raise ConfigEntryError("Could not unload DHE platforms")
+        return False
+    return None if HA_2026_11 else True
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Clear entry-owned Repairs, including on HA before native ownership."""
+    async_delete_repair_issues(hass, entry.entry_id)
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:

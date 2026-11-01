@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.climate import ClimateEntity
 from homeassistant.components.climate.const import ClimateEntityFeature, HVACMode
@@ -28,6 +28,7 @@ from .entity_state_helpers import (
     climate_max_temperature,
     normalize_internal_scald_protection,
 )
+from .ha_compat import HA_2026_11
 from .protocol import (
     ID_CHILD_SAFETY_ACTIVE,
     ID_CHILD_SAFETY_TEMPERATURE_LIMIT,
@@ -65,6 +66,7 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
     _enable_turn_on_off_backwards_compatibility = False
     _attr_has_entity_name = True
     _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
+    _attr_native_current_temperature: float | None = None
     _attr_supported_features = (
         ClimateEntityFeature.TARGET_TEMPERATURE
         | ClimateEntityFeature.TURN_ON
@@ -77,6 +79,21 @@ class StiebelDHEClimate(StiebelDHEEntityMixin, ClimateEntity):
     _attr_target_temperature_step = 0.5
     _attr_should_poll = False
     _attr_translation_key = "water_heating"
+
+    # The legacy properties are final in HA 2026.11 and must only exist on 2026.10.
+    if not TYPE_CHECKING and not HA_2026_11:
+
+        @property
+        def temperature_unit(self) -> str:
+            return self._attr_native_temperature_unit
+
+        @property
+        def current_temperature(self) -> float | None:
+            return self._attr_native_current_temperature
+
+        @property
+        def target_temperature(self) -> float | None:
+            return self._attr_native_target_temperature
 
     def __init__(
         self,

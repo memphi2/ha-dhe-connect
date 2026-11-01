@@ -4,11 +4,12 @@ This document defines migration expectations for the v2 release line.
 
 ## Current Policy
 
-- Installation and updates use the [Marketplace workflow](installation.md).
+- Installation and updates use the [catalog workflow](installation.md).
   The domain remains `stiebel_dhe_connect`; existing HACS installations do not
   need a new config entry for the display-name or catalog change.
-- This line targets Home Assistant `2026.11.0` and newer. Older HA installations
-  stay on integration `v2.0.9`, rather than using compatibility shims in this line.
+- This line supports Home Assistant `2026.10.4` and newer, with a narrow adapter
+  for the 2026.10/2026.11 API differences. Older HA installations need a release
+  with a matching minimum; `v2.0.9` requires HA `2026.10.1` or newer.
 - The v2 hardening line prioritizes clean runtime behavior over broad
   compatibility shims for old private/dev snapshots.
 - No silent data rewrites for unknown legacy states.

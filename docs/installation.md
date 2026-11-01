@@ -6,8 +6,9 @@ Core integration. Its domain is `stiebel_dhe_connect`.
 
 ## Requirements
 
-- Home Assistant `2026.11.0` or newer for this integration line. Older Home
-  Assistant installations must stay on integration `v2.0.9`.
+- Home Assistant `2026.10.4` or newer for this integration line. Use integration
+  `v2.0.9` on HA `2026.10.1` through `2026.10.3`; earlier HA versions need a
+  release with a matching minimum.
 - The DHE web interface must be reachable from the Home Assistant network.
 - Access to the DHE display to confirm pairing when requested.
 
@@ -16,6 +17,10 @@ manually copied test build is not a published Marketplace release. Preview HA
 builds are used for development validation only, not as stable-release evidence.
 
 ## Home Assistant Marketplace
+
+Available on HA 2026.11 and newer. On HA 2026.10, install **Stiebel Eltron DHE
+Connect** from HACS and restart Home Assistant, then continue with step 4.
+Use HACS for subsequent updates on that version.
 
 1. Open `Settings` -> `Marketplace`.
 2. Search for `DHE Connect` and open **Stiebel Eltron DHE Connect**.

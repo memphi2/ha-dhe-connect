@@ -16,6 +16,11 @@ from packaging.specifiers import SpecifierSet
 from packaging.utils import canonicalize_name
 from packaging.version import InvalidVersion, Version
 
+try:
+    from scripts.ha_baseline import read_baseline
+except ModuleNotFoundError:
+    from ha_baseline import read_baseline
+
 ROOT = Path(__file__).resolve().parents[1]
 INTEGRATION = ROOT / "custom_components" / "stiebel_dhe_connect"
 INTEGRATION_NAME = "Stiebel Eltron DHE Connect"
@@ -23,7 +28,8 @@ TRANSLATIONS = INTEGRATION / "translations"
 FIXTURE_ROOT = ROOT / "tests" / "fixtures"
 REPLAY_FIXTURE_NAME = "dhe_protocol_replay_sanitized.json"
 CLIENT_MODULE_MAX_BYTES = 50 * 1024
-MIN_HOMEASSISTANT_VERSION = "2026.11.0"
+MIN_HOMEASSISTANT_VERSION = "2026.10.4"
+NEXT_HOMEASSISTANT_SERIES = "2026.11"
 VALIDATION_PYTHON_VERSION = "3.14"
 SILVER_RULES = {
     # Bronze
@@ -269,9 +275,14 @@ def check_lts_compatibility_policy() -> None:
     )
     if expected_readme_line not in readme:
         _fail("README minimum supported Home Assistant version is stale")
-    if "-r requirements-ha.txt" not in requirements:
-        _fail("requirements.txt must use the central Home Assistant baseline")
+    check_requirement_includes(requirements)
     check_homeassistant_baseline()
+    compatibility = read_baseline(ROOT / "requirements-ha-202610.txt")
+    if (
+        compatibility.version != Version(MIN_HOMEASSISTANT_VERSION)
+        or compatibility.legacy_helpers_version is None
+    ):
+        _fail("compatibility baseline must pin the minimum HA version and matching legacy helpers")
     if hacs.get("homeassistant") != MIN_HOMEASSISTANT_VERSION:
         _fail("hacs.json Home Assistant minimum is stale")
 
@@ -303,7 +314,7 @@ def check_homeassistant_baseline() -> None:
         for line in path.read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.lstrip().startswith("#")
     ]
-    series = MIN_HOMEASSISTANT_VERSION.rsplit(".", 1)[0]
+    series = NEXT_HOMEASSISTANT_SERIES
     if len(requirements) != 2 or not re.fullmatch(
         rf"homeassistant=={re.escape(series)}[.]\d+(?:(?:b|rc)\d+)?",
         requirements[0],
@@ -467,7 +478,8 @@ def check_github_actions() -> None:
     requirements_path = ROOT / "requirements.txt"
     if not requirements_path.exists():
         _fail("validation workflow installs requirements.txt but it is missing")
-    check_validation_dependencies(requirements_path.read_text(encoding="utf-8"))
+    check_requirement_includes(requirements_path.read_text(encoding="utf-8"))
+    check_validation_dependencies((ROOT / "requirements-tools.txt").read_text(encoding="utf-8"))
     if (
         "--disable" + "-warnings" in text
         or "ignore::" + "DeprecationWarning" in text
@@ -494,7 +506,6 @@ def _check_workflow_execution(text: str, action_uses: list[tuple[str, str, str |
     jobs = workflow["jobs"]
     actual_uses = []
     common_commands = (
-        "python -m pip install -r requirements.txt",
         "python -m pip check",
         "python scripts/check_coverage.py",
         "python scripts/check_deprecations.py",
@@ -505,7 +516,7 @@ def _check_workflow_execution(text: str, action_uses: list[tuple[str, str, str |
         "python scripts/check_typing.py",
         "python -m ruff check custom_components/stiebel_dhe_connect tests scripts",
     )
-    for name in ("hacs", "hassfest", "repository", "home-assistant-latest"):
+    for name in ("hacs", "hassfest", "repository", "home-assistant-compat", "home-assistant-latest"):
         job = jobs.get(name)
         if not isinstance(job, dict):
             _fail(f"validation workflow is missing job {name}")
@@ -544,9 +555,17 @@ def _check_workflow_execution(text: str, action_uses: list[tuple[str, str, str |
                 except ValueError:
                     _fail(f"{name}: invalid shell command")
         required_commands = list(common_commands)
+        if name == "home-assistant-compat":
+            required_commands.extend((
+                "python -m pip install -r requirements-ha-202610.txt -r requirements-tools.txt",
+                "python scripts/ha_baseline.py --requirements requirements-ha-202610.txt",
+                "python scripts/check_runtime_soak.py --cycles 30 --idle-seconds 60",
+            ))
+        else:
+            required_commands.append("python -m pip install -r requirements.txt")
         if name == "repository":
             required_commands.append("python scripts/ha_baseline.py")
-        else:
+        elif name == "home-assistant-latest":
             required_commands.extend((
                 "python scripts/ha_baseline.py --resolve-latest /tmp/requirements-ha-latest.txt",
                 "python -m pip install --upgrade -r /tmp/requirements-ha-latest.txt",
@@ -560,32 +579,35 @@ def _check_workflow_execution(text: str, action_uses: list[tuple[str, str, str |
         _fail("validation action pins must correspond to executable job steps")
 
 
+def check_requirement_includes(text: str) -> None:
+    """Keep the default environment limited to its HA pair and shared tools."""
+    lines = [line.strip() for line in text.splitlines()
+             if line.strip() and not line.lstrip().startswith("#")]
+    expected = {"-r requirements-ha.txt", "-r requirements-tools.txt"}
+    if len(lines) != len(expected) or set(lines) != expected:
+        _fail("requirements.txt must contain only the HA baseline and shared-tools includes, once each")
+
+
 def check_validation_dependencies(text: str) -> None:
     """Allow tool-floor updates inside reviewed bounds, not arbitrary upgrades."""
     requirements: dict[str, Requirement] = {}
     allowed_dependencies = set(VALIDATION_DEPENDENCY_MINIMUMS) | set(VALIDATION_TOOL_BOUNDS)
-    baseline_includes = 0
     for line in text.splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
             continue
-        if line == "-r requirements-ha.txt":
-            baseline_includes += 1
-            continue
         try:
             requirement = Requirement(line)
         except InvalidRequirement:
-            _fail("requirements.txt contains an invalid requirement")
+            _fail("requirements-tools.txt contains an invalid requirement")
         name = canonicalize_name(requirement.name)
         if name not in allowed_dependencies:
-            _fail(f"requirements.txt contains unreviewed direct dependency {name!r}")
+            _fail(f"requirements-tools.txt contains unreviewed direct dependency {name!r}")
         if name in requirements:
-            _fail(f"requirements.txt contains duplicate dependency {name!r}")
+            _fail(f"requirements-tools.txt contains duplicate dependency {name!r}")
         if requirement.url or requirement.marker or requirement.extras:
             _fail(f"validation dependency {name!r} must be unconditional and from the index")
         requirements[name] = requirement
-    if baseline_includes != 1:
-        _fail("requirements.txt must include '-r requirements-ha.txt' exactly once")
     for dependency, constraint in sorted(VALIDATION_DEPENDENCY_MINIMUMS.items()):
         requirement = requirements.get(dependency)
         if requirement is None or requirement.specifier != SpecifierSet(constraint):

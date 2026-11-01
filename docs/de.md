@@ -6,12 +6,17 @@ nicht das Herstellerlogo.
 
 ## Voraussetzungen
 
-- Home Assistant `2026.11.0` oder neuer. Fuer aeltere HA-Versionen bleibt
-  Integrationsversion `v2.0.9` vorgesehen.
+- Home Assistant `2026.10.4` oder neuer. Fuer HA `2026.10.1` bis `2026.10.3`
+  Integrationsversion `v2.0.9` verwenden; fuer noch aeltere HA-Versionen eine
+  Veroeffentlichung mit passender Mindestversion waehlen.
 - Das DHE-Webinterface ist aus dem Home-Assistant-Netz erreichbar.
 - Zugriff auf das DHE-Display fuer die Pairing-Bestaetigung.
 
 ## Installation im Marketplace
+
+Ab HA 2026.11. Unter HA 2026.10 **Stiebel Eltron DHE Connect** in HACS
+installieren, Home Assistant neu starten und mit Schritt 4 fortfahren.
+Updates unter dieser Version ebenfalls ueber HACS beziehen.
 
 1. `Einstellungen` -> `Marketplace` oeffnen.
 2. Nach `DHE Connect` suchen und **Stiebel Eltron DHE Connect** waehlen.

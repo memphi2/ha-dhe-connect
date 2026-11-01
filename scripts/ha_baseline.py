@@ -13,6 +13,7 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 from packaging.requirements import Requirement
+from packaging.specifiers import SpecifierSet
 from packaging.version import InvalidVersion, Version
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,10 +27,16 @@ class HABaseline:
     """The core version and immutable revision of its own test helpers."""
 
     version: Version
-    commit: str
+    commit: str | None = None
+    legacy_helpers_version: str | None = None
 
     def requirements(self) -> str:
         """Render an installable pair without changing repository requirements."""
+        if self.legacy_helpers_version is not None:
+            return (
+                f"homeassistant=={self.version}\n"
+                f"pytest-homeassistant-custom-component=={self.legacy_helpers_version}\n"
+            )
         return (
             f"homeassistant=={self.version}\n"
             f"pytest-home-assistant @ git+{CORE_URL}@{self.commit}"
@@ -44,14 +51,27 @@ def read_baseline(path: Path) -> HABaseline:
         for line in path.read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.lstrip().startswith("#")
     ]
-    if len(requirements) != 2 or {r.name for r in requirements} != {
-        "homeassistant", "pytest-home-assistant"
-    }:
+    names = {r.name for r in requirements}
+    if len(requirements) != 2 or names not in (
+        {"homeassistant", "pytest-home-assistant"},
+        {"homeassistant", "pytest-homeassistant-custom-component"},
+    ):
         raise ValueError("HA baseline must contain exactly core and its test helpers")
     core = next(r for r in requirements if r.name == "homeassistant")
     pins = list(core.specifier)
     if len(pins) != 1 or pins[0].operator != "==" or core.marker or core.url or core.extras:
         raise ValueError("Home Assistant must have one exact version pin")
+    if "pytest-homeassistant-custom-component" in names:
+        helpers = next(r for r in requirements if r.name == "pytest-homeassistant-custom-component")
+        helper_pins = list(helpers.specifier)
+        if (
+            len(helper_pins) != 1 or helper_pins[0].operator != "=="
+            or helpers.marker or helpers.url or helpers.extras
+            or Version(helper_pins[0].version).is_prerelease
+            or Version(helper_pins[0].version).is_devrelease
+        ):
+            raise ValueError("HA 2026.10 test helpers must have one stable exact pin")
+        return HABaseline(Version(pins[0].version), legacy_helpers_version=helper_pins[0].version)
     helpers = next(r for r in requirements if r.name == "pytest-home-assistant")
     match = re.fullmatch(
         re.escape(f"git+{CORE_URL}@") + r"([0-9a-f]{40})"
@@ -71,6 +91,27 @@ def installed_baseline_errors(baseline: HABaseline) -> list[str]:
             errors.append(f"installed HA {installed} does not match {baseline.version}")
     except metadata.PackageNotFoundError:
         errors.append("Home Assistant is not installed")
+    if baseline.legacy_helpers_version is not None:
+        try:
+            helpers = metadata.distribution("pytest-homeassistant-custom-component")
+            if helpers.version != baseline.legacy_helpers_version:
+                errors.append("installed HA 2026.10 test helpers do not match the pinned version")
+            core_requirements = [
+                requirement for value in helpers.requires or []
+                if (requirement := Requirement(value)).name == "homeassistant"
+            ]
+            if (
+                len(core_requirements) != 1
+                or core_requirements[0].specifier != SpecifierSet(f"=={baseline.version}")
+                or core_requirements[0].marker or core_requirements[0].url
+                or core_requirements[0].extras
+            ):
+                errors.append("HA 2026.10 test helpers do not pin the selected core version")
+        except metadata.PackageNotFoundError:
+            errors.append("HA 2026.10 test helpers are not installed")
+        except (ValueError, TypeError):
+            errors.append("HA 2026.10 test-helper metadata is invalid")
+        return errors
     try:
         origin = json.loads(
             metadata.distribution("pytest-home-assistant").read_text("direct_url.json") or "{}"
@@ -115,6 +156,8 @@ def resolve_core_commit(version: Version) -> str:
 
 def latest_baseline(current: HABaseline) -> HABaseline:
     """Prefer supported stable releases; previews never downgrade the baseline."""
+    if current.legacy_helpers_version is not None:
+        raise ValueError("use the primary requirements-ha.txt for latest-HA drift checks")
     releases = fetch_json("https://pypi.org/pypi/homeassistant/json")["releases"]
     candidates = []
     for value, files in releases.items():
@@ -160,7 +203,10 @@ def main(argv: list[str] | None = None) -> int:
             for error in errors:
                 print(f"ERROR: {error}", file=sys.stderr)
             return 1
-        print(f"installed HA baseline verified: {baseline.version}, helpers {baseline.commit}")
+        print(
+            f"installed HA baseline verified: {baseline.version}, "
+            f"helpers {baseline.legacy_helpers_version or baseline.commit}"
+        )
         return 0
     except (OSError, ValueError, KeyError, TypeError) as error:
         print(f"ERROR: HA baseline validation failed ({type(error).__name__})", file=sys.stderr)

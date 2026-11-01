@@ -4,10 +4,5 @@
 # HA supplies and pins aiohttp, probatio and zeroconf transitively.
 -r requirements-ha.txt
 
-# Test tooling.
-# pytest itself is pinned by the matching official HA test helpers.
-pytest-cov>=7.1,<8
-
-# Quality gates.
-mypy>=2.4.1,<3
-ruff>=0.17.3,<0.18
+# Tools are shared with the HA 2026.10 compatibility test environment.
+-r requirements-tools.txt

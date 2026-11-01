@@ -72,9 +72,49 @@ class TestReleaseCheck(unittest.TestCase):
                     with (
                         patch.object(release_check, "installed_baseline_errors", return_value=[]),
                         patch.object(release_check, "resolve_core_commit", return_value="a" * 40),
+                        patch.object(release_check, "fetch_json", return_value={
+                            "tag_name": version, "draft": False, "prerelease": False,
+                            "published_at": "2026-11-04T18:00:00Z",
+                        }),
                     ):
                         result = release_check.check_stable_homeassistant_baseline(root)
                     self.assertEqual(result.ok, expected)
+
+    def test_stable_release_requires_published_ha_release_not_just_a_tag(self) -> None:
+        published = {
+            "tag_name": "2026.11.0", "draft": False, "prerelease": False,
+            "published_at": "2026-11-04T18:00:00Z",
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "requirements-ha.txt").write_text(
+                "homeassistant==2026.11.0\n"
+                "pytest-home-assistant @ git+https://github.com/home-assistant/core.git@"
+                + "a" * 40 + "#subdirectory=packages/pytest-home-assistant\n",
+                encoding="utf-8",
+            )
+            with (
+                patch.object(release_check, "installed_baseline_errors", return_value=[]),
+                patch.object(release_check, "resolve_core_commit", return_value="a" * 40),
+                patch.object(release_check, "fetch_json") as fetch,
+            ):
+                for payload in (
+                    {**published, "draft": True},
+                    {**published, "prerelease": True},
+                    {**published, "tag_name": "2026.10.4"},
+                    {**published, "published_at": None},
+                    {**published, "published_at": ""},
+                    {**published, "published_at": "   "},
+                    {"tag_name": "2026.11.0"}, [], None,
+                ):
+                    with self.subTest(payload=payload):
+                        fetch.return_value = payload
+                        self.assertFalse(release_check.check_stable_homeassistant_baseline(root).ok)
+                fetch.return_value = published
+                self.assertTrue(release_check.check_stable_homeassistant_baseline(root).ok)
+                fetch.assert_called_with(f"{release_check.API_URL}/releases/tags/2026.11.0")
+                fetch.side_effect = OSError("release is unavailable")
+                self.assertFalse(release_check.check_stable_homeassistant_baseline(root).ok)
 
     def test_stable_release_rejects_wrong_installed_pair_and_mismatched_tag(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

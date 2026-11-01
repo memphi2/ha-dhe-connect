@@ -23,12 +23,13 @@ user-assigned device names. Existing installations do not need to be recreated.
 ## Status
 
 - Current version: `2.0.10`
-- Minimum supported Home Assistant version: `2026.11.0`
+- Minimum supported Home Assistant version: `2026.10.4`
 - Releases: published stable tags; development checkouts may be unreleased
 - Quality target: Home Assistant Quality Scale Platinum track for a custom integration
 - Support scope: published stable releases; development branches are best-effort
 
-Older Home Assistant installations must stay on DHE Connect v2.0.9. Development
+On HA 2026.10.1 through 2026.10.3, use DHE Connect v2.0.9. For older HA versions,
+choose an integration release whose minimum matches your installation. Development
 validation may use a preview while preparing a new HA release; stable DHE Connect
 releases require validation against stable Home Assistant. The quality target
 is not an official Home Assistant Core certification.
@@ -92,6 +93,9 @@ For Home Assistant 2026.11 and newer:
 The repository is in the shared catalog; no custom repository is needed.
 A first Marketplace install normally loads without a restart. Complete the
 requested restart after an update or removal of loaded code.
+
+On Home Assistant 2026.10, install **Stiebel Eltron DHE Connect** from HACS,
+restart Home Assistant, then add the integration under `Devices & services`.
 
 See [installation, updates and removal](docs/installation.md) for the complete
 workflow, manual installs and existing-installation guidance.

@@ -14,6 +14,10 @@ installation and update steps are in [installation.md](installation.md).
 - Use stable Home Assistant and matching official test helpers in
   `requirements-ha.txt` before publication. A preview-only validation run is not
   a stable release gate; follow [validation.md](validation.md).
+- Retain the HA 2026.10 compatibility path and minimum `2026.10.4` when moving
+  the HA 2026.11 baseline to stable. Replace only the two primary baseline pins,
+  validate a clean environment, then move the prepared changelog items into the
+  current version section and set its publication date.
 
 ## 2) Validation Gate
 
@@ -25,18 +29,21 @@ For release-prep gating, run at minimum:
 python scripts/release_check.py --run-local-checks --expect-tag absent --expect-github-release absent
 ```
 
-Optional lab checks are listed in [docs/validation.md](validation.md) and remain
+Optional lab checks are listed in [validation.md](validation.md) and remain
 network/infrastructure dependent.
 
 ## 3) PR Phase
 
 - Open PR
 - Wait for CI: the check named `HACS` validates the shared catalog metadata;
-  Hassfest, repository checks and CodeQL must pass too.
-- Trigger Codex review with `@codex review`.
+  Hassfest, repository checks, HA 2026.10 compatibility and CodeQL must pass too.
+- Request Code Review with `@codex review` and Security Review with
+  `@codex security review`, unless both already cover the current head.
 - Fix actionable findings, rerun checks and request review of the new head.
 - Before merging, verify mergeability, checks, unresolved comments and the
-  findings-free bot result against the exact current commit.
+  completed Code Review and Security Review results against the exact current
+  commit. Confirm the Security Review completion/report, not just an empty
+  comments list. Resolve addressed threads after checking the fix.
 - Inspect open code-scanning alerts separately from the CodeQL workflow result.
 
 ## 4) Merge And Publish

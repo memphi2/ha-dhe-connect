@@ -24,8 +24,8 @@ updates:
 
   - package-ecosystem: "pip"
     directory: "/"
-    # CI installs requirements.txt and its central requirements-ha.txt include,
-    # without a separate constraints file overriding the reviewed requirements.
+    # Both HA environments use the same requirements-tools.txt. Each core/helper
+    # pair moves together after validation; no independent runtime pins are kept.
     schedule:
       interval: "quarterly"
       time: "05:30"
@@ -59,6 +59,11 @@ updates:
           - "version-update:semver-minor"
           - "version-update:semver-patch"
       - dependency-name: "pytest-home-assistant"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
+      - dependency-name: "pytest-homeassistant-custom-component"
         update-types:
           - "version-update:semver-major"
           - "version-update:semver-minor"

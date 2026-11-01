@@ -59,6 +59,7 @@ files = [
     "custom_components/stiebel_dhe_connect/entity_state_helpers.py",
     "custom_components/stiebel_dhe_connect/error_codes.py",
     "custom_components/stiebel_dhe_connect/flow_helpers.py",
+    "custom_components/stiebel_dhe_connect/ha_compat.py",
     "custom_components/stiebel_dhe_connect/media_player.py",
     "custom_components/stiebel_dhe_connect/number.py",
     "custom_components/stiebel_dhe_connect/pairing_helpers.py",
@@ -86,7 +87,7 @@ files = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "-p pytest_homeassistant -p no:pytest_github_actions_annotate_failures"
+addopts = "-p scripts.pytest_ha_compat -p no:pytest_github_actions_annotate_failures"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 

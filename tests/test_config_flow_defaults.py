@@ -63,6 +63,8 @@ def _install_fake_homeassistant() -> None:
     fake_homeassistant.const.CONF_HOST = "host"
     fake_homeassistant.const.CONF_NAME = "name"
     fake_homeassistant.const.CONF_PORT = "port"
+    fake_homeassistant.const.MAJOR_VERSION = 2026
+    fake_homeassistant.const.MINOR_VERSION = 11
 
     class _ConfigFlowBase:
         @classmethod

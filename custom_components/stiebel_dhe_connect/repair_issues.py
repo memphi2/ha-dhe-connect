@@ -9,6 +9,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import issue_registry as ir
 
 from .const import DEFAULT_NAME, DOMAIN
+from .ha_compat import HA_2026_11
 
 PAIRING_REQUIRED_ISSUE = "pairing_required"
 TOKEN_INVALID_ISSUE = "token_invalid"
@@ -92,11 +93,12 @@ def async_create_repair_issue(
             }
         )
 
+    ownership: dict[str, Any] = {"config_entry_id": entry_id} if HA_2026_11 else {}
     ir.async_create_issue(
         hass=hass,
         domain=DOMAIN,
         issue_id=repair_issue_id(issue_type, entry_id),
-        config_entry_id=entry_id,
+        **ownership,
         is_fixable=issue_type in FIXABLE_REPAIR_ISSUES,
         is_persistent=False,
         severity=ir.IssueSeverity.ERROR,

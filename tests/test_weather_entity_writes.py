@@ -40,6 +40,9 @@ def _ensure_additional_ha_stubs() -> None:
         weather_module.WeatherEntityFeature = WeatherEntityFeature
         sys.modules["homeassistant.components.weather"] = weather_module
         components_dict["weather"] = weather_module
+        weather_const = types.ModuleType("homeassistant.components.weather.const")
+        weather_const.WeatherEntityFeature = WeatherEntityFeature
+        sys.modules["homeassistant.components.weather.const"] = weather_const
 
     util_module = sys.modules.get("homeassistant.util")
     if util_module is None:

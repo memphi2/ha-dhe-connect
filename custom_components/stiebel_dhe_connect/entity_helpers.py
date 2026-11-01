@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from homeassistant.core import callback
 from homeassistant.helpers.device_registry import ChildDeviceInfo, DeviceInfo
 
 DOMAIN = "stiebel_dhe_connect"
@@ -89,15 +90,13 @@ def build_device_info(
     """Build a consistent Home Assistant device_info payload."""
     identifiers = {(DOMAIN, stable_identifier or f"{host}:{port}")}
 
-    device_info = DeviceInfo(
+    return DeviceInfo(
         identifiers=identifiers,
         manufacturer=DEVICE_MANUFACTURER,
         model=device_registry_model(runtime_device_info),
         name=name,
+        sw_version=device_registry_sw_version(runtime_device_info),
     )
-    if sw_version := device_registry_sw_version(runtime_device_info):
-        device_info.sw_version = sw_version
-    return device_info
 
 
 class StiebelDHEEntityMixin:
@@ -107,6 +106,12 @@ class StiebelDHEEntityMixin:
     _attr_suggested_object_id: str | None
     _attr_unique_id: str | None
     _client: Any
+
+    @callback
+    def async_entity_id_changed(self, old_entity_id: str) -> None:
+        """Forward the in-place rename hook when HA provides it."""
+        if handler := getattr(super(), "async_entity_id_changed", None):
+            handler(old_entity_id)
 
     def _init_dhe_entity(
         self,

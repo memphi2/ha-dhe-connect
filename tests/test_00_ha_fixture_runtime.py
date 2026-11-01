@@ -8,6 +8,7 @@ import importlib
 import sys
 import threading
 import types
+from collections import Counter
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from ipaddress import ip_address, ip_network
@@ -18,7 +19,13 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from homeassistant import bootstrap, config_entries, loader
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
+from homeassistant.const import (
+    CONF_HOST,
+    CONF_NAME,
+    CONF_PORT,
+    MAJOR_VERSION,
+    MINOR_VERSION,
+)
 from homeassistant.core import CoreState, HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
@@ -43,18 +50,29 @@ from homeassistant.helpers import (
 from homeassistant.helpers import (
     restore_state as rs,
 )
-from pytest_homeassistant.common import (
-    MockConfigEntry,
-    StoreWithoutWriteLoad,
-)
-from pytest_homeassistant.common import (
-    async_test_home_assistant as _ha_async_test_home_assistant,
-)
+
+if importlib.util.find_spec("pytest_homeassistant"):
+    from pytest_homeassistant.common import (
+        MockConfigEntry,
+        StoreWithoutWriteLoad,
+    )
+    from pytest_homeassistant.common import (
+        async_test_home_assistant as _ha_async_test_home_assistant,
+    )
+else:
+    from pytest_homeassistant_custom_component.common import (
+        MockConfigEntry,
+        StoreWithoutWriteLoad,
+    )
+    from pytest_homeassistant_custom_component.common import (
+        async_test_home_assistant as _ha_async_test_home_assistant,
+    )
 
 pytestmark = pytest.mark.asyncio
 DOMAIN = "stiebel_dhe_connect"
 DEFAULT_PORT = 8443
 ROOT = Path(__file__).resolve().parents[1]
+HA_CONFIG_DIR = ROOT / ".pytest_cache" / f"ha-config-{MAJOR_VERSION}-{MINOR_VERSION}"
 _DEFAULT_ZEROCONF_HOST = object()
 
 if str(ROOT) not in sys.path:
@@ -175,7 +193,7 @@ async def _async_test_home_assistant(
     """Return a HA test instance with deterministic timezone setup."""
     kwargs.setdefault("load_registries", False)
     kwargs.setdefault("initial_state", CoreState.not_running)
-    config_dir = ROOT / ".pytest_cache" / "ha-config"
+    config_dir = HA_CONFIG_DIR
     config_dir.mkdir(parents=True, exist_ok=True)
     kwargs.setdefault("config_dir", str(config_dir))
     with (
@@ -222,7 +240,7 @@ async def test_fixture_uses_real_executor_threads() -> None:
 def _isolate_discovery_cache():
     """Keep persisted discovery prompts from leaking between HA fixture tests."""
     cache_path = (
-        ROOT / ".pytest_cache" / "ha-config"
+        HA_CONFIG_DIR
         / ".storage"
         / "stiebel_dhe_connect_discovery_cache"
     )
@@ -514,13 +532,13 @@ class _FixtureDHEClient:
 async def test_entity_id_changes_keep_subscriptions_and_native_climate_state(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Rename live entities without remove/add, callback leaks or legacy APIs."""
+    """Rename live entities with balanced callbacks and correct temperature units."""
     from homeassistant.helpers import entity_platform
     from homeassistant.util.unit_system import US_CUSTOMARY_SYSTEM
 
     _clear_loaded_integration_modules()
     integration = importlib.import_module(f"custom_components.{DOMAIN}")
-    from homeassistant.helpers.entity import Entity, _entity_class_requires_readd
+    from homeassistant.helpers.entity import Entity
 
     for module_name in (
         "binary_sensor", "button", "climate", "media_player", "number", "select",
@@ -531,7 +549,10 @@ async def test_entity_id_changes_keep_subscriptions_and_native_climate_state(
             if (
                 isinstance(cls, type) and issubclass(cls, Entity)
                 and cls.__module__ == module.__name__
+                and integration.HA_2026_11
             ):
+                from homeassistant.helpers.entity import _entity_class_requires_readd
+
                 assert not _entity_class_requires_readd(cls), cls.__name__
     async with _async_test_home_assistant() as hass:
         hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
@@ -553,30 +574,38 @@ async def test_entity_id_changes_keep_subscriptions_and_native_climate_state(
             for entity in platform.entities.values()
         ]
         assert entities
-        callbacks = {key: tuple(value) for key, value in client.callbacks.items()}
+        callbacks = {key: Counter(value) for key, value in client.callbacks.items()}
         registry = er.async_get(hass)
         for index, entity in enumerate(entities):
             for suffix in ("renamed", "renamed_again"):
                 old_id = entity.entity_id
                 new_id = f"{old_id.rsplit('.', 1)[0]}.{suffix}_{index}"
                 with (
-                    patch.object(entity, "async_added_to_hass", new_callable=AsyncMock) as added,
-                    patch.object(entity, "async_will_remove_from_hass", new_callable=AsyncMock) as removed,
+                    patch.object(entity, "async_added_to_hass", wraps=entity.async_added_to_hass) as added,
+                    patch.object(entity, "async_will_remove_from_hass", wraps=entity.async_will_remove_from_hass) as removed,
                 ):
                     registry.async_update_entity(old_id, new_entity_id=new_id)
                     await hass.async_block_till_done()
-                    added.assert_not_awaited()
-                    removed.assert_not_awaited()
+                    if integration.HA_2026_11:
+                        added.assert_not_awaited()
+                        removed.assert_not_awaited()
+                    else:
+                        added.assert_awaited_once()
+                        removed.assert_awaited_once()
                 assert entity.entity_id == new_id
                 assert hass.states.get(old_id) is None
                 assert hass.states.get(new_id) is not None
-        assert {key: tuple(value) for key, value in client.callbacks.items()} == callbacks
+        assert {key: Counter(value) for key, value in client.callbacks.items()} == callbacks
 
         climate = next(entity for entity in entities if entity.entity_id.startswith("climate."))
         from homeassistant.const import UnitOfTemperature
 
-        assert climate.native_temperature_unit == UnitOfTemperature.CELSIUS
-        assert climate.native_current_temperature is None
+        if integration.HA_2026_11:
+            assert climate.native_temperature_unit == UnitOfTemperature.CELSIUS
+            assert climate.native_current_temperature is None
+        else:
+            assert climate.temperature_unit == UnitOfTemperature.CELSIUS
+            assert climate.current_temperature is None
         assert not any(
             key in climate.__dict__
             for key in ("_attr_temperature_unit", "_attr_target_temperature", "_attr_current_temperature")
@@ -588,8 +617,11 @@ async def test_entity_id_changes_keep_subscriptions_and_native_climate_state(
         state = hass.states.get(climate.entity_id)
         assert state is not None
         assert state.attributes["temperature"] == 104.0
-        assert state.attributes["temperature_unit"] == UnitOfTemperature.FAHRENHEIT
-        assert climate.native_target_temperature == 40.0
+        if integration.HA_2026_11:
+            assert state.attributes["temperature_unit"] == UnitOfTemperature.FAHRENHEIT
+        else:
+            assert hass.config.units.temperature_unit == UnitOfTemperature.FAHRENHEIT
+        assert climate._attr_native_target_temperature == 40.0
         await hass.services.async_call(
             "climate", "set_temperature",
             {"entity_id": climate.entity_id, "temperature": 100.4}, blocking=True,
@@ -616,8 +648,11 @@ async def test_unload_failure_keeps_runtime_and_raises_config_entry_error() -> N
     hass = types.SimpleNamespace(
         config_entries=types.SimpleNamespace(async_unload_platforms=AsyncMock(return_value=False))
     )
-    with pytest.raises(ConfigEntryError, match="Could not unload"):
-        await integration.async_unload_entry(hass, entry)
+    if integration.HA_2026_11:
+        with pytest.raises(ConfigEntryError, match="Could not unload"):
+            await integration.async_unload_entry(hass, entry)
+    else:
+        assert await integration.async_unload_entry(hass, entry) is False
     assert entry.runtime_data is runtime
     client.stop.assert_not_awaited()
 
@@ -901,6 +936,7 @@ async def test_repairs_belong_to_entry_and_are_deleted_with_it() -> None:
     _clear_loaded_integration_modules()
     repairs = importlib.import_module(f"custom_components.{DOMAIN}.repair_issues")
     async with _async_test_home_assistant() as hass:
+        hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
         entries = [
             _build_mock_entry(host="127.0.0.1", port=DEFAULT_PORT, name=name, unique_id=name)
             for name in ("repair-owner-a", "repair-owner-b")
@@ -913,7 +949,9 @@ async def test_repairs_belong_to_entry_and_are_deleted_with_it() -> None:
                     DOMAIN, repairs.repair_issue_id(issue_type, entry.entry_id)
                 )
                 assert issue is not None
-                assert issue.config_entry_id == entry.entry_id
+                if repairs.HA_2026_11:
+                    assert issue.config_entry_id == entry.entry_id
+                assert issue.data["entry_id"] == entry.entry_id
 
         await hass.config_entries.async_remove(entries[0].entry_id)
         await hass.async_block_till_done()
@@ -1586,7 +1624,9 @@ async def test_multiple_entries_keep_services_and_unique_ids_separate() -> None:
             patch.object(
                 integration,
                 "DHEClient",
-                side_effect=[client_one, client_two],
+                side_effect=lambda **kwargs: {
+                    client_one.host: client_one, client_two.host: client_two,
+                }[kwargs["host"]],
             ),
             patch.object(integration, "_async_can_connect", AsyncMock(return_value=True)),
         ):
@@ -1656,7 +1696,9 @@ async def test_services_route_to_requested_entry_with_real_hass_fixture() -> Non
             patch.object(
                 integration,
                 "DHEClient",
-                side_effect=[client_one, client_two],
+                side_effect=lambda **kwargs: {
+                    client_one.host: client_one, client_two.host: client_two,
+                }[kwargs["host"]],
             ),
             patch.object(integration, "_async_can_connect", AsyncMock(return_value=True)),
         ):

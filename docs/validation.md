@@ -12,12 +12,13 @@ The commands here are development/release checks, not a user setup requirement.
 
 | Surface | Current release gate |
 |---|---|
-| Minimum supported Home Assistant version | `2026.11.0` |
+| Minimum supported Home Assistant version | `2026.10.4` |
 | Baseline Home Assistant fixture | `requirements-ha.txt` (core and matching test helpers) |
+| Minimum-version fixture | `requirements-ha-202610.txt` (core and matching legacy test helpers) |
 | Home Assistant drift check | Monthly scheduled and manual latest-HA validation |
 | Python validation runtime | `3.14` |
 | Runtime dependency baseline | Supplied by the pinned Home Assistant core |
-| Marketplace metadata | `hacs.json` declares `homeassistant: 2026.11.0` |
+| Marketplace metadata | `hacs.json` declares `homeassistant: 2026.10.4` |
 | Catalog category | `climate.water_heaters` in the integration manifest |
 
 The catalog category follows the physical device's purpose, not its entity
@@ -48,11 +49,12 @@ lowered/missing/widened bounds, conditional requirements and prerelease bounds
 still fail. Core and its matching test helpers move together in the central
 baseline, rather than as independent tool updates.
 
-`requirements.txt` admits only `mypy`, `ruff`, `pytest-cov` and exactly one
-`-r requirements-ha.txt` include. CI rejects additional direct dependencies,
-extra requirement/constraint includes and duplicated entries. The central HA
-file contains only core and its matching test helpers. Runtime dependencies
-and pytest remain supplied by that pair rather than independently maintained.
+`requirements.txt` includes only `requirements-ha.txt` and `requirements-tools.txt`.
+The shared tools file admits only `mypy`, `ruff` and `pytest-cov`. CI rejects
+additional direct dependencies, extra requirement/constraint includes and
+duplicated entries. Each HA file contains only core and its matching test
+helpers. Runtime dependencies and pytest remain supplied by that pair rather
+than independently maintained.
 
 ## Marketplace Branding
 
@@ -71,7 +73,7 @@ downloader is introduced. See the
 
 ## 2026.11 Release Readiness
 
-The minimum targets the final release, not a preview. Until it is published,
+HA 2026.10.4 remains supported. Until the final HA 2026.11 release is published,
 `requirements-ha.txt` pins an available preview and the official test helpers
 from the same core revision. This is preparation, not stable-release validation.
 
@@ -86,25 +88,29 @@ Do not duplicate HA's runtime pins in repository requirements or guards:
 their versions aligned when the central baseline changes.
 
 `scripts/ha_baseline.py` verifies the installed HA version and the test helpers'
-VCS origin and commit against the chosen requirements file. The drift job
+VCS origin and commit (or the legacy helper version and its core requirement)
+against the chosen requirements file. The drift job
 resolves core and helpers from the same release tag into a temporary file, then
 installs and verifies both. Stable releases are preferred; while preparing an
 unreleased baseline, only previews of that same series are eligible. It never
 downgrades to the preceding stable HA series or edits the pinned baseline.
 
 The publication gate additionally rejects prereleases and checks that the
-helper commit matches the stable core release tag on GitHub. An unavailable
-tag or mismatched installed environment fails the gate, rather than accepting
-the requirement text as evidence of a tested release.
+helper commit matches the stable core release tag on GitHub. The matching GitHub
+release must also be published, neither a draft nor a prerelease; a tag alone
+does not unlock publication. Unavailable metadata or a mismatched installed
+environment fails the gate, rather than accepting the requirement text as
+evidence of a tested release.
 
-Temperature state uses the native climate API. Entity ID changes retain DHE
-callbacks in place. Config-entry setup/unload succeed with `None` and raise a
-config-entry exception on failure. Device metadata uses the 2026.11 `DeviceInfo`
-dataclass. Older HA versions require v2.0.9.
+HA 2026.11 uses native climate temperatures, in-place entity ID changes and
+exception-based config-entry setup/unload. A small compatibility adapter exposes
+the same temperatures on HA 2026.10, preserves its boolean setup/unload results
+and cleans up Repairs when an entry is removed. Both versions test unit
+conversion and callback cleanup; device metadata works with either DeviceInfo API.
 
 ## Release Validation Command Set
 
-Both CI test jobs run `scripts/check_coverage.py`. It runs the full pytest suite
+All CI test jobs run `scripts/check_coverage.py`. It runs the full pytest suite
 once and enforces two line-coverage gates: **85% across every integration module**
 and **95% for the scoped deterministic modules**. The 95% figure is not whole-repo
 coverage. `EXCLUDED_COVERAGE_FILES` in `scripts/check_coverage.py` lists every
@@ -132,6 +138,20 @@ For intentional in-progress worktrees:
 ```bash
 python scripts/release_check.py --run-local-checks --allow-dirty --expect-tag skip --expect-github-release skip
 ```
+
+For the minimum-version checks, use a separate Python 3.14 environment:
+
+```bash
+python -m pip install -r requirements-ha-202610.txt -r requirements-tools.txt
+python -m pip check
+python scripts/ha_baseline.py --requirements requirements-ha-202610.txt
+python scripts/check_coverage.py
+python scripts/check_typing.py
+```
+
+CI runs these checks on every push and PR, along with the repository guards and
+the longer loopback soak below. The compatibility path does not need removal
+when HA 2026.11 is released.
 
 ## Loopback Runtime Soak
 

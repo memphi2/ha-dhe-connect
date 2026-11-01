@@ -2,21 +2,38 @@
 
 ## Unreleased
 
-- Require Home Assistant 2026.11.0; use v2.0.9 on older installations.
-- Use native climate temperature attributes without legacy compatibility code.
+### Compatibility
+
+- Support Home Assistant 2026.10.4 and newer; use v2.0.9 on HA 2026.10.1-2026.10.3.
+- Use native climate temperature attributes with a narrow adapter for HA 2026.10.
 - Keep entity subscriptions active across in-place entity ID changes.
-- Use exception-based config-entry setup and unload results.
-- Construct device metadata with Home Assistant's DeviceInfo dataclass.
-- Centralize the HA core and test-helper baseline in requirements-ha.txt.
-- Document config-entry token storage and device-side revocation accurately.
+- Use exception-based config-entry setup and unload results on HA 2026.11.
+- Construct device metadata through Home Assistant's DeviceInfo API.
+
+### Fixes
+
+- Require fresh device values after reconnecting before restoring availability,
+  and expire the reconnect grace period while startup confirmation is pending.
+- Clear stale authentication errors after a successful runtime recovery.
+- Publish the final filtered sensor value when its update interval expires.
+- Update weather search results independently of recorder filtering, validate
+  bounded integer inputs, and keep adding a favorite separate from selecting it.
+- Serialize discovery-cache loading and atomic writes to avoid lost updates.
 - Bind Repairs to their config entry and prevent recreation after its removal.
+
+### Maintenance
+
+- Centralize paired HA core/test-helper baselines and test both supported APIs.
 - Verify installed core/helper provenance and resolve matching latest-HA pairs.
 - Gate lifecycle/reconnect/idle task and memory growth with a loopback soak test.
+- Group routine tool updates quarterly while keeping security updates separate.
+- Document config-entry token storage and device-side revocation accurately.
 - Classify the integration as a water heater for catalog discovery.
 
-## v2.0.10 - 2026-10-14
+## v2.0.10 - Unreleased
 
-Local maintenance version for the next release cycle after v2.0.9.
+Release preparation for Home Assistant 2026.11. Changes are listed above until
+the final stable HA baseline has passed validation. No release date is set yet.
 
 ## v2.0.9 - 2026-10-14
 

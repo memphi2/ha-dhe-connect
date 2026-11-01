@@ -7,7 +7,8 @@ import logging
 from copy import deepcopy
 from typing import TYPE_CHECKING, Any, Literal, cast
 
-from homeassistant.components.weather import WeatherEntity, WeatherEntityFeature
+from homeassistant.components.weather import WeatherEntity
+from homeassistant.components.weather.const import WeatherEntityFeature
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback

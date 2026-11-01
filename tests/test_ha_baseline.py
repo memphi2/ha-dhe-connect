@@ -27,6 +27,35 @@ def origin() -> dict:
 class TestHABaseline(unittest.TestCase):
     """No network, installation, or repository writes are needed in these tests."""
 
+    def test_legacy_pair_round_trip_and_installed_metadata(self) -> None:
+        pair = baseline.HABaseline(Version("2026.10.4"), legacy_helpers_version="0.13.375")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "requirements-ha-202610.txt"
+            path.write_text(pair.requirements(), encoding="utf-8")
+            self.assertEqual(baseline.read_baseline(path), pair)
+            for invalid in (
+                pair.requirements().replace("==0.13.375", ">=0.13.375"),
+                pair.requirements().replace("==0.13.375", "==0.13.375b1"),
+                pair.requirements() + "aiohttp\n",
+            ):
+                path.write_text(invalid, encoding="utf-8")
+                with self.assertRaises(ValueError):
+                    baseline.read_baseline(path)
+        helpers = Mock(version="0.13.375", requires=["homeassistant==2026.10.4"])
+        with (
+            patch.object(baseline.metadata, "version", return_value="2026.10.4"),
+            patch.object(baseline.metadata, "distribution", return_value=helpers),
+        ):
+            self.assertEqual(baseline.installed_baseline_errors(pair), [])
+            helpers.version = "0.13.372"
+            self.assertTrue(baseline.installed_baseline_errors(pair))
+            helpers.version = "0.13.375"
+            for requirements in ([], ["homeassistant==2026.10.1"], ["homeassistant>=2026.10.4"]):
+                helpers.requires = requirements
+                self.assertTrue(baseline.installed_baseline_errors(pair))
+        with self.assertRaises(ValueError):
+            baseline.latest_baseline(pair)
+
     def test_round_trip_and_reject_invalid_requirement_pairs(self) -> None:
         pair = baseline.HABaseline(Version("2026.11.0"), COMMIT)
         with tempfile.TemporaryDirectory() as directory:

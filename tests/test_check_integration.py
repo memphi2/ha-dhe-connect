@@ -23,11 +23,14 @@ VALIDATION_INSTALL_STEPS = """
 	                  - run: python -m pip install -r requirements.txt
 """
 VALIDATION_REQUIREMENTS_TEXT = """
--r requirements-ha.txt
 mypy>=2.4,<3
 pytest-cov>=7.1,<8
 ruff>=0.17,<0.18
 """
+VALIDATION_INCLUDES_TEXT = "-r requirements-ha.txt\n-r requirements-tools.txt\n"
+COMPAT_HA_REQUIREMENTS_TEXT = (
+    "homeassistant==2026.10.4\npytest-homeassistant-custom-component==0.13.375\n"
+)
 VALIDATION_HA_REQUIREMENTS_TEXT = (
     "homeassistant==2026.11.0b1\n"
     "pytest-home-assistant @ git+https://github.com/home-assistant/core.git@"
@@ -50,7 +53,8 @@ def _write_validate_workflow(root: Path, content: str) -> None:
         ),
         encoding="utf-8",
     )
-    (root / "requirements.txt").write_text(VALIDATION_REQUIREMENTS_TEXT, encoding="utf-8")
+    (root / "requirements.txt").write_text(VALIDATION_INCLUDES_TEXT, encoding="utf-8")
+    (root / "requirements-tools.txt").write_text(VALIDATION_REQUIREMENTS_TEXT, encoding="utf-8")
     (root / "requirements-ha.txt").write_text(
         VALIDATION_HA_REQUIREMENTS_TEXT, encoding="utf-8"
     )
@@ -172,8 +176,11 @@ def _write_lts_policy_fixture(root: Path) -> None:
         encoding="utf-8",
     )
     (root / "requirements.txt").write_text(
-        "-r requirements-ha.txt\n",
+        VALIDATION_INCLUDES_TEXT,
         encoding="utf-8",
+    )
+    (root / "requirements-ha-202610.txt").write_text(
+        COMPAT_HA_REQUIREMENTS_TEXT, encoding="utf-8"
     )
     (root / "requirements-ha.txt").write_text(
         VALIDATION_HA_REQUIREMENTS_TEXT, encoding="utf-8"
@@ -313,8 +320,8 @@ class TestCheckIntegration(unittest.TestCase):
                 redirect_stderr(StringIO()),
                 self.assertRaises(SystemExit),
             ):
-                check_integration.check_validation_dependencies(
-                    VALIDATION_REQUIREMENTS_TEXT.replace("-r requirements-ha.txt", include)
+                check_integration.check_requirement_includes(
+                    VALIDATION_INCLUDES_TEXT.replace("-r requirements-ha.txt", include)
                 )
 
     def test_dependabot_keeps_quarterly_grouped_version_updates(self) -> None:
@@ -364,7 +371,7 @@ class TestCheckIntegration(unittest.TestCase):
 
     def test_workflow_guards_require_executable_checks_in_each_test_job(self) -> None:
         original = (ROOT / ".github/workflows/validate.yml").read_text(encoding="utf-8")
-        for job in ("repository", "home-assistant-latest"):
+        for job in ("repository", "home-assistant-compat", "home-assistant-latest"):
             for command in ("python scripts/check_coverage.py", "python -m pip check"):
                 for replacement in (f"run: true # {command}", f"if: false\n        run: {command}", f"continue-on-error: true\n        run: {command}"):
                     with self.subTest(job=job, command=command, replacement=replacement), tempfile.TemporaryDirectory() as temp_dir:
@@ -533,7 +540,7 @@ class TestCheckIntegration(unittest.TestCase):
                   - run: python scripts/check_release_consistency.py
                 """,
             )
-            requirements = root / "requirements.txt"
+            requirements = root / "requirements-tools.txt"
             requirements.write_text(
                 requirements.read_text(encoding="utf-8").replace(
                     "mypy>=2.4,<3",
@@ -811,7 +818,7 @@ class TestCheckIntegration(unittest.TestCase):
                         redirect_stderr(stderr), self.assertRaises(SystemExit),
                     ):
                         check_integration.check_lts_compatibility_policy()
-                    self.assertIn("must not duplicate", stderr.getvalue())
+                    self.assertIn("must contain only", stderr.getvalue())
 
     def test_lts_policy_rejects_stale_readme_baseline(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
