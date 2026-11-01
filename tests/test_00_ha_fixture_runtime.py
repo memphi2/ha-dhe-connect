@@ -6,6 +6,7 @@ import asyncio
 import datetime as dt
 import importlib
 import sys
+import threading
 import types
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
@@ -201,30 +202,20 @@ async def _async_test_home_assistant(
         ),
     ):
         async with _ha_async_test_home_assistant(**kwargs) as hass:
-            original_executor = hass.async_add_executor_job
-            original_import_executor = hass.async_add_import_executor_job
-
-            def _async_add_test_executor_job(
-                target: Callable[..., Any],
-                *args: Any,
-            ) -> asyncio.Future[Any]:
-                future: asyncio.Future[Any] = hass.loop.create_future()
-                try:
-                    future.set_result(target(*args))
-                except BaseException as err:  # noqa: BLE001  # pragma: no cover
-                    future.set_exception(err)
-                return future
-
-            hass.async_add_executor_job = _async_add_test_executor_job
-            hass.async_add_import_executor_job = _async_add_test_executor_job
             try:
                 await _async_load_test_registries(hass)
                 await hass.async_start()
                 yield hass
             finally:
                 await hass.async_stop(force=True)
-                hass.async_add_executor_job = original_executor
-                hass.async_add_import_executor_job = original_import_executor
+
+
+async def test_fixture_uses_real_executor_threads() -> None:
+    """Keep file I/O and import work off the HA event-loop thread in tests."""
+    async with _async_test_home_assistant() as hass:
+        loop_thread = threading.get_ident()
+        assert await hass.async_add_executor_job(threading.get_ident) != loop_thread
+        assert await hass.async_add_import_executor_job(threading.get_ident) != loop_thread
 
 
 @pytest.fixture(autouse=True)
