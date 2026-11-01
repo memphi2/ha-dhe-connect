@@ -7,9 +7,11 @@ import importlib.util
 import json
 import sys
 import tempfile
+import threading
 import types
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 COMPONENT_DIR = ROOT / "custom_components" / "stiebel_dhe_connect"
@@ -70,9 +72,9 @@ class _FakeHass:
         self.data: dict[str, object] = {}
         self.executor_job_count = 0
 
-    async def async_add_executor_job(self, func, *args):
+    def async_add_executor_job(self, func, *args):
         self.executor_job_count += 1
-        return func(*args)
+        return asyncio.get_running_loop().run_in_executor(None, func, *args)
 
 
 class TestDiscoveryState(unittest.TestCase):
@@ -80,6 +82,70 @@ class TestDiscoveryState(unittest.TestCase):
 
     def setUp(self) -> None:
         self.discovery = _load_discovery_state()
+
+    def test_concurrent_first_loads_and_writes_preserve_all_observations(self) -> None:
+        async def run(root):
+            hass = _FakeHass(root)
+            loaded = await asyncio.gather(*(
+                self.discovery.async_load_discovery_cache(hass) for _ in range(20)
+            ))
+            self.assertTrue(all(item is loaded[0] for item in loaded))
+            self.assertEqual(hass.executor_job_count, 1)
+            records = [self.discovery.DiscoveryRecord(
+                source="scan", key=f"device-{index}", host=f"192.0.2.{index + 1}",
+                port=8443, name="Test DHE", confidence=80,
+                preferred_identity_source="scan_host",
+            ) for index in range(20)]
+            await asyncio.gather(*(
+                self.discovery.async_record_discovery(hass, record)
+                for record in records for _ in range(3)
+            ))
+            persisted = json.loads((root / self.discovery.DISCOVERY_CACHE_FILE).read_text())
+            self.assertEqual(len(persisted["records"]), 20)
+            self.assertTrue(all(item["seen_count"] == 3 for item in persisted["records"].values()))
+            self.assertEqual(persisted, loaded[0])
+            self.assertFalse(list((root / ".storage").glob("*.tmp")))
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            asyncio.run(run(Path(temp_dir)))
+
+    def test_cancelled_writer_finishes_before_next_writer(self) -> None:
+        started = threading.Event()
+        release = threading.Event()
+        original_dump = json.dump
+
+        def slow_dump(*args, **kwargs):
+            started.set()
+            if not release.wait(5):
+                raise TimeoutError("test writer was not released")
+            return original_dump(*args, **kwargs)
+
+        async def run(root):
+            hass = _FakeHass(root)
+            records = [self.discovery.DiscoveryRecord(
+                source="scan", key=f"device-{index}", host=f"192.0.2.{index + 1}",
+                port=8443, name="Test DHE", confidence=80,
+                preferred_identity_source="scan_host",
+            ) for index in range(2)]
+            with patch.object(self.discovery.json, "dump", side_effect=slow_dump):
+                first = asyncio.create_task(self.discovery.async_record_discovery(hass, records[0]))
+                try:
+                    self.assertTrue(await asyncio.to_thread(started.wait, 3))
+                    first.cancel()
+                    second = asyncio.create_task(self.discovery.async_record_discovery(hass, records[1]))
+                    await asyncio.sleep(0)
+                    self.assertFalse(first.done())
+                    self.assertFalse(second.done())
+                finally:
+                    release.set()
+                results = await asyncio.gather(first, second, return_exceptions=True)
+            self.assertIsInstance(results[0], asyncio.CancelledError)
+            self.assertIsInstance(results[1], dict)
+            persisted = json.loads((root / self.discovery.DISCOVERY_CACHE_FILE).read_text())
+            self.assertEqual(len(persisted["records"]), 2)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            asyncio.run(run(Path(temp_dir)))
 
     def test_zeroconf_record_scores_realistic_payload(self) -> None:
         info = types.SimpleNamespace(

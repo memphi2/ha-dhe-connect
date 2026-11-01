@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
 import time
 from collections.abc import Mapping, Sequence
+from copy import deepcopy
 from dataclasses import dataclass
 from ipaddress import ip_address
 from pathlib import Path
@@ -18,6 +20,7 @@ from .const import DEFAULT_NAME, DEFAULT_PORT, DOMAIN
 from .setup_scan import DHEHostCandidate
 
 DISCOVERY_DATA_KEY = f"{DOMAIN}_discovery"
+DISCOVERY_LOCK_KEY = f"{DOMAIN}_discovery_lock"
 DISCOVERY_CACHE_FILE = ".storage/stiebel_dhe_connect_discovery_cache"
 DISCOVERY_CACHE_VERSION = 1
 DISCOVERY_CACHE_TTL_SECONDS = 24 * 60 * 60
@@ -149,6 +152,20 @@ def scan_discovery_record(candidate: DHEHostCandidate) -> DiscoveryRecord:
 
 async def async_load_discovery_cache(hass: HomeAssistant) -> dict[str, Any]:
     """Load and cache discovery state in hass.data."""
+    async with _discovery_lock(hass):
+        return await _async_load_discovery_cache(hass)
+
+
+def _discovery_lock(hass: HomeAssistant) -> asyncio.Lock:
+    """Serialize first load and disk writes for this HA instance."""
+    data = _hass_data(hass)
+    lock = data.get(DISCOVERY_LOCK_KEY)
+    if not isinstance(lock, asyncio.Lock):
+        lock = data[DISCOVERY_LOCK_KEY] = asyncio.Lock()
+    return lock
+
+
+async def _async_load_discovery_cache(hass: HomeAssistant) -> dict[str, Any]:
     hass_data = _hass_data(hass)
     cached = hass_data.get(DISCOVERY_DATA_KEY)
     if isinstance(cached, dict):
@@ -515,14 +532,27 @@ async def _async_save_discovery_cache(
     if path is None:
         return
 
-    def _write() -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path = path.with_name(f"{path.name}.tmp")
-        with tmp_path.open("w", encoding="utf-8") as file:
-            json.dump(payload, file, sort_keys=True)
-        tmp_path.replace(path)
+    async with _discovery_lock(hass):
+        snapshot = deepcopy(payload)
 
-    await hass.async_add_executor_job(_write)
+        def _write() -> None:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp_path = path.with_name(f"{path.name}.tmp")
+            try:
+                with tmp_path.open("w", encoding="utf-8") as file:
+                    json.dump(snapshot, file, sort_keys=True)
+                tmp_path.replace(path)
+            finally:
+                tmp_path.unlink(missing_ok=True)
+
+        job = hass.async_add_executor_job(_write)
+        try:
+            await asyncio.shield(job)
+        except asyncio.CancelledError:
+            # Cancelling an await does not stop the executor thread. Keep the
+            # lock until its atomic replacement has finished.
+            await job
+            raise
 
 
 def _normalized_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
