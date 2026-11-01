@@ -12,6 +12,8 @@
 
 ### Fixes
 
+- Retire all in-flight legacy token sources on reset and preserve newer token
+  writes when overlapping resets finish.
 - Invalidate in-flight legacy token imports when pairing resets the token.
 - Preserve concurrent token and config-entry updates while migrating legacy files.
 - Ignore non-finite weather fields without discarding the remaining forecast.

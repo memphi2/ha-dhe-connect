@@ -32,7 +32,8 @@ from tests.ha_test_support import (
 pytestmark = pytest.mark.asyncio
 
 
-async def test_pairing_reset_survives_inflight_migration_and_ha_restart(tmp_path) -> None:
+@pytest.mark.parametrize("retarget", [False, True])
+async def test_pairing_reset_survives_inflight_migration_and_ha_restart(tmp_path, retarget) -> None:
     _clear_loaded_integration_modules()
     storage = importlib.import_module(f"custom_components.{DOMAIN}.token_storage")
     path = ".storage/stiebel_dhe_connect_token_audit_8443.txt"
@@ -42,6 +43,9 @@ async def test_pairing_reset_survives_inflight_migration_and_ha_restart(tmp_path
         source = storage.LegacyFileTokenStore(hass, path)
         await source.async_save_token("synthetic-legacy-token-000001")
         await storage.async_migrate_legacy_token_file(hass, entry, path)
+        migration_path = ".storage/stiebel_dhe_connect_token_destination_8443.txt" if retarget else path
+        if retarget:
+            await storage.LegacyFileTokenStore(hass, migration_path).async_save_token("synthetic-destination-token-000001")
         reading, resume = asyncio.Event(), asyncio.Event()
         original_load = storage.LegacyFileTokenStore.async_load_token
 
@@ -52,7 +56,7 @@ async def test_pairing_reset_survives_inflight_migration_and_ha_restart(tmp_path
             return token
 
         with patch.object(storage.LegacyFileTokenStore, "async_load_token", paused_load):
-            migration = asyncio.create_task(storage.async_migrate_legacy_token_file(hass, entry, path))
+            migration = asyncio.create_task(storage.async_migrate_legacy_token_file(hass, entry, migration_path))
             try:
                 await asyncio.wait_for(reading.wait(), timeout=5)
                 await storage.ConfigEntryTokenStore(hass, entry).async_clear_token()
@@ -63,6 +67,7 @@ async def test_pairing_reset_survives_inflight_migration_and_ha_restart(tmp_path
         assert "token" not in entry.data
         assert storage.CONF_LEGACY_TOKEN_FILES not in entry.data
         assert not Path(source.token_path).exists()
+        assert not Path(hass.config.path(migration_path)).exists()
 
     persisted = json.loads((tmp_path / ".storage/core.config_entries").read_text())["data"]["entries"][0]
     assert "token" not in persisted["data"]
@@ -70,8 +75,46 @@ async def test_pairing_reset_survives_inflight_migration_and_ha_restart(tmp_path
     async with _async_test_home_assistant(config_dir=str(tmp_path)) as hass:
         restored = MockConfigEntry(domain=DOMAIN, data=persisted["data"], entry_id=entry.entry_id)
         restored.add_to_hass(hass)
-        assert not await storage.async_migrate_legacy_token_file(hass, restored, path)
+        assert not await storage.async_migrate_legacy_token_file(hass, restored, migration_path)
         assert "token" not in restored.data
+
+
+async def test_fresh_token_survives_older_reset_and_persisted_restart(tmp_path) -> None:
+    _clear_loaded_integration_modules()
+    storage = importlib.import_module(f"custom_components.{DOMAIN}.token_storage")
+    path = ".storage/stiebel_dhe_connect_token_audit_8443.txt"
+    fresh_token = "synthetic-fresh-token-000001"
+    async with _async_test_home_assistant(config_dir=str(tmp_path)) as hass:
+        entry = _build_mock_entry(host="audit.invalid", port=8443, name="Audit", unique_id="audit")
+        entry.add_to_hass(hass)
+        await storage.LegacyFileTokenStore(hass, path).async_save_token("synthetic-legacy-token-000001")
+        await storage.async_migrate_legacy_token_file(hass, entry, path)
+        deleting, resume = asyncio.Event(), asyncio.Event()
+        original_clear = storage.LegacyFileTokenStore.async_clear_token
+
+        async def paused_clear(source):
+            deleting.set()
+            await resume.wait()
+            await original_clear(source)
+
+        with patch.object(storage.LegacyFileTokenStore, "async_clear_token", paused_clear):
+            reset = asyncio.create_task(storage.ConfigEntryTokenStore(hass, entry).async_clear_token())
+            try:
+                await asyncio.wait_for(deleting.wait(), timeout=5)
+                await storage.ConfigEntryTokenStore(hass, entry).async_save_token(fresh_token)
+            finally:
+                resume.set()
+                await reset
+        assert entry.data["token"] == fresh_token
+        assert storage.CONF_LEGACY_TOKEN_FILES not in entry.data
+
+    persisted = json.loads((tmp_path / ".storage/core.config_entries").read_text())["data"]["entries"][0]
+    assert persisted["data"]["token"] == fresh_token
+    async with _async_test_home_assistant(config_dir=str(tmp_path)) as hass:
+        restored = MockConfigEntry(domain=DOMAIN, data=persisted["data"], entry_id=entry.entry_id)
+        restored.add_to_hass(hass)
+        assert not await storage.async_migrate_legacy_token_file(hass, restored, path)
+        assert await storage.ConfigEntryTokenStore(hass, restored).async_load_token() == fresh_token
 
 
 async def test_token_migration_persists_concurrent_refresh_with_real_hass(tmp_path) -> None:

@@ -32,9 +32,12 @@ both the token and a migration marker from the persisted config entry. An
 integration reload alone does not delete them. This avoids losing the last
 durable token if HA crashes before its delayed config-entry write. The marker
 contains only legacy filenames, not a second token, and is removed after cleanup.
-Pending sources remain protected from unrelated setup cleanup. Malformed
-candidates can be removed immediately; explicit pairing recovery also clears
-pending sources so they cannot restore a deliberately removed credential.
+Retained and in-flight sources remain protected from unrelated setup cleanup.
+Malformed candidates can be removed immediately. Explicit pairing recovery
+also clears all candidates of overlapping migrations, including files not yet
+read or recorded in the migration marker, so they cannot restore a deliberately
+removed credential. A reset preserves tokens saved after it began, even when
+another reset is still pending.
 Deleting an old file does not clear the active token in the config entry.
 
 Entry-ID-based or shared files from private/development snapshots are not

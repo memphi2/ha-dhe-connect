@@ -7,7 +7,7 @@ import logging
 import os
 import stat
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
 from homeassistant.config_entries import ConfigEntry
@@ -24,10 +24,13 @@ _TOKEN_RESETS = f"{DOMAIN}_token_resets"
 
 @dataclass(slots=True)
 class _TokenResetState:
-    """Invalidate earlier imports and track overlapping resets for one entry."""
+    """Coordinate token writes, migration sources and resets for one entry."""
 
     generation: int = 0
     active_resets: int = 0
+    write_revision: int = 0
+    migration_sources: dict[object, tuple[str, ...]] = field(default_factory=dict)
+    reset_sources: set[str] = field(default_factory=set)
 
 
 def _token_reset_state(hass: HomeAssistant, entry: ConfigEntry) -> _TokenResetState:
@@ -51,6 +54,17 @@ def legacy_token_paths(hass: HomeAssistant, entry: ConfigEntry) -> tuple[str, ..
         and name.startswith(TOKEN_FILE_PREFIX)
         and name.endswith(TOKEN_FILE_SUFFIX)
     )
+
+
+def owned_legacy_token_paths(hass: HomeAssistant, entry: ConfigEntry) -> tuple[str, ...]:
+    """Include sources owned by running migrations and unfinished resets."""
+    paths = set(legacy_token_paths(hass, entry))
+    state = hass.data.get(_TOKEN_RESETS, {}).get(entry.entry_id)
+    if isinstance(state, _TokenResetState):
+        paths.update(state.reset_sources)
+        for sources in state.migration_sources.values():
+            paths.update(sources)
+    return tuple(sorted({os.path.normcase(os.path.abspath(path)) for path in paths}))
 
 
 def _defer_migration_cleanup(hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -166,19 +180,40 @@ class ConfigEntryTokenStore:
 
     async def async_save_token(self, token: str) -> None:
         """Persist the token in the config entry."""
-        _async_update_entry_token(self.hass, self.entry, token.strip())
+        token = token.strip()
+        if not token:
+            await self.async_clear_token()
+            return
+        _async_update_entry_token(self.hass, self.entry, token)
+        _token_reset_state(self.hass, self.entry).write_revision += 1
 
     async def async_clear_token(self) -> None:
         """Remove the token from the config entry."""
         state = _token_reset_state(self.hass, self.entry)
+        write_revision = state.write_revision
         state.generation += 1
         state.active_resets += 1
+        state.reset_sources.update(owned_legacy_token_paths(self.hass, self.entry))
+        deleted: set[str] = set()
         try:
-            for path in legacy_token_paths(self.hass, self.entry):
-                await LegacyFileTokenStore(self.hass, path).async_clear_token()
-            _async_update_entry_token(self.hass, self.entry, "")
+            # Re-scan after each batch: retargeting may add candidates while
+            # file deletion yields, including ones not yet read by migration.
+            while paths := state.reset_sources - deleted:
+                for path in sorted(paths):
+                    await LegacyFileTokenStore(self.hass, path).async_clear_token()
+                    deleted.add(path)
+            if state.write_revision == write_revision:
+                _async_update_entry_token(self.hass, self.entry, "")
+            else:
+                data = dict(self.entry.data)
+                data.pop(CONF_LEGACY_TOKEN_FILES, None)
+                if data != dict(self.entry.data):
+                    self.hass.config_entries.async_update_entry(self.entry, data=data)
+                self.hass.data.get(_PENDING_MIGRATIONS, set()).discard(self.entry.entry_id)
         finally:
             state.active_resets -= 1
+            if not state.active_resets:
+                state.reset_sources.difference_update(deleted)
 
 
 def _async_update_entry_token(
@@ -222,8 +257,26 @@ async def async_migrate_legacy_token_files(
         return False
 
     reset_state = _token_reset_state(hass, entry)
-    if reset_state.active_resets:
-        return False
+    operation = object()
+    sources = tuple(os.path.normcase(os.path.abspath(store.token_path)) for store in stores)
+    reset_state.migration_sources[operation] = sources
+    try:
+        if reset_state.active_resets:
+            reset_state.reset_sources.update(sources)
+            return False
+        return await _async_migrate_legacy_token_stores(hass, entry, stores, pending_paths, reset_state)
+    finally:
+        reset_state.migration_sources.pop(operation)
+
+
+async def _async_migrate_legacy_token_stores(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    stores: tuple[LegacyFileTokenStore, ...],
+    pending_paths: tuple[str, ...],
+    reset_state: _TokenResetState,
+) -> bool:
+    """Migrate sources while the caller owns their reset-cleanup registration."""
     reset_generation = reset_state.generation
     has_entry_token = token_is_well_formed(_entry_token(entry))
     if (
