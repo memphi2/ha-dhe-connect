@@ -75,6 +75,9 @@ def async_create_repair_issue(
     if issue_type not in ALL_REPAIR_ISSUES:
         raise ValueError(f"unknown repair issue type: {issue_type}")
 
+    if hass.config_entries.async_get_entry(entry_id) is None:
+        return
+
     if _entry_is_connected(hass, entry_id):
         async_delete_repair_issues(hass, entry_id)
         return
@@ -93,6 +96,7 @@ def async_create_repair_issue(
         hass=hass,
         domain=DOMAIN,
         issue_id=repair_issue_id(issue_type, entry_id),
+        config_entry_id=entry_id,
         is_fixable=issue_type in FIXABLE_REPAIR_ISSUES,
         is_persistent=False,
         severity=ir.IssueSeverity.ERROR,

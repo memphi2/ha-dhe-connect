@@ -882,6 +882,40 @@ async def test_runtime_device_info_updates_ha_device_model_and_firmware() -> Non
         await hass.async_block_till_done()
 
 
+async def test_repairs_belong_to_entry_and_are_deleted_with_it() -> None:
+    """HA removes only the deleted entry's issues, including unloaded entries."""
+    _clear_loaded_integration_modules()
+    repairs = importlib.import_module(f"custom_components.{DOMAIN}.repair_issues")
+    async with _async_test_home_assistant() as hass:
+        entries = [
+            _build_mock_entry(host="127.0.0.1", port=DEFAULT_PORT, name=name, unique_id=name)
+            for name in ("repair-owner-a", "repair-owner-b")
+        ]
+        for entry in entries:
+            entry.add_to_hass(hass)
+            for issue_type in repairs.ALL_REPAIR_ISSUES:
+                repairs.async_create_repair_issue(hass, entry.entry_id, issue_type, entry.title)
+                issue = ir.async_get(hass).async_get_issue(
+                    DOMAIN, repairs.repair_issue_id(issue_type, entry.entry_id)
+                )
+                assert issue is not None
+                assert issue.config_entry_id == entry.entry_id
+
+        await hass.config_entries.async_remove(entries[0].entry_id)
+        await hass.async_block_till_done()
+        for issue_type in repairs.ALL_REPAIR_ISSUES:
+            assert ir.async_get(hass).async_get_issue(
+                DOMAIN, repairs.repair_issue_id(issue_type, entries[0].entry_id)
+            ) is None
+            assert ir.async_get(hass).async_get_issue(
+                DOMAIN, repairs.repair_issue_id(issue_type, entries[1].entry_id)
+            ) is not None
+        repairs.async_create_pairing_issue(hass, entries[0].entry_id, "Removed entry")
+        assert ir.async_get(hass).async_get_issue(
+            DOMAIN, repairs.pairing_required_issue_id(entries[0].entry_id)
+        ) is None
+
+
 async def test_runtime_auth_failure_creates_single_repair_issue() -> None:
     """Runtime auth failures create one DHE repair issue without generic reauth."""
     _clear_loaded_integration_modules()
