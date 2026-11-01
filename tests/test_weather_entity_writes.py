@@ -121,6 +121,23 @@ def _weather_state(*, tmax: float = 32.0) -> dict:
 class TestWeatherEntityWrites(unittest.IsolatedAsyncioTestCase):
     """Validate weather entity write throttling."""
 
+    def test_malformed_weather_field_does_not_drop_valid_update(self) -> None:
+        module = _load_weather_module()
+        client = types.SimpleNamespace(host="127.0.0.1", port=8443,
+                                       device_identifier=None, available=True)
+        entity = module.StiebelDHEWeather("test-entry", "Test DHE", client)
+        writes = []
+        entity.async_write_ha_state = lambda: writes.append(entity._attr_native_temperature)
+        state = _weather_state(tmax="NaN")
+        state["simple_days"][0].update(icon_id_day="1e309", preci_morning="NaN")
+        entity._handle_weather_update(state)
+        self.assertEqual(writes, [21.0])
+        self.assertTrue(entity._attr_available)
+        self.assertNotIn("native_temperature", entity._forecast[0])
+        entity._handle_weather_update(_weather_state())
+        self.assertEqual(writes, [21.0, 26.5])
+
+
     async def test_weather_entity_skips_duplicate_state_writes(self) -> None:
         weather_module = _load_weather_module()
         state = _weather_state()
