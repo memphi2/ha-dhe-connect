@@ -399,7 +399,7 @@ class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(writes, [media_player.MediaPlayerState.OFF, media_player.MediaPlayerState.OFF])
         self.assertFalse(player._attr_available)
 
-    def test_radio_write_signature_ignores_unrecorded_favorite_payload(self) -> None:
+    def test_radio_write_signature_includes_unrecorded_favorite_payload(self) -> None:
         media_player = _load_media_player_module()
         player = media_player.StiebelDHERadioMediaPlayer.__new__(
             media_player.StiebelDHERadioMediaPlayer
@@ -422,12 +422,26 @@ class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
         }
 
         first_signature = player._radio_write_signature()
-        player._attr_extra_state_attributes["favorites"] = [
-            {"id": 1, "name": "Radio Test", "logo": "changed"}
-        ]
+        player._attr_extra_state_attributes["favorites"][0]["id"] = 2
 
         self.assertIn("favorites", player._unrecorded_attributes)
-        self.assertEqual(first_signature, player._radio_write_signature())
+        self.assertNotEqual(first_signature, player._radio_write_signature())
+
+    def test_favorite_id_change_is_published_once_even_with_same_name(self) -> None:
+        media_player = _load_media_player_module()
+        client = types.SimpleNamespace(
+            host="example.invalid", port=8443, available=True, last_device_info={},
+        )
+        player = media_player.StiebelDHERadioMediaPlayer("test-entry", "Test", client)
+        player.async_write_ha_state = Mock()
+        state = {"play": False, "volume": 30, "favorites": [{"Id": 1, "Name": "Station A"}]}
+        player._handle_radio_update(state)
+        player.async_write_ha_state.reset_mock()
+        state["favorites"][0]["Id"] = 2
+        player._handle_radio_update(state)
+        player._handle_radio_update(state)
+        player.async_write_ha_state.assert_called_once()
+        self.assertEqual(player._attr_extra_state_attributes["favorites"], [{"id": 2, "name": "Station A"}])
 
     def test_radio_source_fallback_is_bounded_without_favorites(self) -> None:
         radio = _load_component_module("radio_mapping")

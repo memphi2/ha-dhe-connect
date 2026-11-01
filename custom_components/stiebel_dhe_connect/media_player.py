@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 from homeassistant.components.media_player import MediaPlayerEntity
@@ -23,7 +24,7 @@ from .action_error_helpers import (
 from .client import DHEClient
 from .client_types import DHEError
 from .entity_helpers import StiebelDHEEntityMixin
-from .entity_state_helpers import connected_and_ready, filtered_state_attributes
+from .entity_state_helpers import connected_and_ready
 from .runtime_helpers import get_runtime_data
 
 PARALLEL_UPDATES = 0
@@ -257,7 +258,7 @@ class StiebelDHERadioMediaPlayer(
         self._write_radio_state()
 
     def _write_radio_state(self, *, force: bool = False) -> bool:
-        """Write radio state only when recorder-visible state changed."""
+        """Publish changed live state independently of recorder exclusions."""
         signature = self._radio_write_signature()
         if not force and signature == getattr(
             self,
@@ -283,14 +284,7 @@ class StiebelDHERadioMediaPlayer(
             getattr(self, "_attr_media_title", None),
             getattr(self, "_attr_media_artist", None),
             getattr(self, "_radio_off_requested", False),
-            self._recorded_radio_attributes(),
-        )
-
-    def _recorded_radio_attributes(self) -> dict[str, Any]:
-        """Return radio attributes that should participate in recorder writes."""
-        return filtered_state_attributes(
-            getattr(self, "_attr_extra_state_attributes", None),
-            self._unrecorded_attributes,
+            deepcopy(getattr(self, "_attr_extra_state_attributes", None)),
         )
 
     def _apply_radio_state(self, state: dict[str, Any]) -> None:
