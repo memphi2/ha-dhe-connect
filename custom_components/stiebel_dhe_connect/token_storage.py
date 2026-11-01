@@ -210,8 +210,7 @@ async def async_migrate_legacy_token_files(
         hass.config_entries.async_update_entry(entry, data=data)
         return False
 
-    migrated = False
-    data = dict(entry.data)
+    legacy_token = ""
     retained_names: list[str] = []
     for store in stores:
         token = await store.async_load_token()
@@ -224,12 +223,18 @@ async def async_migrate_legacy_token_files(
             await store.async_clear_token()
             continue
         retained_names.append(os.path.basename(store.token_path))
-        if not has_entry_token:
-            data[CONF_TOKEN] = token
-            has_entry_token = True
-            migrated = True
+        if not legacy_token:
+            legacy_token = token
+    migrated = False
     if retained_names:
-        data[CONF_LEGACY_TOKEN_FILES] = retained_names
+        # File I/O yields to authentication and other migrations. Merge only
+        # into current entry data, without yielding again before the update.
+        data = dict(entry.data)
+        if not token_is_well_formed(_entry_token(entry)):
+            data[CONF_TOKEN] = legacy_token
+            migrated = True
+        retained_names.extend(os.path.basename(path) for path in legacy_token_paths(hass, entry))
+        data[CONF_LEGACY_TOKEN_FILES] = list(dict.fromkeys(retained_names))
         _defer_migration_cleanup(hass, entry)
         if data != dict(entry.data):
             hass.config_entries.async_update_entry(entry, data=data)

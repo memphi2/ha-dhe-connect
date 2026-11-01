@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import importlib
 import json
 from pathlib import Path
@@ -29,6 +30,46 @@ from tests.ha_test_support import (
 )
 
 pytestmark = pytest.mark.asyncio
+
+
+async def test_token_migration_persists_concurrent_refresh_with_real_hass(tmp_path) -> None:
+    _clear_loaded_integration_modules()
+    storage = importlib.import_module(f"custom_components.{DOMAIN}.token_storage")
+    path = ".storage/stiebel_dhe_connect_token_audit_8443.txt"
+    token = "synthetic-fresh-token-000001"
+    async with _async_test_home_assistant(config_dir=str(tmp_path)) as hass:
+        entry = _build_mock_entry(host="audit.invalid", port=8443, name="Audit", unique_id="audit")
+        entry.add_to_hass(hass)
+        store = storage.ConfigEntryTokenStore(hass, entry)
+        await store.async_save_token("synthetic-previous-token-000001")
+        source = storage.LegacyFileTokenStore(hass, path)
+        await source.async_save_token("synthetic-legacy-token-000001")
+        reading, resume = asyncio.Event(), asyncio.Event()
+        original_load = storage.LegacyFileTokenStore.async_load_token
+
+        async def paused_load(legacy_store):
+            result = await original_load(legacy_store)
+            reading.set()
+            await resume.wait()
+            return result
+
+        with patch.object(storage.LegacyFileTokenStore, "async_load_token", paused_load):
+            migration = asyncio.create_task(storage.async_migrate_legacy_token_file(hass, entry, path))
+            try:
+                await asyncio.wait_for(reading.wait(), timeout=5)
+                await store.async_save_token(token)
+            finally:
+                resume.set()
+                migrated = await migration
+        assert entry.data["token"] == token
+        assert migrated is False
+        assert Path(source.token_path).exists()
+        assert not await storage.async_migrate_legacy_token_files(hass, entry, ())
+        assert Path(source.token_path).exists()
+
+    persisted = json.loads((tmp_path / ".storage/core.config_entries").read_text())["data"]["entries"][0]
+    assert persisted["data"]["token"] == token
+    assert persisted["data"][storage.CONF_LEGACY_TOKEN_FILES] == [Path(path).name]
 
 
 async def test_token_migration_only_deletes_sources_after_persisted_restart(tmp_path) -> None:

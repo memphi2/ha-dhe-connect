@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
@@ -128,6 +129,85 @@ async def test_existing_token_also_defers_legacy_deletion_until_restart(
 
     await token_storage.async_migrate_legacy_token_files(_FakeHass(tmp_path), entry, ())
     assert not legacy_file.exists()
+
+
+@pytest.mark.parametrize("initial_token", [None, "malformed", "entry-token-value-000001"])
+@pytest.mark.parametrize("paused_index", [0, 1])
+async def test_migration_preserves_token_and_entry_updates_during_file_reads(
+    tmp_path, initial_token, paused_index,
+) -> None:
+    module = _module()
+    hass = _FakeHass(tmp_path)
+    entry = SimpleNamespace(entry_id="entry-1", data={"host": "dhe.local", "name": "Before"})
+    if initial_token is not None:
+        entry.data["token"] = initial_token
+    paths = [f".storage/stiebel_dhe_connect_token_{target}_8443.txt" for target in ("new", "old")]
+    for index, path in enumerate(paths):
+        await module.LegacyFileTokenStore(hass, path).async_save_token(
+            f"legacy-token-value-{index:06d}"
+        )
+    reading, resume = asyncio.Event(), asyncio.Event()
+    original_load = module.LegacyFileTokenStore.async_load_token
+
+    async def paused_load(store):
+        token = await original_load(store)
+        if store.token_path == hass.config.path(paths[paused_index]):
+            reading.set()
+            await resume.wait()
+        return token
+
+    with patch.object(module.LegacyFileTokenStore, "async_load_token", paused_load):
+        migration = asyncio.create_task(module.async_migrate_legacy_token_files(hass, entry, paths))
+        try:
+            await asyncio.wait_for(reading.wait(), timeout=5)
+            await module.ConfigEntryTokenStore(hass, entry).async_save_token("fresh-token-value-000001")
+            hass.config_entries.async_update_entry(entry, data={**entry.data, "name": "After"})
+        finally:
+            resume.set()
+            migrated = await migration
+
+    assert entry.data["token"] == "fresh-token-value-000001"
+    assert entry.data["name"] == "After"
+    assert migrated is False
+    assert entry.data[module.CONF_LEGACY_TOKEN_FILES] == [Path(path).name for path in paths]
+    assert all(Path(hass.config.path(path)).exists() for path in paths)
+
+
+async def test_overlapping_migrations_preserve_current_token_and_pending_sources(tmp_path) -> None:
+    module = _module()
+    hass = _FakeHass(tmp_path)
+    entry = SimpleNamespace(entry_id="entry-1", data={})
+    paths = [f".storage/stiebel_dhe_connect_token_{target}_8443.txt" for target in ("first", "second")]
+    for index, path in enumerate(paths):
+        await module.LegacyFileTokenStore(hass, path).async_save_token(
+            f"legacy-token-value-{index:06d}"
+        )
+    reading, resume = asyncio.Event(), asyncio.Event()
+    original_load = module.LegacyFileTokenStore.async_load_token
+
+    async def paused_load(store):
+        token = await original_load(store)
+        if store.token_path == hass.config.path(paths[0]):
+            reading.set()
+            await resume.wait()
+        return token
+
+    with patch.object(module.LegacyFileTokenStore, "async_load_token", paused_load):
+        first = asyncio.create_task(module.async_migrate_legacy_token_file(hass, entry, paths[0]))
+        try:
+            await asyncio.wait_for(reading.wait(), timeout=5)
+            assert await module.async_migrate_legacy_token_file(hass, entry, paths[1])
+        finally:
+            resume.set()
+            migrated = await first
+
+    assert entry.data["token"] == "legacy-token-value-000001"
+    assert migrated is False
+    assert set(entry.data[module.CONF_LEGACY_TOKEN_FILES]) == {Path(path).name for path in paths}
+    assert not await module.async_migrate_legacy_token_files(hass, entry, ())
+    assert all(Path(hass.config.path(path)).exists() for path in paths)
+    assert not await module.async_migrate_legacy_token_files(_FakeHass(tmp_path), entry, ())
+    assert all(not Path(hass.config.path(path)).exists() for path in paths)
 
 
 async def test_migrate_legacy_token_file_ignores_malformed_token(tmp_path) -> None:
