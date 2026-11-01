@@ -39,6 +39,12 @@ def _yaml_examples():
 
 
 class DocumentationTests(unittest.TestCase):
+    def test_security_reports_use_private_advisories(self):
+        text = (ROOT / "SECURITY.md").read_text()
+        self.assertIn("https://github.com/memphi2/ha-dhe-connect/security/advisories/new", text)
+        self.assertIn("Ordinary bugs and feature requests", text)
+        self.assertNotIn("report security-related issues through GitHub issues", text)
+
     def test_relative_document_and_image_links_exist(self):
         for path in DOCS:
             text = path.read_text(encoding="utf-8")

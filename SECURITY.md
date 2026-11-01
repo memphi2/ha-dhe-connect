@@ -39,7 +39,14 @@ the device's supported controls, then pair again. See the
 
 Runtime diagnostics, HA smoke checks and release validation redact known token, authorization, credential, URL and private-host fragments before printing failures. This is a defense-in-depth measure for support logs and CI output; it is not a substitute for protecting Home Assistant config storage and backups.
 
-## Reporting issues
+## Reporting vulnerabilities
 
-Please report security-related issues through GitHub issues:
-[https://github.com/memphi2/ha-dhe-connect/issues](https://github.com/memphi2/ha-dhe-connect/issues)
+Report suspected vulnerabilities privately using
+[GitHub private vulnerability reporting](https://github.com/memphi2/ha-dhe-connect/security/advisories/new).
+Do not disclose an unfixed vulnerability in a public issue or pull request.
+Include affected versions, reproducible steps and the impact. Use synthetic
+credentials and redact tokens, private addresses and personal information from
+any attachments; never upload raw Home Assistant storage or backups.
+
+Ordinary bugs and feature requests belong in
+[GitHub issues](https://github.com/memphi2/ha-dhe-connect/issues).
