@@ -7,6 +7,7 @@ import logging
 import os
 import stat
 from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 from homeassistant.config_entries import ConfigEntry
@@ -18,6 +19,23 @@ from .token_file_helpers import TOKEN_FILE_PREFIX, TOKEN_FILE_SUFFIX
 _LOGGER = logging.getLogger(__name__)
 CONF_LEGACY_TOKEN_FILES = "legacy_token_files"
 _PENDING_MIGRATIONS = f"{DOMAIN}_pending_token_migrations"
+_TOKEN_RESETS = f"{DOMAIN}_token_resets"
+
+
+@dataclass(slots=True)
+class _TokenResetState:
+    """Invalidate earlier imports and track overlapping resets for one entry."""
+
+    generation: int = 0
+    active_resets: int = 0
+
+
+def _token_reset_state(hass: HomeAssistant, entry: ConfigEntry) -> _TokenResetState:
+    states = hass.data.setdefault(_TOKEN_RESETS, {})
+    state = states.get(entry.entry_id)
+    if not isinstance(state, _TokenResetState):
+        state = states[entry.entry_id] = _TokenResetState()
+    return state
 
 
 def legacy_token_paths(hass: HomeAssistant, entry: ConfigEntry) -> tuple[str, ...]:
@@ -97,10 +115,11 @@ class LegacyFileTokenStore:
         """Read the legacy token file."""
 
         def _read() -> str:
-            if not os.path.exists(self.token_path):
+            try:
+                with open(self.token_path, encoding="utf-8") as file:
+                    return file.read().strip()
+            except FileNotFoundError:
                 return ""
-            with open(self.token_path, encoding="utf-8") as file:
-                return file.read().strip()
 
         return str(await self.hass.async_add_executor_job(_read))
 
@@ -151,9 +170,15 @@ class ConfigEntryTokenStore:
 
     async def async_clear_token(self) -> None:
         """Remove the token from the config entry."""
-        for path in legacy_token_paths(self.hass, self.entry):
-            await LegacyFileTokenStore(self.hass, path).async_clear_token()
-        _async_update_entry_token(self.hass, self.entry, "")
+        state = _token_reset_state(self.hass, self.entry)
+        state.generation += 1
+        state.active_resets += 1
+        try:
+            for path in legacy_token_paths(self.hass, self.entry):
+                await LegacyFileTokenStore(self.hass, path).async_clear_token()
+            _async_update_entry_token(self.hass, self.entry, "")
+        finally:
+            state.active_resets -= 1
 
 
 def _async_update_entry_token(
@@ -196,6 +221,10 @@ async def async_migrate_legacy_token_files(
     if not stores:
         return False
 
+    reset_state = _token_reset_state(hass, entry)
+    if reset_state.active_resets:
+        return False
+    reset_generation = reset_state.generation
     has_entry_token = token_is_well_formed(_entry_token(entry))
     if (
         has_entry_token
@@ -205,6 +234,8 @@ async def async_migrate_legacy_token_files(
         # This marker and token were loaded from disk, not set by this process.
         for store in stores:
             await store.async_clear_token()
+            if reset_state.generation != reset_generation:
+                return False
         data = dict(entry.data)
         data.pop(CONF_LEGACY_TOKEN_FILES, None)
         hass.config_entries.async_update_entry(entry, data=data)
@@ -214,6 +245,8 @@ async def async_migrate_legacy_token_files(
     retained_names: list[str] = []
     for store in stores:
         token = await store.async_load_token()
+        if reset_state.generation != reset_generation:
+            return False
         if not token_is_well_formed(token):
             if token:
                 _LOGGER.warning(
@@ -221,6 +254,8 @@ async def async_migrate_legacy_token_files(
                     getattr(entry, "entry_id", "unknown"),
                 )
             await store.async_clear_token()
+            if reset_state.generation != reset_generation:
+                return False
             continue
         retained_names.append(os.path.basename(store.token_path))
         if not legacy_token:

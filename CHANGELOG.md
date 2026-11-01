@@ -12,6 +12,7 @@
 
 ### Fixes
 
+- Invalidate in-flight legacy token imports when pairing resets the token.
 - Preserve concurrent token and config-entry updates while migrating legacy files.
 - Ignore non-finite weather fields without discarding the remaining forecast.
 - Retain legacy token sources until the migrated config entry has survived a HA

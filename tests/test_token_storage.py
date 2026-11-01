@@ -6,7 +6,7 @@ import asyncio
 from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -293,6 +293,192 @@ async def test_pairing_clear_removes_pending_sources_and_cannot_reimport(tmp_pat
     assert "token" not in entry.data
     assert module.CONF_LEGACY_TOKEN_FILES not in entry.data
     assert not await module.async_migrate_legacy_token_file(_FakeHass(tmp_path), entry, path)
+
+
+@pytest.mark.parametrize("save_fresh_token", [False, True])
+async def test_pairing_reset_invalidates_an_inflight_legacy_read(tmp_path, save_fresh_token) -> None:
+    module = _module()
+    hass = _FakeHass(tmp_path)
+    entry = SimpleNamespace(entry_id="entry-1", data={})
+    path = ".storage/stiebel_dhe_connect_token_dhe_8443.txt"
+    source = module.LegacyFileTokenStore(hass, path)
+    await source.async_save_token("legacy-token-value-000001")
+    await module.async_migrate_legacy_token_file(hass, entry, path)
+    reading, resume = asyncio.Event(), asyncio.Event()
+    original_load = module.LegacyFileTokenStore.async_load_token
+
+    async def paused_load(store):
+        token = await original_load(store)
+        reading.set()
+        await resume.wait()
+        return token
+
+    with patch.object(module.LegacyFileTokenStore, "async_load_token", paused_load):
+        migration = asyncio.create_task(module.async_migrate_legacy_token_file(hass, entry, path))
+        try:
+            await asyncio.wait_for(reading.wait(), timeout=5)
+            await module.ConfigEntryTokenStore(hass, entry).async_clear_token()
+            assert "token" not in entry.data
+            if save_fresh_token:
+                await module.ConfigEntryTokenStore(hass, entry).async_save_token("fresh-token-value-000001")
+        finally:
+            resume.set()
+            migrated = await migration
+
+    assert module.CONF_LEGACY_TOKEN_FILES not in entry.data
+    assert entry.data.get("token") == ("fresh-token-value-000001" if save_fresh_token else None)
+    assert migrated is False
+    assert not Path(source.token_path).exists()
+    assert not await module.async_migrate_legacy_token_file(_FakeHass(tmp_path), entry, path)
+
+
+async def test_migration_does_not_read_sources_during_pairing_reset(tmp_path) -> None:
+    module = _module()
+    hass = _FakeHass(tmp_path)
+    entry = SimpleNamespace(entry_id="entry-1", data={})
+    path = ".storage/stiebel_dhe_connect_token_dhe_8443.txt"
+    await module.LegacyFileTokenStore(hass, path).async_save_token("legacy-token-value-000001")
+    await module.async_migrate_legacy_token_file(hass, entry, path)
+    deleting, resume = asyncio.Event(), asyncio.Event()
+    original_clear = module.LegacyFileTokenStore.async_clear_token
+
+    async def paused_clear(store):
+        deleting.set()
+        await resume.wait()
+        await original_clear(store)
+
+    with patch.object(module.LegacyFileTokenStore, "async_clear_token", paused_clear):
+        reset = asyncio.create_task(module.ConfigEntryTokenStore(hass, entry).async_clear_token())
+        try:
+            await asyncio.wait_for(deleting.wait(), timeout=5)
+            with patch.object(module.LegacyFileTokenStore, "async_load_token", side_effect=AssertionError("read during reset")):
+                assert not await module.async_migrate_legacy_token_file(hass, entry, path)
+        finally:
+            resume.set()
+            await reset
+    assert "token" not in entry.data
+    assert module.CONF_LEGACY_TOKEN_FILES not in entry.data
+
+
+async def test_legacy_read_tolerates_a_source_deleted_before_open(tmp_path) -> None:
+    module = _module()
+    hass = _FakeHass(tmp_path)
+    source = module.LegacyFileTokenStore(hass, ".storage/stiebel_dhe_connect_token_dhe_8443.txt")
+    await source.async_save_token("legacy-token-value-000001")
+    with patch("builtins.open", side_effect=FileNotFoundError):
+        assert await source.async_load_token() == ""
+
+
+@pytest.mark.parametrize("error", [PermissionError, asyncio.CancelledError])
+async def test_failed_pairing_reset_does_not_leave_migration_blocked(tmp_path, error) -> None:
+    module = _module()
+    hass = _FakeHass(tmp_path)
+    entry = SimpleNamespace(entry_id="entry-1", data={})
+    path = ".storage/stiebel_dhe_connect_token_dhe_8443.txt"
+    await module.LegacyFileTokenStore(hass, path).async_save_token("legacy-token-value-000001")
+    await module.async_migrate_legacy_token_file(hass, entry, path)
+    with (
+        patch.object(module.LegacyFileTokenStore, "async_clear_token", side_effect=error),
+        pytest.raises(error),
+    ):
+        await module.ConfigEntryTokenStore(hass, entry).async_clear_token()
+    with patch.object(module.LegacyFileTokenStore, "async_load_token", new=AsyncMock(return_value="legacy-token-value-000001")) as read:
+        assert not await module.async_migrate_legacy_token_file(hass, entry, path)
+        read.assert_awaited_once()
+    await module.ConfigEntryTokenStore(hass, entry).async_clear_token()
+    assert "token" not in entry.data
+
+
+async def test_overlapping_resets_block_only_their_entry_until_both_complete(tmp_path) -> None:
+    module = _module()
+    hass = _FakeHass(tmp_path)
+    entry = SimpleNamespace(entry_id="entry-1", data={})
+    other_entry = SimpleNamespace(entry_id="entry-2", data={})
+    path = ".storage/stiebel_dhe_connect_token_dhe_8443.txt"
+    other_path = ".storage/stiebel_dhe_connect_token_other_8443.txt"
+    for source_path in (path, other_path):
+        await module.LegacyFileTokenStore(hass, source_path).async_save_token("legacy-token-value-000001")
+    await module.async_migrate_legacy_token_file(hass, entry, path)
+    started = [asyncio.Event(), asyncio.Event()]
+    resume = [asyncio.Event(), asyncio.Event()]
+    calls = 0
+    original_clear = module.LegacyFileTokenStore.async_clear_token
+
+    async def paused_clear(store):
+        nonlocal calls
+        index = calls
+        calls += 1
+        started[index].set()
+        await resume[index].wait()
+        await original_clear(store)
+
+    resets = []
+    with patch.object(module.LegacyFileTokenStore, "async_clear_token", paused_clear):
+        try:
+            for index in range(2):
+                resets.append(asyncio.create_task(module.ConfigEntryTokenStore(hass, entry).async_clear_token()))
+                await asyncio.wait_for(started[index].wait(), timeout=5)
+            assert await module.async_migrate_legacy_token_file(hass, other_entry, other_path)
+            resume[0].set()
+            await resets[0]
+            with patch.object(module.LegacyFileTokenStore, "async_load_token", side_effect=AssertionError("read during reset")):
+                assert not await module.async_migrate_legacy_token_file(hass, entry, path)
+        finally:
+            for event in resume:
+                event.set()
+            await asyncio.gather(*resets)
+    with patch.object(module.LegacyFileTokenStore, "async_load_token", new=AsyncMock(return_value="")) as read:
+        assert not await module.async_migrate_legacy_token_file(hass, entry, path)
+        read.assert_awaited_once()
+
+
+@pytest.mark.parametrize("cleanup_kind", ["malformed", "persisted"])
+async def test_pairing_reset_invalidates_migration_during_file_deletion(tmp_path, cleanup_kind) -> None:
+    module = _module()
+    hass = _FakeHass(tmp_path)
+    entry = SimpleNamespace(entry_id="entry-1", data={})
+    path = ".storage/stiebel_dhe_connect_token_dhe_8443.txt"
+    extra_path = ".storage/stiebel_dhe_connect_token_extra_8443.txt"
+    await module.LegacyFileTokenStore(hass, path).async_save_token("legacy-token-value-000001")
+    await module.async_migrate_legacy_token_file(hass, entry, path)
+    if cleanup_kind == "persisted":
+        hass = _FakeHass(tmp_path)
+        paths = (path,)
+        paused_path = path
+    else:
+        await module.LegacyFileTokenStore(hass, extra_path).async_save_token("malformed")
+        paths = (path, extra_path)
+        paused_path = extra_path
+    deleting, resume = asyncio.Event(), asyncio.Event()
+    original_clear = module.LegacyFileTokenStore.async_clear_token
+
+    async def paused_clear(store):
+        if store.token_path == hass.config.path(paused_path) and not deleting.is_set():
+            deleting.set()
+            await resume.wait()
+        await original_clear(store)
+
+    with patch.object(module.LegacyFileTokenStore, "async_clear_token", paused_clear):
+        migration = asyncio.create_task(module.async_migrate_legacy_token_files(hass, entry, paths))
+        try:
+            await asyncio.wait_for(deleting.wait(), timeout=5)
+            await module.ConfigEntryTokenStore(hass, entry).async_clear_token()
+            if cleanup_kind == "persisted":
+                await module.ConfigEntryTokenStore(hass, entry).async_save_token("fresh-token-value-000001")
+                await module.LegacyFileTokenStore(hass, extra_path).async_save_token("fresh-legacy-token-000001")
+                assert not await module.async_migrate_legacy_token_file(hass, entry, extra_path)
+            expected_data = dict(entry.data)
+        finally:
+            resume.set()
+            migrated = await migration
+    assert not migrated
+    assert entry.data == expected_data
+    if cleanup_kind == "persisted":
+        assert entry.data[module.CONF_LEGACY_TOKEN_FILES] == [Path(extra_path).name]
+        assert entry.data["token"] == "fresh-token-value-000001"
+    else:
+        assert "token" not in entry.data
+        assert module.CONF_LEGACY_TOKEN_FILES not in entry.data
 
 
 async def test_token_change_after_restart_defers_pending_cleanup_again(tmp_path) -> None:
