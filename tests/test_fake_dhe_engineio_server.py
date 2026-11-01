@@ -677,6 +677,10 @@ class TestFakeDHEEngineIOServer(unittest.IsolatedAsyncioTestCase):
                     server.queue_token_response(PAIRING_TOKEN)
                     server.queue_authentication()
 
+                    # Retained values and proof from an earlier session must not
+                    # authenticate a silent replacement session.
+                    client._last_measurements[protocol_module.ID_DEVICE_STATUS] = 1
+                    client._runtime_startup_proven = True
                     await DHEClient.start(client)
                     auth_failed_seen = False
                     for _attempt in range(40):
@@ -701,10 +705,19 @@ class TestFakeDHEEngineIOServer(unittest.IsolatedAsyncioTestCase):
         DHEClient = client_module.DHEClient
         client = DHEClient.__new__(DHEClient)
         client._last_measurements = {protocol_module.ID_PROTOCOL_VERSION: "1.9.00"}
+        client._pending_write_future = None
+        client._measurement_callbacks = []
+        client._notify_callbacks = Mock()
 
+        client._handle_measurement(protocol_module.ID_PROTOCOL_VERSION, "1.9.00")
         self.assertFalse(DHEClient._has_runtime_startup_proof(client))
 
         client._last_measurements[protocol_module.ID_DEVICE_STATUS] = 1
+        self.assertFalse(DHEClient._has_runtime_startup_proof(client))
+        client._handle_measurement(protocol_module.ID_DEVICE_STATUS, None)
+        self.assertFalse(DHEClient._has_runtime_startup_proof(client))
+        client._last_measurements[protocol_module.ID_DEVICE_STATUS] = 1
+        client._handle_measurement(protocol_module.ID_DEVICE_STATUS, 1)
 
         self.assertTrue(DHEClient._has_runtime_startup_proof(client))
 

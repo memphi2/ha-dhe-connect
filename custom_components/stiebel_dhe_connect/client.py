@@ -104,7 +104,6 @@ from .token_storage import (
 
 _LOGGER = logging.getLogger(__name__)
 DEVICE_INFO_REQUEST_TIMEOUT_SECONDS = 5.0
-RUNTIME_STARTUP_PROOF_IDS = frozenset(INITIAL_VALUE_IDS) - {ID_PROTOCOL_VERSION}
 
 
 class DHEClient(
@@ -440,9 +439,8 @@ class DHEClient(
     async def _run_loop(self) -> None:
         while not self._stopped.is_set():
             try:
+                self._runtime_startup_proven = False
                 self._ctx = await self._open_authenticated_session()
-                self._record_session_connected()
-                self._cancel_reconnect_grace_timer()
                 self._update_diagnostics(
                     connection_state="initializing",
                     next_reconnect_delay_seconds=None,
@@ -453,6 +451,8 @@ class DHEClient(
                 self._set_online(True)
                 await self._request_initial_values(self._ctx)
                 await self._wait_for_initial_runtime_values(self._ctx)
+                self._record_session_connected()
+                self._cancel_reconnect_grace_timer()
                 self._ready.set()
                 self._set_available(True)
                 self._update_diagnostics(connection_state="connected")
@@ -707,10 +707,7 @@ class DHEClient(
 
     def _has_runtime_startup_proof(self) -> bool:
         """Return whether the authenticated runtime session produced DHE data."""
-        return any(
-            odb_id in self._last_measurements
-            for odb_id in RUNTIME_STARTUP_PROOF_IDS
-        )
+        return self._runtime_startup_proven
 
     def _new_setpoint_future(
         self, expected: float | None = None
