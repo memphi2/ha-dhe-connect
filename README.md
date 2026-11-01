@@ -79,6 +79,8 @@ More automation examples and practical scenarios:
 
 ### Home Assistant Marketplace (recommended)
 
+[![Open your Home Assistant instance and open this repository in the Marketplace](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=memphi2&repository=ha-dhe-connect&category=integration)
+
 For Home Assistant 2026.11 and newer:
 
 1. Open `Settings` -> `Marketplace`.
