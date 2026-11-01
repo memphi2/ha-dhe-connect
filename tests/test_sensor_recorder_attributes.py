@@ -378,18 +378,19 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         )
 
         self.assertEqual(writes, ["connected"])
-        self.assertEqual(sensor._attr_extra_state_attributes, {"session_id": "sid-1"})
+        self.assertEqual(sensor._attr_extra_state_attributes, {})
 
         sensor._handle_diagnostic_update(
             {
                 "connection_state": "connected",
                 "session_id": "sid-2",
+                "websocket_sid": "private-websocket-sid",
                 "last_message_received_at": "2026-05-16T12:00:02Z",
             }
         )
 
-        self.assertEqual(writes, ["connected", "connected"])
-        self.assertEqual(sensor._attr_extra_state_attributes, {"session_id": "sid-2"})
+        self.assertEqual(writes, ["connected"])
+        self.assertEqual(sensor._attr_extra_state_attributes, {})
 
     def test_next_reconnect_delay_diagnostic_accepts_float_state(self) -> None:
         sensor_module = _load_sensor_module()

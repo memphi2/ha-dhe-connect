@@ -60,6 +60,7 @@ files = [
     "custom_components/stiebel_dhe_connect/error_codes.py",
     "custom_components/stiebel_dhe_connect/flow_helpers.py",
     "custom_components/stiebel_dhe_connect/ha_compat.py",
+    "custom_components/stiebel_dhe_connect/http_helpers.py",
     "custom_components/stiebel_dhe_connect/media_player.py",
     "custom_components/stiebel_dhe_connect/number.py",
     "custom_components/stiebel_dhe_connect/pairing_helpers.py",

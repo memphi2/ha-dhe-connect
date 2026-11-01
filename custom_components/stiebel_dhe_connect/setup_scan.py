@@ -19,6 +19,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .connection_helpers import host_for_url
 from .const import DEFAULT_PORT
 from .error_codes import INVALID_SCAN_SUBNET, SCAN_SUBNET_TOO_LARGE
+from .http_helpers import IDENTITY_ENCODING_HEADERS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -351,8 +352,14 @@ async def _probe_host(
 ) -> DHEHostCandidate | None:
     url = f"http://{host_for_url(host)}:{port}/"
     try:
-        async with session.get(url, timeout=timeout, allow_redirects=False) as response:
-            if not 200 <= response.status < 300:
+        async with session.get(
+            url, timeout=timeout, allow_redirects=False,
+            auto_decompress=False, headers=IDENTITY_ENCODING_HEADERS,
+        ) as response:
+            if (
+                not 200 <= response.status < 300
+                or response.headers.get("Content-Encoding", "identity").lower() != "identity"
+            ):
                 return None
             body = await response.content.read(4096)
             evidence = dhe_response_evidence(body, response.headers)

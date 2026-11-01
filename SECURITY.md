@@ -39,6 +39,13 @@ the device's supported controls, then pair again. See the
 
 Runtime diagnostics, HA smoke checks and release validation redact known token, authorization, credential, URL and private-host fragments before printing failures. This is a defense-in-depth measure for support logs and CI output; it is not a substitute for protecting Home Assistant config storage and backups.
 
+Internal polling and WebSocket session identifiers are not published as entity
+attributes. Device HTTP requests and WebSocket handshakes refuse redirects.
+Protocol responses and WebSocket messages are limited to 4 MiB; the optional web
+version probe is limited to 256 KiB. HTTP requests ask for uncompressed responses
+and reject unexpected compression before decoding. HTTP error bodies are not
+included in transport errors.
+
 ## Reporting vulnerabilities
 
 Report suspected vulnerabilities privately using

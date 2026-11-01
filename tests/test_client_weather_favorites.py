@@ -88,6 +88,7 @@ def _load_client():
     _load_component_module("client_runtime_app")
     _load_component_module("client_runtime_media")
     _load_component_module("client_runtime")
+    _load_component_module("http_helpers")
     _load_component_module("client_web_version")
     _load_component_module("token_storage")
     _load_component_module("client_transport_helpers")
@@ -931,6 +932,12 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
 
         class _DecodeFailureResponse:
             status = 200
+            headers = {}
+            content_length = 1
+
+            @property
+            def content(self):
+                return self
 
             async def __aenter__(self) -> Self:
                 return self
@@ -938,11 +945,11 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
             async def __aexit__(self, *_args: object) -> None:
                 return None
 
-            async def text(self) -> str:
-                raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid")
+            async def iter_chunked(self, _size):
+                yield b"\xff"
 
         class _FakeSession:
-            def get(self, _url: str, *, timeout: object, allow_redirects: bool) -> _DecodeFailureResponse:
+            def get(self, _url: str, **kwargs) -> _DecodeFailureResponse:
                 return _DecodeFailureResponse()
 
         client = DHEClient.__new__(DHEClient)

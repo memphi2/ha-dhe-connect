@@ -59,6 +59,8 @@ DIAGNOSTIC_VOLATILE_ATTRIBUTE_KEYS = frozenset(
         "last_invalid_odb_at",
         "message_count",
         "next_reconnect_delay_seconds",
+        "session_id",
+        "websocket_sid",
     }
 )
 

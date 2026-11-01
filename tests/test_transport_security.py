@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import gzip
+import importlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import aiohttp
 import pytest
@@ -71,3 +73,80 @@ async def test_http_redirect_never_reaches_destination(status: int, method: str)
                 port = int(origin_url.rsplit(":", 1)[1])
                 assert await _probe_host(session, "127.0.0.1", port, aiohttp.ClientTimeout(total=2)) is None
     assert received == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["get", "post", "version"])
+@pytest.mark.parametrize("encoding", ["length", "chunked", "gzip"])
+@pytest.mark.parametrize("oversized", [False, True])
+async def test_response_limits_cover_streaming_and_compressed_bodies(
+    method: str, encoding: str, oversized: bool,
+) -> None:
+    module = _load_client()
+    limit = 1024
+    payload = b'<html manifest="/manifest-1.9.00.appcache">'
+    body = payload.ljust(limit + int(oversized), b" ")
+
+    async def respond(request):
+        assert request.headers["Accept-Encoding"] == "identity"
+        if encoding == "gzip":
+            return web.Response(body=gzip.compress(body), headers={"Content-Encoding": "gzip"})
+        if encoding == "chunked":
+            response = web.StreamResponse()
+            response.enable_chunked_encoding()
+            await response.prepare(request)
+            await response.write(body[:512])
+            await response.write(body[512:])
+            await response.write_eof()
+            return response
+        return web.Response(body=body)
+
+    async with http_server(respond) as url, aiohttp.ClientSession() as session:
+        client = module.DHEClient.__new__(module.DHEClient)
+        client._session = session
+        client.base_url = url
+        client._poll_url = lambda *args: url
+        client._handle_web_interface_version = Mock()
+        transport = importlib.import_module(f"{module.__package__}.client_transport")
+        version = importlib.import_module(f"{module.__package__}.client_web_version")
+        with (
+            patch.object(transport, "PROTOCOL_RESPONSE_LIMIT", limit),
+            patch.object(version, "WEB_PAGE_RESPONSE_LIMIT", limit),
+        ):
+            rejected = oversized or encoding == "gzip"
+            if method == "version":
+                await client._request_web_interface_version()
+                if rejected:
+                    client._handle_web_interface_version.assert_not_called()
+                else:
+                    client._handle_web_interface_version.assert_called_once_with("1.9.00")
+            else:
+                operation = (
+                    client._get_text(url) if method == "get"
+                    else client._post_packet(module.DHESession("sid", "token"), "packet")
+                )
+                if rejected:
+                    with pytest.raises(module.DHEError, match="refused|size limit"):
+                        await operation
+                else:
+                    assert await operation == body.decode()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["get", "post"])
+async def test_error_response_body_is_not_exposed(method: str) -> None:
+    module = _load_client()
+
+    async def respond(request):
+        return web.Response(status=500, text="SYNTHETIC_PRIVATE_RESPONSE")
+
+    async with http_server(respond) as url, aiohttp.ClientSession() as session:
+        client = module.DHEClient.__new__(module.DHEClient)
+        client._session = session
+        client._poll_url = lambda *args: url
+        with pytest.raises(module.DHEError) as caught:
+            if method == "get":
+                await client._get_text(url)
+            else:
+                await client._post_packet(module.DHESession("sid", "token"), "packet")
+        assert str(caught.value) == f"{method.upper()} 500"
