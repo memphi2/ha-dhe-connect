@@ -179,7 +179,7 @@ class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
         await player.async_turn_off()
 
         player._client.set_radio_play.assert_awaited_once_with(False)
-        self.assertEqual(player._attr_state, media_player.STATE_OFF)
+        self.assertEqual(player._attr_state, media_player.MediaPlayerState.OFF)
         self.assertTrue(player._radio_off_requested)
         player.async_write_ha_state.assert_called_once()
 
@@ -197,7 +197,7 @@ class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
         await player.async_media_pause()
 
         player._client.set_radio_play.assert_awaited_once_with(False)
-        self.assertEqual(player._attr_state, media_player.STATE_PAUSED)
+        self.assertEqual(player._attr_state, media_player.MediaPlayerState.PAUSED)
         self.assertFalse(player._radio_off_requested)
 
     async def test_source_selection_clears_requested_off_state(self) -> None:
@@ -219,7 +219,7 @@ class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
 
         player._client.select_radio_station.assert_awaited_once_with(station)
         self.assertEqual(player._attr_source, "WDR 2")
-        self.assertEqual(player._attr_state, media_player.STATE_PLAYING)
+        self.assertEqual(player._attr_state, media_player.MediaPlayerState.PLAYING)
         self.assertFalse(player._radio_off_requested)
         player.async_write_ha_state.assert_called_once()
 
@@ -275,7 +275,7 @@ class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
 
         player._apply_playback_state({"play": False})
 
-        self.assertEqual(player._attr_state, media_player.STATE_OFF)
+        self.assertEqual(player._attr_state, media_player.MediaPlayerState.OFF)
 
     def test_startup_playback_false_uses_off_state(self) -> None:
         media_player = _load_media_player_module()
@@ -286,7 +286,7 @@ class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
 
         player._apply_playback_state({"play": False})
 
-        self.assertEqual(player._attr_state, media_player.STATE_OFF)
+        self.assertEqual(player._attr_state, media_player.MediaPlayerState.OFF)
 
     def test_runtime_playback_false_keeps_paused_state_after_pause(self) -> None:
         media_player = _load_media_player_module()
@@ -294,11 +294,11 @@ class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
             media_player.StiebelDHERadioMediaPlayer
         )
         player._radio_off_requested = False
-        player._attr_state = media_player.STATE_PAUSED
+        player._attr_state = media_player.MediaPlayerState.PAUSED
 
         player._apply_playback_state({"play": False})
 
-        self.assertEqual(player._attr_state, media_player.STATE_PAUSED)
+        self.assertEqual(player._attr_state, media_player.MediaPlayerState.PAUSED)
 
     async def test_startup_metadata_without_play_restores_previous_playing_state(
         self,
@@ -316,7 +316,7 @@ class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
         await player._restore_playback_state()
         player._apply_playback_state({"favorites": [{"Id": 1, "Name": "Radio Test"}]})
 
-        self.assertEqual(player._attr_state, media_player.STATE_PLAYING)
+        self.assertEqual(player._attr_state, media_player.MediaPlayerState.PLAYING)
         self.assertFalse(player._radio_off_requested)
 
     async def test_startup_metadata_without_play_restores_previous_off_state(
@@ -335,7 +335,7 @@ class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
         await player._restore_playback_state()
         player._apply_playback_state({"favorites": [{"Id": 1, "Name": "Radio Test"}]})
 
-        self.assertEqual(player._attr_state, media_player.STATE_OFF)
+        self.assertEqual(player._attr_state, media_player.MediaPlayerState.OFF)
         self.assertTrue(player._radio_off_requested)
 
     def test_startup_metadata_without_restore_uses_off_state(self) -> None:
@@ -346,18 +346,18 @@ class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
 
         player._apply_playback_state({"favorites": [{"Id": 1, "Name": "Radio Test"}]})
 
-        self.assertEqual(player._attr_state, media_player.STATE_OFF)
+        self.assertEqual(player._attr_state, media_player.MediaPlayerState.OFF)
 
     def test_metadata_without_play_preserves_runtime_state(self) -> None:
         media_player = _load_media_player_module()
         player = media_player.StiebelDHERadioMediaPlayer.__new__(
             media_player.StiebelDHERadioMediaPlayer
         )
-        player._attr_state = media_player.STATE_PLAYING
+        player._attr_state = media_player.MediaPlayerState.PLAYING
 
         player._apply_playback_state({"favorites": [{"Id": 1, "Name": "Radio Test"}]})
 
-        self.assertEqual(player._attr_state, media_player.STATE_PLAYING)
+        self.assertEqual(player._attr_state, media_player.MediaPlayerState.PLAYING)
 
     def test_playback_update_clears_requested_off_state_when_playing(self) -> None:
         media_player = _load_media_player_module()
@@ -368,7 +368,7 @@ class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
 
         player._apply_playback_state({"play": True})
 
-        self.assertEqual(player._attr_state, media_player.STATE_PLAYING)
+        self.assertEqual(player._attr_state, media_player.MediaPlayerState.PLAYING)
         self.assertFalse(player._radio_off_requested)
 
     def test_radio_update_skips_duplicate_state_writes(self) -> None:
@@ -396,7 +396,7 @@ class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
         player._handle_availability_update(True)
         player._handle_availability_update(False)
 
-        self.assertEqual(writes, [media_player.STATE_OFF, media_player.STATE_OFF])
+        self.assertEqual(writes, [media_player.MediaPlayerState.OFF, media_player.MediaPlayerState.OFF])
         self.assertFalse(player._attr_available)
 
     def test_radio_write_signature_ignores_unrecorded_favorite_payload(self) -> None:
@@ -405,7 +405,7 @@ class TestMediaPlayerHelpers(unittest.IsolatedAsyncioTestCase):
             media_player.StiebelDHERadioMediaPlayer
         )
         player._attr_available = True
-        player._attr_state = media_player.STATE_PLAYING
+        player._attr_state = media_player.MediaPlayerState.PLAYING
         player._attr_volume_level = 0.5
         player._attr_source = "Radio Test"
         player._attr_source_list = ["Radio Test"]

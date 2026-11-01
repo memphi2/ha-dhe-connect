@@ -546,7 +546,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
             def __init__(self) -> None:
                 self.tasks = []
 
-            def async_create_task(self, coro, *, name: str | None = None):
+            def async_create_background_task(self, coro, name: str):
                 task = asyncio.create_task(coro, name=name)
                 self.tasks.append(task)
                 return task
@@ -612,7 +612,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
             def __init__(self) -> None:
                 self.tasks: list[asyncio.Task[object]] = []
 
-            def async_create_task(self, coro, *, name: str | None = None):
+            def async_create_background_task(self, coro, name: str):
                 task = asyncio.create_task(coro, name=name)
                 self.tasks.append(task)
                 return task
@@ -1005,7 +1005,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
             def __init__(self) -> None:
                 self.tasks = []
 
-            def async_create_task(self, coro, *, name: str | None = None):
+            def async_create_background_task(self, coro, name: str):
                 task = asyncio.create_task(coro, name=name)
                 self.tasks.append(task)
                 return task
@@ -1075,7 +1075,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
             def __init__(self) -> None:
                 self.tasks = []
 
-            def async_create_task(self, coro, *, name: str | None = None):
+            def async_create_background_task(self, coro, name: str):
                 task = asyncio.create_task(coro, name=name)
                 self.tasks.append(task)
                 return task
@@ -1206,7 +1206,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
             def __init__(self) -> None:
                 self.tasks = []
 
-            def async_create_task(self, coro, *, name: str | None = None):
+            def async_create_background_task(self, coro, name: str):
                 task = asyncio.create_task(coro, name=name)
                 self.tasks.append(task)
                 return task

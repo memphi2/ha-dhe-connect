@@ -10,7 +10,6 @@ import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -149,15 +148,7 @@ class DHEClient(
             self._token_store = InMemoryTokenStore()
         else:
             self._token_store = LegacyFileTokenStore(hass, token_file)
-        self._owns_session = False
-        try:
-            self._session = async_get_clientsession(hass)
-        except RuntimeError as err:
-            # In early setup-test flows the HA frame helper may not yet be ready;
-            # keep setup robust by using a scoped local session.
-            _LOGGER.debug("Falling back to direct aiohttp.ClientSession: %s", err)
-            self._session = aiohttp.ClientSession()
-            self._owns_session = True
+        self._session = async_get_clientsession(hass)
         self._ctx: DHESession | None = None
         self._token: str | None = None
         self._runner: asyncio.Task[None] | None = None
@@ -347,8 +338,6 @@ class DHEClient(
             runner.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await runner
-        if getattr(self, "_owns_session", False):
-            await self._session.close()
         ctx = self._ctx
         self._ctx = None
         self._ready.clear()

@@ -464,7 +464,7 @@ evidence:
     exception-translations:
       implementation: >
         DHE action exceptions now use translated HomeAssistantError keys with
-        redacted placeholders and runtime-safe fallback for lightweight stubs.
+        redacted placeholders through the supported Home Assistant API.
       tests: >
         Translation tests require action exception keys in both locales.
       docs: >

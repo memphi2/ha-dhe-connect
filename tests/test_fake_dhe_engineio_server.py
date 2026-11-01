@@ -1872,7 +1872,7 @@ class _FakeHass:
         self.loop = loop
         self.config = _FakeConfig(config_root)
 
-    def async_create_task(self, coro: Any, *, name: str | None = None) -> asyncio.Task[Any]:
+    def async_create_background_task(self, coro: Any, name: str) -> asyncio.Task[Any]:
         return asyncio.create_task(coro, name=name)
 
     async def async_add_executor_job(self, target: Any, *args: Any) -> Any:

@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-from importlib import import_module
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from homeassistant.components.media_player import (
     MediaPlayerEntity,
+    MediaPlayerEntityFeature,
+    MediaPlayerState,
 )
-
-if TYPE_CHECKING:
-    from homeassistant.components.media_player.const import MediaPlayerState
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -32,39 +29,9 @@ from .runtime_helpers import get_runtime_data
 PARALLEL_UPDATES = 0
 
 
-def _media_player_attr(class_name: str, attr_name: str, fallback: Any) -> Any:
-    """Return a media-player const value across HA module layouts."""
-    for module_name in (
-        "homeassistant.components.media_player",
-        "homeassistant.components.media_player.const",
-    ):
-        try:
-            cls = getattr(import_module(module_name), class_name)
-        except (AttributeError, ImportError):
-            continue
-        return getattr(cls, attr_name, fallback)
-    return fallback
-
-
-def _media_player_feature(name: str) -> Any:
-    """Return one media-player feature flag when the HA version exposes it."""
-    return _media_player_attr("MediaPlayerEntityFeature", name, 0)
-
-
-STATE_OFF: Any = _media_player_attr("MediaPlayerState", "OFF", "off")
-STATE_PAUSED: Any = _media_player_attr("MediaPlayerState", "PAUSED", "paused")
-STATE_PLAYING: Any = _media_player_attr("MediaPlayerState", "PLAYING", "playing")
-
-
-def _state_key(state: Any) -> str:
-    """Return the recorder string for a media-player state constant."""
-    return str(getattr(state, "value", state))
-
-
 RESTORABLE_PLAYBACK_STATES = {
-    _state_key(STATE_OFF): STATE_OFF,
-    _state_key(STATE_PAUSED): STATE_PAUSED,
-    _state_key(STATE_PLAYING): STATE_PLAYING,
+    str(state): state
+    for state in (MediaPlayerState.OFF, MediaPlayerState.PAUSED, MediaPlayerState.PLAYING)
 }
 
 
@@ -95,14 +62,14 @@ class StiebelDHERadioMediaPlayer(
     _attr_icon = "mdi:radio"
     _attr_should_poll = False
     _attr_supported_features = (
-        _media_player_feature("PLAY")
-        | _media_player_feature("PAUSE")
-        | _media_player_feature("TURN_ON")
-        | _media_player_feature("TURN_OFF")
-        | _media_player_feature("VOLUME_SET")
-        | _media_player_feature("SELECT_SOURCE")
-        | _media_player_feature("NEXT_TRACK")
-        | _media_player_feature("PREVIOUS_TRACK")
+        MediaPlayerEntityFeature.PLAY
+        | MediaPlayerEntityFeature.PAUSE
+        | MediaPlayerEntityFeature.TURN_ON
+        | MediaPlayerEntityFeature.TURN_OFF
+        | MediaPlayerEntityFeature.VOLUME_SET
+        | MediaPlayerEntityFeature.SELECT_SOURCE
+        | MediaPlayerEntityFeature.NEXT_TRACK
+        | MediaPlayerEntityFeature.PREVIOUS_TRACK
     )
     _attr_translation_key = "radio"
     _unrecorded_attributes = frozenset({"favorites"})
@@ -150,11 +117,11 @@ class StiebelDHERadioMediaPlayer(
         last_state = await self.async_get_last_state()
         if last_state is None:
             return
-        restored_state = RESTORABLE_PLAYBACK_STATES.get(_state_key(last_state.state))
+        restored_state = RESTORABLE_PLAYBACK_STATES.get(last_state.state)
         if restored_state is None:
             return
         self._attr_state = restored_state
-        self._radio_off_requested = restored_state == STATE_OFF
+        self._radio_off_requested = restored_state == MediaPlayerState.OFF
 
     async def async_media_play(self) -> None:
         """Start radio playback."""
@@ -170,7 +137,7 @@ class StiebelDHERadioMediaPlayer(
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off radio playback."""
-        await self._set_playing(False, state=STATE_OFF, off_requested=True)
+        await self._set_playing(False, state=MediaPlayerState.OFF, off_requested=True)
 
     async def async_set_volume_level(self, volume: float) -> None:
         """Set radio volume."""
@@ -204,7 +171,7 @@ class StiebelDHERadioMediaPlayer(
             raise dhe_action_error("Could not select DHE radio source", err) from err
         self._attr_source = source
         self._radio_off_requested = False
-        self._attr_state = STATE_PLAYING
+        self._attr_state = MediaPlayerState.PLAYING
         self._attr_available = True
         self._write_radio_state(force=True)
 
@@ -232,7 +199,9 @@ class StiebelDHERadioMediaPlayer(
         except DHEError as err:
             raise dhe_action_error("Could not set DHE radio playback", err) from err
         self._radio_off_requested = off_requested
-        self._attr_state = state or (STATE_PLAYING if accepted_playing else STATE_PAUSED)
+        self._attr_state = state or (
+            MediaPlayerState.PLAYING if accepted_playing else MediaPlayerState.PAUSED
+        )
         self._attr_available = True
         self._write_radio_state(force=True)
 
@@ -350,19 +319,19 @@ class StiebelDHERadioMediaPlayer(
         play = state.get("play")
         if play is True:
             self._radio_off_requested = False
-            self._attr_state = STATE_PLAYING
+            self._attr_state = MediaPlayerState.PLAYING
         elif play is False:
             current_state = getattr(self, "_attr_state", None)
             self._attr_state = (
-                STATE_OFF
+                MediaPlayerState.OFF
                 if (
                     getattr(self, "_radio_off_requested", False)
-                    or current_state in {None, STATE_OFF}
+                    or current_state in {None, MediaPlayerState.OFF}
                 )
-                else STATE_PAUSED
+                else MediaPlayerState.PAUSED
             )
         elif state and getattr(self, "_attr_state", None) is None:
-            self._attr_state = STATE_OFF
+            self._attr_state = MediaPlayerState.OFF
 
     def _apply_volume_state(self, state: dict[str, Any]) -> None:
         """Apply HA volume level from the DHE radio state."""

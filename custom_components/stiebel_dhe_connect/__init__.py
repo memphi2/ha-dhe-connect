@@ -412,13 +412,9 @@ def _start_client_background(
     client: DHEClient,
 ) -> asyncio.Task[Any]:
     """Start the persistent DHE session without blocking entity setup."""
-    create_task = getattr(entry, "async_create_background_task", None)
-    if create_task is not None:
-        return cast(
-            asyncio.Task[Any],
-            create_task(hass, client.start(), "stiebel_dhe_connect_start"),
-        )
-    return create_background_task(hass, client.start(), "stiebel_dhe_connect_start")
+    return entry.async_create_background_task(
+        hass, client.start(), "stiebel_dhe_connect_start"
+    )
 
 
 def _runtime_task_cancel_callback(

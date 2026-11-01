@@ -9,6 +9,7 @@ import types
 import unittest
 from datetime import UTC, datetime
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 try:
     from tests.test_aiohttp_stubs import _ensure_aiohttp_stub
@@ -114,10 +115,10 @@ def _weather_state(*, tmax: float = 32.0) -> dict:
     }
 
 
-class TestWeatherEntityWrites(unittest.TestCase):
+class TestWeatherEntityWrites(unittest.IsolatedAsyncioTestCase):
     """Validate weather entity write throttling."""
 
-    def test_weather_entity_skips_duplicate_state_writes(self) -> None:
+    async def test_weather_entity_skips_duplicate_state_writes(self) -> None:
         weather_module = _load_weather_module()
         state = _weather_state()
 
@@ -134,18 +135,21 @@ class TestWeatherEntityWrites(unittest.TestCase):
             client=_FakeClient(),
         )
         writes: list[str | None] = []
-        listener_updates: list[tuple[str, ...]] = []
+        entity.hass = types.SimpleNamespace(
+            async_create_background_task=lambda coro, name: asyncio.create_task(coro, name=name)
+        )
         entity.async_write_ha_state = lambda: writes.append(entity._attr_condition)
-        entity.async_update_listeners = lambda value: listener_updates.append(value)
+        entity.async_update_listeners = AsyncMock()
         entity._async_subscription_started("daily")
 
         entity._handle_weather_update(_weather_state())
         entity._handle_weather_update(_weather_state())
         entity._handle_availability_update(True)
         entity._handle_availability_update(False)
+        await entity._forecast_listener_update_task
 
         self.assertEqual(writes, ["sunny", "sunny"])
-        self.assertEqual(listener_updates, [("daily",)])
+        entity.async_update_listeners.assert_awaited_once_with(("daily",))
         self.assertFalse(entity._attr_available)
 
     def test_weather_entity_skips_listener_task_without_forecast_listeners(self) -> None:
@@ -163,11 +167,10 @@ class TestWeatherEntityWrites(unittest.TestCase):
             def __init__(self) -> None:
                 self.tasks: list[asyncio.Task[object]] = []
 
-            def async_create_task(
+            def async_create_background_task(
                 self,
                 coro: object,
-                *,
-                name: str | None = None,
+                name: str,
             ) -> asyncio.Task[object]:
                 task = asyncio.create_task(coro, name=name)
                 self.tasks.append(task)
@@ -211,11 +214,10 @@ class TestWeatherEntityWrites(unittest.TestCase):
             def __init__(self) -> None:
                 self.tasks: list[asyncio.Task[object]] = []
 
-            def async_create_task(
+            def async_create_background_task(
                 self,
                 coro: object,
-                *,
-                name: str | None = None,
+                name: str,
             ) -> asyncio.Task[object]:
                 task = asyncio.create_task(coro, name=name)
                 self.tasks.append(task)
