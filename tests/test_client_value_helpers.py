@@ -76,6 +76,11 @@ class TestClientValueHelpers(unittest.TestCase):
         self.assertFalse(self.helpers.raw_to_bool("off"))
         self.assertFalse(self.helpers.raw_to_bool(""))
 
+    def test_nonfinite_protocol_values_raise_value_error(self) -> None:
+        for value in ("nan", "1e309", "-inf", float("inf"), 10**400):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                self.helpers.raw_to_float(value)
+
     def test_water_heating_encoding_uses_protocol_raw_values(self) -> None:
         self.assertTrue(
             self.helpers.raw_to_water_heating_enabled(

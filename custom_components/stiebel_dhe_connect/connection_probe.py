@@ -8,7 +8,13 @@ import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
+from .client_types import DHEError
 from .connection_helpers import host_for_url
+from .http_helpers import (
+    IDENTITY_ENCODING_HEADERS,
+    WEB_PAGE_RESPONSE_LIMIT,
+    read_bounded_response,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -37,11 +43,16 @@ async def async_can_connect(
         async with session.get(
             url,
             timeout=aiohttp.ClientTimeout(total=timeout_seconds),
+            allow_redirects=False,
+            auto_decompress=False,
+            headers=IDENTITY_ENCODING_HEADERS,
         ) as resp:
-            await resp.read()
             status = int(resp.status)
-            return 200 <= status < 500
-    except (aiohttp.ClientError, TimeoutError, OSError):
+            if not 200 <= status < 500 or 300 <= status < 400:
+                return False
+            await read_bounded_response(resp, WEB_PAGE_RESPONSE_LIMIT)
+            return True
+    except (aiohttp.ClientError, DHEError, TimeoutError, OSError):
         return False
     finally:
         if should_close:

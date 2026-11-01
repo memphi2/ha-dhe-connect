@@ -39,21 +39,18 @@ It does not claim official Home Assistant Core certification.
    - Explicit Protocol contracts across client mixins
    - Minimize `Any`, broad casts and unmanaged ignores
 
-## Mandatory Local Gate
+## Validation Gate
 
-```bash
-python scripts/check_coverage.py
-python scripts/check_integration.py
-python scripts/check_deprecations.py
-python scripts/check_typing.py
-python -m ruff check custom_components/stiebel_dhe_connect tests scripts
-```
+Use the maintained command set in [validation.md](validation.md), including
+coverage, HA baseline provenance, privacy/deprecation guards, strict typing and
+Ruff. Do not maintain a reduced duplicate checklist here.
 
-Optional release-style gate:
+The loopback runtime soak is a bounded regression test, not proof of multi-day
+device stability. Real-device evidence belongs in [firmware_matrix.md](firmware_matrix.md).
+Live smoke checks require a deliberately authorized test installation.
 
-```bash
-python scripts/release_check.py --run-local-checks --run-github-hygiene --expect-tag skip --expect-github-release skip
-```
+For publication, follow [release_process.md](release_process.md). Skipping tag
+or release checks during development is not a stable-release approval.
 
 ## Exit Criteria For Platinum-Track Rounds
 

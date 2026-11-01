@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections.abc import Callable
 from contextlib import suppress
+from datetime import datetime
 from typing import Any, cast
 
 from homeassistant.components.sensor import (
@@ -16,6 +18,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory, UnitOfTime
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_call_later
 
 from .async_helpers import create_background_task
 from .client import DHEClient
@@ -184,6 +187,7 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
         self._last_written_native_value: MeasurementValue = None
         self._last_written_monotonic: float | None = None
         self._last_written_recorded_attributes: dict[str, Any] | None = None
+        self._pending_write_cancel: Callable[[], None] | None = None
         self._missing_measurement_refresh_task: asyncio.Task[Any] | None = None
         self._missing_measurement_refresh_cancel_registered = False
         self._timer_active = False
@@ -192,8 +196,14 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
         self._timer_remaining_base_minutes: float | None = None
         self._timer_remaining_base_monotonic: float | None = None
 
+    @callback
+    def async_entity_id_changed(self, old_entity_id: str) -> None:
+        """Keep device subscriptions active when the entity ID changes in place."""
+        super().async_entity_id_changed(old_entity_id)
+
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE measurements and start the persistent session."""
+        self.async_on_remove(self._cancel_pending_write)
         self.async_on_remove(
             self._client.add_measurement_callback(
                 self._handle_measurement_update,
@@ -574,6 +584,7 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
 
         recorded_attributes = self._recorded_state_attributes()
         if recorded_attributes == self._last_written_recorded_attributes:
+            self._schedule_pending_write()
             self._schedule_timer_countdown()
             return
 
@@ -604,6 +615,7 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
     def _handle_availability_update(self, available: bool) -> None:
         """Handle DHE connection availability updates."""
         if not available:
+            self._cancel_pending_write()
             self._cancel_timer_countdown()
         if available:
             self._schedule_missing_measurement_refresh()
@@ -612,7 +624,40 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
         if self._attr_available == next_available:
             return
         self._attr_available = next_available
+        self._mark_state_written()
         self.async_write_ha_state()
+
+    def _cancel_pending_write(self) -> None:
+        """Cancel the single delayed publication owned by this entity."""
+        if self._pending_write_cancel is not None:
+            self._pending_write_cancel()
+            self._pending_write_cancel = None
+
+    def _schedule_pending_write(self) -> None:
+        """Publish a filtered value by its deadline even if the device goes quiet."""
+        if self._attr_native_value == self._last_written_native_value:
+            self._cancel_pending_write()
+            return
+        interval = self._max_write_interval_seconds
+        last_written = self._last_written_monotonic
+        hass = getattr(self, "hass", None)
+        if (
+            self._pending_write_cancel is not None
+            or not self._attr_available
+            or interval is None
+            or last_written is None
+            or hass is None
+        ):
+            return
+        delay = max(0.0, last_written + interval - time.monotonic())
+        self._pending_write_cancel = async_call_later(hass, delay, self._flush_pending_write)
+
+    @callback
+    def _flush_pending_write(self, _now: datetime) -> None:
+        self._pending_write_cancel = None
+        if self._attr_available and self._attr_native_value != self._last_written_native_value:
+            self._mark_state_written()
+            self.async_write_ha_state()
 
     def _should_write_measurement_state(
         self,
@@ -654,6 +699,7 @@ class StiebelDHESensor(StiebelDHEEntityMixin, SensorEntity):
         update_value: bool = True,
     ) -> None:
         """Remember the HA state snapshot last written by this entity."""
+        self._cancel_pending_write()
         if update_value:
             self._last_written_native_value = self._attr_native_value
         self._last_written_monotonic = time.monotonic()

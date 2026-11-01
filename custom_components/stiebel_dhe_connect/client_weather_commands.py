@@ -12,9 +12,6 @@ from .client_mapping import (
     weather_location_has_id as _weather_location_has_id,
 )
 from .client_mapping import (
-    weather_location_id as _weather_location_id,
-)
-from .client_mapping import (
     weather_location_in_list as _weather_location_in_list,
 )
 from .client_types import DHEError, DHESession
@@ -106,7 +103,7 @@ class DHEClientWeatherCommandsMixin:
         )
 
     async def add_weather_favorite(self, location: dict[str, Any]) -> bool:
-        """Add a weather favorite without toggling an existing favorite off."""
+        """Add a favorite without toggling it off or changing the active location."""
         if not _weather_location_has_id(location):
             raise DHEError("Weather favorite location must include LocationId")
         client = _command_context(self)
@@ -129,13 +126,10 @@ class DHEClientWeatherCommandsMixin:
             if is_favorite:
                 return True
 
-            location_id = _weather_location_id(payload)
             favorites = await self._assign_weather_favorite_and_wait(ctx, payload)
             is_favorite = _weather_location_in_list(payload, favorites)
             if not is_favorite:
                 raise DHEError("DHE weather favorite did not change")
-            await client._send_ste_command(ctx, WEATHER_LOCATION_GET_COMMAND, location_id)
-            await client._wait_for_weather_location(location_id)
             return True
 
         return await client._run_command_with_reconnect_retry(

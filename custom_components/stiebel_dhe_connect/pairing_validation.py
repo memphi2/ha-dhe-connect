@@ -19,7 +19,7 @@ from .token_file_helpers import (
     stale_unconfigured_token_paths,
     token_file_for_target,
 )
-from .token_storage import DHETokenStore
+from .token_storage import DHETokenStore, owned_legacy_token_paths
 
 SETUP_PAIRING_TIMEOUT_SECONDS = 180.0
 
@@ -46,6 +46,7 @@ def _configured_token_paths(hass: HomeAssistant) -> set[str]:
 
     paths: set[str] = set()
     for entry in entries(DOMAIN):
+        paths.update(_abs_config_path(hass, path) for path in owned_legacy_token_paths(hass, entry))
         target = entry_target(entry)
         if target is None:
             continue

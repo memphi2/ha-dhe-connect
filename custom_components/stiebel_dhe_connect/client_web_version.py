@@ -9,7 +9,12 @@ from typing import TYPE_CHECKING, Any
 import aiohttp
 
 from .client_diagnostics import diagnostic_error as _diagnostic_error
-from .client_types import MeasurementValue
+from .client_types import DHEError, MeasurementValue
+from .http_helpers import (
+    IDENTITY_ENCODING_HEADERS,
+    WEB_PAGE_RESPONSE_LIMIT,
+    read_bounded_response,
+)
 from .protocol import ID_PROTOCOL_VERSION
 
 _LOGGER = logging.getLogger(__name__)
@@ -73,11 +78,15 @@ class DHEClientWebVersionMixin:
             timeout = aiohttp.ClientTimeout(
                 total=WEB_INTERFACE_VERSION_TIMEOUT_SECONDS,
             )
-            async with self._session.get(self.base_url, timeout=timeout) as response:
-                if response.status >= 400:
+            async with self._session.get(
+                self.base_url, timeout=timeout, allow_redirects=False,
+                auto_decompress=False, headers=IDENTITY_ENCODING_HEADERS,
+            ) as response:
+                if not 200 <= response.status < 300:
                     return
-                html = await response.text()
+                html = (await read_bounded_response(response, WEB_PAGE_RESPONSE_LIMIT)).decode("utf-8")
         except (
+            DHEError,
             UnicodeDecodeError,
             aiohttp.ClientError,
             OSError,

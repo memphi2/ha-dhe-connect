@@ -2,22 +2,29 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
 import time
 from collections.abc import Mapping, Sequence
+from copy import deepcopy
 from dataclasses import dataclass
 from ipaddress import ip_address
 from pathlib import Path
 from typing import Any
 
+from homeassistant.const import EVENT_HOMEASSISTANT_FINAL_WRITE
 from homeassistant.core import HomeAssistant
 
+from .async_helpers import create_background_task
 from .const import DEFAULT_NAME, DEFAULT_PORT, DOMAIN
 from .setup_scan import DHEHostCandidate
 
 DISCOVERY_DATA_KEY = f"{DOMAIN}_discovery"
+DISCOVERY_LOCK_KEY = f"{DOMAIN}_discovery_lock"
+DISCOVERY_WRITER_KEY = f"{DOMAIN}_discovery_writer"
+DISCOVERY_SAVE_DELAY_SECONDS = 5.0
 DISCOVERY_CACHE_FILE = ".storage/stiebel_dhe_connect_discovery_cache"
 DISCOVERY_CACHE_VERSION = 1
 DISCOVERY_CACHE_TTL_SECONDS = 24 * 60 * 60
@@ -28,6 +35,16 @@ DISCOVERY_MIN_PROMPT_CONFIDENCE = 55
 
 _DHE_SERVICE_SUFFIX = "._ste-dhe._tcp.local"
 _LOGGER = logging.getLogger(__name__)
+
+
+@dataclass(slots=True)
+class _DiscoveryWriter:
+    """Own at most one deferred cache write for the HA instance."""
+
+    handle: asyncio.TimerHandle | None = None
+    task: asyncio.Task[None] | None = None
+    dirty: bool = False
+    stopping: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,6 +166,20 @@ def scan_discovery_record(candidate: DHEHostCandidate) -> DiscoveryRecord:
 
 async def async_load_discovery_cache(hass: HomeAssistant) -> dict[str, Any]:
     """Load and cache discovery state in hass.data."""
+    async with _discovery_lock(hass):
+        return await _async_load_discovery_cache(hass)
+
+
+def _discovery_lock(hass: HomeAssistant) -> asyncio.Lock:
+    """Serialize first load and disk writes for this HA instance."""
+    data = _hass_data(hass)
+    lock = data.get(DISCOVERY_LOCK_KEY)
+    if not isinstance(lock, asyncio.Lock):
+        lock = data[DISCOVERY_LOCK_KEY] = asyncio.Lock()
+    return lock
+
+
+async def _async_load_discovery_cache(hass: HomeAssistant) -> dict[str, Any]:
     hass_data = _hass_data(hass)
     cached = hass_data.get(DISCOVERY_DATA_KEY)
     if isinstance(cached, dict):
@@ -200,7 +231,7 @@ async def async_record_discovery(
     )
     records[record.key] = updated
     _prune_payload(payload, now=now)
-    await _async_save_discovery_cache(hass, payload)
+    _async_schedule_discovery_save(hass)
     if discovery_debug_enabled():
         _LOGGER.debug(
             "DHE discovery update: source=%s confidence=%s preferred=%s "
@@ -245,7 +276,7 @@ async def async_record_scan_discoveries(
             prompted=False,
         )
     _prune_payload(payload, now=now)
-    await _async_save_discovery_cache(hass, payload)
+    _async_schedule_discovery_save(hass)
 
 
 async def async_recent_discovery_prompt_seen(
@@ -507,6 +538,66 @@ def _record_cache_update(
     return updated
 
 
+def _async_schedule_discovery_save(hass: HomeAssistant) -> None:
+    data = _hass_data(hass)
+    writer = data.get(DISCOVERY_WRITER_KEY)
+    if not isinstance(writer, _DiscoveryWriter):
+        writer = data[DISCOVERY_WRITER_KEY] = _DiscoveryWriter()
+
+        async def _stop(_event: Any) -> None:
+            writer.stopping = True
+            try:
+                await async_flush_discovery_cache(hass)
+            except OSError as err:
+                _LOGGER.warning("Could not save discovery cache at shutdown (%s)", type(err).__name__)
+
+        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_FINAL_WRITE, _stop)
+    if writer.stopping:
+        return
+    writer.dirty = True
+    if writer.handle is not None or writer.task is not None:
+        return
+
+    async def _save() -> None:
+        try:
+            await async_flush_discovery_cache(hass)
+        except OSError as err:
+            # Retry on the next observation or final write, not in an idle loop.
+            _LOGGER.warning("Could not save discovery cache (%s)", type(err).__name__)
+            return
+        finally:
+            writer.task = None
+        if writer.dirty:
+            _async_schedule_discovery_save(hass)
+
+    def _start() -> None:
+        writer.handle = None
+        task = create_background_task(hass, _save(), f"{DOMAIN}_discovery_save")
+        writer.task = None if task.done() else task
+
+    writer.handle = asyncio.get_running_loop().call_later(DISCOVERY_SAVE_DELAY_SECONDS, _start)
+
+
+async def async_flush_discovery_cache(hass: HomeAssistant) -> None:
+    """Flush the newest snapshot without overlapping an in-flight disk write."""
+    writer = _hass_data(hass).get(DISCOVERY_WRITER_KEY)
+    if not isinstance(writer, _DiscoveryWriter):
+        return
+    if writer.handle is not None:
+        writer.handle.cancel()
+        writer.handle = None
+    if writer.task is not None and writer.task is not asyncio.current_task():
+        await asyncio.shield(writer.task)
+    if not writer.dirty:
+        return
+    writer.dirty = False
+    try:
+        await _async_save_discovery_cache(hass, _hass_data(hass)[DISCOVERY_DATA_KEY])
+    except BaseException:
+        writer.dirty = True
+        raise
+
+
 async def _async_save_discovery_cache(
     hass: HomeAssistant,
     payload: Mapping[str, Any],
@@ -515,14 +606,27 @@ async def _async_save_discovery_cache(
     if path is None:
         return
 
-    def _write() -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path = path.with_name(f"{path.name}.tmp")
-        with tmp_path.open("w", encoding="utf-8") as file:
-            json.dump(payload, file, sort_keys=True)
-        tmp_path.replace(path)
+    async with _discovery_lock(hass):
+        snapshot = deepcopy(payload)
 
-    await hass.async_add_executor_job(_write)
+        def _write() -> None:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp_path = path.with_name(f"{path.name}.tmp")
+            try:
+                with tmp_path.open("w", encoding="utf-8") as file:
+                    json.dump(snapshot, file, sort_keys=True)
+                tmp_path.replace(path)
+            finally:
+                tmp_path.unlink(missing_ok=True)
+
+        job = hass.async_add_executor_job(_write)
+        try:
+            await asyncio.shield(job)
+        except asyncio.CancelledError:
+            # Cancelling an await does not stop the executor thread. Keep the
+            # lock until its atomic replacement has finished.
+            await job
+            raise
 
 
 def _normalized_payload(payload: Mapping[str, Any]) -> dict[str, Any]:

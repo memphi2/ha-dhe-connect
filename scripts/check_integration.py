@@ -4,27 +4,32 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 import sys
 import tomllib
-import unittest
 from pathlib import Path
 
+import yaml
 from packaging.requirements import InvalidRequirement, Requirement
 from packaging.specifiers import SpecifierSet
 from packaging.utils import canonicalize_name
 from packaging.version import InvalidVersion, Version
 
+try:
+    from scripts.ha_baseline import read_baseline
+except ModuleNotFoundError:
+    from ha_baseline import read_baseline
+
 ROOT = Path(__file__).resolve().parents[1]
 INTEGRATION = ROOT / "custom_components" / "stiebel_dhe_connect"
+INTEGRATION_NAME = "Stiebel Eltron DHE Connect"
 TRANSLATIONS = INTEGRATION / "translations"
 FIXTURE_ROOT = ROOT / "tests" / "fixtures"
 REPLAY_FIXTURE_NAME = "dhe_protocol_replay_sanitized.json"
 CLIENT_MODULE_MAX_BYTES = 50 * 1024
-MIN_HOMEASSISTANT_VERSION = "2026.10.1"
+MIN_HOMEASSISTANT_VERSION = "2026.10.4"
+NEXT_HOMEASSISTANT_SERIES = "2026.11"
 VALIDATION_PYTHON_VERSION = "3.14"
-AIOHTTP_CONSTRAINT = ">=3.14.4,<4"
-PROBATIO_CONSTRAINT = "==0.13.0"
-ZEROCONF_CONSTRAINT = "==0.151.5"
 SILVER_RULES = {
     # Bronze
     "action-setup",
@@ -71,13 +76,7 @@ NODE24_VALIDATION_ACTION_MAJORS = {
     "actions/setup-python": 7,
 }
 VALIDATION_DEPENDENCY_MINIMUMS = {
-    "aiohttp": AIOHTTP_CONSTRAINT,
-    "homeassistant": f"=={MIN_HOMEASSISTANT_VERSION}",
-    "probatio": PROBATIO_CONSTRAINT,
-    "pytest": "==9.0.3",
-    "pytest-homeassistant-custom-component": "==0.13.372",
-    "pytest-cov": "==7.1.0",
-    "zeroconf": ZEROCONF_CONSTRAINT,
+    "pytest-cov": ">=7.1,<8",
 }
 VALIDATION_TOOL_BOUNDS = {
     "mypy": ("2.4", "3"),
@@ -91,6 +90,7 @@ _USES_LINE_RE = re.compile(r"^\s*(?:-\s*)?uses:\s*\S+", re.MULTILINE)
 _MAJOR_VERSION_REF_RE = re.compile(r"^v(?P<major>\d+)(?:\.|$)")
 _MARKDOWN_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 README_REQUIRED_DOC_LINKS = {
+    "docs/installation.md",
     "docs/troubleshooting.md",
     "docs/examples.md",
     "docs/use-cases.md",
@@ -190,7 +190,8 @@ def check_manifest() -> str:
     manifest = _load_json(INTEGRATION / "manifest.json")
     required = {
         "domain": "stiebel_dhe_connect",
-        "name": "DHE Connect",
+        "name": INTEGRATION_NAME,
+        "categories": ["climate.water_heaters"],
         "config_flow": True,
         "iot_class": "local_push",
         "integration_type": "device",
@@ -208,7 +209,7 @@ def check_manifest() -> str:
 
 def check_hacs() -> None:
     hacs = _load_json(ROOT / "hacs.json")
-    if hacs.get("name") != "DHE Connect":
+    if hacs.get("name") != INTEGRATION_NAME:
         _fail("hacs.json name does not match the integration name")
     if hacs.get("homeassistant") != MIN_HOMEASSISTANT_VERSION:
         _fail(
@@ -228,7 +229,8 @@ def check_repository_files(version: str) -> None:
         "custom_components/stiebel_dhe_connect/services.yaml",
         "custom_components/stiebel_dhe_connect/quality_scale.yaml",
         "custom_components/stiebel_dhe_connect/brand/icon.png",
-        "custom_components/stiebel_dhe_connect/brand/logo.png",
+        "custom_components/stiebel_dhe_connect/brand/icon@2x.png",
+        "docs/installation.md",
         "docs/troubleshooting.md",
         "docs/validation.md",
         "docs/examples.md",
@@ -272,31 +274,57 @@ def check_lts_compatibility_policy() -> None:
     )
     if expected_readme_line not in readme:
         _fail("README minimum supported Home Assistant version is stale")
-    if f"homeassistant=={MIN_HOMEASSISTANT_VERSION}" not in requirements:
-        _fail("requirements.txt Home Assistant baseline is stale")
-    if f"aiohttp{AIOHTTP_CONSTRAINT}" not in requirements:
-        _fail("requirements.txt aiohttp runtime floor is stale")
+    check_requirement_includes(requirements)
+    check_homeassistant_baseline()
+    compatibility = read_baseline(ROOT / "requirements-ha-202610.txt")
+    if (
+        compatibility.version != Version(MIN_HOMEASSISTANT_VERSION)
+        or compatibility.legacy_helpers_version is None
+    ):
+        _fail("compatibility baseline must pin the minimum HA version and matching legacy helpers")
     if hacs.get("homeassistant") != MIN_HOMEASSISTANT_VERSION:
         _fail("hacs.json Home Assistant minimum is stale")
 
     expected_validation_rows = (
         f"| Minimum supported Home Assistant version | `{MIN_HOMEASSISTANT_VERSION}` |",
-        f"| Baseline Home Assistant fixture | `homeassistant=={MIN_HOMEASSISTANT_VERSION}` |",
+        "| Baseline Home Assistant fixture | `requirements-ha.txt` (core and matching test helpers) |",
         f"| Python validation runtime | `{VALIDATION_PYTHON_VERSION}` |",
+        "| Runtime dependency baseline | Supplied by the pinned Home Assistant core |",
         (
-            "| Runtime dependency baseline | "
-            f"`aiohttp{AIOHTTP_CONSTRAINT}`, "
-            f"`probatio{PROBATIO_CONSTRAINT}`, "
-            f"`zeroconf{ZEROCONF_CONSTRAINT}` |"
-        ),
-        (
-            "| HACS metadata | `hacs.json` declares "
+            "| Marketplace metadata | `hacs.json` declares "
             f"`homeassistant: {MIN_HOMEASSISTANT_VERSION}` |"
         ),
     )
     for row in expected_validation_rows:
         if row not in validation:
             _fail(f"docs/validation.md LTS matrix is missing or stale: {row}")
+    for library in ("aiohttp", "probatio", "zeroconf"):
+        if re.search(rf"^{library}\s*[<>=!~]", requirements, re.MULTILINE):
+            _fail(f"requirements.txt must not duplicate Home Assistant's {library} pin")
+
+
+def check_homeassistant_baseline() -> None:
+    """Allow preview-to-stable pin updates without duplicating exact versions."""
+    path = ROOT / "requirements-ha.txt"
+    if not path.is_file():
+        _fail("central Home Assistant baseline requirements-ha.txt is missing")
+    requirements = [
+        line.strip()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    series = NEXT_HOMEASSISTANT_SERIES
+    if len(requirements) != 2 or not re.fullmatch(
+        rf"homeassistant=={re.escape(series)}[.]\d+(?:(?:b|rc)\d+)?",
+        requirements[0],
+    ):
+        _fail("central HA baseline must pin core in the supported release series")
+    if not re.fullmatch(
+        r"pytest-home-assistant @ git\+https://github[.]com/home-assistant/core[.]git@"
+        r"[0-9a-f]{40}#subdirectory=packages/pytest-home-assistant",
+        requirements[1],
+    ):
+        _fail("central HA test helpers must be pinned to a full core commit SHA")
 
 
 def check_gold_evidence_docs() -> None:
@@ -440,35 +468,151 @@ def check_github_actions() -> None:
         _fail("validation workflow must keep scheduled Hassfest validation enabled")
     if "github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'" not in text:
         _fail("latest Home Assistant drift check must run on schedule and workflow_dispatch")
-    if "python -m pip install --upgrade homeassistant" not in text:
-        _fail("validation workflow must include a latest Home Assistant drift check")
+    if "python scripts/ha_baseline.py --resolve-latest /tmp/requirements-ha-latest.txt" not in text:
+        _fail("validation workflow must resolve a matching latest Home Assistant pair")
+    if "python -m pip install --upgrade -r /tmp/requirements-ha-latest.txt" not in text:
+        _fail("validation workflow must install the matching latest Home Assistant pair")
     if "python -m pip install -r requirements.txt" not in text:
         _fail("validation workflow must install requirements.txt")
     requirements_path = ROOT / "requirements.txt"
     if not requirements_path.exists():
         _fail("validation workflow installs requirements.txt but it is missing")
-    check_validation_dependencies(requirements_path.read_text(encoding="utf-8"))
+    check_requirement_includes(requirements_path.read_text(encoding="utf-8"))
+    check_validation_dependencies((ROOT / "requirements-tools.txt").read_text(encoding="utf-8"))
     if (
         "--disable" + "-warnings" in text
         or "ignore::" + "DeprecationWarning" in text
     ):
         _fail("validation workflow must not suppress deprecation warnings")
+    _check_workflow_execution(text, action_uses)
+
+
+def _check_workflow_execution(text: str, action_uses: list[tuple[str, str, str | None]]) -> None:
+    """Validate executable job/step structure, not strings in comments or names."""
+    try:
+        workflow = yaml.load(text, Loader=yaml.BaseLoader)
+    except yaml.YAMLError:
+        _fail("validation workflow must be valid YAML")
+    if not isinstance(workflow, dict) or not isinstance(workflow.get("jobs"), dict):
+        _fail("validation workflow must define jobs")
+    triggers = workflow.get("on", {})
+    if (
+        not isinstance(triggers, dict)
+        or not {"push", "pull_request", "workflow_dispatch", "schedule"} <= triggers.keys()
+        or {"cron": "0 4 1 * *"} not in (triggers.get("schedule") or [])
+    ):
+        _fail("validation workflow must enable push, PR, dispatch and monthly schedule triggers")
+    if triggers["push"] != {"branches": ["main"], "tags": ["v*"]}:
+        _fail("push validation must cover main and release tags without duplicating PR branches")
+    if triggers["pull_request"] not in (None, "", {}):
+        _fail("PR validation must not filter required checks")
+    if workflow.get("concurrency") != {
+        "group": "${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}",
+        "cancel-in-progress": "${{ github.event_name == 'pull_request' }}",
+    }:
+        _fail("validation must cancel superseded PR runs without cancelling other event types")
+    jobs = workflow["jobs"]
+    actual_uses = []
+    common_commands = (
+        "python -m pip check",
+        "python scripts/check_coverage.py",
+        "python scripts/check_deprecations.py",
+        "python scripts/check_privacy_markers.py",
+        "python scripts/check_integration.py",
+        "python scripts/check_translation_keys.py",
+        "python scripts/check_release_consistency.py",
+        "python scripts/check_typing.py",
+        "python -m ruff check custom_components/stiebel_dhe_connect tests scripts",
+    )
+    for name in ("hacs", "hassfest", "repository", "home-assistant-compat", "home-assistant-latest"):
+        job = jobs.get(name)
+        if not isinstance(job, dict):
+            _fail(f"validation workflow is missing job {name}")
+        expected_condition = (
+            "github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'"
+            if name == "home-assistant-latest" else None
+        )
+        if job.get("if") != expected_condition or job.get("continue-on-error", "false") != "false":
+            _fail(f"{name}: validation job must run on its required events and fail on errors")
+        steps = job.get("steps")
+        if not isinstance(steps, list) or not all(isinstance(step, dict) for step in steps):
+            _fail(f"{name}: validation steps must be a list of mappings")
+        active_steps = [step for step in steps if "if" not in step and step.get("continue-on-error", "false") == "false"]
+        for step in steps:
+            if "uses" in step:
+                actual_uses.append(step["uses"])
+        active_uses = [step["uses"].split("@")[0] for step in active_steps if isinstance(step.get("uses"), str)]
+        if "actions/checkout" not in active_uses:
+            _fail(f"{name}: checkout must run unconditionally")
+        if name in ("hacs", "hassfest"):
+            required_action = "hacs/action" if name == "hacs" else "home-assistant/actions/hassfest"
+            if required_action not in active_uses:
+                _fail(f"{name}: required validation action must run unconditionally")
+            continue
+        if not any(
+            step.get("uses", "").startswith("actions/setup-python@")
+            and step.get("with", {}).get("python-version") == VALIDATION_PYTHON_VERSION
+            for step in active_steps
+        ):
+            _fail(f"{name}: Python setup must use {VALIDATION_PYTHON_VERSION}")
+        commands = []
+        for step in active_steps:
+            if isinstance(step.get("run"), str):
+                try:
+                    commands.append(shlex.split(step["run"], comments=True))
+                except ValueError:
+                    _fail(f"{name}: invalid shell command")
+        required_commands = list(common_commands)
+        if name == "home-assistant-compat":
+            required_commands.extend((
+                "python -m pip install -r requirements-ha-202610.txt -r requirements-tools.txt",
+                "python scripts/ha_baseline.py --requirements requirements-ha-202610.txt",
+                "python scripts/check_runtime_soak.py --cycles 30 --idle-seconds 60",
+            ))
+        else:
+            required_commands.append("python -m pip install -r requirements.txt")
+        if name == "repository":
+            required_commands.append("python scripts/ha_baseline.py")
+        elif name == "home-assistant-latest":
+            required_commands.extend((
+                "python scripts/ha_baseline.py --resolve-latest /tmp/requirements-ha-latest.txt",
+                "python -m pip install --upgrade -r /tmp/requirements-ha-latest.txt",
+                "python scripts/ha_baseline.py --requirements /tmp/requirements-ha-latest.txt",
+                "python scripts/check_runtime_soak.py --cycles 30 --idle-seconds 60",
+            ))
+        for command in required_commands:
+            if shlex.split(command) not in commands:
+                _fail(f"{name}: missing unconditional command: {command}")
+    if sorted(actual_uses) != sorted(f"{name}@{ref}" for name, ref, _ in action_uses):
+        _fail("validation action pins must correspond to executable job steps")
+
+
+def check_requirement_includes(text: str) -> None:
+    """Keep the default environment limited to its HA pair and shared tools."""
+    lines = [line.strip() for line in text.splitlines()
+             if line.strip() and not line.lstrip().startswith("#")]
+    expected = {"-r requirements-ha.txt", "-r requirements-tools.txt"}
+    if len(lines) != len(expected) or set(lines) != expected:
+        _fail("requirements.txt must contain only the HA baseline and shared-tools includes, once each")
 
 
 def check_validation_dependencies(text: str) -> None:
     """Allow tool-floor updates inside reviewed bounds, not arbitrary upgrades."""
     requirements: dict[str, Requirement] = {}
+    allowed_dependencies = set(VALIDATION_DEPENDENCY_MINIMUMS) | set(VALIDATION_TOOL_BOUNDS)
     for line in text.splitlines():
         line = line.strip()
-        if not line or line.startswith(("#", "-r ")):
+        if not line or line.startswith("#"):
             continue
         try:
             requirement = Requirement(line)
         except InvalidRequirement:
-            _fail("requirements.txt contains an invalid requirement")
+            _fail("requirements-tools.txt contains an invalid requirement")
         name = canonicalize_name(requirement.name)
+        if name not in allowed_dependencies:
+            _fail(f"requirements-tools.txt contains unreviewed direct dependency {name!r}")
         if name in requirements:
-            _fail(f"requirements.txt contains duplicate dependency {name!r}")
+            _fail(f"requirements-tools.txt contains duplicate dependency {name!r}")
         if requirement.url or requirement.marker or requirement.extras:
             _fail(f"validation dependency {name!r} must be unconditional and from the index")
         requirements[name] = requirement
@@ -586,13 +730,6 @@ def check_compile() -> None:
             _fail(f"Python syntax check failed for {path.relative_to(ROOT)}: {err}")
 
 
-def check_unit_tests() -> None:
-    suite = unittest.defaultTestLoader.discover(str(ROOT / "tests"))
-    result = unittest.TextTestRunner(stream=sys.stdout, verbosity=1).run(suite)
-    if not result.wasSuccessful():
-        _fail("unit tests failed")
-
-
 def main() -> None:
     version = check_manifest()
     check_hacs()
@@ -606,7 +743,6 @@ def main() -> None:
     check_translations()
     check_type_gate_coverage()
     check_compile()
-    check_unit_tests()
     print("integration checks ok")
 
 

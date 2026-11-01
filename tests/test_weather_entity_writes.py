@@ -9,6 +9,7 @@ import types
 import unittest
 from datetime import UTC, datetime
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 try:
     from tests.test_aiohttp_stubs import _ensure_aiohttp_stub
@@ -39,6 +40,9 @@ def _ensure_additional_ha_stubs() -> None:
         weather_module.WeatherEntityFeature = WeatherEntityFeature
         sys.modules["homeassistant.components.weather"] = weather_module
         components_dict["weather"] = weather_module
+        weather_const = types.ModuleType("homeassistant.components.weather.const")
+        weather_const.WeatherEntityFeature = WeatherEntityFeature
+        sys.modules["homeassistant.components.weather.const"] = weather_const
 
     util_module = sys.modules.get("homeassistant.util")
     if util_module is None:
@@ -114,10 +118,27 @@ def _weather_state(*, tmax: float = 32.0) -> dict:
     }
 
 
-class TestWeatherEntityWrites(unittest.TestCase):
+class TestWeatherEntityWrites(unittest.IsolatedAsyncioTestCase):
     """Validate weather entity write throttling."""
 
-    def test_weather_entity_skips_duplicate_state_writes(self) -> None:
+    def test_malformed_weather_field_does_not_drop_valid_update(self) -> None:
+        module = _load_weather_module()
+        client = types.SimpleNamespace(host="127.0.0.1", port=8443,
+                                       device_identifier=None, available=True)
+        entity = module.StiebelDHEWeather("test-entry", "Test DHE", client)
+        writes = []
+        entity.async_write_ha_state = lambda: writes.append(entity._attr_native_temperature)
+        state = _weather_state(tmax="NaN")
+        state["simple_days"][0].update(icon_id_day="1e309", preci_morning="NaN")
+        entity._handle_weather_update(state)
+        self.assertEqual(writes, [21.0])
+        self.assertTrue(entity._attr_available)
+        self.assertNotIn("native_temperature", entity._forecast[0])
+        entity._handle_weather_update(_weather_state())
+        self.assertEqual(writes, [21.0, 26.5])
+
+
+    async def test_weather_entity_skips_duplicate_state_writes(self) -> None:
         weather_module = _load_weather_module()
         state = _weather_state()
 
@@ -134,18 +155,21 @@ class TestWeatherEntityWrites(unittest.TestCase):
             client=_FakeClient(),
         )
         writes: list[str | None] = []
-        listener_updates: list[tuple[str, ...]] = []
+        entity.hass = types.SimpleNamespace(
+            async_create_background_task=lambda coro, name: asyncio.create_task(coro, name=name)
+        )
         entity.async_write_ha_state = lambda: writes.append(entity._attr_condition)
-        entity.async_update_listeners = lambda value: listener_updates.append(value)
+        entity.async_update_listeners = AsyncMock()
         entity._async_subscription_started("daily")
 
         entity._handle_weather_update(_weather_state())
         entity._handle_weather_update(_weather_state())
         entity._handle_availability_update(True)
         entity._handle_availability_update(False)
+        await entity._forecast_listener_update_task
 
         self.assertEqual(writes, ["sunny", "sunny"])
-        self.assertEqual(listener_updates, [("daily",)])
+        entity.async_update_listeners.assert_awaited_once_with(("daily",))
         self.assertFalse(entity._attr_available)
 
     def test_weather_entity_skips_listener_task_without_forecast_listeners(self) -> None:
@@ -163,11 +187,10 @@ class TestWeatherEntityWrites(unittest.TestCase):
             def __init__(self) -> None:
                 self.tasks: list[asyncio.Task[object]] = []
 
-            def async_create_task(
+            def async_create_background_task(
                 self,
                 coro: object,
-                *,
-                name: str | None = None,
+                name: str,
             ) -> asyncio.Task[object]:
                 task = asyncio.create_task(coro, name=name)
                 self.tasks.append(task)
@@ -211,11 +234,10 @@ class TestWeatherEntityWrites(unittest.TestCase):
             def __init__(self) -> None:
                 self.tasks: list[asyncio.Task[object]] = []
 
-            def async_create_task(
+            def async_create_background_task(
                 self,
                 coro: object,
-                *,
-                name: str | None = None,
+                name: str,
             ) -> asyncio.Task[object]:
                 task = asyncio.create_task(coro, name=name)
                 self.tasks.append(task)
@@ -289,7 +311,7 @@ class TestWeatherEntityWrites(unittest.TestCase):
         self.assertFalse(entity._has_forecast_listeners())
         self.assertFalse(entity._forecast_listener_update_pending)
 
-    def test_weather_write_signature_ignores_unrecorded_list_payloads(self) -> None:
+    def test_weather_write_signature_includes_unrecorded_list_payloads(self) -> None:
         weather_module = _load_weather_module()
         entity = weather_module.StiebelDHEWeather.__new__(
             weather_module.StiebelDHEWeather
@@ -321,7 +343,33 @@ class TestWeatherEntityWrites(unittest.TestCase):
         self.assertIn("favorite_locations", entity._unrecorded_attributes)
         self.assertIn("forecast_results", entity._unrecorded_attributes)
         self.assertIn("int_names", entity._unrecorded_attributes)
-        self.assertEqual(first_signature, entity._weather_write_signature())
+        self.assertNotEqual(first_signature, entity._weather_write_signature())
+
+    def test_replaced_search_results_publish_without_forecast_notification(self) -> None:
+        from copy import deepcopy
+        from unittest.mock import Mock
+
+        weather_module = _load_weather_module()
+        client = types.SimpleNamespace(
+            host="127.0.0.1", port=8443, device_identifier=None, available=True,
+        )
+        entity = weather_module.StiebelDHEWeather("test-entry", "Test DHE", client)
+        snapshots = []
+        entity.async_write_ha_state = lambda: snapshots.append(
+            deepcopy(entity._attr_extra_state_attributes)
+        )
+        entity._schedule_forecast_listener_update = Mock()
+        state = _weather_state()
+        state["forecast_results"] = [{"Name": "First", "LocationId": "ID=1"}]
+        entity._handle_weather_update(state)
+        entity._schedule_forecast_listener_update.reset_mock()
+        state["forecast_results"] = [{"Name": "Second", "LocationId": "ID=2"}]
+        entity._handle_weather_update(state)
+        entity._handle_weather_update(state)
+
+        self.assertEqual(len(snapshots), 2)
+        self.assertEqual(snapshots[-1]["forecast_results"][0]["name"], "Second")
+        entity._schedule_forecast_listener_update.assert_not_called()
 
 
 if __name__ == "__main__":

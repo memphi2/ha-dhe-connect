@@ -6,10 +6,12 @@ import json
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stderr
+from contextlib import ExitStack, redirect_stderr
 from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
+
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -17,20 +19,42 @@ if str(ROOT) not in sys.path:
 
 from scripts import check_integration
 
+
+class TestRepositoryCheckEntryPoint(unittest.TestCase):
+    def test_repository_guards_do_not_repeat_the_pytest_suite(self):
+        with ExitStack() as stack:
+            checks = [stack.enter_context(patch.object(check_integration, name))
+                      for name in (
+                          "check_manifest", "check_hacs", "check_repository_files",
+                          "check_lts_compatibility_policy", "check_gold_evidence_docs",
+                          "check_quality_scale", "check_replay_fixtures", "check_github_actions",
+                          "check_client_module_size", "check_translations",
+                          "check_type_gate_coverage", "check_compile",
+                      )]
+            discover = stack.enter_context(patch.object(unittest.defaultTestLoader, "discover"))
+            check_integration.main()
+            for check in checks:
+                check.assert_called_once()
+            discover.assert_not_called()
+
 VALIDATION_INSTALL_STEPS = """
 	                  - run: python -m pip install -r requirements.txt
 """
 VALIDATION_REQUIREMENTS_TEXT = """
-aiohttp>=3.14.4,<4
-homeassistant==2026.10.1
 mypy>=2.4,<3
-probatio==0.13.0
-pytest==9.0.3
-pytest-homeassistant-custom-component==0.13.372
-pytest-cov==7.1.0
+pytest-cov>=7.1,<8
 ruff>=0.17,<0.18
-zeroconf==0.151.5
 """
+VALIDATION_INCLUDES_TEXT = "-r requirements-ha.txt\n-r requirements-tools.txt\n"
+COMPAT_HA_REQUIREMENTS_TEXT = (
+    "homeassistant==2026.10.4\npytest-homeassistant-custom-component==0.13.375\n"
+)
+VALIDATION_HA_REQUIREMENTS_TEXT = (
+    "homeassistant==2026.11.0b1\n"
+    "pytest-home-assistant @ git+https://github.com/home-assistant/core.git@"
+    "6cfd47af9851a1552ad6f58c926b5814689a9f1d"
+    "#subdirectory=packages/pytest-home-assistant\n"
+)
 
 
 def _write_validate_workflow(root: Path, content: str) -> None:
@@ -43,10 +67,15 @@ def _write_validate_workflow(root: Path, content: str) -> None:
             "    - cron: \"0 4 1 * *\"\n"
             "  workflow_dispatch:\n\n"
             + content
+            if "jobs:" not in content else content
         ),
         encoding="utf-8",
     )
-    (root / "requirements.txt").write_text(VALIDATION_REQUIREMENTS_TEXT, encoding="utf-8")
+    (root / "requirements.txt").write_text(VALIDATION_INCLUDES_TEXT, encoding="utf-8")
+    (root / "requirements-tools.txt").write_text(VALIDATION_REQUIREMENTS_TEXT, encoding="utf-8")
+    (root / "requirements-ha.txt").write_text(
+        VALIDATION_HA_REQUIREMENTS_TEXT, encoding="utf-8"
+    )
 
 
 def _write_type_gate_fixture(root: Path, files: list[str]) -> None:
@@ -91,11 +120,12 @@ def _write_repository_files_fixture(
     (integration / "services.yaml").write_text("{}", encoding="utf-8")
     (integration / "quality_scale.yaml").write_text("rules: {}\n", encoding="utf-8")
     (integration / "brand" / "icon.png").write_bytes(b"png")
-    (integration / "brand" / "logo.png").write_bytes(b"png")
+    (integration / "brand" / "icon@2x.png").write_bytes(b"png")
 
     docs = root / "docs"
     docs.mkdir(parents=True, exist_ok=True)
     for name in (
+        "installation.md",
         "troubleshooting.md",
         "validation.md",
         "examples.md",
@@ -106,13 +136,17 @@ def _write_repository_files_fixture(
         (docs / name).write_text(f"# {name}\n", encoding="utf-8")
 
     (root / "LICENSE").write_text("MIT\n", encoding="utf-8")
-    (root / "hacs.json").write_text('{"name":"DHE Connect","render_readme":true}\n', encoding="utf-8")
+    (root / "hacs.json").write_text(
+        json.dumps({"name": check_integration.INTEGRATION_NAME, "render_readme": True}),
+        encoding="utf-8",
+    )
     (root / "README.md").write_text(
         (
             "# README\n\n"
             f"Current version: `{version}`\n\n"
             "### Removal\n\n"
             "## Documentation\n\n"
+            "- [Installation and updates](docs/installation.md)\n"
             "- [Troubleshooting guide](docs/troubleshooting.md)\n"
             "- [Examples](docs/examples.md)\n"
             "- [Use cases](docs/use-cases.md)\n"
@@ -135,7 +169,6 @@ def _write_repository_files_fixture(
 
 def _write_lts_policy_fixture(root: Path) -> None:
     version = check_integration.MIN_HOMEASSISTANT_VERSION
-    aiohttp = check_integration.AIOHTTP_CONSTRAINT
     python_version = check_integration.VALIDATION_PYTHON_VERSION
     (root / "README.md").write_text(
         (
@@ -153,22 +186,27 @@ def _write_lts_policy_fixture(root: Path) -> None:
             "| Surface | Current release gate |\n"
             "|---|---|\n"
             f"| Minimum supported Home Assistant version | `{version}` |\n"
-            f"| Baseline Home Assistant fixture | `homeassistant=={version}` |\n"
+            "| Baseline Home Assistant fixture | `requirements-ha.txt` (core and matching test helpers) |\n"
             f"| Python validation runtime | `{python_version}` |\n"
-            "| Runtime dependency baseline | "
-            f"`aiohttp{aiohttp}`, `probatio==0.13.0`, `zeroconf==0.151.5` |\n"
-            f"| HACS metadata | `hacs.json` declares `homeassistant: {version}` |\n"
+            "| Runtime dependency baseline | Supplied by the pinned Home Assistant core |\n"
+            f"| Marketplace metadata | `hacs.json` declares `homeassistant: {version}` |\n"
         ),
         encoding="utf-8",
     )
     (root / "requirements.txt").write_text(
-        f"aiohttp{aiohttp}\nhomeassistant=={version}\n",
+        VALIDATION_INCLUDES_TEXT,
         encoding="utf-8",
+    )
+    (root / "requirements-ha-202610.txt").write_text(
+        COMPAT_HA_REQUIREMENTS_TEXT, encoding="utf-8"
+    )
+    (root / "requirements-ha.txt").write_text(
+        VALIDATION_HA_REQUIREMENTS_TEXT, encoding="utf-8"
     )
     (root / "hacs.json").write_text(
         json.dumps(
             {
-                "name": "DHE Connect",
+                "name": check_integration.INTEGRATION_NAME,
                 "homeassistant": version,
                 "render_readme": True,
             }
@@ -179,6 +217,55 @@ def _write_lts_policy_fixture(root: Path) -> None:
 
 class TestCheckIntegration(unittest.TestCase):
     """Validate repository guard helpers."""
+
+    def test_manifest_requires_device_category_not_entity_domains(self) -> None:
+        manifest = {
+            "domain": "stiebel_dhe_connect",
+            "name": check_integration.INTEGRATION_NAME,
+            "categories": ["climate.water_heaters"],
+            "config_flow": True,
+            "iot_class": "local_push",
+            "integration_type": "device",
+            "requirements": [],
+            "version": "2.0.10",
+        }
+        with patch.object(check_integration, "_load_json", return_value=manifest):
+            self.assertEqual(check_integration.check_manifest(), manifest["version"])
+            for categories in (None, [], "climate.water_heaters", ["Climate"], ["sensor"]):
+                with self.subTest(categories=categories), redirect_stderr(StringIO()):
+                    manifest["categories"] = categories
+                    with self.assertRaises(SystemExit):
+                        check_integration.check_manifest()
+
+    def test_ha_baseline_accepts_preview_and_stable_without_other_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            for version in ("2026.11.0b1", "2026.11.0rc1", "2026.11.0", "2026.11.4"):
+                with self.subTest(version=version):
+                    (root / "requirements-ha.txt").write_text(
+                        VALIDATION_HA_REQUIREMENTS_TEXT.replace("2026.11.0b1", version),
+                        encoding="utf-8",
+                    )
+                    with patch.object(check_integration, "ROOT", root):
+                        check_integration.check_homeassistant_baseline()
+
+    def test_ha_baseline_rejects_old_series_and_floating_helpers(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            for bad in (
+                VALIDATION_HA_REQUIREMENTS_TEXT.replace("2026.11.0b1", "2026.10.4"),
+                VALIDATION_HA_REQUIREMENTS_TEXT.replace("2026.11.0b1", "2026.12.0"),
+                VALIDATION_HA_REQUIREMENTS_TEXT.replace(
+                    "6cfd47af9851a1552ad6f58c926b5814689a9f1d", "dev"
+                ),
+            ):
+                with self.subTest(requirements=bad):
+                    (root / "requirements-ha.txt").write_text(bad, encoding="utf-8")
+                    with (
+                        patch.object(check_integration, "ROOT", root),
+                        redirect_stderr(StringIO()), self.assertRaises(SystemExit),
+                    ):
+                        check_integration.check_homeassistant_baseline()
 
     def test_validation_tool_floor_updates_within_supported_bounds(self) -> None:
         for dependency, versions in (
@@ -213,7 +300,7 @@ class TestCheckIntegration(unittest.TestCase):
     def test_validation_dependencies_reject_duplicates_and_comment_only_pins(self) -> None:
         for text in (
             VALIDATION_REQUIREMENTS_TEXT + "mypy>=2.4.1,<3\n",
-            VALIDATION_REQUIREMENTS_TEXT.replace("pytest==9.0.3", "# pytest==9.0.3"),
+            VALIDATION_REQUIREMENTS_TEXT.replace("pytest-cov>=7.1,<8", "# pytest-cov>=7.1,<8"),
         ):
             with (
                 self.subTest(text=text),
@@ -221,6 +308,62 @@ class TestCheckIntegration(unittest.TestCase):
                 self.assertRaises(SystemExit),
             ):
                 check_integration.check_validation_dependencies(text)
+
+    def test_validation_dependencies_reject_unreviewed_direct_requirements(self) -> None:
+        for dependency in (
+            "aiohttp>=3.14,<4", "probatio==0.13.0", "zeroconf==0.151.5",
+            "pytest==9.0.3", "homeassistant==2026.11.0",
+            "pytest-homeassistant-custom-component==0.13.372", "requests",
+            "AIOHTTP", "pytest_home_assistant",
+        ):
+            with (
+                self.subTest(dependency=dependency),
+                redirect_stderr(StringIO()),
+                self.assertRaises(SystemExit),
+            ):
+                check_integration.check_validation_dependencies(
+                    VALIDATION_REQUIREMENTS_TEXT + dependency + "\n"
+                )
+
+    def test_validation_dependencies_require_only_the_central_baseline_include(self) -> None:
+        for include in (
+            "", "# -r requirements-ha.txt", "-r unreviewed.txt",
+            "-r requirements-ha.txt\n-r unreviewed.txt",
+            "-r requirements-ha.txt\n-r requirements-ha.txt",
+            "-r requirements-ha.txt\n-c constraints.txt",
+            "-r requirements-ha.txt\n--requirement=unreviewed.txt",
+        ):
+            with (
+                self.subTest(include=include),
+                redirect_stderr(StringIO()),
+                self.assertRaises(SystemExit),
+            ):
+                check_integration.check_requirement_includes(
+                    VALIDATION_INCLUDES_TEXT.replace("-r requirements-ha.txt", include)
+                )
+
+    def test_dependabot_keeps_quarterly_grouped_version_updates(self) -> None:
+        config = yaml.safe_load((ROOT / ".github/dependabot.yml").read_text(encoding="utf-8"))
+        self.assertEqual(config["version"], 2)
+        self.assertEqual(len(config["updates"]), 2)
+        updates = {entry["package-ecosystem"]: entry for entry in config["updates"]}
+        self.assertEqual(set(updates), {"github-actions", "pip"})
+        for ecosystem, entry in updates.items():
+            with self.subTest(ecosystem=ecosystem):
+                self.assertEqual(entry["directory"], "/")
+                self.assertEqual(entry["schedule"]["interval"], "quarterly")
+                self.assertNotIn("day", entry["schedule"])
+                self.assertEqual(entry["open-pull-requests-limit"], 1)
+                self.assertNotIn("target-branch", entry)
+                groups = list(entry["groups"].values())
+                self.assertEqual(len(groups), 1)
+                self.assertEqual(groups[0]["applies-to"], "version-updates")
+                self.assertEqual(groups[0]["patterns"], ["*"])
+                for ignored in entry.get("ignore", []):
+                    self.assertNotIn("versions", ignored)
+                    self.assertTrue(ignored.get("update-types"))
+        python_group = next(iter(updates["pip"]["groups"].values()))
+        self.assertEqual(set(python_group["update-types"]), {"minor", "patch"})
 
     def test_validation_ruff_bounds_do_not_allow_unsupported_minor(self) -> None:
         for invalid in (">=0.16,<0.18", ">=0.17,<0.19", ">=0.17.3", ">=0.18,<0.18"):
@@ -238,26 +381,55 @@ class TestCheckIntegration(unittest.TestCase):
             root = Path(temp_dir)
             _write_validate_workflow(
                 root,
-                """
-                steps:
-                  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-                  - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-                    with:
-                      python-version: "3.14"
-                  - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
-                  - uses: home-assistant/actions/hassfest@cd6f3635a740c84d8a14f6121a90068b8ece6bf6
-                  - run: python -m pip install -r requirements.txt
-                  - run: python scripts/check_deprecations.py
-                  - run: python scripts/check_privacy_markers.py
-                  - run: python scripts/check_translation_keys.py
-                  - run: python scripts/check_release_consistency.py
-                  - if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-                    run: python -m pip install --upgrade homeassistant
-                """,
+                (ROOT / ".github/workflows/validate.yml").read_text(encoding="utf-8"),
             )
 
             with patch.object(check_integration, "ROOT", root):
                 check_integration.check_github_actions()
+
+    def test_workflow_guards_require_executable_checks_in_each_test_job(self) -> None:
+        original = (ROOT / ".github/workflows/validate.yml").read_text(encoding="utf-8")
+        for job in ("repository", "home-assistant-compat", "home-assistant-latest"):
+            for command in ("python scripts/check_coverage.py", "python -m pip check"):
+                for replacement in (f"run: true # {command}", f"if: false\n        run: {command}", f"continue-on-error: true\n        run: {command}"):
+                    with self.subTest(job=job, command=command, replacement=replacement), tempfile.TemporaryDirectory() as temp_dir:
+                        root = Path(temp_dir)
+                        before, after = original.split(f"  {job}:", 1)
+                        modified = before + f"  {job}:" + after.replace(f"run: {command}", replacement, 1)
+                        _write_validate_workflow(root, modified)
+                        with patch.object(check_integration, "ROOT", root), redirect_stderr(StringIO()), self.assertRaisesRegex(SystemExit, "1"):
+                            check_integration.check_github_actions()
+
+    def test_workflow_requires_baseline_verification_and_active_jobs(self) -> None:
+        original = (ROOT / ".github/workflows/validate.yml").read_text(encoding="utf-8")
+        for old, new in (
+            ("run: python scripts/ha_baseline.py\n", "run: true # python scripts/ha_baseline.py\n"),
+            ("run: python scripts/ha_baseline.py --requirements", "run: echo python scripts/ha_baseline.py --requirements"),
+            ("  repository:\n", "  repository:\n    if: false\n"),
+            ("  hacs:\n", "  hacs:\n    if: false\n"),
+            ("  hassfest:\n", "  hassfest:\n    continue-on-error: true\n"),
+            ("  push:\n", "  # push:\n"),
+        ):
+            with self.subTest(old=old), tempfile.TemporaryDirectory() as temp_dir:
+                root = Path(temp_dir)
+                _write_validate_workflow(root, original.replace(old, new, 1))
+                with patch.object(check_integration, "ROOT", root), redirect_stderr(StringIO()), self.assertRaises(SystemExit):
+                    check_integration.check_github_actions()
+
+    def test_workflow_keeps_pr_main_and_tag_checks_without_duplicate_branch_runs(self) -> None:
+        original = (ROOT / ".github/workflows/validate.yml").read_text(encoding="utf-8")
+        for old, new in (
+            ("branches: [main]", "branches: ['*']"),
+            ("tags: ['v*']", "tags: []"),
+            ("  pull_request:\n", "  pull_request:\n    paths: ['docs/**']\n"),
+            ("${{ github.event_name == 'pull_request' }}", "true"),
+            ("-${{ github.event_name }}-", "-"),
+        ):
+            with self.subTest(old=old), tempfile.TemporaryDirectory() as temp_dir:
+                root = Path(temp_dir)
+                _write_validate_workflow(root, original.replace(old, new, 1))
+                with patch.object(check_integration, "ROOT", root), redirect_stderr(StringIO()), self.assertRaises(SystemExit):
+                    check_integration.check_github_actions()
 
     def test_github_actions_rejects_unapproved_action(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -383,7 +555,7 @@ class TestCheckIntegration(unittest.TestCase):
             ), self.assertRaises(SystemExit):
                 check_integration.check_github_actions()
 
-    def test_github_actions_rejects_stale_fixture_helper(self) -> None:
+    def test_github_actions_rejects_stale_tool_dependency(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             _write_validate_workflow(
@@ -401,11 +573,11 @@ class TestCheckIntegration(unittest.TestCase):
                   - run: python scripts/check_release_consistency.py
                 """,
             )
-            requirements = root / "requirements.txt"
+            requirements = root / "requirements-tools.txt"
             requirements.write_text(
                 requirements.read_text(encoding="utf-8").replace(
-                    "pytest-homeassistant-custom-component==0.13.372",
-                    "pytest-homeassistant-custom-component==0.13.371",
+                    "mypy>=2.4,<3",
+                    "mypy>=2.3,<3",
                 ),
                 encoding="utf-8",
             )
@@ -623,7 +795,7 @@ class TestCheckIntegration(unittest.TestCase):
             (root / "hacs.json").write_text(
                 json.dumps(
                     {
-                        "name": "DHE Connect",
+                        "name": check_integration.INTEGRATION_NAME,
                         "homeassistant": check_integration.MIN_HOMEASSISTANT_VERSION,
                         "render_readme": True,
                     }
@@ -640,7 +812,7 @@ class TestCheckIntegration(unittest.TestCase):
             (root / "hacs.json").write_text(
                 json.dumps(
                     {
-                        "name": "DHE Connect",
+                        "name": check_integration.INTEGRATION_NAME,
                         "homeassistant": "2026.5.0",
                         "render_readme": True,
                     }
@@ -662,6 +834,24 @@ class TestCheckIntegration(unittest.TestCase):
 
             with patch.object(check_integration, "ROOT", root):
                 check_integration.check_lts_compatibility_policy()
+
+    def test_lts_policy_rejects_duplicated_ha_runtime_pins(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            for library in ("aiohttp", "probatio", "zeroconf"):
+                with self.subTest(library=library):
+                    _write_lts_policy_fixture(root)
+                    (root / "requirements.txt").write_text(
+                        f"-r requirements-ha.txt\n{library}==0.0.0\n",
+                        encoding="utf-8",
+                    )
+                    stderr = StringIO()
+                    with (
+                        patch.object(check_integration, "ROOT", root),
+                        redirect_stderr(stderr), self.assertRaises(SystemExit),
+                    ):
+                        check_integration.check_lts_compatibility_policy()
+                    self.assertIn("must contain only", stderr.getvalue())
 
     def test_lts_policy_rejects_stale_readme_baseline(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -686,8 +876,8 @@ class TestCheckIntegration(unittest.TestCase):
             validation = root / "docs" / "validation.md"
             validation.write_text(
                 validation.read_text(encoding="utf-8").replace(
-                    "homeassistant==2026.10.1",
-                    "homeassistant==2026.9.4",
+                    "`requirements-ha.txt`",
+                    "`outdated-requirements.txt`",
                 ),
                 encoding="utf-8",
             )

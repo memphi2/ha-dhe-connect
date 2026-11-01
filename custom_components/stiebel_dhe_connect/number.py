@@ -371,6 +371,11 @@ class StiebelDHENumber(StiebelDHEEntityMixin, RestoreNumber):
             )
         self._attr_extra_state_attributes = attributes
 
+    @callback
+    def async_entity_id_changed(self, old_entity_id: str) -> None:
+        """Keep device subscriptions active when the entity ID changes in place."""
+        super().async_entity_id_changed(old_entity_id)
+
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE updates and start the persistent session."""
         self.async_on_remove(

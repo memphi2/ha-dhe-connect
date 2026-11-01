@@ -30,6 +30,7 @@ from .client_value_helpers import (
 )
 from .client_weather_commands import DHEClientWeatherCommandsMixin
 from .client_wellness_timer_commands import DHEClientWellnessTimerCommandsMixin
+from .entity_state_helpers import coerce_float
 from .protocol import (
     CO2_EMISSION_MAX,
     ELECTRICITY_PRICE_MAX,
@@ -69,6 +70,8 @@ class DHEClientCommandsMixin(
         return next_address
 
     async def set_temperature(self, temperature: float) -> float:
+        if not math.isfinite(temperature):
+            raise DHEError("Temperature must be a finite number")
         requested = _round_to_half_c(_clamp(float(temperature), 20.0, 60.0))
         client = _command_context(self)
 
@@ -213,7 +216,10 @@ class DHEClientCommandsMixin(
 
     async def set_co2_emission(self, kg_per_kwh: float) -> float:
         client = _command_context(self)
-        value = round(_clamp(float(kg_per_kwh), 0.0, CO2_EMISSION_MAX), 3)
+        value = coerce_float(kg_per_kwh)
+        if value is None:
+            raise DHEError("CO2 emission must be a finite number")
+        value = round(_clamp(value, 0.0, CO2_EMISSION_MAX), 3)
         raw_value = client._co2_emission_to_raw(value)
         await client.write_odb_value(ID_CO2_EMISSION_RAW, raw_value)
         return value
@@ -226,10 +232,13 @@ class DHEClientCommandsMixin(
         *,
         max_value: float,
     ) -> float:
+        numeric = coerce_float(value)
+        if numeric is None:
+            raise DHEError("Price must be a finite number")
         client = _command_context(self)
         old_euros = client._last_measurements.get(euros_odb_id)
         old_cents = client._last_measurements.get(cents_odb_id)
-        total_cents = round(_clamp(float(value), 0.0, max_value) * 100)
+        total_cents = round(_clamp(numeric, 0.0, max_value) * 100)
         euros, cents = divmod(total_cents, 100)
         attempted_components: list[tuple[int, MeasurementValue]] = []
         try:

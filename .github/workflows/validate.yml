@@ -2,10 +2,16 @@ name: Validate
 
 on:
   push:
+    branches: [main]
+    tags: ['v*']
   pull_request:
   schedule:
     - cron: "0 4 1 * *"
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -48,8 +54,62 @@ jobs:
       - name: Install repository check dependencies
         run: python -m pip install -r requirements.txt
 
-      - name: Run unit tests
-        run: python -m pytest -q
+      - name: Verify installed dependency compatibility
+        run: python -m pip check
+
+      - name: Verify installed HA baseline
+        run: python scripts/ha_baseline.py
+
+      - name: Run tests and coverage gates
+        run: python scripts/check_coverage.py
+
+      - name: Run deprecation guard
+        run: python scripts/check_deprecations.py
+
+      - name: Run privacy marker guard
+        run: python scripts/check_privacy_markers.py
+
+      - name: Run integration checks
+        run: python scripts/check_integration.py
+
+      - name: Run translation key checks
+        run: python scripts/check_translation_keys.py
+
+      - name: Run release consistency check
+        run: python scripts/check_release_consistency.py
+
+      - name: Run type checks
+        run: python scripts/check_typing.py
+
+      - name: Run Ruff
+        run: python -m ruff check custom_components/stiebel_dhe_connect tests scripts
+
+  home-assistant-compat:
+    name: Home Assistant 2026.10
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+
+      - name: Install stable compatibility dependencies
+        run: python -m pip install -r requirements-ha-202610.txt -r requirements-tools.txt
+
+      - name: Verify installed dependency compatibility
+        run: python -m pip check
+
+      - name: Verify installed stable HA pair
+        run: python scripts/ha_baseline.py --requirements requirements-ha-202610.txt
+
+      - name: Run tests and coverage gates
+        run: python scripts/check_coverage.py
+
+      - name: Run isolated runtime soak
+        run: python scripts/check_runtime_soak.py --cycles 30 --idle-seconds 60
 
       - name: Run deprecation guard
         run: python scripts/check_deprecations.py
@@ -88,14 +148,28 @@ jobs:
       - name: Install baseline repository check dependencies
         run: python -m pip install -r requirements.txt
 
-      - name: Upgrade to latest Home Assistant
-        run: python -m pip install --upgrade homeassistant
+      - name: Resolve latest Home Assistant and matching test helpers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/ha_baseline.py --resolve-latest /tmp/requirements-ha-latest.txt
+
+      - name: Install latest Home Assistant and matching test helpers
+        run: python -m pip install --upgrade -r /tmp/requirements-ha-latest.txt
+
+      - name: Verify installed dependency compatibility
+        run: python -m pip check
+
+      - name: Verify installed latest HA pair
+        run: python scripts/ha_baseline.py --requirements /tmp/requirements-ha-latest.txt
 
       - name: Show Home Assistant version
         run: python -c "import homeassistant.const as const; print(const.__version__)"
 
-      - name: Run unit tests
-        run: python -m pytest -q
+      - name: Run tests and coverage gates
+        run: python scripts/check_coverage.py
+
+      - name: Run isolated runtime soak
+        run: python scripts/check_runtime_soak.py --cycles 30 --idle-seconds 60
 
       - name: Run deprecation guard
         run: python scripts/check_deprecations.py

@@ -9,7 +9,7 @@ import time
 import types
 import unittest
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 try:
     from tests.test_aiohttp_stubs import _ensure_aiohttp_stub
@@ -75,11 +75,71 @@ def _fake_error_status_client():
         available=True,
         last_setpoint=38.0,
         last_measurements={},
+        last_measurement_attributes={},
     )
 
 
 class TestSensorRecorderAttributes(unittest.TestCase):
     """Validate unrecorded dynamic attributes for recorder safety."""
+
+    def test_documented_diagnostic_sensor_defaults_match_entities(self) -> None:
+        module = _load_sensor_module()
+        documentation = (ROOT / "docs/entities.md").read_text(encoding="utf-8")
+        for key, label in (
+            ("inlet_temperature", "Inlet temperature"),
+            ("outlet_temperature", "Outlet temperature"),
+            ("device_status", "Device status"),
+        ):
+            with self.subTest(key=key):
+                description = next(item for item in module.SENSOR_DESCRIPTIONS if item.key == key)
+                sensor = module.StiebelDHESensor("test-entry", "Test DHE", _fake_error_status_client(), description)
+                self.assertTrue(sensor.entity_registry_enabled_default)
+                row = next(line for line in documentation.splitlines() if line.startswith(f"| {label} |"))
+                self.assertIn("enabled by default", row)
+
+    def test_filtered_value_flushes_latest_value_with_one_timer(self) -> None:
+        module = _load_sensor_module()
+        description = next(item for item in module.SENSOR_DESCRIPTIONS if item.key == "inlet_temperature")
+        sensor = module.StiebelDHESensor("test-entry", "Test DHE", _fake_error_status_client(), description)
+        sensor.hass = Mock()
+        writes = []
+        sensor.async_write_ha_state = lambda: writes.append(sensor._attr_native_value)
+        cancel = Mock()
+        with (
+            patch.object(module, "async_call_later", return_value=cancel) as schedule,
+            patch.object(module.time, "monotonic", return_value=1000.0) as now,
+        ):
+            sensor._handle_measurement_update(description.odb_id, 20.0)
+            now.return_value = 1001.0
+            for _ in range(100):
+                sensor._handle_measurement_update(description.odb_id, 20.1)
+            sensor._handle_measurement_update(description.odb_id, 20.2)
+            schedule.assert_called_once()
+            self.assertEqual(schedule.call_args.args[1], 119.0)
+            self.assertEqual(writes, [20.0])
+            now.return_value = 1120.0
+            schedule.call_args.args[2](None)
+            self.assertEqual(writes, [20.0, 20.2])
+            self.assertIsNone(sensor._pending_write_cancel)
+
+    def test_pending_write_cancels_on_return_immediate_write_and_unavailability(self) -> None:
+        module = _load_sensor_module()
+        description = next(item for item in module.SENSOR_DESCRIPTIONS if item.key == "inlet_temperature")
+        for next_value in (20.0, 21.0, None):
+            with self.subTest(next_value=next_value):
+                sensor = module.StiebelDHESensor("test-entry", "Test DHE", _fake_error_status_client(), description)
+                sensor.hass = Mock()
+                sensor.async_write_ha_state = Mock()
+                cancel = Mock()
+                with patch.object(module, "async_call_later", return_value=cancel):
+                    sensor._handle_measurement_update(description.odb_id, 20.0)
+                    sensor._handle_measurement_update(description.odb_id, 20.1)
+                    if next_value is None:
+                        sensor._handle_availability_update(False)
+                    else:
+                        sensor._handle_measurement_update(description.odb_id, next_value)
+                cancel.assert_called_once_with()
+                self.assertIsNone(sensor._pending_write_cancel)
 
     def test_stiebel_sensor_excludes_heavy_dynamic_attributes(self) -> None:
         sensor_module = _load_sensor_module()
@@ -318,18 +378,19 @@ class TestSensorRecorderAttributes(unittest.TestCase):
         )
 
         self.assertEqual(writes, ["connected"])
-        self.assertEqual(sensor._attr_extra_state_attributes, {"session_id": "sid-1"})
+        self.assertEqual(sensor._attr_extra_state_attributes, {})
 
         sensor._handle_diagnostic_update(
             {
                 "connection_state": "connected",
                 "session_id": "sid-2",
+                "websocket_sid": "private-websocket-sid",
                 "last_message_received_at": "2026-05-16T12:00:02Z",
             }
         )
 
-        self.assertEqual(writes, ["connected", "connected"])
-        self.assertEqual(sensor._attr_extra_state_attributes, {"session_id": "sid-2"})
+        self.assertEqual(writes, ["connected"])
+        self.assertEqual(sensor._attr_extra_state_attributes, {})
 
     def test_next_reconnect_delay_diagnostic_accepts_float_state(self) -> None:
         sensor_module = _load_sensor_module()
@@ -546,7 +607,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
             def __init__(self) -> None:
                 self.tasks = []
 
-            def async_create_task(self, coro, *, name: str | None = None):
+            def async_create_background_task(self, coro, name: str):
                 task = asyncio.create_task(coro, name=name)
                 self.tasks.append(task)
                 return task
@@ -612,7 +673,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
             def __init__(self) -> None:
                 self.tasks: list[asyncio.Task[object]] = []
 
-            def async_create_task(self, coro, *, name: str | None = None):
+            def async_create_background_task(self, coro, name: str):
                 task = asyncio.create_task(coro, name=name)
                 self.tasks.append(task)
                 return task
@@ -1005,7 +1066,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
             def __init__(self) -> None:
                 self.tasks = []
 
-            def async_create_task(self, coro, *, name: str | None = None):
+            def async_create_background_task(self, coro, name: str):
                 task = asyncio.create_task(coro, name=name)
                 self.tasks.append(task)
                 return task
@@ -1075,7 +1136,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
             def __init__(self) -> None:
                 self.tasks = []
 
-            def async_create_task(self, coro, *, name: str | None = None):
+            def async_create_background_task(self, coro, name: str):
                 task = asyncio.create_task(coro, name=name)
                 self.tasks.append(task)
                 return task
@@ -1206,7 +1267,7 @@ class TestSensorRecorderAttributes(unittest.TestCase):
             def __init__(self) -> None:
                 self.tasks = []
 
-            def async_create_task(self, coro, *, name: str | None = None):
+            def async_create_background_task(self, coro, name: str):
                 task = asyncio.create_task(coro, name=name)
                 self.tasks.append(task)
                 return task

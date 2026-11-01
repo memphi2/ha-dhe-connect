@@ -17,6 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 COVERAGE_TARGET = "custom_components/stiebel_dhe_connect"
 COVERAGE_FAIL_UNDER = 95
+FULL_COVERAGE_FAIL_UNDER = 85
 
 
 @dataclass(frozen=True)
@@ -216,7 +217,12 @@ def main() -> int:
     if pytest_result != 0:
         return pytest_result
 
-    return _run(
+    full_result = _run([
+        sys.executable, "-m", "coverage", "report",
+        f"--fail-under={FULL_COVERAGE_FAIL_UNDER}", "--precision=2",
+        "--skip-covered", "--show-missing",
+    ])
+    scoped_result = _run(
         [
             sys.executable,
             "-m",
@@ -228,6 +234,7 @@ def main() -> int:
             f"--omit={_coverage_omit_argument()}",
         ]
     )
+    return full_result or scoped_result
 
 
 if __name__ == "__main__":

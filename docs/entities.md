@@ -2,6 +2,12 @@
 
 Home Assistant entity names are translated through `translations/en.json` and `translations/de.json`. The tables below use the English names and list the underlying DHE source for maintainers. User-facing entity names avoid protocol markers such as `ODB`; the source column records when a value comes from an ODB ID.
 
+The catalog name is **Stiebel Eltron DHE Connect**, and the device manufacturer
+is **Stiebel Eltron**. The tables use the short product name where appropriate.
+Actual entity IDs depend on your registry and device names; copy your own IDs
+from Home Assistant instead of assuming the illustrative IDs in examples.
+See [installation.md](installation.md) for setup, updates and existing entries.
+
 ## Climate
 
 | Entity | Type | Source | Behavior |
@@ -56,7 +62,7 @@ Weather location search uses the same split city/country workflow as the DHE UI.
 
 Weather favorite service actions:
 
-- `add_weather_favorite`: safe add behavior (no toggle off if already present, requires a fresh favorite list on confirmation)
+- `add_weather_favorite`: safe add behavior (no toggle off if already present, requires a fresh favorite list on confirmation, leaves the active location unchanged)
 - `remove_weather_favorite`: safe remove behavior (no toggle on if already missing, requires a fresh favorite list on removal)
 - `toggle_weather_favorite`: low-level toggle (protocol-native), can add or remove depending on current state
 
@@ -65,7 +71,7 @@ All services share the same selection input model as before (`entry_id`, `result
 Selecting the active weather location is a separate step. The service `stiebel_dhe_connect.select_weather_location` sends `get:ste.app.weather:location` with the selected `LocationId`, matching the browser protocol used when switching to a favorite. It can select by exact `location_id`, by the current search `result_number`, or run a fresh name/country search first. When multiple DHE devices are configured, include `entry_id` in service data to target one integration entry. Example for toggling New York in the USA:
 
 ```yaml
-service: stiebel_dhe_connect.toggle_weather_favorite
+action: stiebel_dhe_connect.toggle_weather_favorite
 data:
   entry_id: 01HXXXXXXXXXXXXXXX
   name: New York
@@ -76,7 +82,7 @@ data:
 Example for explicitly adding or removing the same location:
 
 ```yaml
-service: stiebel_dhe_connect.add_weather_favorite
+action: stiebel_dhe_connect.add_weather_favorite
 data:
   entry_id: 01HXXXXXXXXXXXXXXX
   name: New York
@@ -85,7 +91,7 @@ data:
 ```
 
 ```yaml
-service: stiebel_dhe_connect.remove_weather_favorite
+action: stiebel_dhe_connect.remove_weather_favorite
 data:
   entry_id: 01HXXXXXXXXXXXXXXX
   name: New York
@@ -96,7 +102,7 @@ data:
 Example for switching to an existing favorite by `LocationId`:
 
 ```yaml
-service: stiebel_dhe_connect.select_weather_location
+action: stiebel_dhe_connect.select_weather_location
 data:
   entry_id: 01HXXXXXXXXXXXXXXX
   location_id: ID=320@ID2=84666@REGIO=5@COUNTRY_ID=34
@@ -110,10 +116,10 @@ data:
 | Current power consumption | `kW` | `power` | `measurement` | ODB ID `16 / 100 * nominal_power_kw` |
 | Nominal power | `kW` | `power`, disabled by default | none | ODB ID `20` |
 | Operating duration | `h` | `duration`, diagnostic, disabled by default | `total_increasing` | ODB ID `18`, raw hours |
-| Inlet temperature | `C` | `temperature`, diagnostic, disabled by default | `measurement` | ODB ID `13 / 10` |
-| Outlet temperature | `C` | `temperature`, diagnostic, disabled by default | `measurement` | ODB ID `14 / 10` |
+| Inlet temperature | `C` | `temperature`, diagnostic, enabled by default | `measurement` | ODB ID `13 / 10` |
+| Outlet temperature | `C` | `temperature`, diagnostic, enabled by default | `measurement` | ODB ID `14 / 10` |
 | Scald protection temperature limit | `C` | `temperature`, diagnostic, disabled by default | none | ODB ID `24 / 10` |
-| Device status | text | `enum`, diagnostic, disabled by default | none | ODB ID `34`; status code `2` means water is running, status code `3` is surfaced through the error status sensor |
+| Device status | text | `enum`, diagnostic, enabled by default | none | ODB ID `34`; status code `2` means water is running, status code `3` is surfaced through the error status sensor |
 | Protocol version | text | diagnostic, disabled by default | none | DHE web interface version from `web:index`; the raw ODB ID `67` marker is kept as diagnostic context only |
 | Water consumption week | `L` | `water`, disabled by default | `total_increasing` | `set:ste.app.consumption:waterWeek` |
 | Water consumption year | `m3` | `water`, disabled by default | `total_increasing` | `set:ste.app.consumption:waterYear` |

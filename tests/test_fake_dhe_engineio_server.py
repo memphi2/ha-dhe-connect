@@ -11,7 +11,7 @@ import unittest
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from types import TracebackType
+from types import SimpleNamespace, TracebackType
 from typing import Any, Self
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -19,13 +19,13 @@ import aiohttp
 from aiohttp import web
 
 try:
-    from tests.test_client_weather_favorites import (
+    from tests.client_test_support import (
         _load_client,
         _load_component_module,
         _load_protocol,
     )
 except ModuleNotFoundError:
-    from test_client_weather_favorites import (
+    from client_test_support import (
         _load_client,
         _load_component_module,
         _load_protocol,
@@ -677,6 +677,10 @@ class TestFakeDHEEngineIOServer(unittest.IsolatedAsyncioTestCase):
                     server.queue_token_response(PAIRING_TOKEN)
                     server.queue_authentication()
 
+                    # Retained values and proof from an earlier session must not
+                    # authenticate a silent replacement session.
+                    client._last_measurements[protocol_module.ID_DEVICE_STATUS] = 1
+                    client._runtime_startup_proven = True
                     await DHEClient.start(client)
                     auth_failed_seen = False
                     for _attempt in range(40):
@@ -701,10 +705,19 @@ class TestFakeDHEEngineIOServer(unittest.IsolatedAsyncioTestCase):
         DHEClient = client_module.DHEClient
         client = DHEClient.__new__(DHEClient)
         client._last_measurements = {protocol_module.ID_PROTOCOL_VERSION: "1.9.00"}
+        client._pending_write_future = None
+        client._measurement_callbacks = []
+        client._notify_callbacks = Mock()
 
+        client._handle_measurement(protocol_module.ID_PROTOCOL_VERSION, "1.9.00")
         self.assertFalse(DHEClient._has_runtime_startup_proof(client))
 
         client._last_measurements[protocol_module.ID_DEVICE_STATUS] = 1
+        self.assertFalse(DHEClient._has_runtime_startup_proof(client))
+        client._handle_measurement(protocol_module.ID_DEVICE_STATUS, None)
+        self.assertFalse(DHEClient._has_runtime_startup_proof(client))
+        client._last_measurements[protocol_module.ID_DEVICE_STATUS] = 1
+        client._handle_measurement(protocol_module.ID_DEVICE_STATUS, 1)
 
         self.assertTrue(DHEClient._has_runtime_startup_proof(client))
 
@@ -745,6 +758,9 @@ class TestFakeDHEEngineIOServer(unittest.IsolatedAsyncioTestCase):
                         },
                     )
 
+                    client._stopped.set()
+                    await client._handle_auth_failure(client_module.DHEAuthError("Stored token rejected"))
+                    self.assertTrue(client.diagnostic_state["auth_failure"])
                     await DHEClient.start(client)
                     for _attempt in range(40):
                         if client.diagnostic_state.get("connection_state") == "connected":
@@ -752,6 +768,10 @@ class TestFakeDHEEngineIOServer(unittest.IsolatedAsyncioTestCase):
                         await asyncio.sleep(0.05)
                     connected_state = client.diagnostic_state["connection_state"]
                     available = client.available
+                    self.assertNotIn("auth_failure", client.diagnostic_state)
+                    client._mark_reconnecting("ServerDisconnectedError: socket closed")
+                    self.assertNotIn("auth_failure", client.diagnostic_state)
+                    self.assertEqual(client.diagnostic_state["connection_state"], "reconnecting")
                     await DHEClient.stop(client)
 
                 saved_token = token_file.read_text(encoding="utf-8")
@@ -761,6 +781,105 @@ class TestFakeDHEEngineIOServer(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(saved_token, PAIRING_TOKEN)
         self.assertEqual(connected_state, "connected")
         self.assertTrue(available)
+
+    async def test_reconnect_grace_expires_before_delayed_startup_proof(self) -> None:
+        client_module = _load_client()
+        protocol_module = _load_protocol()
+        state_module = sys.modules[f"{PACKAGE_NAME}.client_connection_state"]
+        now = 0.0
+        grace_deadline = asyncio.Event()
+        reconnecting = asyncio.Event()
+        initializing = asyncio.Event()
+        availability: list[bool] = []
+
+        async def wait_for_grace_deadline(delay: float) -> None:
+            self.assertEqual(delay, 15.0)
+            await grace_deadline.wait()
+
+        def observe_diagnostics(state: dict[str, Any]) -> None:
+            if state.get("connection_state") == "reconnecting":
+                reconnecting.set()
+            elif state.get("connection_state") == "initializing":
+                initializing.set()
+
+        startup_value = {
+            "command": protocol_module.ODB_SET_COMMAND,
+            "value": {"id": protocol_module.ID_DEVICE_STATUS, "value": 1},
+        }
+        # Advance only the reconnect deadline, leaving real transport I/O intact.
+        timer_asyncio = SimpleNamespace(
+            sleep=wait_for_grace_deadline,
+            current_task=asyncio.current_task,
+            CancelledError=asyncio.CancelledError,
+        )
+        async with (
+            FakeDHEEngineIOServer(protocol_module.NS) as server,
+            aiohttp.ClientSession() as session,
+        ):
+            with (
+                patch.object(client_module, "async_get_clientsession", return_value=session),
+                patch.object(state_module, "asyncio", timer_asyncio),
+            ):
+                client = client_module.DHEClient(
+                    _FakeHass(asyncio.get_running_loop()),
+                    server.host,
+                    server.port,
+                    ".storage/test-token",
+                    "DHE",
+                )
+                client._token = STORED_TOKEN
+                client._connection_supervisor = client_module.DHEConnectionSupervisor(
+                    base_delay=0,
+                    max_delay=0,
+                    grace_period=15.0,
+                    monotonic=lambda: now,
+                )
+                client.add_availability_callback(availability.append)
+                client.add_diagnostic_callback(observe_diagnostics)
+                server.queue_authentication()
+                server.queue_event("message", startup_value)
+                try:
+                    await client.start()
+                    await asyncio.wait_for(client._ready.wait(), timeout=2)
+                    previous_ctx = client._ctx
+                    initializing.clear()
+
+                    await server.close_active_websockets()
+                    await asyncio.wait_for(reconnecting.wait(), timeout=2)
+                    now = 12.0
+                    server.queue_authentication()
+                    await asyncio.wait_for(initializing.wait(), timeout=2)
+                    self.assertIsNotNone(client._ctx)
+                    self.assertIsNot(client._ctx, previous_ctx)
+                    self.assertFalse(client._ready.is_set())
+                    self.assertFalse(client._has_runtime_startup_proof())
+                    self.assertTrue(client.available)
+                    grace_task = client._reconnect_grace_task
+                    self.assertIsNotNone(grace_task)
+
+                    now = 15.0
+                    grace_deadline.set()
+                    await asyncio.wait_for(asyncio.shield(grace_task), timeout=2)
+                    self.assertFalse(client.available)
+                    self.assertIsNone(client._reconnect_grace_task)
+                    self.assertEqual(client.diagnostic_state["connection_state"], "initializing")
+                    self.assertNotIn("auth_failure", client.diagnostic_state)
+
+                    now = 18.0
+                    server.queue_event("message", startup_value)
+                    await server._send_queued_websocket_packets(server.websockets[-1])
+                    await asyncio.wait_for(client._ready.wait(), timeout=2)
+                    self.assertTrue(client.available)
+                    self.assertEqual(client.diagnostic_state["connection_state"], "connected")
+                    self.assertEqual(availability, [False, True, False, True])
+                    self.assertEqual(
+                        client._connection_supervisor.diagnostic_state()[
+                            "last_successful_reconnect_duration_seconds"
+                        ],
+                        18.0,
+                    )
+                finally:
+                    await client.stop()
 
     async def test_stored_token_auth_session_close_is_auth_failure(self) -> None:
         client_module = _load_client()
@@ -1681,7 +1800,7 @@ class TestFakeDHEEngineIOServer(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result)
         self.assertEqual(client.last_radio_state["favorites"], [])
 
-    async def test_add_weather_favorite_selects_location_with_fake_dhe_readbacks(
+    async def test_add_weather_favorite_preserves_location_until_explicit_selection(
         self,
     ) -> None:
         client_module = _load_client()
@@ -1700,6 +1819,7 @@ class TestFakeDHEEngineIOServer(unittest.IsolatedAsyncioTestCase):
                 ctx,
             ),
         ):
+                client._last_weather_state["location"] = {"LocationId": "previous-location"}
                 command_task = asyncio.create_task(
                     DHEClient.add_weather_favorite(client, location)
                 )
@@ -1727,6 +1847,16 @@ class TestFakeDHEEngineIOServer(unittest.IsolatedAsyncioTestCase):
                     [location],
                 )
 
+                self.assertTrue(await asyncio.wait_for(command_task, timeout=1))
+                self.assertEqual(client.last_weather_state["location"]["LocationId"], "previous-location")
+                self.assertFalse(any(
+                    protocol_module.WEATHER_LOCATION_GET_COMMAND in packet
+                    for packet in server.posted_packets
+                ))
+
+                command_task = asyncio.create_task(
+                    DHEClient.select_weather_location(client, location)
+                )
                 location_packet = await server.wait_for_posted_packet(
                     protocol_module.WEATHER_LOCATION_GET_COMMAND,
                 )
@@ -1872,7 +2002,7 @@ class _FakeHass:
         self.loop = loop
         self.config = _FakeConfig(config_root)
 
-    def async_create_task(self, coro: Any, *, name: str | None = None) -> asyncio.Task[Any]:
+    def async_create_background_task(self, coro: Any, name: str) -> asyncio.Task[Any]:
         return asyncio.create_task(coro, name=name)
 
     async def async_add_executor_job(self, target: Any, *args: Any) -> Any:

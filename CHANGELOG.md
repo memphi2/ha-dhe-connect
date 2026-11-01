@@ -2,7 +2,61 @@
 
 ## Unreleased
 
-- No changes yet.
+### Compatibility
+
+- Support Home Assistant 2026.10.4 and newer; use v2.0.9 on HA 2026.10.1-2026.10.3.
+- Use native climate temperature attributes with a narrow adapter for HA 2026.10.
+- Keep entity subscriptions active across in-place entity ID changes.
+- Use exception-based config-entry setup and unload results on HA 2026.11.
+- Construct device metadata through Home Assistant's DeviceInfo API.
+
+### Fixes
+
+- Retire all in-flight legacy token sources on reset and preserve newer token
+  writes when overlapping resets finish.
+- Invalidate in-flight legacy token imports when pairing resets the token.
+- Preserve concurrent token and config-entry updates while migrating legacy files.
+- Ignore non-finite weather fields without discarding the remaining forecast.
+- Retain legacy token sources until the migrated config entry has survived a HA
+  restart; protect pending sources during setup cleanup and pairing recovery.
+- Reject non-finite cost and emission settings before any device write.
+- Apply redirect, compression and response-size protection to setup reachability
+  checks as well as the persistent device transport.
+- Reject non-finite temperature commands before enabling heating, and ignore
+  malformed numeric telemetry without terminating the runtime session.
+- Release session state and pending commands even when the runtime task fails.
+- Publish changed radio favorite IDs while keeping their payload out of recorder.
+- Refuse HTTP and WebSocket redirects, bound response sizes, omit HTTP error
+  bodies, and remove session identifiers from diagnostic entity attributes.
+- Require fresh device values after reconnecting before restoring availability,
+  and expire the reconnect grace period while startup confirmation is pending.
+- Clear stale authentication errors after a successful runtime recovery.
+- Publish the final filtered sensor value when its update interval expires.
+- Update weather search results independently of recorder filtering, validate
+  bounded integer inputs, and keep adding a favorite separate from selecting it.
+- Serialize discovery-cache loading and atomic writes to avoid lost updates.
+- Bind Repairs to their config entry and prevent recreation after its removal.
+
+### Maintenance
+
+- Avoid duplicate push/PR validation and repeated unittest execution; retain
+  complete pytest coverage gates for both supported HA environments.
+- Coalesce discovery-cache disk writes and flush pending changes at HA shutdown.
+- Verify recorder filtering against real SQLite rows and organize HA/client tests
+  into focused suites with shared fixtures.
+- Correct countdown and memory-control examples, document migration scope and
+  asset provenance, and direct security reports to private GitHub advisories.
+- Centralize paired HA core/test-helper baselines and test both supported APIs.
+- Verify installed core/helper provenance and resolve matching latest-HA pairs.
+- Gate lifecycle/reconnect/idle task and memory growth with a loopback soak test.
+- Group routine tool updates quarterly while keeping security updates separate.
+- Document config-entry token storage and device-side revocation accurately.
+- Classify the integration as a water heater for catalog discovery.
+
+## v2.0.10 - Unreleased
+
+Release preparation for Home Assistant 2026.11. Changes are listed above until
+the final stable HA baseline has passed validation. No release date is set yet.
 
 ## v2.0.9 - 2026-10-14
 

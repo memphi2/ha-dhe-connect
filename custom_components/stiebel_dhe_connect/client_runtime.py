@@ -98,6 +98,7 @@ from .protocol import (
     ID_WATER_FLOW,
     ID_WATER_HEATING_ENABLED,
     ID_WELLNESS_ACTIVE,
+    INITIAL_VALUE_IDS,
     LAST_USAGE_SET_COMMAND,
     ODB_ASSIGN_COMMAND,
     ODB_DEBUG_NAMES,
@@ -157,6 +158,8 @@ def _extract_odb_error_code(value: Any) -> int | None:
 
 class DHEClientRuntimeMixin(DHEClientRuntimeMediaMixin, DHEClientRuntimeAppMixin):
     """Runtime event dispatch, state updates and readback waiters."""
+
+    _runtime_startup_proven = False
 
     if TYPE_CHECKING:
         _diagnostic_callbacks: set[DiagnosticCallback]
@@ -869,6 +872,12 @@ class DHEClientRuntimeMixin(DHEClientRuntimeMediaMixin, DHEClientRuntimeAppMixin
     def _handle_measurement(
         self, odb_id: int, value: MeasurementValue, *, force_update: bool = False
     ) -> None:
+        if (
+            odb_id in INITIAL_VALUE_IDS
+            and odb_id != ID_PROTOCOL_VERSION
+            and value is not None
+        ):
+            self._runtime_startup_proven = True
         previous = self._last_measurements.get(odb_id, _MISSING_MEASUREMENT)
         self._last_measurements[odb_id] = value
         if value is not None and not isinstance(value, str):
