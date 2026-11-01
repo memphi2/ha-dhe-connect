@@ -82,6 +82,21 @@ def _fake_error_status_client():
 class TestSensorRecorderAttributes(unittest.TestCase):
     """Validate unrecorded dynamic attributes for recorder safety."""
 
+    def test_documented_diagnostic_sensor_defaults_match_entities(self) -> None:
+        module = _load_sensor_module()
+        documentation = (ROOT / "docs/entities.md").read_text(encoding="utf-8")
+        for key, label in (
+            ("inlet_temperature", "Inlet temperature"),
+            ("outlet_temperature", "Outlet temperature"),
+            ("device_status", "Device status"),
+        ):
+            with self.subTest(key=key):
+                description = next(item for item in module.SENSOR_DESCRIPTIONS if item.key == key)
+                sensor = module.StiebelDHESensor("test-entry", "Test DHE", _fake_error_status_client(), description)
+                self.assertTrue(sensor.entity_registry_enabled_default)
+                row = next(line for line in documentation.splitlines() if line.startswith(f"| {label} |"))
+                self.assertIn("enabled by default", row)
+
     def test_filtered_value_flushes_latest_value_with_one_timer(self) -> None:
         module = _load_sensor_module()
         description = next(item for item in module.SENSOR_DESCRIPTIONS if item.key == "inlet_temperature")

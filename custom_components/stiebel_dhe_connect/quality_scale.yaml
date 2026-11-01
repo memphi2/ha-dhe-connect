@@ -173,10 +173,12 @@ evidence:
         docs/validation.md records the push-update validation evidence.
     reauthentication-flow:
       implementation: >
-        Stored-token authentication failures start Home Assistant reauth and
-        create a fixable Repairs issue backed by the normal pairing flow.
+        Stored-token authentication failures create one fixable Repairs issue
+        backed by the normal pairing flow. Duplicate generic Home Assistant
+        reauth issues and flows are cleared; explicit reauth remains supported.
       tests: >
-        HA fixture tests cover auth failure, reauth start and repair pairing.
+        HA fixture tests cover auth-failure Repairs, duplicate suppression,
+        explicit reauth and repair pairing.
       docs: >
         docs/troubleshooting.md documents invalid-token and pairing repair
         recovery.
@@ -265,7 +267,8 @@ evidence:
         README.md.
     docs-installation-instructions:
       implementation: >
-        HACS and custom integration installation paths are documented.
+        Marketplace and manual installation paths are documented, including
+        migration and removal guidance for existing HACS installations.
       tests: >
         Repository checks validate required docs.
       docs: >

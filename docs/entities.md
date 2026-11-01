@@ -116,10 +116,10 @@ data:
 | Current power consumption | `kW` | `power` | `measurement` | ODB ID `16 / 100 * nominal_power_kw` |
 | Nominal power | `kW` | `power`, disabled by default | none | ODB ID `20` |
 | Operating duration | `h` | `duration`, diagnostic, disabled by default | `total_increasing` | ODB ID `18`, raw hours |
-| Inlet temperature | `C` | `temperature`, diagnostic, disabled by default | `measurement` | ODB ID `13 / 10` |
-| Outlet temperature | `C` | `temperature`, diagnostic, disabled by default | `measurement` | ODB ID `14 / 10` |
+| Inlet temperature | `C` | `temperature`, diagnostic, enabled by default | `measurement` | ODB ID `13 / 10` |
+| Outlet temperature | `C` | `temperature`, diagnostic, enabled by default | `measurement` | ODB ID `14 / 10` |
 | Scald protection temperature limit | `C` | `temperature`, diagnostic, disabled by default | none | ODB ID `24 / 10` |
-| Device status | text | `enum`, diagnostic, disabled by default | none | ODB ID `34`; status code `2` means water is running, status code `3` is surfaced through the error status sensor |
+| Device status | text | `enum`, diagnostic, enabled by default | none | ODB ID `34`; status code `2` means water is running, status code `3` is surfaced through the error status sensor |
 | Protocol version | text | diagnostic, disabled by default | none | DHE web interface version from `web:index`; the raw ODB ID `67` marker is kept as diagnostic context only |
 | Water consumption week | `L` | `water`, disabled by default | `total_increasing` | `set:ste.app.consumption:waterWeek` |
 | Water consumption year | `m3` | `water`, disabled by default | `total_increasing` | `set:ste.app.consumption:waterYear` |

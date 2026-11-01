@@ -163,9 +163,12 @@ This check is a release-lab gate, not a universal CI check. It can fail in
 VLANs or networks that block mDNS even when the integration and manual setup are
 correct.
 
-The integration keeps a temporary anonymized discovery cache in Home Assistant
-storage. Support diagnostics expose cache counts, cache age, confidence bands
-and prompt-suppression state, but not raw hosts, IP addresses or service names.
+The integration keeps a temporary discovery cache in Home Assistant storage.
+The local `.storage/stiebel_dhe_connect_discovery_cache` file contains device
+hosts, IP addresses, names and service identifiers; it is not anonymized and
+must not be attached to public issues. Export support diagnostics instead:
+they expose cache counts, cache age, confidence bands and prompt-suppression
+state, but not raw hosts, IP addresses or service names.
 
 ## Setup Scan Finds Nothing
 
