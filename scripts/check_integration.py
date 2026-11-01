@@ -7,7 +7,6 @@ import re
 import shlex
 import sys
 import tomllib
-import unittest
 from pathlib import Path
 
 import yaml
@@ -503,6 +502,15 @@ def _check_workflow_execution(text: str, action_uses: list[tuple[str, str, str |
         or {"cron": "0 4 1 * *"} not in (triggers.get("schedule") or [])
     ):
         _fail("validation workflow must enable push, PR, dispatch and monthly schedule triggers")
+    if triggers["push"] != {"branches": ["main"], "tags": ["v*"]}:
+        _fail("push validation must cover main and release tags without duplicating PR branches")
+    if triggers["pull_request"] not in (None, "", {}):
+        _fail("PR validation must not filter required checks")
+    if workflow.get("concurrency") != {
+        "group": "${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}",
+        "cancel-in-progress": "${{ github.event_name == 'pull_request' }}",
+    }:
+        _fail("validation must cancel superseded PR runs without cancelling other event types")
     jobs = workflow["jobs"]
     actual_uses = []
     common_commands = (
@@ -722,15 +730,6 @@ def check_compile() -> None:
             _fail(f"Python syntax check failed for {path.relative_to(ROOT)}: {err}")
 
 
-def check_unit_tests() -> None:
-    if str(ROOT) not in sys.path:
-        sys.path.insert(0, str(ROOT))
-    suite = unittest.defaultTestLoader.discover(str(ROOT / "tests"))
-    result = unittest.TextTestRunner(stream=sys.stdout, verbosity=1).run(suite)
-    if not result.wasSuccessful():
-        _fail("unit tests failed")
-
-
 def main() -> None:
     version = check_manifest()
     check_hacs()
@@ -744,7 +743,6 @@ def main() -> None:
     check_translations()
     check_type_gate_coverage()
     check_compile()
-    check_unit_tests()
     print("integration checks ok")
 
 

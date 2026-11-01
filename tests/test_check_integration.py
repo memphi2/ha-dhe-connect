@@ -6,7 +6,7 @@ import json
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stderr
+from contextlib import ExitStack, redirect_stderr
 from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
@@ -20,17 +20,22 @@ if str(ROOT) not in sys.path:
 from scripts import check_integration
 
 
-class TestUnitTestEntryPoint(unittest.TestCase):
-    def test_direct_script_exposes_shared_test_support_modules(self):
-        with (
-            patch.object(sys, "path", []),
-            patch.object(unittest.defaultTestLoader, "discover") as discover,
-            patch.object(unittest, "TextTestRunner") as runner,
-        ):
-            check_integration.check_unit_tests()
-            self.assertEqual(sys.path[0], str(ROOT))
-            discover.assert_called_once_with(str(ROOT / "tests"))
-            runner.return_value.run.assert_called_once_with(discover.return_value)
+class TestRepositoryCheckEntryPoint(unittest.TestCase):
+    def test_repository_guards_do_not_repeat_the_pytest_suite(self):
+        with ExitStack() as stack:
+            checks = [stack.enter_context(patch.object(check_integration, name))
+                      for name in (
+                          "check_manifest", "check_hacs", "check_repository_files",
+                          "check_lts_compatibility_policy", "check_gold_evidence_docs",
+                          "check_quality_scale", "check_replay_fixtures", "check_github_actions",
+                          "check_client_module_size", "check_translations",
+                          "check_type_gate_coverage", "check_compile",
+                      )]
+            discover = stack.enter_context(patch.object(unittest.defaultTestLoader, "discover"))
+            check_integration.main()
+            for check in checks:
+                check.assert_called_once()
+            discover.assert_not_called()
 
 VALIDATION_INSTALL_STEPS = """
 	                  - run: python -m pip install -r requirements.txt
@@ -404,6 +409,21 @@ class TestCheckIntegration(unittest.TestCase):
             ("  hacs:\n", "  hacs:\n    if: false\n"),
             ("  hassfest:\n", "  hassfest:\n    continue-on-error: true\n"),
             ("  push:\n", "  # push:\n"),
+        ):
+            with self.subTest(old=old), tempfile.TemporaryDirectory() as temp_dir:
+                root = Path(temp_dir)
+                _write_validate_workflow(root, original.replace(old, new, 1))
+                with patch.object(check_integration, "ROOT", root), redirect_stderr(StringIO()), self.assertRaises(SystemExit):
+                    check_integration.check_github_actions()
+
+    def test_workflow_keeps_pr_main_and_tag_checks_without_duplicate_branch_runs(self) -> None:
+        original = (ROOT / ".github/workflows/validate.yml").read_text(encoding="utf-8")
+        for old, new in (
+            ("branches: [main]", "branches: ['*']"),
+            ("tags: ['v*']", "tags: []"),
+            ("  pull_request:\n", "  pull_request:\n    paths: ['docs/**']\n"),
+            ("${{ github.event_name == 'pull_request' }}", "true"),
+            ("-${{ github.event_name }}-", "-"),
         ):
             with self.subTest(old=old), tempfile.TemporaryDirectory() as temp_dir:
                 root = Path(temp_dir)

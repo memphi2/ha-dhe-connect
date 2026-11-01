@@ -138,6 +138,8 @@ and **95% for the scoped deterministic modules**. The 95% figure is not whole-re
 coverage. `EXCLUDED_COVERAGE_FILES` in `scripts/check_coverage.py` lists every
 file omitted from the narrower gate and its reason; none are omitted from the
 whole-integration gate. Both reports are printed even if one threshold fails.
+`scripts/check_integration.py` runs repository guards only; it does not repeat
+the tests through a second unittest discovery run.
 
 Run this before opening/finalizing release-prep PRs:
 
@@ -171,8 +173,11 @@ python scripts/check_coverage.py
 python scripts/check_typing.py
 ```
 
-CI runs these checks on every push and PR, along with the repository guards and
-the longer loopback soak below. The compatibility path does not need removal
+CI runs these checks on every PR update and pushes to `main` or `v*` release
+tags, along with the repository guards and the longer loopback soak below.
+Working branches without a PR use manual dispatch or the local commands above.
+New PR updates cancel obsolete runs for that PR without cancelling main, tag,
+scheduled or manually dispatched runs. The compatibility path does not need removal
 when HA 2026.11 is released.
 
 ## Loopback Runtime Soak

@@ -35,6 +35,8 @@
 
 ### Maintenance
 
+- Avoid duplicate push/PR validation and repeated unittest execution; retain
+  complete pytest coverage gates for both supported HA environments.
 - Coalesce discovery-cache disk writes and flush pending changes at HA shutdown.
 - Verify recorder filtering against real SQLite rows and organize HA/client tests
   into focused suites with shared fixtures.
