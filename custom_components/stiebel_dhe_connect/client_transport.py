@@ -196,13 +196,15 @@ class DHEClientTransportMixin(
             ping_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await ping_task
-        with _suppress_transport_errors():
-            await self._post_packet(ctx, f"41/{NS}")
-        websocket = ctx.websocket
-        ctx.websocket = None
-        if websocket is not None and not websocket.closed:
+        try:
             with _suppress_transport_errors():
-                await websocket.close()
+                await self._post_packet(ctx, f"41/{NS}")
+        finally:
+            websocket = ctx.websocket
+            ctx.websocket = None
+            if websocket is not None and not websocket.closed:
+                with _suppress_transport_errors():
+                    await websocket.close()
 
     async def _force_reconnect(
         self,

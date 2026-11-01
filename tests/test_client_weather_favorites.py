@@ -201,6 +201,8 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         client._last_message_monotonic = None
         client._notify_callbacks = Mock()
         client._reconnect_grace_task = grace_task
+        client._pending_setpoint_future = None
+        client._pending_write_future = None
 
         await DHEClient.stop(client)
 
@@ -212,6 +214,39 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(client._online)
         self.assertFalse(client._available)
         self.assertEqual(client._diagnostic_state["connection_state"], "stopped")
+
+    async def test_malformed_numeric_telegram_does_not_block_valid_update(self) -> None:
+        module = _load_client()
+        module.async_get_clientsession = Mock(return_value=object())
+        client = module.DHEClient(types.SimpleNamespace(), "example.invalid", 8443, None, "Test")
+        for value in ("1e309", "nan", "-inf", 10**400):
+            client._handle_odb_value(33, value)
+            self.assertNotIn(33, client.last_measurements)
+        client._handle_odb_value(33, 1)
+        self.assertIn(33, client.last_measurements)
+
+    async def test_failed_runtime_and_stop_release_all_session_state(self) -> None:
+        module = _load_client()
+        module.async_get_clientsession = Mock(return_value=object())
+        client = module.DHEClient(types.SimpleNamespace(), "example.invalid", 8443, None, "Test")
+        ctx = module.DHESession("synthetic-session", "synthetic-token")
+        client._open_authenticated_session = AsyncMock(return_value=ctx)
+        client._request_initial_values = AsyncMock()
+        client._wait_for_initial_runtime_values = AsyncMock()
+        client._read_events_once = AsyncMock(side_effect=AssertionError("unexpected bug"))
+        client._close_session = AsyncMock()
+        pending = client._pending_setpoint_future = asyncio.get_running_loop().create_future()
+        client._runner = asyncio.create_task(client._run_loop())
+        with self.assertRaisesRegex(AssertionError, "unexpected bug"):
+            await client._runner
+        self.assertIsNone(client._ctx)
+        self.assertFalse(client._ready.is_set())
+        self.assertFalse(client.available)
+        self.assertFalse(client.online)
+        self.assertTrue(pending.cancelled())
+        await client.stop()
+        client._close_session.assert_awaited_once_with(ctx)
+        self.assertIsNone(client._runner)
 
     async def test_toggle_weather_favorite_does_not_retry(self) -> None:
         client_module = _load_client()

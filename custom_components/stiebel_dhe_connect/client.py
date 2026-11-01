@@ -333,19 +333,31 @@ class DHEClient(
             await cancel_task_if_pending(grace_task)
         runner = self._runner
         self._runner = None
-        if runner:
-            runner.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await runner
+        try:
+            if runner:
+                runner.cancel()
+                try:
+                    await runner
+                except asyncio.CancelledError:
+                    pass
+                except Exception as err:  # noqa: BLE001 - unload must also release failed tasks
+                    _LOGGER.error("DHE session task failed (%s)", type(err).__name__)
+        finally:
+            await self._cleanup_runtime_session()
+            self._update_diagnostics(connection_state="stopped")
+
+    async def _cleanup_runtime_session(self) -> None:
+        """Release runtime ownership even after a failed session task."""
         ctx = self._ctx
         self._ctx = None
         self._ready.clear()
-        if ctx is not None:
-            await self._close_session(ctx)
+        self._clear_pending_future(None)
+        self._clear_pending_write_future(None)
         self._set_online(False)
         self._set_available(False, immediate=True)
         self._clear_stale_runtime_probe()
-        self._update_diagnostics(connection_state="stopped")
+        if ctx is not None:
+            await self._close_session(ctx)
 
     async def validate_setup_authentication(
         self, *, timeout_seconds: float = 180.0
@@ -437,6 +449,12 @@ class DHEClient(
         )
 
     async def _run_loop(self) -> None:
+        try:
+            await self._run_sessions()
+        finally:
+            await self._cleanup_runtime_session()
+
+    async def _run_sessions(self) -> None:
         while not self._stopped.is_set():
             try:
                 self._runtime_startup_proven = False
