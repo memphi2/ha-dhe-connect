@@ -20,6 +20,17 @@ from tests.client_test_support import (
 
 
 class TestClientCommands(unittest.IsolatedAsyncioTestCase):
+    async def test_invalid_cost_and_emission_commands_never_write(self) -> None:
+        module = _load_client()
+        client = module.DHEClient.__new__(module.DHEClient)
+        client.write_odb_value = AsyncMock()
+        for method in ("set_electricity_price", "set_water_price", "set_co2_emission"):
+            for value in (float("nan"), float("inf"), float("-inf"), True, 10**400):
+                with self.subTest(method=method, value=value):
+                    with self.assertRaisesRegex(module.DHEError, "finite"):
+                        await getattr(client, method)(value)
+                    client.write_odb_value.assert_not_awaited()
+
     async def test_nonfinite_temperature_is_rejected_before_transport(self) -> None:
         module = _load_client()
         client = module.DHEClient.__new__(module.DHEClient)

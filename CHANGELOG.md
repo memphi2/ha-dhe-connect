@@ -12,6 +12,7 @@
 
 ### Fixes
 
+- Reject non-finite cost and emission settings before any device write.
 - Apply redirect, compression and response-size protection to setup reachability
   checks as well as the persistent device transport.
 - Reject non-finite temperature commands before enabling heating, and ignore

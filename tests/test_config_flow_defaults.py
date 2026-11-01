@@ -304,21 +304,14 @@ def _install_fake_integration_modules() -> None:
     fake_const.CONF_TOKEN = "token"
     sys.modules["custom_components.stiebel_dhe_connect.const"] = fake_const
 
-    fake_entity_state = types.ModuleType(
+    state_spec = importlib.util.spec_from_file_location(
         "custom_components.stiebel_dhe_connect.entity_state_helpers",
+        CONFIG_FLOW_PATH.with_name("entity_state_helpers.py"),
     )
-    fake_entity_state.CONF_INTERNAL_SCALD_PROTECTION = "internal_scald_protection"
+    assert state_spec is not None and state_spec.loader is not None
+    fake_entity_state = importlib.util.module_from_spec(state_spec)
+    state_spec.loader.exec_module(fake_entity_state)
     fake_entity_state.INTERNAL_SCALD_PROTECTION_DEFAULT = "50"
-    fake_entity_state.INTERNAL_SCALD_PROTECTION_OPTIONS = (
-        "43",
-        "50",
-        "55",
-        "60",
-        "no_jumper",
-    )
-    fake_entity_state.normalize_internal_scald_protection = lambda value: str(
-        value or "50"
-    )
     sys.modules[
         "custom_components.stiebel_dhe_connect.entity_state_helpers"
     ] = fake_entity_state
@@ -529,6 +522,22 @@ class TestDeviceSettingsOptionsFlow(
         self.client.set_electricity_price.assert_awaited_once_with(0.21)
         self.client.set_water_price.assert_not_awaited()
         self.client.set_co2_emission.assert_not_awaited()
+
+    async def test_invalid_numbers_never_partially_write_settings(self) -> None:
+        self.flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}
+        for field in ("electricity_price", "water_price", "co2_emission"):
+            for invalid in ("NaN", "nan", "inf", "-inf", "1e309", "-1e309", "no"):
+                with self.subTest(field=field, invalid=invalid):
+                    result = await self.flow.async_step_device_settings({
+                        "electricity_price": "0,21",
+                        "water_price": "1.5",
+                        "co2_emission": "0.3",
+                        field: invalid,
+                    })
+                    self.assertEqual(result["errors"], {"base": "invalid_device_setting"})
+                    self.client.set_electricity_price.assert_not_awaited()
+                    self.client.set_water_price.assert_not_awaited()
+                    self.client.set_co2_emission.assert_not_awaited()
 
 
 class TestConnectionOptionsConnectivity(
