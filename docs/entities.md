@@ -62,7 +62,7 @@ Weather location search uses the same split city/country workflow as the DHE UI.
 
 Weather favorite service actions:
 
-- `add_weather_favorite`: safe add behavior (no toggle off if already present, requires a fresh favorite list on confirmation)
+- `add_weather_favorite`: safe add behavior (no toggle off if already present, requires a fresh favorite list on confirmation, leaves the active location unchanged)
 - `remove_weather_favorite`: safe remove behavior (no toggle on if already missing, requires a fresh favorite list on removal)
 - `toggle_weather_favorite`: low-level toggle (protocol-native), can add or remove depending on current state
 

@@ -1701,7 +1701,7 @@ class TestFakeDHEEngineIOServer(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result)
         self.assertEqual(client.last_radio_state["favorites"], [])
 
-    async def test_add_weather_favorite_selects_location_with_fake_dhe_readbacks(
+    async def test_add_weather_favorite_preserves_location_until_explicit_selection(
         self,
     ) -> None:
         client_module = _load_client()
@@ -1720,6 +1720,7 @@ class TestFakeDHEEngineIOServer(unittest.IsolatedAsyncioTestCase):
                 ctx,
             ),
         ):
+                client._last_weather_state["location"] = {"LocationId": "previous-location"}
                 command_task = asyncio.create_task(
                     DHEClient.add_weather_favorite(client, location)
                 )
@@ -1747,6 +1748,16 @@ class TestFakeDHEEngineIOServer(unittest.IsolatedAsyncioTestCase):
                     [location],
                 )
 
+                self.assertTrue(await asyncio.wait_for(command_task, timeout=1))
+                self.assertEqual(client.last_weather_state["location"]["LocationId"], "previous-location")
+                self.assertFalse(any(
+                    protocol_module.WEATHER_LOCATION_GET_COMMAND in packet
+                    for packet in server.posted_packets
+                ))
+
+                command_task = asyncio.create_task(
+                    DHEClient.select_weather_location(client, location)
+                )
                 location_packet = await server.wait_for_posted_packet(
                     protocol_module.WEATHER_LOCATION_GET_COMMAND,
                 )
