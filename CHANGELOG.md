@@ -12,6 +12,8 @@
 
 ### Fixes
 
+- Apply redirect, compression and response-size protection to setup reachability
+  checks as well as the persistent device transport.
 - Reject non-finite temperature commands before enabling heating, and ignore
   malformed numeric telemetry without terminating the runtime session.
 - Release session state and pending commands even when the runtime task fails.

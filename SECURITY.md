@@ -50,7 +50,7 @@ Runtime diagnostics, HA smoke checks and release validation redact known token, 
 Internal polling and WebSocket session identifiers are not published as entity
 attributes. Device HTTP requests and WebSocket handshakes refuse redirects.
 Protocol responses and WebSocket messages are limited to 4 MiB; the optional web
-version probe is limited to 256 KiB. HTTP requests ask for uncompressed responses
+version and setup reachability probes are limited to 256 KiB. HTTP requests ask for uncompressed responses
 and reject unexpected compression before decoding. HTTP error bodies are not
 included in transport errors.
 

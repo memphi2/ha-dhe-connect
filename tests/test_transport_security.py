@@ -31,7 +31,7 @@ async def http_server(handler) -> AsyncIterator[str]:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("status", [301, 302, 303, 307, 308])
-@pytest.mark.parametrize("method", ["get", "post", "version", "scan", "websocket"])
+@pytest.mark.parametrize("method", ["get", "post", "version", "scan", "websocket", "probe"])
 async def test_http_redirect_never_reaches_destination(status: int, method: str) -> None:
     module = _load_client()
     received = []
@@ -67,6 +67,13 @@ async def test_http_redirect_never_reaches_destination(status: int, method: str)
             elif method == "version":
                 await client._request_web_interface_version()
                 client._handle_web_interface_version.assert_not_called()
+            elif method == "probe":
+                from custom_components.stiebel_dhe_connect import connection_probe
+
+                with patch.object(connection_probe, "async_get_clientsession", return_value=session):
+                    assert not await connection_probe.async_can_connect(
+                        Mock(), "127.0.0.1", int(origin_url.rsplit(":", 1)[1]),
+                    )
             else:
                 from custom_components.stiebel_dhe_connect.setup_scan import _probe_host
 
@@ -76,7 +83,7 @@ async def test_http_redirect_never_reaches_destination(status: int, method: str)
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("method", ["get", "post", "version"])
+@pytest.mark.parametrize("method", ["get", "post", "version", "probe"])
 @pytest.mark.parametrize("encoding", ["length", "chunked", "gzip"])
 @pytest.mark.parametrize("oversized", [False, True])
 async def test_response_limits_cover_streaming_and_compressed_bodies(
@@ -109,12 +116,19 @@ async def test_response_limits_cover_streaming_and_compressed_bodies(
         client._handle_web_interface_version = Mock()
         transport = importlib.import_module(f"{module.__package__}.client_transport")
         version = importlib.import_module(f"{module.__package__}.client_web_version")
+        probe = importlib.import_module(f"{module.__package__}.connection_probe")
         with (
             patch.object(transport, "PROTOCOL_RESPONSE_LIMIT", limit),
             patch.object(version, "WEB_PAGE_RESPONSE_LIMIT", limit),
+            patch.object(probe, "WEB_PAGE_RESPONSE_LIMIT", limit),
+            patch.object(probe, "async_get_clientsession", return_value=session),
         ):
             rejected = oversized or encoding == "gzip"
-            if method == "version":
+            if method == "probe":
+                assert await probe.async_can_connect(
+                    Mock(), "127.0.0.1", int(url.rsplit(":", 1)[1]),
+                ) is not rejected
+            elif method == "version":
                 await client._request_web_interface_version()
                 if rejected:
                     client._handle_web_interface_version.assert_not_called()
