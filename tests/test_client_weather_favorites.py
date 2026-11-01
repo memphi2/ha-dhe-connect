@@ -942,7 +942,7 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
                 raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid")
 
         class _FakeSession:
-            def get(self, _url: str, *, timeout: object) -> _DecodeFailureResponse:
+            def get(self, _url: str, *, timeout: object, allow_redirects: bool) -> _DecodeFailureResponse:
                 return _DecodeFailureResponse()
 
         client = DHEClient.__new__(DHEClient)
@@ -1803,6 +1803,7 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         session = types.SimpleNamespace(ws_connect=AsyncMock(return_value=websocket))
         client = DHEClient.__new__(DHEClient)
         client._session = session
+        client._connect_websocket = session.ws_connect
         client._send_lock = client_module.asyncio.Lock()
         client._websocket_url_candidates = Mock(
             return_value=(("websocket-sid", "socket-sid", "ws://example.invalid/ws"),)
@@ -1824,9 +1825,7 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         self.assertIs(ctx.websocket, websocket)
         self.assertIsNotNone(ctx.websocket_ping_task)
         session.ws_connect.assert_awaited_once()
-        kwargs = session.ws_connect.await_args.kwargs
-        self.assertTrue(kwargs["autoping"])
-        self.assertIsNone(kwargs["heartbeat"])
+        session.ws_connect.assert_awaited_once_with("ws://example.invalid/ws", "socket-sid")
         websocket.send_str.assert_any_await("2probe")
         websocket.send_str.assert_any_await("5")
 
@@ -1844,6 +1843,7 @@ class TestClientWeatherFavorites(unittest.IsolatedAsyncioTestCase):
         client = DHEClient.__new__(DHEClient)
         client._session = session
         client._websocket_upgrade_failures = 0
+        client._connect_websocket = session.ws_connect
         client._websocket_url_candidates = Mock(
             return_value=(("websocket-sid", "socket-sid", "ws://example.invalid/ws"),)
         )

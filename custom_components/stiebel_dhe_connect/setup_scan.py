@@ -351,7 +351,9 @@ async def _probe_host(
 ) -> DHEHostCandidate | None:
     url = f"http://{host_for_url(host)}:{port}/"
     try:
-        async with session.get(url, timeout=timeout) as response:
+        async with session.get(url, timeout=timeout, allow_redirects=False) as response:
+            if not 200 <= response.status < 300:
+                return None
             body = await response.content.read(4096)
             evidence = dhe_response_evidence(body, response.headers)
     except (aiohttp.ClientError, TimeoutError, OSError):

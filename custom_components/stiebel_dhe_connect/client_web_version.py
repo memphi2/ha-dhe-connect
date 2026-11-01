@@ -73,8 +73,10 @@ class DHEClientWebVersionMixin:
             timeout = aiohttp.ClientTimeout(
                 total=WEB_INTERFACE_VERSION_TIMEOUT_SECONDS,
             )
-            async with self._session.get(self.base_url, timeout=timeout) as response:
-                if response.status >= 400:
+            async with self._session.get(
+                self.base_url, timeout=timeout, allow_redirects=False,
+            ) as response:
+                if not 200 <= response.status < 300:
                     return
                 html = await response.text()
         except (
