@@ -9,6 +9,11 @@ import tomllib
 import unittest
 from pathlib import Path
 
+from packaging.requirements import InvalidRequirement, Requirement
+from packaging.specifiers import SpecifierSet
+from packaging.utils import canonicalize_name
+from packaging.version import InvalidVersion, Version
+
 ROOT = Path(__file__).resolve().parents[1]
 INTEGRATION = ROOT / "custom_components" / "stiebel_dhe_connect"
 TRANSLATIONS = INTEGRATION / "translations"
@@ -68,13 +73,15 @@ NODE24_VALIDATION_ACTION_MAJORS = {
 VALIDATION_DEPENDENCY_MINIMUMS = {
     "aiohttp": AIOHTTP_CONSTRAINT,
     "homeassistant": f"=={MIN_HOMEASSISTANT_VERSION}",
-    "mypy": ">=2.4,<3",
     "probatio": PROBATIO_CONSTRAINT,
     "pytest": "==9.0.3",
     "pytest-homeassistant-custom-component": "==0.13.372",
     "pytest-cov": "==7.1.0",
-    "ruff": ">=0.17,<0.18",
     "zeroconf": ZEROCONF_CONSTRAINT,
+}
+VALIDATION_TOOL_BOUNDS = {
+    "mypy": ("2.4", "3"),
+    "ruff": ("0.17", "0.18"),
 }
 _ACTION_REF_RE = re.compile(
     r"^\s*(?:-\s*)?uses:\s*([^@\s]+)@([^\s#]+)(?:\s+#\s*([^\s]+))?",
@@ -435,26 +442,58 @@ def check_github_actions() -> None:
         _fail("latest Home Assistant drift check must run on schedule and workflow_dispatch")
     if "python -m pip install --upgrade homeassistant" not in text:
         _fail("validation workflow must include a latest Home Assistant drift check")
-    requirements_text = ""
-    if "python -m pip install -r requirements.txt" in text:
-        requirements_path = ROOT / "requirements.txt"
-        if not requirements_path.exists():
-            _fail("validation workflow installs requirements.txt but it is missing")
-        requirements_text = requirements_path.read_text(encoding="utf-8")
-    dependency_text = requirements_text or text
-    for dependency, constraint in sorted(VALIDATION_DEPENDENCY_MINIMUMS.items()):
-        requirement = f'"{dependency}{constraint}"'
-        unquoted_requirement = f"{dependency}{constraint}"
-        if requirement not in dependency_text and unquoted_requirement not in dependency_text:
-            _fail(
-                "validation workflow must install current dependency floor "
-                f"{unquoted_requirement!r}"
-            )
+    if "python -m pip install -r requirements.txt" not in text:
+        _fail("validation workflow must install requirements.txt")
+    requirements_path = ROOT / "requirements.txt"
+    if not requirements_path.exists():
+        _fail("validation workflow installs requirements.txt but it is missing")
+    check_validation_dependencies(requirements_path.read_text(encoding="utf-8"))
     if (
         "--disable" + "-warnings" in text
         or "ignore::" + "DeprecationWarning" in text
     ):
         _fail("validation workflow must not suppress deprecation warnings")
+
+
+def check_validation_dependencies(text: str) -> None:
+    """Allow tool-floor updates inside reviewed bounds, not arbitrary upgrades."""
+    requirements: dict[str, Requirement] = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith(("#", "-r ")):
+            continue
+        try:
+            requirement = Requirement(line)
+        except InvalidRequirement:
+            _fail("requirements.txt contains an invalid requirement")
+        name = canonicalize_name(requirement.name)
+        if name in requirements:
+            _fail(f"requirements.txt contains duplicate dependency {name!r}")
+        if requirement.url or requirement.marker or requirement.extras:
+            _fail(f"validation dependency {name!r} must be unconditional and from the index")
+        requirements[name] = requirement
+    for dependency, constraint in sorted(VALIDATION_DEPENDENCY_MINIMUMS.items()):
+        requirement = requirements.get(dependency)
+        if requirement is None or requirement.specifier != SpecifierSet(constraint):
+            _fail(
+                "validation workflow must install current dependency floor "
+                f"{dependency + constraint!r}"
+            )
+    for dependency, (floor, ceiling) in sorted(VALIDATION_TOOL_BOUNDS.items()):
+        requirement = requirements.get(dependency)
+        specifiers = list(requirement.specifier) if requirement else []
+        operators = {specifier.operator: specifier.version for specifier in specifiers}
+        if len(specifiers) != 2 or set(operators) != {">=", "<"}:
+            _fail(f"{dependency} must declare one >= floor and one < ceiling")
+        try:
+            lower, upper = Version(operators[">="]), Version(operators["<"])
+        except InvalidVersion:
+            _fail(f"{dependency} bounds must be valid stable versions")
+        if (
+            any(version.is_prerelease or version.local for version in (lower, upper))
+            or not Version(floor) <= lower < upper <= Version(ceiling)
+        ):
+            _fail(f"{dependency} bounds must stay within >={floor},<{ceiling}")
 
 
 def _workflow_action_uses(text: str) -> list[tuple[str, str, str | None]]:
