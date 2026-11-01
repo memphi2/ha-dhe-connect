@@ -95,11 +95,12 @@ def _write_repository_files_fixture(
     (integration / "services.yaml").write_text("{}", encoding="utf-8")
     (integration / "quality_scale.yaml").write_text("rules: {}\n", encoding="utf-8")
     (integration / "brand" / "icon.png").write_bytes(b"png")
-    (integration / "brand" / "logo.png").write_bytes(b"png")
+    (integration / "brand" / "icon@2x.png").write_bytes(b"png")
 
     docs = root / "docs"
     docs.mkdir(parents=True, exist_ok=True)
     for name in (
+        "installation.md",
         "troubleshooting.md",
         "validation.md",
         "examples.md",
@@ -110,13 +111,17 @@ def _write_repository_files_fixture(
         (docs / name).write_text(f"# {name}\n", encoding="utf-8")
 
     (root / "LICENSE").write_text("MIT\n", encoding="utf-8")
-    (root / "hacs.json").write_text('{"name":"DHE Connect","render_readme":true}\n', encoding="utf-8")
+    (root / "hacs.json").write_text(
+        json.dumps({"name": check_integration.INTEGRATION_NAME, "render_readme": True}),
+        encoding="utf-8",
+    )
     (root / "README.md").write_text(
         (
             "# README\n\n"
             f"Current version: `{version}`\n\n"
             "### Removal\n\n"
             "## Documentation\n\n"
+            "- [Installation and updates](docs/installation.md)\n"
             "- [Troubleshooting guide](docs/troubleshooting.md)\n"
             "- [Examples](docs/examples.md)\n"
             "- [Use cases](docs/use-cases.md)\n"
@@ -159,7 +164,7 @@ def _write_lts_policy_fixture(root: Path) -> None:
             "| Baseline Home Assistant fixture | `requirements-ha.txt` (core and matching test helpers) |\n"
             f"| Python validation runtime | `{python_version}` |\n"
             "| Runtime dependency baseline | Supplied by the pinned Home Assistant core |\n"
-            f"| HACS metadata | `hacs.json` declares `homeassistant: {version}` |\n"
+            f"| Marketplace metadata | `hacs.json` declares `homeassistant: {version}` |\n"
         ),
         encoding="utf-8",
     )
@@ -173,7 +178,7 @@ def _write_lts_policy_fixture(root: Path) -> None:
     (root / "hacs.json").write_text(
         json.dumps(
             {
-                "name": "DHE Connect",
+                "name": check_integration.INTEGRATION_NAME,
                 "homeassistant": version,
                 "render_readme": True,
             }
@@ -188,7 +193,7 @@ class TestCheckIntegration(unittest.TestCase):
     def test_manifest_requires_device_category_not_entity_domains(self) -> None:
         manifest = {
             "domain": "stiebel_dhe_connect",
-            "name": "DHE Connect",
+            "name": check_integration.INTEGRATION_NAME,
             "categories": ["climate.water_heaters"],
             "config_flow": True,
             "iot_class": "local_push",
@@ -678,7 +683,7 @@ class TestCheckIntegration(unittest.TestCase):
             (root / "hacs.json").write_text(
                 json.dumps(
                     {
-                        "name": "DHE Connect",
+                        "name": check_integration.INTEGRATION_NAME,
                         "homeassistant": check_integration.MIN_HOMEASSISTANT_VERSION,
                         "render_readme": True,
                     }
@@ -695,7 +700,7 @@ class TestCheckIntegration(unittest.TestCase):
             (root / "hacs.json").write_text(
                 json.dumps(
                     {
-                        "name": "DHE Connect",
+                        "name": check_integration.INTEGRATION_NAME,
                         "homeassistant": "2026.5.0",
                         "render_readme": True,
                     }

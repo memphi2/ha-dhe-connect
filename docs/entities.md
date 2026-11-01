@@ -2,6 +2,12 @@
 
 Home Assistant entity names are translated through `translations/en.json` and `translations/de.json`. The tables below use the English names and list the underlying DHE source for maintainers. User-facing entity names avoid protocol markers such as `ODB`; the source column records when a value comes from an ODB ID.
 
+The catalog name is **Stiebel Eltron DHE Connect**, and the device manufacturer
+is **Stiebel Eltron**. The tables use the short product name where appropriate.
+Actual entity IDs depend on your registry and device names; copy your own IDs
+from Home Assistant instead of assuming the illustrative IDs in examples.
+See [installation.md](installation.md) for setup, updates and existing entries.
+
 ## Climate
 
 | Entity | Type | Source | Behavior |
@@ -65,7 +71,7 @@ All services share the same selection input model as before (`entry_id`, `result
 Selecting the active weather location is a separate step. The service `stiebel_dhe_connect.select_weather_location` sends `get:ste.app.weather:location` with the selected `LocationId`, matching the browser protocol used when switching to a favorite. It can select by exact `location_id`, by the current search `result_number`, or run a fresh name/country search first. When multiple DHE devices are configured, include `entry_id` in service data to target one integration entry. Example for toggling New York in the USA:
 
 ```yaml
-service: stiebel_dhe_connect.toggle_weather_favorite
+action: stiebel_dhe_connect.toggle_weather_favorite
 data:
   entry_id: 01HXXXXXXXXXXXXXXX
   name: New York
@@ -76,7 +82,7 @@ data:
 Example for explicitly adding or removing the same location:
 
 ```yaml
-service: stiebel_dhe_connect.add_weather_favorite
+action: stiebel_dhe_connect.add_weather_favorite
 data:
   entry_id: 01HXXXXXXXXXXXXXXX
   name: New York
@@ -85,7 +91,7 @@ data:
 ```
 
 ```yaml
-service: stiebel_dhe_connect.remove_weather_favorite
+action: stiebel_dhe_connect.remove_weather_favorite
 data:
   entry_id: 01HXXXXXXXXXXXXXXX
   name: New York
@@ -96,7 +102,7 @@ data:
 Example for switching to an existing favorite by `LocationId`:
 
 ```yaml
-service: stiebel_dhe_connect.select_weather_location
+action: stiebel_dhe_connect.select_weather_location
 data:
   entry_id: 01HXXXXXXXXXXXXXXX
   location_id: ID=320@ID2=84666@REGIO=5@COUNTRY_ID=34

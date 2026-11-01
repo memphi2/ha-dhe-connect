@@ -1,89 +1,95 @@
-# Deutsche Kurzanleitung
+# Stiebel Eltron DHE Connect: Kurzanleitung
 
-Kurzfassung fuer Installation und Betrieb der inoffiziellen DHE-Connect
-Integration in Home Assistant.
+Inoffizielle Community-Integration fuer die lokale Anbindung kompatibler
+Stiebel-Eltron-DHE-Connect-Geraete. Das Icon ist eigenes Projekt-Artwork,
+nicht das Herstellerlogo.
 
-Die Detaildokumentation bleibt in den englischen Seiten:
+## Voraussetzungen
 
-- [Entitaeten](entities.md)
-- [Troubleshooting](troubleshooting.md)
-- [Validierung](validation.md)
-- [Protokoll](protocol.md)
+- Home Assistant `2026.11.0` oder neuer. Fuer aeltere HA-Versionen bleibt
+  Integrationsversion `v2.0.9` vorgesehen.
+- Das DHE-Webinterface ist aus dem Home-Assistant-Netz erreichbar.
+- Zugriff auf das DHE-Display fuer die Pairing-Bestaetigung.
 
-## Installation (HACS)
+## Installation im Marketplace
 
-[![DHE Connect direkt in HACS oeffnen](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=memphi2&repository=ha-dhe-connect&category=integration)
+1. `Einstellungen` -> `Marketplace` oeffnen.
+2. Nach `DHE Connect` suchen und **Stiebel Eltron DHE Connect** waehlen.
+3. Integration installieren und den Hinweis zur Community-Integration bestaetigen.
+4. Unter `Einstellungen` -> `Geraete & Dienste` die Integration hinzufuegen.
+5. Gefundenes Geraet waehlen, Subnetz scannen oder Host und Port manuell angeben.
+6. Pairing am DHE-Display bestaetigen, wenn die Einrichtung dazu auffordert.
 
-1. HACS -> `Integrations`
-2. Nach `DHE Connect` suchen
-3. Repository oeffnen und `Download` auswaehlen
-4. Home Assistant neu starten
-5. Integration unter `Einstellungen -> Geraete & Dienste` hinzufuegen
+Kein benutzerdefiniertes Repository erforderlich. Eine erste Marketplace-
+Installation braucht normalerweise keinen HA-Neustart. Nach Updates oder dem
+Entfernen geladenen Codes der Neustartaufforderung von Home Assistant folgen.
 
-`DHE Connect` ist im HACS-Standardkatalog enthalten. Das Hinzufuegen als
-benutzerdefiniertes Repository ist nicht mehr erforderlich. Bereits auf diesem
-Weg installierte Versionen erhalten weiterhin Updates und muessen nicht neu
-installiert werden.
+Die vollstaendige [Installationsanleitung](installation.md) beschreibt auch
+Updates, manuelle Installation und Entfernung. Die Metadatendatei heisst
+weiterhin `hacs.json`; sie wird auch vom Marketplace verwendet.
 
-## Manuelle Installation
+## Bestehende Installationen und Updates
 
-Nach:
+Der Anzeigename lautet **Stiebel Eltron DHE Connect**, der Hersteller in den
+Geraeteinformationen **Stiebel Eltron**. Die Domain bleibt
+`stiebel_dhe_connect`. Bestehende Config Entries, Entity-IDs, Geraete-IDs,
+Tokens und selbst vergebene Namen bleiben erhalten.
 
-```text
-/config/custom_components/stiebel_dhe_connect/
-```
+Bereits ueber HACS installierte Versionen verwenden dasselbe Repository und
+dieselbe Domain. Nicht loeschen, neu installieren oder ein zweites Exemplar
+daneben anlegen. Den vorhandenen Updateweg nutzen und bestehende Eintraege
+behalten; fuer diese Umbenennung ist kein neues Pairing erforderlich.
 
-kopieren, Home Assistant neu starten, Integration ueber UI hinzufuegen.
+Marketplace-Updates stehen unter `Einstellungen` -> `Updates`. Vor einem Update
+ein HA-Backup anlegen, die Release-Hinweise lesen und danach den angeforderten
+HA-Neustart abschliessen. Ein manuell kopierter Entwicklungsstand ist keine
+veroeffentlichte Marketplace-Version.
 
-## Setup
+## Einrichtung und Pairing
 
-Der Setup-Flow bietet:
+Der Einrichtungsdialog bietet Zeroconf-Discovery (`_ste-dhe._tcp.local.`),
+Subnetz-Scan im privaten IPv4-Netz und manuelle Host-/Port-Eingabe. Zeroconf
+braucht mDNS-Sichtbarkeit im lokalen Netz oder ein passend eingerichtetes Relay.
+Beim Host nur Hostname oder IP-Adresse eingeben, keine URL oder Portangabe.
+Der Standardport ist `8443`.
 
-- Zeroconf discovery (`_ste-dhe._tcp.local.`)
-- Subnetz-Scan (private IPv4, Standardport `8443`)
-- Manuelle Host/Port-Eingabe
+Ein Config Entry wird erst nach erfolgreichem Pairing und Login angelegt.
+Das Token liegt im Home-Assistant-Config-Entry. Alte Token-Dateien werden bei
+der Migration uebernommen und danach geloescht. `.storage` nicht von Hand aendern.
 
-Hinweis: Zeroconf funktioniert normalerweise nur im lokalen Subnetz/VLAN, wenn
-kein mDNS-Relay aktiv ist.
+Bei einem abgelehnten Token zuerst das passende Problem unter
+`Einstellungen` -> `System` -> `Reparaturen` bearbeiten. Falls kein Problem
+sichtbar ist, den standardmaessig deaktivierten Button `Repair pairing`
+aktivieren und verwenden. Das neue Pairing am DHE bestaetigen.
 
-## Pairing und Token
+Bei einer geaenderten Adresse `Neu konfigurieren` am bestehenden Eintrag nutzen,
+nicht einen weiteren Eintrag fuer dasselbe Geraet anlegen.
 
-Der Config Entry wird erst nach erfolgreichem Pairing angelegt.
-
-Das DHE-Pairing-Token wird im Home-Assistant-Config-Entry gespeichert. Alte
-zielbezogene Token-Dateien aus frueheren Versionen werden automatisch in den
-Config Entry uebernommen und danach geloescht.
-
-Bei Token-/Pairing-Problemen zuerst den deaktivierten `Repair pairing` Button
-aktivieren und nutzen.
-
-## Betrieb
+## Betrieb und Hilfe
 
 - Live-Werte und Steuerung laufen lokal ueber Socket.IO/Engine.IO.
-- Einige Diagnose- und High-Churn-Entitaeten sind bewusst standardmaessig
-  deaktiviert.
-- Bei mehreren DHE-Geraeten Services immer mit `entry_id` aufrufen.
+- Optionale Diagnose- und haeufig wechselnde Entitaeten nur bei Bedarf aktivieren.
+- Bei mehreren DHE-Geraeten Integrationsaktionen mit `entry_id` zuordnen.
+- Bei Problemen [Troubleshooting](troubleshooting.md) nutzen und bestehende
+  Eintraege nicht vorsorglich loeschen.
 
-## Troubleshooting
+## Entfernung und Sicherheit
 
-Startpunkt immer:
+Zuerst die betroffenen Config Entries unter `Geraete & Dienste` entfernen.
+Danach bei Bedarf die Integration im Marketplace deinstallieren und den
+angeforderten Neustart abschliessen. Bei HACS- oder manuellen Installationen
+die [Entfernungsanleitung](installation.md#removal) beachten.
 
-- [Troubleshooting](troubleshooting.md)
+Nur im vertrauenswuerdigen lokalen Netz einsetzen; das DHE-Webinterface nicht
+ins Internet freigeben. Keine Tokens, privaten Hosts, IPs oder ungekuerzten
+Speicherdateien in Issues veroeffentlichen. Das Entfernen eines HA-Tokens
+widerruft nicht automatisch seine Berechtigung am DHE.
 
-Typische Themen:
+## Weitere Dokumentation
 
-- Pairing/Token ungültig
-- DHE offline/reconnecting
-- Zeroconf findet nichts
-- Recorder schreibt zu viele Daten
-
-## Sicherheit und Rechtliches
-
-- Nur im vertrauenswuerdigen lokalen Netz einsetzen.
-- DHE-Webinterface nicht ins Internet freigeben.
-- Keine Tokens/Hosts/private IPs in Issues, PRs oder Release-Texten veroeffentlichen.
-
-Siehe:
-
-- [SECURITY.md](../SECURITY.md)
-- [Legal](legal.md)
+- [Entitaeten und Aktionen](entities.md)
+- [Automationsbeispiele](examples.md)
+- [Bekannte Grenzen](known_limitations.md)
+- [Sicherheit](../SECURITY.md)
+- [Rechtliches und eigene Grafiken](legal.md)
+- [Validierung fuer Entwicklung und Maintainer](validation.md)

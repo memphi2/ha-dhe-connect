@@ -34,7 +34,11 @@ from .const import (
     DOMAIN,
     PLATFORMS,
 )
-from .entity_helpers import device_registry_model, device_registry_sw_version
+from .entity_helpers import (
+    DEVICE_MANUFACTURER,
+    device_registry_model,
+    device_registry_sw_version,
+)
 from .protocol import ID_DEVICE_INFO
 from .repair_issues import (
     DEVICE_UNREACHABLE_ISSUE,
@@ -279,7 +283,7 @@ def _async_update_device_registry_info(
     client: DHEClient,
     metadata: tuple[str, str | None],
 ) -> bool:
-    """Update one HA device registry entry with runtime model/firmware metadata."""
+    """Update the manufacturer and runtime model/firmware of one HA device."""
     device_registry = dr.async_get(hass)
     device_entry = _async_entry_device(device_registry, entry, client)
     if device_entry is None:
@@ -288,7 +292,7 @@ def _async_update_device_registry_info(
     model, sw_version = metadata
     device_registry.async_update_device(
         device_entry.id,
-        manufacturer=None,
+        manufacturer=DEVICE_MANUFACTURER,
         model=model,
         sw_version=sw_version,
     )

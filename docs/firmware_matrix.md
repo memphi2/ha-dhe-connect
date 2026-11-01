@@ -5,6 +5,11 @@ validated with the integration. It is intentionally conservative: only add a
 combination as tested when it has passed a real Home Assistant setup or smoke
 run against that device family.
 
+Entries record evidence from the stated dates and integration/HA versions.
+Historical device compatibility is not a claim that the current branch has
+already passed real-device validation on its new HA baseline. Keep earlier
+results intact and add a separately dated result when retesting.
+
 Do not add private data to this file. Keep hosts, IP addresses, MAC addresses,
 serial numbers, pairing tokens and full product IDs out of the matrix. The Home
 Assistant UI can show the full product ID for the local user, but public reports
@@ -14,7 +19,7 @@ and anonymized diagnostics should only use the first 7 characters.
 
 | Status | Meaning |
 |---|---|
-| `yes` | Confirmed with a real device and the current integration validation flow |
+| `yes` | Confirmed with a real device or identified user report; see the recorded versions, date and scope |
 | `partial` | Basic protocol behavior is confirmed, but not every feature was tested on that device/firmware combination |
 | `planned` | Known or expected device family, but no current live validation evidence yet |
 | `unknown` | Reported by a user without enough evidence to classify |
@@ -41,7 +46,7 @@ Recommended per-entry marker groups:
 
 | Device | Firmware / Web-App Version | Tested | Coverage | Notes |
 |---|---|---|---|---|
-| DHE Connect 18/21/24 | `1.9.00` observed | yes | Pairing, setup flow, runtime connection, climate, live water/power sensors, timers, ODB ID `32` wellness runtime, radio, weather, recorder smoke, diagnostics | Primary live validation target for the current release line; latest full live evidence run: `2026-05-21` |
+| DHE Connect 18/21/24 | `1.9.00` observed | yes | Pairing, setup flow, runtime connection, climate, live water/power sensors, timers, ODB ID `32` wellness runtime, radio, weather, recorder smoke, diagnostics | Recorded maintainer live evidence: `2026-05-21`; not a new HA-baseline retest |
 | DHE Connect 27 | unknown | planned | Not yet validated on a dedicated live device | Expected to share most protocol behavior, but needs confirmation before marking as partial or yes |
 | FFB T Plus Set EU / DHE Touch | Firmware `1.9.01.0000`, app `0.3.0` | yes | Pairing/setup and full integration function user-confirmed with integration `v2.0.3` on Home Assistant Core `2026.6.4` | Reported in issue #12 after updating device firmware; status is based on user-confirmed function, not a maintainer-owned lab smoke run |
 
@@ -112,7 +117,7 @@ the matrix interpretation conservative:
   - timers
   - ODB ID `32` wellness runtime counter
   - radio/weather runtime behavior
-- Result: pass for release-prep scope on the current integration line.
+- Result: pass for the recorded scope and date; not a new HA-baseline retest.
 
 ## How To Add A Result
 

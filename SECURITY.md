@@ -7,7 +7,8 @@ This integration is intended for local use inside a trusted Home Assistant netwo
 ## Recommendations
 
 - Do not expose the DHE web interface or port `8443` to the internet.
-- Keep Home Assistant and HACS updated.
+- Keep Home Assistant and the integration updated through the Marketplace.
+  If the installation is still HACS-managed, keep HACS updated too.
 - Treat debug logs as sensitive if they contain raw protocol frames.
 - Use the integration's `Repair pairing` button or the Home Assistant Repairs flow to replace a rejected token. Do not edit Home Assistant storage by hand.
 - Restrict access to Home Assistant configuration and backups because they contain the stored pairing token.

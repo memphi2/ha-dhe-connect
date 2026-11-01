@@ -99,6 +99,7 @@ class TestEntityHelpers(unittest.TestCase):
                 "identifiers": {
                     ("stiebel_dhe_connect", "device:aa:bb:cc:dd:ee:ff")
                 },
+                "manufacturer": "Stiebel Eltron",
                 "model": "DHE Connect",
                 "name": "Bathroom DHE",
             },
@@ -109,6 +110,7 @@ class TestEntityHelpers(unittest.TestCase):
             self.helpers.build_device_info("192.0.2.5", 8443, "Bathroom DHE"),
             {
                 "identifiers": {("stiebel_dhe_connect", "192.0.2.5:8443")},
+                "manufacturer": "Stiebel Eltron",
                 "model": "DHE Connect",
                 "name": "Bathroom DHE",
             },
@@ -128,6 +130,7 @@ class TestEntityHelpers(unittest.TestCase):
             ),
             {
                 "identifiers": {("stiebel_dhe_connect", "192.0.2.5:8443")},
+                "manufacturer": "Stiebel Eltron",
                 "model": "DHE Connect 18/21/24",
                 "name": "Bathroom DHE",
                 "sw_version": "1.9.00",
@@ -160,6 +163,7 @@ class TestEntityHelpers(unittest.TestCase):
         self.assertIs(entity._client, client)
         self.assertEqual(entity._attr_unique_id, "stiebel_dhe_connect_entry-1_radio")
         self.assertEqual(entity._attr_suggested_object_id, "Kitchen DHE_radio")
+        self.assertEqual(entity._attr_device_info.manufacturer, "Stiebel Eltron")
         self.assertEqual(
             entity._attr_device_info.identifiers,
             {

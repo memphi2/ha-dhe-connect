@@ -4,12 +4,12 @@ This repository is an unofficial community project for local Home Assistant
 interoperability with compatible DHE Connect devices.
 
 It is not affiliated with, endorsed by, sponsored by or otherwise approved by
-any device manufacturer, Home Assistant, HACS or their respective owners.
+any device manufacturer, Home Assistant, the Marketplace, HACS or their respective owners.
 Product and project names are used only to describe compatibility.
 
 ## Trademark Notice
 
-Names such as STIEBEL ELTRON, DHE Connect, Home Assistant, HACS, and Nabu Casa
+Names such as Stiebel Eltron, DHE Connect, Home Assistant, HACS, and Nabu Casa
 are used strictly for compatibility reference. All trademarks and product names
 belong to their respective owners. This project does not claim any trademark
 rights or brand affiliation.

@@ -835,7 +835,7 @@ async def test_runtime_relevant_config_entry_update_reloads_entry() -> None:
 
 
 async def test_runtime_device_info_updates_ha_device_model_and_firmware() -> None:
-    """Expose DHE device type and firmware version in HA's device registry."""
+    """Update manufacturer/model/firmware without replacing an existing device."""
     _clear_loaded_integration_modules()
     integration = importlib.import_module(f"custom_components.{DOMAIN}")
     protocol = importlib.import_module(f"custom_components.{DOMAIN}.protocol")
@@ -849,6 +849,17 @@ async def test_runtime_device_info_updates_ha_device_model_and_firmware() -> Non
             unique_id="device-info-fixture-dhe",
         )
         entry.add_to_hass(hass)
+        device_registry = dr.async_get(hass)
+        existing_device = device_registry.async_get_or_create(
+            config_entry_id=entry.entry_id,
+            identifiers={(DOMAIN, f"device:{entry.unique_id}")},
+            name=entry.title,
+            model="DHE Connect",
+        )
+        assert existing_device.manufacturer is None
+        device_registry.async_update_device(
+            existing_device.id, name_by_user="User-assigned DHE"
+        )
 
         with (
             patch.object(integration, "DHEClient", return_value=client),
@@ -857,12 +868,17 @@ async def test_runtime_device_info_updates_ha_device_model_and_firmware() -> Non
             assert await hass.config_entries.async_setup(entry.entry_id)
             await hass.async_block_till_done()
 
-        device_registry = dr.async_get(hass)
         devices = dr.async_entries_for_config_entry(device_registry, entry.entry_id)
         assert len(devices) == 1
+        assert devices[0].id == existing_device.id
+        assert devices[0].name_by_user == "User-assigned DHE"
         assert devices[0].model == "DHE Connect"
-        assert devices[0].manufacturer is None
+        assert devices[0].manufacturer == "Stiebel Eltron"
         assert devices[0].sw_version is None
+        entity_ids = {
+            entity.unique_id: entity.entity_id
+            for entity in er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)
+        }
 
         client.last_device_info = {
             "device_type": "DHE Connect 18/21/24",
@@ -874,9 +890,16 @@ async def test_runtime_device_info_updates_ha_device_model_and_firmware() -> Non
 
         devices = dr.async_entries_for_config_entry(device_registry, entry.entry_id)
         assert len(devices) == 1
+        assert devices[0].id == existing_device.id
+        assert devices[0].identifiers == existing_device.identifiers
+        assert devices[0].name_by_user == "User-assigned DHE"
         assert devices[0].model == "DHE Connect 18/21/24"
-        assert devices[0].manufacturer is None
+        assert devices[0].manufacturer == "Stiebel Eltron"
         assert devices[0].sw_version == "1.9.00"
+        assert entity_ids == {
+            entity.unique_id: entity.entity_id
+            for entity in er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)
+        }
 
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()

@@ -8,6 +8,7 @@ from typing import Any
 from homeassistant.helpers.device_registry import ChildDeviceInfo, DeviceInfo
 
 DOMAIN = "stiebel_dhe_connect"
+DEVICE_MANUFACTURER = "Stiebel Eltron"
 DEFAULT_DEVICE_MODEL = "DHE Connect"
 
 
@@ -90,6 +91,7 @@ def build_device_info(
 
     device_info = DeviceInfo(
         identifiers=identifiers,
+        manufacturer=DEVICE_MANUFACTURER,
         model=device_registry_model(runtime_device_info),
         name=name,
     )

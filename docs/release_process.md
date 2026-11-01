@@ -1,16 +1,23 @@
 # Release Process
 
-This checklist describes the repository release flow.
+This checklist is for maintainers publishing Marketplace updates. User-facing
+installation and update steps are in [installation.md](installation.md).
 
 ## 1) Preparation
 
 - Update version references (`manifest`, `README`, `CHANGELOG`)
 - Move release items out of `Unreleased`
 - Keep `Unreleased` with `- No changes yet.`
+- Keep the minimum Home Assistant version aligned in `hacs.json`, README and
+  validation policy. The integration manifest version must match the release tag.
+- Keep `hacs.json`: the Marketplace still reads that filename.
+- Use stable Home Assistant and matching official test helpers in
+  `requirements-ha.txt` before publication. A preview-only validation run is not
+  a stable release gate; follow [validation.md](validation.md).
 
 ## 2) Validation Gate
 
-Use the canonical command set from [docs/validation.md](validation.md).
+Use the canonical command set from [validation.md](validation.md).
 
 For release-prep gating, run at minimum:
 
@@ -24,25 +31,37 @@ network/infrastructure dependent.
 ## 3) PR Phase
 
 - Open PR
-- Wait for CI (HACS, Hassfest, repository checks)
-- Trigger Codex review
-- Fix all findings
-- Re-run review until no open findings remain
+- Wait for CI: the check named `HACS` validates the shared catalog metadata;
+  Hassfest, repository checks and CodeQL must pass too.
+- Trigger Codex review with `@codex review`.
+- Fix actionable findings, rerun checks and request review of the new head.
+- Before merging, verify mergeability, checks, unresolved comments and the
+  findings-free bot result against the exact current commit.
+- Inspect open code-scanning alerts separately from the CodeQL workflow result.
 
 ## 4) Merge And Publish
 
 - Merge PR
-- Create tag/release
+- Publish a GitHub release with the matching version tag. A tag alone is not a
+  published Marketplace update.
+- Verify that the released `custom_components/stiebel_dhe_connect/` includes
+  the manifest, Python modules, translations and local brand images.
 - Run post-release verification:
 
 ```bash
 python scripts/release_check.py --expect-tag present --expect-github-release present --require-current-tag
 ```
 
-## 5) HACS Default Update
+## 5) Catalog Delivery
 
-- Update existing `hacs/default` PR (or open one if missing)
-- Refresh release link and successful action links
+The repository is already listed in the shared catalog. No catalog PR is needed
+for routine releases. Do not open or refresh a `hacs/default` submission for
+every version.
+
+The catalog discovers the published release, then the Marketplace offers it
+under `Settings` -> `Updates`. Allow time for catalog refresh; do not promise
+immediate availability. Each release's `hacs.json` controls its HA minimum.
+See the official [release delivery guide](https://contributors.home-assistant.io/marketplace/guides/releases/).
 
 ## 6) Hygiene
 

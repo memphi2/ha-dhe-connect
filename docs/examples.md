@@ -1,7 +1,10 @@
 # Automation Examples
 
 These examples are intentionally compact and use stable entities from this
-integration. Replace entity IDs with your own registry IDs.
+integration. Replace entity IDs with your own registry IDs and the notification
+action with your own mobile-app action. See the [entity reference](entities.md)
+for diagnostic states and available controls. Import each automation as its own
+automation; dashboard snippets belong in a dashboard, not `automations.yaml`.
 
 ## Shower Timer Finished Notification
 
@@ -92,10 +95,10 @@ mode: single
 alias: DHE offline
 triggers:
   - trigger: state
-    entity_id: sensor.dhe_connect_connection_state
+    entity_id: sensor.dhe_connect_error_status
     to: disconnected
-for:
-  minutes: 2
+    for:
+      minutes: 2
 actions:
   - action: notify.mobile_app_phone
     data:

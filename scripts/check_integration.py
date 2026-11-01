@@ -16,6 +16,7 @@ from packaging.version import InvalidVersion, Version
 
 ROOT = Path(__file__).resolve().parents[1]
 INTEGRATION = ROOT / "custom_components" / "stiebel_dhe_connect"
+INTEGRATION_NAME = "Stiebel Eltron DHE Connect"
 TRANSLATIONS = INTEGRATION / "translations"
 FIXTURE_ROOT = ROOT / "tests" / "fixtures"
 REPLAY_FIXTURE_NAME = "dhe_protocol_replay_sanitized.json"
@@ -82,6 +83,7 @@ _USES_LINE_RE = re.compile(r"^\s*(?:-\s*)?uses:\s*\S+", re.MULTILINE)
 _MAJOR_VERSION_REF_RE = re.compile(r"^v(?P<major>\d+)(?:\.|$)")
 _MARKDOWN_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 README_REQUIRED_DOC_LINKS = {
+    "docs/installation.md",
     "docs/troubleshooting.md",
     "docs/examples.md",
     "docs/use-cases.md",
@@ -181,7 +183,7 @@ def check_manifest() -> str:
     manifest = _load_json(INTEGRATION / "manifest.json")
     required = {
         "domain": "stiebel_dhe_connect",
-        "name": "DHE Connect",
+        "name": INTEGRATION_NAME,
         "categories": ["climate.water_heaters"],
         "config_flow": True,
         "iot_class": "local_push",
@@ -200,7 +202,7 @@ def check_manifest() -> str:
 
 def check_hacs() -> None:
     hacs = _load_json(ROOT / "hacs.json")
-    if hacs.get("name") != "DHE Connect":
+    if hacs.get("name") != INTEGRATION_NAME:
         _fail("hacs.json name does not match the integration name")
     if hacs.get("homeassistant") != MIN_HOMEASSISTANT_VERSION:
         _fail(
@@ -220,7 +222,8 @@ def check_repository_files(version: str) -> None:
         "custom_components/stiebel_dhe_connect/services.yaml",
         "custom_components/stiebel_dhe_connect/quality_scale.yaml",
         "custom_components/stiebel_dhe_connect/brand/icon.png",
-        "custom_components/stiebel_dhe_connect/brand/logo.png",
+        "custom_components/stiebel_dhe_connect/brand/icon@2x.png",
+        "docs/installation.md",
         "docs/troubleshooting.md",
         "docs/validation.md",
         "docs/examples.md",
@@ -276,7 +279,7 @@ def check_lts_compatibility_policy() -> None:
         f"| Python validation runtime | `{VALIDATION_PYTHON_VERSION}` |",
         "| Runtime dependency baseline | Supplied by the pinned Home Assistant core |",
         (
-            "| HACS metadata | `hacs.json` declares "
+            "| Marketplace metadata | `hacs.json` declares "
             f"`homeassistant: {MIN_HOMEASSISTANT_VERSION}` |"
         ),
     )

@@ -1,9 +1,10 @@
 # Troubleshooting
 
 This guide collects the checks that are most useful when the DHE Connect
-integration does not behave as expected. The integration is local-only, so most
-issues come from pairing state, local network reachability, DHE session state or
-Home Assistant entity/recorder behavior.
+integration does not behave as expected. For installation, Marketplace updates,
+restart requirements and removal, start with [installation.md](installation.md).
+Runtime communication is local; the Marketplace is the distribution path, not
+a relay for DHE data.
 
 ## Quick checks
 
@@ -14,43 +15,21 @@ Start with these checks before changing configuration:
 3. Confirm that the configured port matches the DHE web interface port.
 4. Check the `Connection state`, `Reconnects`, `Last reconnect reason` and `Error status` diagnostic sensors.
 5. Check Home Assistant logs for `custom_components.stiebel_dhe_connect`.
-6. If the issue started after testing development builds, reload the integration once and restart Home Assistant if entities still look stale.
+6. After replacing or updating integration files, complete the Home Assistant
+   restart. Reloading an entry reconnects it but does not replace imported Python code.
 
-## FAQ (Short Answers)
+## Find The Right Check
 
-### Zeroconf finds nothing
-
-Use manual host/port setup or subnet scan. Zeroconf usually needs mDNS
-visibility in the same subnet/VLAN.
-
-### Setup scan finds nothing
-
-Check selected subnet and scan port (`8443` by default), then continue with
-manual host/port entry.
-
-### DHE is connected but entities are unavailable
-
-Check reconnect state and availability diagnostics. After reconnect grace,
-entities remain unavailable until fresh runtime payloads arrive.
-
-### Token invalid / pairing required
-
-Use `Repair pairing` and confirm the pairing request on the DHE display.
-
-### Reconfigure host/port without creating a new device
-
-Use the Reconfigure flow on the existing integration entry. Do not create a
-second entry for the same physical device.
-
-### Recorder grows too fast
-
-Enable only needed high-churn entities and verify recorder writes with mounted
-smoke checks.
-
-### Radio or weather behavior looks inconsistent
-
-Check favorite/source sync and current runtime state first, then run the
-service checks from the development smoke section if needed.
+| Symptom | Start here |
+|---|---|
+| Missing install/update or old name/icon | [Installation and updates](installation.md) |
+| Pairing or token error | [Repairs](#pairing-required--token-invalid--repairs) |
+| Address changed | [Reconfigure](#reconfigure-host-or-port) |
+| Discovery or scan finds nothing | [Zeroconf](#zeroconf-finds-nothing), [subnet scan](#setup-scan-finds-nothing) |
+| Device stays offline | [DHE offline](#dhe-offline), [reconnect loops](#reconnect-loops) |
+| Entities have no values | [Live sensors](#live-sensors-are-empty), [availability](#entities-stay-unavailable) |
+| Database or task counts grow | [Recorder](#recorder-writes-too-much), [runtime soak](validation.md#loopback-runtime-soak) |
+| Radio or weather is missing | [Radio and weather](#radio-or-weather-missing) |
 
 ## Pairing Required / Token Invalid / Repairs
 
@@ -74,19 +53,18 @@ disabled-by-default `Repair pairing` button remains available as a manual
 fallback. It removes the token for the affected config entry and starts a fresh
 pairing round without requiring manual file edits.
 
-If Home Assistant can still load the config entry and the DHE explicitly stops
-accepting the stored token, the integration starts Home Assistant's
-reauthentication flow and creates a fixable Repairs issue. Follow either the
-reauthentication form or the Repairs form, then confirm the new pairing request
-on the DHE display. The integration reloads after successful pairing and login.
+When a loaded entry reports a rejected token, the integration creates the
+pairing/token Repairs issue. Do not wait for a second generic reauthentication
+prompt or repeatedly reload the entry. Complete the Repairs flow; the
+integration reloads after successful pairing and login.
 
 Manual token-file deletion should no longer be needed. The integration stores
 the DHE pairing token in the Home Assistant config entry; legacy per-target token
 files from older versions are migrated into the entry and deleted
-automatically. If Home Assistant cannot load the integration far enough to
-expose the repair button, prefer removing and re-adding only the affected
-config entry over editing `.storage` by hand. Never paste tokens, `.storage`
-contents or raw diagnostics into public issues.
+automatically. If the integration cannot load far enough to expose Repairs or
+the button, first check the HA minimum, installed files, completed restart and
+setup error in the log. Do not delete a working config entry as a routine
+troubleshooting step, and never edit `.storage` or paste its contents into issues.
 
 ## Pairing Required Again
 
@@ -97,15 +75,8 @@ the DHE rejects that token after reload.
 The integration does not create a config entry until pairing and login both
 succeed.
 
-Use this sequence:
-
-1. Open the Home Assistant Repairs issue for the affected DHE entry.
-2. Start the repair flow.
-3. Confirm the new pairing request on the DHE display.
-4. Wait until the `Connection state` diagnostic sensor returns to `connected`.
-
-If the entry is loaded but the Repairs issue is not visible, use the
-disabled-by-default `Repair pairing` button as a fallback.
+Use the [Repairs sequence above](#pairing-required--token-invalid--repairs), then
+wait for the connection diagnostic to return to `connected`.
 
 If pairing is not shown on the DHE display, check that the DHE web interface is
 reachable from the Home Assistant network and that no other client keeps the DHE
@@ -129,12 +100,10 @@ Pairing requires confirmation on the DHE display. If the setup flow reaches the
 confirmation step but never completes, check the device display and confirm the
 pairing prompt there.
 
-If pairing keeps repeating:
-
-1. Enable the disabled-by-default `Repair pairing` button.
-2. Press `Repair pairing`.
-3. Confirm the new pairing request on the DHE display.
-4. Wait until the `Connection state` diagnostic sensor returns to `connected`.
+If pairing keeps repeating, collect one debug-log reproduction and the DHE
+display result before starting another attempt. Use the
+[Repairs flow](#pairing-required--token-invalid--repairs) rather than deleting the
+entry or repeatedly replacing its token without evidence.
 
 ## Reconfigure Host Or Port
 
@@ -263,6 +232,8 @@ When the integration cannot connect:
 2. Check whether another browser tab, mobile app or automation is keeping the DHE session busy.
 3. Confirm that the DHE and Home Assistant can route to each other.
 4. Confirm that no firewall blocks the configured port.
+5. Let automatic reconnect recover after reachability returns. If it does not,
+   inspect the diagnostics and reload the existing entry once.
 
 During Home Assistant startup or config-entry reload, an unreachable DHE causes
 the config entry to wait for retry instead of setting up stale platform state.
@@ -273,7 +244,6 @@ After the reconnect grace window expires, Home Assistant can raise
 Normal DHE controls are blocked while the runtime is unavailable so Home
 Assistant does not send stale writes to an offline device. The disabled-by-
 default `Repair pairing` button remains available as the recovery exception.
-5. Reload the integration after the DHE web interface is reachable again.
 
 If the DHE is powered, reachable from a browser and still shown as offline in
 Home Assistant, compare the browser URL with the integration options. The host
@@ -292,11 +262,11 @@ remain available while the `Connection state` diagnostic sensor reports
 `reconnecting`. Repeated reconnects are visible through the `Reconnects`,
 `Next reconnect delay` and `Last reconnect reason` sensors.
 
-The runtime now also detects stale sessions where the socket stays technically
+The runtime detects stale sessions where the socket stays technically
 connected but no device data arrives for an extended period. In that case the
 integration sends a lightweight watchdog probe and forces one reconnect if the
-probe remains unanswered. This replaces most cases where a manual "reconnect
-Wi-Fi" action on the DHE UI was previously needed.
+probe remains unanswered. Persistent failures still need diagnostics; a
+connected transport alone is not proof that device data is arriving.
 
 If reconnects keep increasing:
 
@@ -346,70 +316,20 @@ Entities are live-state based. During short reconnects they keep their cached
 state; after the reconnect grace expires they become unavailable until fresh
 runtime data arrives from the DHE.
 
-For optional entities enabled after startup, reload the integration if the DHE
-has not sent the matching value yet. Some disabled-by-default entities depend on
-runtime payloads and may stay `unknown` until the device publishes the next real
-value.
-
-Diagnostic ODB total and saving sensors use stricter startup handling:
-
-- `Heating energy`
-- `Hot water volume`
-- `Possible energy saving`
-- `Actual water saving`
-
-For these sensors, a direct startup or entity-enable readback of `0` is treated
-as a placeholder. The entity stays available with `unknown` until the DHE sends
-a real runtime update. This can be visible on fresh installs before the first
-usage event; after water is used, the DHE normally publishes the value promptly.
-A later runtime value of `0` is still accepted.
-
-The ODB saving sensors can be close to saving-monitor sensors, but they are not
-the same source. `ODB_Gsprt_Energie` tracks the saving-monitor possible energy
-value in observed DHE traffic. `ODB_Gsprt_KW_Volumen` tracks the saving-monitor
-real water-saving value. `ODB_WW_Volumen` remains a hot-water-volume ODB value
-even when its current value is close to a saving-monitor water value.
-
-The Home Assistant entity names intentionally omit protocol labels such as
-`ODB`. The entity reference keeps the exact ODB ID and web-interface name in the
-source column for debugging.
+Distinguish `unavailable` from an available entity with `unknown` state. The
+[live-sensor checks above](#live-sensors-are-empty) describe startup placeholders
+and delayed optional values. The [entity reference](entities.md#sensors) records
+the exact sources for diagnostic totals and saving-monitor values; similar
+numbers do not mean they are interchangeable measurements.
 
 ## Recorder Writes Too Much
 
-The integration filters repeated high-churn values before writing Home Assistant
-state. If the recorder database still grows unexpectedly, separate idle and
-operational windows:
-
-```bash
-python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log --monitor-seconds 90
-```
-
-For release or performance evidence, prefer a longer idle window:
-
-```bash
-python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log --monitor-seconds 600 --require-idle --print-operational-signals
-```
-
-For sanitized release/performance evidence, write the same run to JSON:
-
-```bash
-python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log --monitor-seconds 600 --require-idle --print-operational-signals --evidence-json /tmp/dhe-smoke-evidence.json
-```
-
-The JSON evidence contains summarized checks, entity counts, monitor settings
-and recorder top writers only. It does not persist local config paths, tokens,
-token paths, hosts, IPv4/IPv6 addresses or session identifiers.
-
-Run the monitor while the DHE is idle when validating database churn. If the
-device-status sensor reports water running (`status_2` or the observed
-transition state `status_4`), if the error-status diagnostic attributes carry
-that device status, or if `Last usage duration` changes during the monitor
-window, the smoke check treats the window as operational and skips idle write
-thresholds. It still checks logs and reconnect stability.
-Use `--require-idle` when you explicitly want a clean idle database-growth
-measurement. In that mode, any detected water use or completed-usage signal
-fails the run and prints the responsible entity or `device_status` attribute
-when `--print-operational-signals` is set.
+The integration filters repeated high-churn values before writing HA state.
+Compare idle and water-use windows when reporting unexpected database growth.
+Recorder writes are not the same thing as retained asyncio tasks or RAM growth.
+Maintainer commands and sanitized evidence export are documented once in
+[mounted recorder checks](validation.md#mounted-home-assistant-smoke); task and
+allocation regression checks are in [runtime soak](validation.md#loopback-runtime-soak).
 
 Expected operational writers during water use include current flow, current
 power, live temperature, consumption and saving-monitor entities. Unexpected idle
@@ -519,7 +439,13 @@ if the target device is not otherwise unambiguous.
 
 ## Debug Logs
 
-Enable debug logging only while collecting evidence:
+Prefer `Enable debug logging` from the integration's menu under `Settings` ->
+`Devices & services`. Reproduce the problem once, then disable debug logging
+and keep the downloaded log. Download diagnostics for the affected entry too.
+Review both files before sharing them, even when the integration redacts known
+sensitive fields. Do not attach raw `.storage` files or Home Assistant backups.
+
+For deliberate YAML-based logging configuration:
 
 ```yaml
 logger:
@@ -536,29 +462,8 @@ session context from their own output, but Home Assistant backups and raw
 
 ## Development Smoke Checks
 
-The complete validation flow is documented in
-[validation.md](validation.md). The short version:
-
-For a mounted Home Assistant test configuration:
-
-```bash
-python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log
-```
-
-If the mounted entity registry contains DHE entries but none are enabled, the
-smoke fails instead of silently trusting stale recorder fallback data. That
-usually means Home Assistant has not loaded the integration correctly, or the
-registry state is not representative for a live validation run.
-
-For live service smoke against a test instance:
-
-```bash
-HA_TEST_URL=http://homeassistant.local:8123 \
-HA_TEST_USERNAME=your-ha-user \
-HA_TEST_PASSWORD=your-ha-password \
-python scripts/ha_test_api.py --config /mnt/ha-test-config --service-smoke --cleanup-localhost-tokens
-```
-
-Do not run service smoke while someone depends on hot water. The service smoke
-actively calls `climate.turn_off`, `climate.turn_on`, `media_player.turn_off`
-and `media_player.select_source`.
+Maintainer-only loopback, mounted-config and live API checks are in
+[validation.md](validation.md). They are not required to install the integration
+or open a user issue. Live service checks can change heating and radio state;
+run them only on an explicitly authorized test installation and never while
+someone depends on hot water.

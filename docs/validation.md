@@ -2,15 +2,11 @@
 
 This document defines the active validation gate for this repository.
 
-Dependabot can raise the stable mypy and Ruff minimum versions inside the
-reviewed ranges (`>=2.4,<3` and `>=0.17,<0.18`). The dependency guard parses
-requirements semantically instead of requiring the old floor as literal text.
-Removing a bound, lowering the minimum, allowing a new major/minor outside the
-reviewed range, conditional requirements and prerelease bounds still fail.
-HA and its matching runtime/test pins remain exact baseline changes.
-
 It is version-neutral by design and should not include stale snapshots from
 older branches.
+
+For normal installation and updates, use [installation.md](installation.md).
+The commands here are development/release checks, not a user setup requirement.
 
 ## LTS Compatibility Matrix
 
@@ -21,13 +17,36 @@ older branches.
 | Home Assistant drift check | Monthly scheduled and manual latest-HA validation |
 | Python validation runtime | `3.14` |
 | Runtime dependency baseline | Supplied by the pinned Home Assistant core |
-| HACS metadata | `hacs.json` declares `homeassistant: 2026.11.0` |
+| Marketplace metadata | `hacs.json` declares `homeassistant: 2026.11.0` |
 | Catalog category | `climate.water_heaters` in the integration manifest |
 
 The catalog category follows the physical device's purpose, not its entity
 platforms. It uses the official
 [water-heater category](https://contributors.home-assistant.io/core/integrations/categories/#climate)
-for HACS and Marketplace discovery; it does not change HA entity domains.
+for Marketplace discovery; it does not change HA entity domains. `hacs.json`
+and the CI check named `HACS` remain correct technical names for the shared
+catalog format and validator.
+
+Dependabot may raise stable mypy and Ruff minimums inside the reviewed ranges
+(`>=2.4,<3` and `>=0.17,<0.18`). The guard parses requirements semantically;
+lowered/missing/widened bounds, conditional requirements and prerelease bounds
+still fail. Core and its matching test helpers move together in the central
+baseline, rather than as independent tool updates.
+
+## Marketplace Branding
+
+The catalog and integration display name is `Stiebel Eltron DHE Connect`.
+The integration domain remains `stiebel_dhe_connect`; existing config entries,
+device identifiers, entity unique IDs and user-assigned names are unchanged.
+Device information includes the manufacturer `Stiebel Eltron`, both on setup
+and when runtime model/firmware metadata updates an existing device.
+
+The bundled original project artwork uses `brand/icon.png` (256 x 256) and
+`brand/icon@2x.png` (512 x 512). The same square artwork serves as the logo via
+Home Assistant's supported local fallback, including dark-theme requests.
+No vendor logo, remote logo URL, alternate integration domain or runtime image
+downloader is introduced. See the
+[official brand image rules](https://contributors.home-assistant.io/core/integrations/brands/).
 
 ## 2026.11 Release Readiness
 
@@ -126,6 +145,11 @@ python scripts/zeroconf_smoke.py --timeout 20
 
 ### Mounted Home Assistant Smoke
 
+These commands inspect a mounted test configuration and recorder evidence.
+They do not install or activate an integration. Verify the intended share and
+keep its files and raw output private. Installing code, restarting Home
+Assistant and calling live APIs are separate operations.
+
 ```bash
 python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log
 ```
@@ -142,6 +166,11 @@ Strict idle recorder gate:
 python scripts/ha_test_smoke.py --config /mnt/ha-test-config --include-fault-log --monitor-seconds 600 --require-idle --print-operational-signals
 ```
 
+For a sanitized evidence file, append `--evidence-json /tmp/dhe-smoke-evidence.json`.
+Compare separate idle and water-use windows. Water flow or a completed-use
+signal makes a window operational; `--require-idle` rejects such a window
+rather than reporting it as idle memory/database evidence.
+
 ### Live HA API Smoke
 
 ```bash
@@ -157,7 +186,9 @@ Optional:
 - `--service-smoke`
 - `--timer-smoke`
 
-Use active service smokes only when live control changes are acceptable.
+Use active service smokes only with explicit lab authorization. They can change
+heating and radio state; never run them while someone depends on hot water.
+Loopback tests are not authorization to access a running HA installation.
 
 ## Quality Scale Evidence
 
