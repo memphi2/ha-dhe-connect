@@ -12,6 +12,7 @@
 - Bind Repairs to their config entry and prevent recreation after its removal.
 - Verify installed core/helper provenance and resolve matching latest-HA pairs.
 - Gate lifecycle/reconnect/idle task and memory growth with a loopback soak test.
+- Classify the integration as a water heater for catalog discovery.
 
 ## v2.0.10 - 2026-10-14
 

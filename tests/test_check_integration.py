@@ -185,6 +185,25 @@ def _write_lts_policy_fixture(root: Path) -> None:
 class TestCheckIntegration(unittest.TestCase):
     """Validate repository guard helpers."""
 
+    def test_manifest_requires_device_category_not_entity_domains(self) -> None:
+        manifest = {
+            "domain": "stiebel_dhe_connect",
+            "name": "DHE Connect",
+            "categories": ["climate.water_heaters"],
+            "config_flow": True,
+            "iot_class": "local_push",
+            "integration_type": "device",
+            "requirements": [],
+            "version": "2.0.10",
+        }
+        with patch.object(check_integration, "_load_json", return_value=manifest):
+            self.assertEqual(check_integration.check_manifest(), manifest["version"])
+            for categories in (None, [], "climate.water_heaters", ["Climate"], ["sensor"]):
+                with self.subTest(categories=categories), redirect_stderr(StringIO()):
+                    manifest["categories"] = categories
+                    with self.assertRaises(SystemExit):
+                        check_integration.check_manifest()
+
     def test_ha_baseline_accepts_preview_and_stable_without_other_changes(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

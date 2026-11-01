@@ -1,6 +1,9 @@
 {
   "domain": "stiebel_dhe_connect",
   "name": "DHE Connect",
+  "categories": [
+    "climate.water_heaters"
+  ],
   "codeowners": [
     "@memphi2"
   ],

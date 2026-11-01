@@ -15,6 +15,12 @@ older branches.
 | Python validation runtime | `3.14` |
 | Runtime dependency baseline | Supplied by the pinned Home Assistant core |
 | HACS metadata | `hacs.json` declares `homeassistant: 2026.11.0` |
+| Catalog category | `climate.water_heaters` in the integration manifest |
+
+The catalog category follows the physical device's purpose, not its entity
+platforms. It uses the official
+[water-heater category](https://contributors.home-assistant.io/core/integrations/categories/#climate)
+for HACS and Marketplace discovery; it does not change HA entity domains.
 
 ## 2026.11 Release Readiness
 

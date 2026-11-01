@@ -175,6 +175,7 @@ def check_manifest() -> str:
     required = {
         "domain": "stiebel_dhe_connect",
         "name": "DHE Connect",
+        "categories": ["climate.water_heaters"],
         "config_flow": True,
         "iot_class": "local_push",
         "integration_type": "device",
