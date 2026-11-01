@@ -291,7 +291,7 @@ class TestWeatherEntityWrites(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(entity._has_forecast_listeners())
         self.assertFalse(entity._forecast_listener_update_pending)
 
-    def test_weather_write_signature_ignores_unrecorded_list_payloads(self) -> None:
+    def test_weather_write_signature_includes_unrecorded_list_payloads(self) -> None:
         weather_module = _load_weather_module()
         entity = weather_module.StiebelDHEWeather.__new__(
             weather_module.StiebelDHEWeather
@@ -323,7 +323,33 @@ class TestWeatherEntityWrites(unittest.IsolatedAsyncioTestCase):
         self.assertIn("favorite_locations", entity._unrecorded_attributes)
         self.assertIn("forecast_results", entity._unrecorded_attributes)
         self.assertIn("int_names", entity._unrecorded_attributes)
-        self.assertEqual(first_signature, entity._weather_write_signature())
+        self.assertNotEqual(first_signature, entity._weather_write_signature())
+
+    def test_replaced_search_results_publish_without_forecast_notification(self) -> None:
+        from copy import deepcopy
+        from unittest.mock import Mock
+
+        weather_module = _load_weather_module()
+        client = types.SimpleNamespace(
+            host="127.0.0.1", port=8443, device_identifier=None, available=True,
+        )
+        entity = weather_module.StiebelDHEWeather("test-entry", "Test DHE", client)
+        snapshots = []
+        entity.async_write_ha_state = lambda: snapshots.append(
+            deepcopy(entity._attr_extra_state_attributes)
+        )
+        entity._schedule_forecast_listener_update = Mock()
+        state = _weather_state()
+        state["forecast_results"] = [{"Name": "First", "LocationId": "ID=1"}]
+        entity._handle_weather_update(state)
+        entity._schedule_forecast_listener_update.reset_mock()
+        state["forecast_results"] = [{"Name": "Second", "LocationId": "ID=2"}]
+        entity._handle_weather_update(state)
+        entity._handle_weather_update(state)
+
+        self.assertEqual(len(snapshots), 2)
+        self.assertEqual(snapshots[-1]["forecast_results"][0]["name"], "Second")
+        entity._schedule_forecast_listener_update.assert_not_called()
 
 
 if __name__ == "__main__":

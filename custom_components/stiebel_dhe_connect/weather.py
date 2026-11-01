@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from copy import deepcopy
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from homeassistant.components.weather import WeatherEntity, WeatherEntityFeature
@@ -17,7 +18,7 @@ from . import weather_mapping as weather_model
 from .async_helpers import create_background_task
 from .client import DHEClient
 from .entity_helpers import StiebelDHEEntityMixin
-from .entity_state_helpers import connected_and_ready, filtered_state_attributes
+from .entity_state_helpers import connected_and_ready
 from .runtime_helpers import get_runtime_data
 
 if TYPE_CHECKING:
@@ -120,8 +121,10 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
     @callback
     def _handle_weather_update(self, state: dict[str, Any]) -> None:
         """Handle weather updates from the persistent client."""
+        previous_forecast = self._forecast
         self._apply_weather_state(state)
-        if self._write_weather_state():
+        self._write_weather_state()
+        if self._forecast != previous_forecast:
             self._schedule_forecast_listener_update()
 
     @callback
@@ -135,7 +138,7 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
         self._write_weather_state()
 
     def _write_weather_state(self, *, force: bool = False) -> bool:
-        """Write weather state only when recorder-visible state changed."""
+        """Publish changed HA state, including attributes excluded from history."""
         signature = self._weather_write_signature()
         if not force and signature == self._last_written_weather_signature:
             return False
@@ -151,14 +154,7 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
             self._attr_native_temperature,
             self._attr_name,
             list(self._forecast),
-            self._recorded_weather_attributes(),
-        )
-
-    def _recorded_weather_attributes(self) -> dict[str, Any]:
-        """Return weather attributes that should participate in recorder writes."""
-        return filtered_state_attributes(
-            self._attr_extra_state_attributes,
-            self._unrecorded_attributes,
+            deepcopy(self._attr_extra_state_attributes),
         )
 
     def _schedule_forecast_listener_update(self) -> None:
