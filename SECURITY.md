@@ -9,21 +9,30 @@ This integration is intended for local use inside a trusted Home Assistant netwo
 - Do not expose the DHE web interface or port `8443` to the internet.
 - Keep Home Assistant and HACS updated.
 - Treat debug logs as sensitive if they contain raw protocol frames.
-- Remove the matching `/config/.storage/stiebel_dhe_connect_token_<host>_<port>.txt` file to revoke the local integration token and pair again.
-- Restrict access to Home Assistant backups because the token file is included in the HA config directory.
+- Use the integration's `Repair pairing` button or the Home Assistant Repairs flow to replace a rejected token. Do not edit Home Assistant storage by hand.
+- Restrict access to Home Assistant configuration and backups because they contain the stored pairing token.
 - Avoid sharing mounted Home Assistant config folders, release-check logs or smoke-test output without reviewing them first.
 
 ## Token handling
 
-The integration stores the DHE token locally per configured DHE target at:
+The integration stores the DHE pairing token in the data of its Home Assistant
+config entry. Home Assistant manages persistence in `.storage/core.config_entries`;
+the integration does not create a separate token file for normal operation.
+Treat that storage and all backups containing it as credentials. Never share raw
+config-entry storage, and do not edit it manually.
 
-```text
-/config/.storage/stiebel_dhe_connect_token_<host>_<port>.txt
-```
+Legacy per-target, entry-id and shared token files are migration inputs only.
+Setup and retargeting migrate a usable legacy token into the config entry, then
+delete the legacy files. Deleting an old file after migration does not clear the
+active token in the config entry.
 
-Older integration versions used `/config/.storage/stiebel_dhe_connect_token.txt` or entry-id based token filenames. Setup pairing removes stale legacy token files that are not owned by an existing config entry before requesting a fresh token.
-
-The file is written atomically and the integration attempts to set permissions to `0600`. Some Home Assistant filesystems may not enforce POSIX permissions; therefore Home Assistant backups and config access should be treated as sensitive.
+Use `Repair pairing` or the fixable pairing/token issue in Repairs to request a
+fresh pairing. The pairing procedure may require confirmation on the DHE.
+Removing a stored token or the integration's config entry removes the local
+credential; it must not be treated as proof that the DHE has revoked it. If a
+token may have been disclosed, invalidate its authorization on the device using
+the device's supported controls, then pair again. See the
+[pairing troubleshooting guide](docs/troubleshooting.md#pairing-required--token-invalid--repairs).
 
 ## Diagnostic redaction
 
