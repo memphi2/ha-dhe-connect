@@ -182,14 +182,15 @@ evidence:
         recovery.
     test-coverage:
       implementation: >
-        scripts/check_coverage.py runs pytest-cov for deterministic integration
-        modules with a documented Silver coverage gate.
+        scripts/check_coverage.py enforces 85% line coverage across all integration
+        modules and 95% for the narrower deterministic-module scope. The scoped
+        result is not a claim of 95% coverage for the whole integration.
       tests: >
-        scripts/check_coverage.py and scripts/check_integration.py are part of
-        the release validation command set.
+        Both baseline and latest-HA CI jobs run scripts/check_coverage.py;
+        focused tests verify both thresholds are enforced.
       docs: >
-        docs/validation.md documents the coverage threshold and every
-        exclusion.
+        docs/validation.md documents both thresholds and points to the
+        per-file exclusion list with reasons in scripts/check_coverage.py.
 
   bronze:
     action-setup:

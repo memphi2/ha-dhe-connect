@@ -83,6 +83,13 @@ dataclass. Older HA versions require v2.0.9.
 
 ## Release Validation Command Set
 
+Both CI test jobs run `scripts/check_coverage.py`. It runs the full pytest suite
+once and enforces two line-coverage gates: **85% across every integration module**
+and **95% for the scoped deterministic modules**. The 95% figure is not whole-repo
+coverage. `EXCLUDED_COVERAGE_FILES` in `scripts/check_coverage.py` lists every
+file omitted from the narrower gate and its reason; none are omitted from the
+whole-integration gate. Both reports are printed even if one threshold fails.
+
 Run this before opening/finalizing release-prep PRs:
 
 ```bash
