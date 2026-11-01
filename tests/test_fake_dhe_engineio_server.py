@@ -758,6 +758,9 @@ class TestFakeDHEEngineIOServer(unittest.IsolatedAsyncioTestCase):
                         },
                     )
 
+                    client._stopped.set()
+                    await client._handle_auth_failure(client_module.DHEAuthError("Stored token rejected"))
+                    self.assertTrue(client.diagnostic_state["auth_failure"])
                     await DHEClient.start(client)
                     for _attempt in range(40):
                         if client.diagnostic_state.get("connection_state") == "connected":
@@ -765,6 +768,10 @@ class TestFakeDHEEngineIOServer(unittest.IsolatedAsyncioTestCase):
                         await asyncio.sleep(0.05)
                     connected_state = client.diagnostic_state["connection_state"]
                     available = client.available
+                    self.assertNotIn("auth_failure", client.diagnostic_state)
+                    client._mark_reconnecting("ServerDisconnectedError: socket closed")
+                    self.assertNotIn("auth_failure", client.diagnostic_state)
+                    self.assertEqual(client.diagnostic_state["connection_state"], "reconnecting")
                     await DHEClient.stop(client)
 
                 saved_token = token_file.read_text(encoding="utf-8")

@@ -455,7 +455,7 @@ class DHEClient(
                 self._cancel_reconnect_grace_timer()
                 self._ready.set()
                 self._set_available(True)
-                self._update_diagnostics(connection_state="connected")
+                self._update_diagnostics(connection_state="connected", auth_failure=None)
                 self._clear_stale_runtime_probe()
                 while not self._stopped.is_set() and self._ctx is not None:
                     current_ctx = self._ctx
