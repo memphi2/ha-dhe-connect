@@ -14,8 +14,13 @@ The normal pytest suite includes `tests/test_00_recorder_runtime.py`, which
 starts the real HA recorder against a temporary SQLite database. It checks idle
 deduplication, jitter flushes, zero crossings, live catalog updates with excluded
 payloads, and optional countdown writes. No user database or physical DHE is
-accessed. These regression checks complement, but do not replace, live database
-growth measurements.
+accessed. A six-day event-time replay also runs real statistics compilation,
+purge batches and SQLite repack. The two-day state/short-term-statistics window
+must stop growing while hourly energy and water totals remain complete and
+numerically correct. It checks database integrity and observes the actual
+VACUUM; it does not accelerate the whole HA scheduler or prove physical disk
+capacity over weeks. These regression checks complement, but do not replace,
+live database growth measurements.
 
 Discovery observations update the bounded in-memory cache immediately. Disk
 writes are coalesced over a five-second window with one pending timer/write;
