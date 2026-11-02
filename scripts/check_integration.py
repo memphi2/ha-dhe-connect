@@ -445,12 +445,12 @@ def _check_workflow_execution(text: str, action_uses: list[tuple[str, str, str |
     triggers = workflow.get("on", {})
     if (
         not isinstance(triggers, dict)
-        or not {"push", "pull_request", "workflow_dispatch", "schedule"} <= triggers.keys()
+        or not {"push", "pull_request", "workflow_dispatch", "workflow_call", "schedule"} <= triggers.keys()
         or {"cron": "0 4 1 * *"} not in (triggers.get("schedule") or [])
     ):
-        _fail("validation workflow must enable push, PR, dispatch and monthly schedule triggers")
-    if triggers["push"] != {"branches": ["main"], "tags": ["v*"]}:
-        _fail("push validation must cover main and release tags without duplicating PR branches")
+        _fail("validation workflow must enable push, PR, dispatch, reusable calls and monthly schedule triggers")
+    if triggers["push"] != {"branches": ["main"]}:
+        _fail("push validation must cover main; release tags use the reusable validation gate")
     if triggers["pull_request"] not in (None, "", {}):
         _fail("PR validation must not filter required checks")
     if workflow.get("concurrency") != {
@@ -476,7 +476,7 @@ def _check_workflow_execution(text: str, action_uses: list[tuple[str, str, str |
         if not isinstance(job, dict):
             _fail(f"validation workflow is missing job {name}")
         expected_condition = (
-            "github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'"
+            "(github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.workflow == 'Validate'"
             if name == "home-assistant-latest" else None
         )
         if job.get("if") != expected_condition or job.get("continue-on-error", "false") != "false":

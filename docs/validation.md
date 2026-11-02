@@ -8,6 +8,14 @@ older branches.
 For normal installation and updates, use [installation.md](installation.md).
 The commands here are development/release checks, not a user setup requirement.
 
+Release tags enter through `.github/workflows/release.yml`, which calls the same
+validation workflow before publishing. The validation workflow does not also
+subscribe directly to tags, avoiding duplicate runs. The latest-HA drift job
+runs only through scheduled/manual Validate runs, not manual Release retries.
+Publication requires a
+stable HA baseline and dated release notes, verifies downloaded draft assets
+before publication, then repeats the remote checks. See [release_process.md](release_process.md).
+
 ## LTS Compatibility Matrix
 
 The normal pytest suite includes `tests/test_00_recorder_runtime.py`, which

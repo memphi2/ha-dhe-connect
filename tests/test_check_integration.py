@@ -416,11 +416,12 @@ class TestCheckIntegration(unittest.TestCase):
                 with patch.object(check_integration, "ROOT", root), redirect_stderr(StringIO()), self.assertRaises(SystemExit):
                     check_integration.check_github_actions()
 
-    def test_workflow_keeps_pr_main_and_tag_checks_without_duplicate_branch_runs(self) -> None:
+    def test_workflow_keeps_pr_main_and_reusable_checks_without_duplicate_runs(self) -> None:
         original = (ROOT / ".github/workflows/validate.yml").read_text(encoding="utf-8")
         for old, new in (
             ("branches: [main]", "branches: ['*']"),
-            ("tags: ['v*']", "tags: []"),
+            ("  workflow_call:\n", ""),
+            ("branches: [main]", "branches: [main]\n    tags: ['v*']"),
             ("  pull_request:\n", "  pull_request:\n    paths: ['docs/**']\n"),
             ("${{ github.event_name == 'pull_request' }}", "true"),
             ("-${{ github.event_name }}-", "-"),
