@@ -86,6 +86,7 @@ jobs:
 
       - name: Verify reproducible release assets
         run: |
+          python scripts/check_legal_audit.py
           python scripts/build_release.py
           python scripts/build_release.py --verify .release
 

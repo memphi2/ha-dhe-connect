@@ -28,6 +28,8 @@ def release_repo(tmp_path: Path) -> Path:
     }))
     (component / "__init__.py").write_text('"""Test integration."""\n')
     (tmp_path / "LICENSE").write_text("Test license\n")
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs/asset_provenance.json").write_text('{"version": 1, "assets": {}}')
     git(tmp_path, "add", ".")
     git(tmp_path, "commit", "-m", "Fixture")
     return tmp_path
@@ -48,6 +50,10 @@ def test_assets_reproduce_source_and_checksums(release_repo: Path) -> None:
         digest, name = line.split("  ")
         assert digest == hashlib.sha256(assets[name]).hexdigest()
     sbom = json.loads(assets["sbom.spdx.json"])
+    assert set(sbom) == {
+        "spdxVersion", "dataLicense", "SPDXID", "name", "documentNamespace",
+        "creationInfo", "comment", "packages", "relationships",
+    }
     assert sbom["packages"][0]["checksums"][0]["checksumValue"] == metadata["zip_sha256"]
     assert sbom["creationInfo"]["created"] == metadata["source_date"]
 

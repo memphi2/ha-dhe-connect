@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "assets": {
+    "custom_components/stiebel_dhe_connect/brand/icon.png": {
+      "sha256": "9a3032c7539c3e080aea5952b238c59043e1606e1f961190918659a2bd4e763c",
+      "origin": "Original project artwork recorded in commit 166ed1b; not a manufacturer logo.",
+      "rights": "Project artwork under MIT; no rights to manufacturer trademarks are granted."
+    },
+    "custom_components/stiebel_dhe_connect/brand/icon@2x.png": {
+      "sha256": "81929696e1dbd064ce943bd7f5c8badbe9e9234578e26ac32a3868da6bba9b0d",
+      "origin": "Same original project artwork, introduced as brand/logo.png in 166ed1b and renamed in a29fa0c.",
+      "rights": "Project artwork under MIT; no rights to manufacturer trademarks are granted."
+    },
+    "assets/dhe-connect-card.png": {
+      "sha256": "868170beb0b486f32a9ac8296da308a615d66016c1170692a26768abe2cc9caa",
+      "origin": "Project-provided ha-dhe-connect-card dashboard screenshot recorded in commit 166ed1b; not a vendor-interface capture.",
+      "rights": "Project contributions are MIT; depicted third-party UI elements and marks retain their owners' rights."
+    }
+  }
+}

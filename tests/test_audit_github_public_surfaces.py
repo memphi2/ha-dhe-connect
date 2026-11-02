@@ -3,6 +3,7 @@
 import io
 import json
 import zipfile
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
@@ -141,3 +142,13 @@ def test_plain_attachment_is_scanned_and_download_errors_fail_closed() -> None:
     result = audit.audit_public_surfaces("example/repo", runner, Mock(side_effect=OSError("private")))
     assert not result.ok
     assert "private" not in result.message
+
+
+@pytest.mark.parametrize("name", sorted(audit.PUBLIC_NETWORK_EXAMPLE_DIGESTS))
+def test_only_exact_reviewed_public_examples_are_exempt(name: str) -> None:
+    root = Path(__file__).resolve().parents[1]
+    data = (root / "custom_components/stiebel_dhe_connect" / name).read_bytes()
+    assert "private address or username marker" in audit.scan_bytes(data)
+    assert not audit.scan_zip(zip_bytes(name, data))
+    assert "private address or username marker" in audit.scan_zip(zip_bytes(name, data + b"changed"))
+    assert "private address or username marker" in audit.scan_zip(zip_bytes("unexpected.py", data))

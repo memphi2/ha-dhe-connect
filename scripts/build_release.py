@@ -13,6 +13,15 @@ import zipfile
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
+try:
+    from scripts.check_legal_audit import (
+        PROVENANCE_PATH,
+        parse_inventory,
+        validate_package,
+    )
+except ModuleNotFoundError:
+    from check_legal_audit import PROVENANCE_PATH, parse_inventory, validate_package
+
 ROOT = Path(__file__).resolve().parents[1]
 DOMAIN = "stiebel_dhe_connect"
 REPOSITORY = "memphi2/ha-dhe-connect"
@@ -73,6 +82,9 @@ def build_assets(root: Path = ROOT) -> dict[str, bytes]:
         raise ValueError("commit tracked changes before building release assets")
     commit = _git(root, "rev-parse", "HEAD").decode().strip()
     files = source_files(root, commit)
+    inventory = parse_inventory(_git(root, "show", f"{commit}:{PROVENANCE_PATH}"))
+    if failures := validate_package(files, inventory):
+        raise ValueError("release package failed provenance/content checks: " + "; ".join(failures))
     manifest = json.loads(files["manifest.json"])
     version = manifest.get("version", "")
     if not isinstance(version, str) or not re.fullmatch(r"\d+\.\d+\.\d+", version):
@@ -113,7 +125,7 @@ def build_assets(root: Path = ROOT) -> dict[str, bytes]:
                 "created": created,
                 "creators": ["Tool: ha-dhe-connect-build-release"],
             },
-            "documentComment": (
+            "comment": (
                 "Integration archive inventory only. No bundled third-party dependencies; "
                 "Home Assistant and its environment are not included."
             ),
@@ -167,7 +179,7 @@ def main(argv: list[str] | None = None) -> int:
                     raise ValueError("release output must not contain symlinks")
                 target.write_bytes(data)
             verify_assets(args.output_dir, assets)
-    except (OSError, ValueError) as err:
+    except (OSError, TypeError, ValueError) as err:
         print(f"ERROR: {err}", file=sys.stderr)
         return 1
     print("release assets match committed source (ZIP, metadata, SPDX inventory, SHA256SUMS)")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import io
 import json
 import os
@@ -26,6 +27,13 @@ MAX_MEMBER_BYTES = 8 * 1024 * 1024
 MAX_ZIP_MEMBERS = 4096
 TEXT_FIELDS = {"title", "body", "name", "label"}
 Download = Callable[[str, int], bytes]
+# These exact public source versions contain intentional RFC1918 scan examples.
+# Only the network-marker category is exempt; changed bytes require fresh review.
+PUBLIC_NETWORK_EXAMPLE_DIGESTS = {
+    "setup_scan.py": "e9521c78b39ee94036a64d559ba2f058d43cd79770b51795e6a6536e2c97fa92",
+    "translations/de.json": "9e4fc4f3d73e7479729ff3b9c7189bcdf7ae91f8a5374424e3eb607a515454b1",
+    "translations/en.json": "ea9ab9feb18778b2950db331b54023d4995a1ed1bf01e937af0d67f887ea466c",
+}
 
 
 def scan_bytes(data: bytes) -> set[str]:
@@ -81,7 +89,10 @@ def scan_zip(data: bytes) -> set[str]:
                     if len(member) > MAX_MEMBER_BYTES:
                         findings.add("ZIP member exceeds audit size limit")
                     else:
-                        findings.update(scan_bytes(member))
+                        categories = scan_bytes(member)
+                        if PUBLIC_NETWORK_EXAMPLE_DIGESTS.get(name) == hashlib.sha256(member).hexdigest():
+                            categories.discard("private address or username marker")
+                        findings.update(categories)
     except (zipfile.BadZipFile, RuntimeError, NotImplementedError, OSError, ValueError):
         findings.add("unreadable ZIP asset")
     return findings

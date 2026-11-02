@@ -47,3 +47,25 @@ No external logo is fetched at runtime. Replacements must record their actual
 source and applicable license here before being added. A repository commit alone
 is not evidence of permission for externally sourced artwork. Do not introduce a
 manufacturer logo merely because its URL is publicly accessible.
+
+## Maintainer Provenance Gate
+
+`scripts/check_legal_audit.py` compares every tracked image with
+[asset_provenance.json](asset_provenance.json), including its SHA256, recorded
+origin and rights scope. Replacing artwork requires reviewing and updating both
+inventories. The hashes freeze the currently documented files; they do not prove
+authorship, ownership or permission for a new asset.
+
+The replay files under `tests/fixtures/firmware_*/` are synthetic test vectors,
+not device traffic captures. Their explicit `provenance` object records
+`docs/protocol.md` as the interoperability reference, artificial data and the
+project MIT license. Firmware profile labels are test scenarios, not proof that
+a particular manufacturer firmware was tested. Raw HAR/PCAP dumps, firmware
+images and vendor software must not be committed as fixtures.
+
+The same gate checks the exact committed bytes used by `build_release.py`:
+component code/metadata, translations, the two documented brand images and
+LICENSE. Undocumented package paths, changed artwork and known secret/vendor
+content markers fail preparation. CI and the local release checks run the gate.
+This is a consistency and content check, not legal clearance or a substitute for
+reviewing rights when new third-party material is proposed.

@@ -1,5 +1,11 @@
 {
   "version": 2,
+  "provenance": {
+    "kind": "synthetic",
+    "source": "docs/protocol.md",
+    "license": "MIT",
+    "contains_live_capture": false
+  },
   "firmware_profile": "firmware_a",
   "description": "Synthetic DHE protocol replay for parser and runtime tests. Values are artificial and contain no live host, credential or device identifiers.",
   "engineio_open": "0{\"sid\":\"fixture-polling-sid\",\"websocketSid\":\"fixture-websocket-sid\",\"pingInterval\":25000}",

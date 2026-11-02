@@ -152,6 +152,7 @@ python scripts/check_translation_keys.py
 python scripts/check_release_consistency.py
 python scripts/check_deprecations.py
 python scripts/check_privacy_markers.py
+python scripts/check_legal_audit.py
 python scripts/check_typing.py
 python -m ruff check custom_components/stiebel_dhe_connect tests scripts
 python scripts/release_check.py --run-local-checks --expect-tag absent --expect-github-release absent
@@ -345,6 +346,12 @@ proof that the same commit was published.
   and remote URLs are not recursively inspected or OCR-scanned. Oversized assets
   require a separate manual review and cannot silently pass this gate. These
   pattern checks are not proof that every possible secret or license issue is absent.
+- Three exact, SHA256-pinned public source files contain intentional private-range
+  scan examples (`setup_scan.py` and both translations). Only their network-marker
+  findings are exempt inside installation ZIPs. Changed bytes or another filename
+  are not exempt, and credential/vendor markers are still checked. Update the
+  small digest inventory only after reviewing the changed examples; there is no
+  blanket private-IP allowlist.
 - Do not publish tokens, private hosts, private IPs or credentials.
 - Treat mounted HA config directories as sensitive.
 - Prefer sanitized helper output over raw `.storage` dumps.
