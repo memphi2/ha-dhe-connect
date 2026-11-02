@@ -8,9 +8,19 @@ rules:
   config-flow: done
   dependency-transparency: done
   docs-actions: done
+  docs-conditions:
+    status: exempt
+    comment: |
+      The integration provides no custom automation conditions. Users can use
+      Home Assistant's standard entity-state and numeric-state conditions.
   docs-high-level-description: done
   docs-installation-instructions: done
   docs-removal-instructions: done
+  docs-triggers:
+    status: exempt
+    comment: |
+      The integration provides no custom automation triggers. Users can use
+      Home Assistant's standard entity-state and numeric-state triggers.
   entity-event-setup:
     status: exempt
     comment: |
@@ -195,6 +205,14 @@ evidence:
         per-file exclusion list with reasons in scripts/check_coverage.py.
 
   bronze:
+    docs-conditions:
+      implementation: No custom condition platform is exposed.
+      tests: tests/test_quality_scale_silver.py checks this exemption's scope.
+      docs: docs/examples.md uses standard Home Assistant automation conditions.
+    docs-triggers:
+      implementation: No custom trigger platform is exposed.
+      tests: tests/test_quality_scale_silver.py checks this exemption's scope.
+      docs: docs/examples.md uses standard Home Assistant automation triggers.
     action-setup:
       implementation: >
         __init__.py registers domain services and services.yaml defines their
@@ -334,6 +352,20 @@ evidence:
         Duplicate target and MAC duplicate tests cover all setup methods.
       docs: >
         docs/troubleshooting.md documents duplicate and recreated-device cases.
+
+  platinum:
+    async-dependency:
+      implementation: The async protocol client is owned by this integration, not an external library.
+      tests: Fake-DHE and runtime soak tests exercise async I/O and lifecycle cleanup.
+      docs: docs/platinum_prep.md explains the local-client architecture and exemption.
+    inject-websession:
+      implementation: There is no external library requiring session injection.
+      tests: Client transport and lifecycle tests cover session ownership and cleanup.
+      docs: docs/platinum_prep.md describes the shared runtime session.
+    strict-typing:
+      implementation: Every top-level integration module is in the strict mypy scope.
+      tests: scripts/check_typing.py rejects untyped or stale integration module entries.
+      docs: docs/validation.md defines the typing and release gates.
 
   gold:
     devices:

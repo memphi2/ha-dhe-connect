@@ -5,6 +5,30 @@ this custom integration.
 
 It does not claim official Home Assistant Core certification.
 
+## Quality Inventory
+
+Open rules: none
+
+The local inventory tracks all 54 rules in the
+[official rule list](https://contributors.home-assistant.io/core/quality-scale/rules/),
+checked on 2026-11-02. `scripts/check_quality_scale.py` parses YAML, rejects
+duplicate/missing/unknown rules and invalid statuses, requires a reason for
+every exemption or TODO and checks implementation/test/documentation evidence
+for every rule. The integration guard runs it in CI without network access.
+Revisit this snapshot when adopting a new HA baseline; it is not an upstream
+rule-change detector.
+
+There are no custom trigger or condition platforms, so `docs-triggers` and
+`docs-conditions` are exempt. Standard entity-state/numeric-state automation
+examples are in [examples.md](examples.md). `async-dependency` and
+`inject-websession` remain exempt because the async protocol client is owned
+by the integration, not an external dependency accepting a session.
+
+If a rule becomes `todo`, record its reason in the YAML and list its rule ID in
+the `Open rules:` line above. Required done rules cannot be silently downgraded.
+Evidence descriptions still require human review; the guard checks consistency,
+not fulfillment of Home Assistant's official review process.
+
 ## Scope
 
 - No protocol-semantic changes for hardening-only rounds

@@ -16,8 +16,10 @@ from packaging.utils import canonicalize_name
 from packaging.version import InvalidVersion, Version
 
 try:
+    from scripts.check_quality_scale import check_files as quality_scale_errors
     from scripts.ha_baseline import read_baseline
 except ModuleNotFoundError:
+    from check_quality_scale import check_files as quality_scale_errors
     from ha_baseline import read_baseline
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,41 +32,6 @@ CLIENT_MODULE_MAX_BYTES = 50 * 1024
 MIN_HOMEASSISTANT_VERSION = "2026.10.4"
 NEXT_HOMEASSISTANT_SERIES = "2026.11"
 VALIDATION_PYTHON_VERSION = "3.14"
-SILVER_RULES = {
-    # Bronze
-    "action-setup",
-    "appropriate-polling",
-    "brands",
-    "common-modules",
-    "config-flow-test-coverage",
-    "config-flow",
-    "dependency-transparency",
-    "docs-actions",
-    "docs-high-level-description",
-    "docs-installation-instructions",
-    "docs-removal-instructions",
-    "entity-unique-id",
-    "has-entity-name",
-    "runtime-data",
-    "test-before-configure",
-    "test-before-setup",
-    "unique-config-entry",
-    # Silver
-    "action-exceptions",
-    "config-entry-unloading",
-    "docs-configuration-parameters",
-    "docs-installation-parameters",
-    "entity-unavailable",
-    "integration-owner",
-    "log-when-unavailable",
-    "parallel-updates",
-    "reauthentication-flow",
-    "test-coverage",
-}
-GOLD_CORE_RULES = {
-    "reconfiguration-flow",
-    "repair-issues",
-}
 REQUIRED_VALIDATION_ACTIONS = {
     "actions/checkout",
     "actions/setup-python",
@@ -350,30 +317,10 @@ def check_gold_evidence_docs() -> None:
             _fail(f"docs/validation.md is missing section: {section}")
 
 
-def _quality_scale_done_rules(text: str) -> set[str]:
-    """Return rule IDs whose quality-scale status is done."""
-    done: set[str] = set()
-    current_rule: str | None = None
-    for line in text.splitlines():
-        rule_match = re.match(r"^  ([a-z0-9-]+):(?:\s*(done|todo))?\s*$", line)
-        if rule_match:
-            current_rule = rule_match.group(1)
-            if rule_match.group(2) == "done":
-                done.add(current_rule)
-            continue
-        status_match = re.match(r"^    status:\s*(done|todo|exempt)\s*$", line)
-        if status_match and current_rule and status_match.group(1) == "done":
-            done.add(current_rule)
-    return done
-
-
 def check_quality_scale() -> None:
-    """Ensure tracked Home Assistant Silver and Gold-core rules stay done."""
-    path = INTEGRATION / "quality_scale.yaml"
-    done = _quality_scale_done_rules(path.read_text(encoding="utf-8"))
-    missing = sorted((SILVER_RULES | GOLD_CORE_RULES) - done)
-    if missing:
-        _fail(f"quality_scale.yaml is missing required done rules: {missing}")
+    """Validate every quality rule, its evidence and documented open items."""
+    if failures := quality_scale_errors(ROOT):
+        _fail("; ".join(failures))
 
 
 def check_replay_fixtures() -> None:

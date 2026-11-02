@@ -274,7 +274,10 @@ The source of truth is:
 
 - `custom_components/stiebel_dhe_connect/quality_scale.yaml`
 
-Repository checks ensure required Silver and Gold-core items stay consistent.
+Repository checks validate the complete rule inventory, statuses, exemption
+reasons and evidence mappings using `scripts/check_quality_scale.py`. Open
+items must match [platinum_prep.md](platinum_prep.md). This is local tracking,
+not an official Home Assistant quality-tier award.
 
 ## Gold Evidence Log Template
 

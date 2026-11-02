@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import importlib
-import re
 from pathlib import Path
 
 import yaml
@@ -31,7 +30,7 @@ BRONZE_RULES = {
     "test-before-setup",
     "unique-config-entry",
 }
-BRONZE_EVIDENCE_RULES = BRONZE_RULES | {"entity-event-setup"}
+BRONZE_EVIDENCE_RULES = BRONZE_RULES | {"entity-event-setup", "docs-conditions", "docs-triggers"}
 SILVER_ONLY_RULES = {
     "action-exceptions",
     "config-entry-unloading",
@@ -80,19 +79,16 @@ PLATINUM_RULES = {
 
 
 def _done_rules(text: str) -> set[str]:
-    done: set[str] = set()
-    current_rule: str | None = None
-    for line in text.splitlines():
-        rule_match = re.match(r"^  ([a-z0-9-]+):(?:\s*(done|todo))?\s*$", line)
-        if rule_match:
-            current_rule = rule_match.group(1)
-            if rule_match.group(2) == "done":
-                done.add(current_rule)
-            continue
-        status_match = re.match(r"^    status:\s*(done|todo|exempt)\s*$", line)
-        if status_match and current_rule and status_match.group(1) == "done":
-            done.add(current_rule)
-    return done
+    return {
+        rule for rule, value in yaml.safe_load(text)["rules"].items()
+        if (value if isinstance(value, str) else value["status"]) == "done"
+    }
+
+
+def test_trigger_and_condition_exemptions_match_exposed_platforms() -> None:
+    assert not {"trigger", "condition"} & {platform.value for platform in PLATFORMS}
+    for name in ("trigger.py", "condition.py", "device_trigger.py", "device_condition.py"):
+        assert not (QUALITY_SCALE.parent / name).exists()
 
 
 def test_platforms_define_parallel_updates() -> None:
@@ -126,8 +122,9 @@ def test_quality_scale_evidence_maps_rules_to_tests_and_docs() -> None:
     assert set(evidence["silver"]) == SILVER_ONLY_RULES
     assert set(evidence["bronze"]) == BRONZE_EVIDENCE_RULES
     assert set(evidence["gold"]) == GOLD_EVIDENCE_RULES
+    assert set(evidence["platinum"]) == PLATINUM_RULES
 
-    for group in ("silver", "bronze", "gold"):
+    for group in ("silver", "bronze", "gold", "platinum"):
         for rule, mapping in evidence[group].items():
             assert set(mapping) == {"implementation", "tests", "docs"}, rule
             assert mapping["implementation"].strip(), rule
