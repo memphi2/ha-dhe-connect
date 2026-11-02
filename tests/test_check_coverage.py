@@ -15,7 +15,7 @@ def test_coverage_gates(results, expected):
     if len(results) == 3:
         full = run.call_args_list[1].args[0]
         scoped = run.call_args_list[2].args[0]
-        assert "--fail-under=85" in full
+        assert "--fail-under=95" in full
         assert not any(arg.startswith("--omit") for arg in full)
         assert "--fail-under=95" in scoped
         assert any(arg.startswith("--omit=") for arg in scoped)

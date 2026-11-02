@@ -133,11 +133,15 @@ conversion and callback cleanup; device metadata works with either DeviceInfo AP
 ## Release Validation Command Set
 
 All CI test jobs run `scripts/check_coverage.py`. It runs the full pytest suite
-once and enforces two line-coverage gates: **85% across every integration module**
-and **95% for the scoped deterministic modules**. The 95% figure is not whole-repo
-coverage. `EXCLUDED_COVERAGE_FILES` in `scripts/check_coverage.py` lists every
+once and enforces two line-coverage gates: **95% across the whole integration**
+and **95% for the scoped deterministic modules**. Integration-wide coverage
+includes config flows, entities, transport and runtime code, but not repository
+scripts or tests. `EXCLUDED_COVERAGE_FILES` in `scripts/check_coverage.py` lists every
 file omitted from the narrower gate and its reason; none are omitted from the
 whole-integration gate. Both reports are printed even if one threshold fails.
+Tests cover options workflows, confirmed device writes, malformed responses,
+pairing cancellation, transport recovery, scan session ownership and entity
+restoration. Device I/O is simulated; coverage is not a physical-device test.
 `scripts/check_integration.py` runs repository guards only; it does not repeat
 the tests through a second unittest discovery run.
 
