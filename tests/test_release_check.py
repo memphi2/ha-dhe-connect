@@ -908,8 +908,8 @@ class TestReleaseCheck(unittest.TestCase):
         )
 
         self.assertFalse(result.ok)
-        self.assertIn("GitHub metadata contains non-anonymized or proprietary markers", result.message)
-        self.assertIn(sample_user, result.message)
+        self.assertIn("GitHub public-surface audit findings", result.message)
+        self.assertNotIn(sample_user, result.message)
 
     def test_github_hygiene_scan_rejects_private_ipv4_markers(self) -> None:
         sample_ip = "10.1.23.45"
@@ -937,8 +937,8 @@ class TestReleaseCheck(unittest.TestCase):
         )
 
         self.assertFalse(result.ok)
-        self.assertIn("GitHub metadata contains non-anonymized or proprietary markers", result.message)
-        self.assertIn(sample_ip, result.message)
+        self.assertIn("GitHub public-surface audit findings", result.message)
+        self.assertNotIn(sample_ip, result.message)
 
     def test_parse_paginated_gh_json_accepts_concatenated_documents(self) -> None:
         docs = release_check._parse_paginated_gh_json('{"a":1}\n{"b":2}\n')

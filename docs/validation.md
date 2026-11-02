@@ -330,6 +330,18 @@ proof that the same commit was published.
 
 ## Security Hygiene
 
+- The opt-in `--run-github-hygiene` release gate reads all pages of issues,
+  PRs, issue/review comments, review bodies, releases and attached files. It is
+  also available as `python scripts/audit_github_public_surfaces.py` and is not
+  run on every PR. It uses the authenticated GitHub CLI but never posts, edits
+  or deletes anything. Reports contain numeric locations and finding categories,
+  not matched secrets. API or download failures fail the audit.
+- ZIP attachments are inspected without extraction, with a 32 MiB archive and
+  total expansion limit, an 8 MiB member limit and at most 4096 members. Other
+  attachments are byte-scanned; nested archives, linked log uploads, screenshots
+  and remote URLs are not recursively inspected or OCR-scanned. Oversized assets
+  require a separate manual review and cannot silently pass this gate. These
+  pattern checks are not proof that every possible secret or license issue is absent.
 - Do not publish tokens, private hosts, private IPs or credentials.
 - Treat mounted HA config directories as sensitive.
 - Prefer sanitized helper output over raw `.storage` dumps.
