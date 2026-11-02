@@ -13,7 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MIB = 1024 * 1024
-PHASES = ("connected", "reconnected", "same_client_reconnected", "idle", "unloaded")
+PHASES = ("connected", "reconnected", "same_client_reconnected", "steady", "idle", "unloaded")
 LIMITS = {
     "tasks": 2,
     "owned_tasks": 0,
@@ -55,14 +55,16 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cycles", type=int, default=30)
     parser.add_argument("--idle-seconds", type=float, default=60)
+    parser.add_argument("--updates", type=int, default=300)
     parser.add_argument("--json-output", type=Path)
     args = parser.parse_args(argv)
     if (
         args.cycles < 3
         or not math.isfinite(args.idle_seconds)
         or args.idle_seconds < 0.5
+        or args.updates < 30
     ):
-        parser.error("use at least 3 cycles and 0.5 finite idle seconds")
+        parser.error("use at least 3 cycles, 30 updates and 0.5 finite idle seconds")
     with tempfile.TemporaryDirectory(prefix="dhe-soak-") as directory:
         report = (args.json_output or Path(directory) / "report.json").resolve()
         report.unlink(missing_ok=True)
@@ -70,6 +72,7 @@ def main(argv: list[str] | None = None) -> int:
         env.update(
             DHE_SOAK_CYCLES=str(args.cycles),
             DHE_SOAK_IDLE_SECONDS=str(args.idle_seconds),
+            DHE_SOAK_UPDATES=str(args.updates),
             DHE_SOAK_REPORT=str(report),
         )
         result = subprocess.run(
@@ -98,6 +101,7 @@ def main(argv: list[str] | None = None) -> int:
                 or data.get("cycles") != args.cycles
                 or data.get("same_client_reconnects") != args.cycles + 2
                 or data.get("idle_seconds") != args.idle_seconds
+                or data.get("updates") != args.updates
                 or sample_errors(data.get("samples", []))
             ):
                 print(

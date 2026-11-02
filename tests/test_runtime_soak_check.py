@@ -54,6 +54,14 @@ class RuntimeSoakCheckTests(unittest.TestCase):
         same_client[-1]["callbacks"] = 1
         self.assertIn("same_client_reconnected: callbacks growth exceeds 0", sample_errors(samples))
 
+    def test_steady_growth_is_rejected(self):
+        for metric, limit in LIMITS.items():
+            with self.subTest(metric=metric):
+                samples = self._samples()
+                steady = [sample for sample in samples if sample["phase"] == "steady"]
+                steady[-1][metric] = limit + 1
+                self.assertTrue(sample_errors(samples))
+
     def test_optional_rss_and_invalid_metrics(self):
         samples = self._samples()
         for sample in samples:
@@ -71,6 +79,7 @@ class RuntimeSoakCheckTests(unittest.TestCase):
     def test_cli_rejects_invalid_limits(self):
         for args in (
             ["--cycles", "2"],
+            ["--updates", "29"],
             ["--idle-seconds", "nan"],
             ["--idle-seconds", "inf"],
             ["--idle-seconds", "0"],
@@ -91,10 +100,11 @@ class RuntimeSoakCheckTests(unittest.TestCase):
                 self.assertFalse(check)
                 self.assertTrue((cwd / "pyproject.toml").exists())
                 self.assertEqual(env["DHE_SOAK_CYCLES"], "3")
+                self.assertEqual(env["DHE_SOAK_UPDATES"], "300")
                 self.assertEqual(env["DHE_SOAK_REPORT"], str(report))
                 report.write_text(
                     json.dumps(
-                        {"cycles": 3, "same_client_reconnects": 5, "idle_seconds": 0.5, "errors": [], "samples": self._samples()}
+                        {"cycles": 3, "updates": 300, "same_client_reconnects": 5, "idle_seconds": 0.5, "errors": [], "samples": self._samples()}
                     ),
                     encoding="utf-8",
                 )

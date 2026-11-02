@@ -191,8 +191,13 @@ The regular pytest suite includes a short soak using real HA entity platforms
 and the real DHE HTTP/WebSocket client against a local fake device. Two warmup
 cycles precede measurements of three setup/unload cycles. A separate phase
 reconnects the same live client repeatedly, without unloading or replacing it,
-with two reconnect warmups followed by the requested number of samples. Idle
-sampling follows on that same client. Executor and import work use HA's real
+with two reconnect warmups followed by the requested number of samples. A steady
+phase then replaces radio/weather catalogs, changes flow measurements and confirms
+ECO writes through the real transport without replacing the client or connection.
+Ten update warmups precede 30 measured updates in pytest, or 300 in the isolated
+runner (`--updates`). Catalogs must contain only the latest results, the entity
+registry must stay unchanged and command futures must be cleared. Idle sampling
+follows on that same client. Executor and import work use HA's real
 worker threads. No physical device or running HA installation is accessed.
 
 For a longer isolated run with numeric, credential-free evidence:

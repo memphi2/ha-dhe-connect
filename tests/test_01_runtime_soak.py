@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant import loader
+from homeassistant.helpers import entity_registry
 
 from scripts.check_runtime_soak import LIMITS, PHASES, sample_errors
 
@@ -120,16 +121,26 @@ class _SoakServer(FakeDHEEngineIOServer):
     async def _handle_post(self, request):
         body = await request.text()
         response = await super()._handle_post(request)
-        for packet in _decode_length_prefixed_packets(body):
+        self._answer_packets(_decode_length_prefixed_packets(body))
+        return response
+
+    def _answer_packets(self, packets):
+        protocol = importlib.import_module(f"custom_components.{DOMAIN}.protocol")
+        for packet in packets:
             if not packet.startswith("42") or "[" not in packet:
                 continue
             event = json.loads(packet[packet.index("[") :])
             if event[0] == "token_request":
-                protocol = importlib.import_module(
-                    f"custom_components.{DOMAIN}.protocol"
-                )
                 _queue_startup(self, protocol)
-        return response
+            elif event[0] == "message" and event[1].get("command") == protocol.ODB_ASSIGN_COMMAND:
+                self.queue_event("message", {
+                    "command": protocol.ODB_SET_COMMAND, "value": event[1]["value"],
+                })
+
+    async def _send_queued_websocket_packets(self, websocket):
+        self._answer_packets(self.websocket_packets)
+        self.websocket_packets.clear()
+        await super()._send_queued_websocket_packets(websocket)
 
 
 def _trim_server_history(server):
@@ -138,11 +149,51 @@ def _trim_server_history(server):
     server.websockets[:] = [socket for socket in server.websockets if not socket.closed]
 
 
+async def _exercise_loaded_client(hass, entry, server, protocol, updates, references):
+    """Replace catalogs and confirm writes on one connection without resetting it."""
+    client = entry.runtime_data.client
+    context = client._ctx
+    registry = entity_registry.async_get(hass)
+    entity_ids = {item.entity_id for item in entity_registry.async_entries_for_config_entry(
+        registry, entry.entry_id
+    )}
+    samples = []
+    for index in range(updates + 10):
+        station = {"Id": index + 1, "Name": f"Synthetic station {index}"}
+        location = {"LocationId": f"synthetic-{index}", "Name": f"Synthetic place {index}"}
+        for command, value in (
+            (protocol.ODB_SET_COMMAND, {"id": protocol.ID_WATER_FLOW, "value": (index % 2) * 50}),
+            (protocol.RADIO_STATIONS_SET_COMMAND, [station]),
+            (protocol.RADIO_FAVORITES_SET_COMMAND, [station]),
+            (protocol.WEATHER_FORECAST_SET_COMMAND, [location]),
+        ):
+            server.queue_event("message", {"command": command, "value": value})
+        await server._send_queued_websocket_packets(server.websockets[-1])
+        async with asyncio.timeout(5):
+            while client.last_weather_state.get("forecast_results") != [location]:
+                await asyncio.sleep(0.001)
+        assert await client.set_eco_mode(bool(index % 2)) is bool(index % 2)
+        await hass.async_block_till_done()
+        assert entry.runtime_data.client is client and client._ctx is context
+        assert client._last_radio_stations == [station]
+        assert client.last_radio_state["favorites"] == [station]
+        assert client._pending_write_future is None
+        assert client._pending_setpoint_future is None
+        assert {item.entity_id for item in entity_registry.async_entries_for_config_entry(
+            registry, entry.entry_id
+        )} == entity_ids
+        _trim_server_history(server)
+        if index >= 10 and ((index - 10) % max(1, updates // 5) == 0 or index == updates + 9):
+            samples.append(_snapshot("steady", client, references))
+    return samples
+
+
 @pytest.mark.asyncio
 async def test_runtime_soak(caplog):
     """Measure both complete lifecycles and repeated reconnects on one client."""
     cycles = int(os.environ.get("DHE_SOAK_CYCLES", "3"))
     idle_seconds = float(os.environ.get("DHE_SOAK_IDLE_SECONDS", "0.5"))
+    updates = int(os.environ.get("DHE_SOAK_UPDATES", "30"))
     # Pytest's log history must not become the measured source of retention.
     caplog.set_level(logging.CRITICAL)
     _clear_loaded_integration_modules()
@@ -216,6 +267,9 @@ async def test_runtime_soak(caplog):
                                     samples.append(_snapshot(
                                         "same_client_reconnected", client, references[:-1]
                                     ))
+                            samples.extend(await _exercise_loaded_client(
+                                hass, entry, server, protocol, updates, references[:-1]
+                            ))
                             deadline = hass.loop.time() + idle_seconds
                             while True:
                                 _trim_server_history(server)
@@ -245,6 +299,8 @@ async def test_runtime_soak(caplog):
             "warmup_cycles": 2,
             "same_client_reconnects": cycles + 2,
             "idle_seconds": idle_seconds,
+            "updates": updates,
+            "update_warmup": 10,
             "limits": LIMITS,
             "errors": errors,
             "ranges": {
