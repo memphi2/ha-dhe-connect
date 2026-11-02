@@ -49,6 +49,22 @@ network/infrastructure dependent.
 ## 4) Merge And Publish
 
 - Merge PR
+- Check out the exact release commit with a clean tracked worktree and build
+  the supplemental installation archive and its verification assets:
+
+  ```bash
+  python scripts/build_release.py
+  python scripts/build_release.py --verify .release
+  ```
+
+- Attach `.release/ha-dhe-connect.zip`, `SHA256SUMS`, `build-metadata.json` and
+  `sbom.spdx.json` to the release. The ZIP contains component files at its root
+  plus the project LICENSE; extract it into `custom_components/stiebel_dhe_connect/`.
+  Only committed Git blobs are packaged. Untracked files are never included;
+  tracked changes, symlinks and generated component files fail the build.
+  Fixed ZIP metadata, uncompressed entries and the commit timestamp make all
+  four assets byte-for-byte reproducible. The SPDX inventory describes this
+  integration archive only, not Home Assistant's dependency environment.
 - Publish a GitHub release with the matching version tag. A tag alone is not a
   published Marketplace update.
 - Verify that the released `custom_components/stiebel_dhe_connect/` includes
@@ -58,6 +74,14 @@ network/infrastructure dependent.
 ```bash
 python scripts/release_check.py --expect-tag present --expect-github-release present --require-current-tag
 ```
+
+Download the four attached assets into a temporary directory and compare them
+with the checked-out release commit using
+`python scripts/build_release.py --verify /path/to/downloaded-assets`.
+This rebuild comparison detects changed content even if its checksums were
+replaced too. It is not a cryptographic publisher signature. Marketplace
+delivery still uses the repository source; `hacs.json` does not opt into ZIP
+delivery. These additional assets do not change existing update behavior.
 
 ## 5) Catalog Delivery
 

@@ -84,6 +84,11 @@ jobs:
       - name: Run Ruff
         run: python -m ruff check custom_components/stiebel_dhe_connect tests scripts
 
+      - name: Verify reproducible release assets
+        run: |
+          python scripts/build_release.py
+          python scripts/build_release.py --verify .release
+
   home-assistant-compat:
     name: Home Assistant 2026.10
     runs-on: ubuntu-latest
