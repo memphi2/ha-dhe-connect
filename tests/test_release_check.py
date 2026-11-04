@@ -65,8 +65,8 @@ class TestReleaseCheck(unittest.TestCase):
                 with self.subTest(version=version):
                     path.write_text(
                         f"homeassistant=={version}\n"
-                        "pytest-home-assistant @ git+https://github.com/home-assistant/core.git@"
-                        + "a" * 40 + "#subdirectory=packages/pytest-home-assistant\n",
+                        "pytest-homeassistant @ git+https://github.com/home-assistant/core.git@"
+                        + "a" * 40 + "#subdirectory=packages/pytest-homeassistant\n",
                         encoding="utf-8",
                     )
                     with (
@@ -89,8 +89,8 @@ class TestReleaseCheck(unittest.TestCase):
             root = Path(temp_dir)
             (root / "requirements-ha.txt").write_text(
                 "homeassistant==2026.11.0\n"
-                "pytest-home-assistant @ git+https://github.com/home-assistant/core.git@"
-                + "a" * 40 + "#subdirectory=packages/pytest-home-assistant\n",
+                "pytest-homeassistant @ git+https://github.com/home-assistant/core.git@"
+                + "a" * 40 + "#subdirectory=packages/pytest-homeassistant\n",
                 encoding="utf-8",
             )
             with (
@@ -121,8 +121,8 @@ class TestReleaseCheck(unittest.TestCase):
             root = Path(temp_dir)
             (root / "requirements-ha.txt").write_text(
                 "homeassistant==2026.11.0\n"
-                "pytest-home-assistant @ git+https://github.com/home-assistant/core.git@"
-                + "a" * 40 + "#subdirectory=packages/pytest-home-assistant\n",
+                "pytest-homeassistant @ git+https://github.com/home-assistant/core.git@"
+                + "a" * 40 + "#subdirectory=packages/pytest-homeassistant\n",
                 encoding="utf-8",
             )
             with patch.object(release_check, "installed_baseline_errors", return_value=["wrong installed HA"]):
@@ -947,16 +947,21 @@ class TestReleaseCheck(unittest.TestCase):
     def test_service_smoke_requires_config_and_username(self) -> None:
         args = release_check._parse_args(["--run-ha-service-smoke"])
 
-        results = release_check.collect_results(
-            args,
-            lambda command: release_check.CommandResult(
-                args=tuple(command),
-                returncode=0,
-                stdout="",
-                stderr="",
-            ),
-        )
+        with patch(
+            "scripts.release_check.check_stable_homeassistant_baseline",
+            return_value=release_check.CheckResult(True, "stable baseline ok"),
+        ) as baseline_check:
+            results = release_check.collect_results(
+                args,
+                lambda command: release_check.CommandResult(
+                    args=tuple(command),
+                    returncode=0,
+                    stdout="",
+                    stderr="",
+                ),
+            )
 
+        baseline_check.assert_called_once_with(release_check.ROOT)
         failures = [result.message for result in results if not result.ok]
         self.assertIn("--ha-username is required for service smoke", failures)
 
@@ -1284,9 +1289,14 @@ class TestReleaseCheck(unittest.TestCase):
             patch("scripts.release_check.load_manifest_version", return_value="1.3.2"),
             patch("scripts.release_check.check_version_files", return_value=[]),
             patch("scripts.release_check.scan_tracked_files_for_secrets", return_value=release_check.CheckResult(True, "secret scan ok")),
+            patch(
+                "scripts.release_check.check_stable_homeassistant_baseline",
+                return_value=release_check.CheckResult(True, "stable baseline ok"),
+            ) as baseline_check,
         ):
             results = release_check.collect_results(args, _runner)
 
+        baseline_check.assert_called_once_with(release_check.ROOT)
         self.assertTrue(
             any(
                 result.message == "HEAD matches release tag v1.3.2 (abc123)"

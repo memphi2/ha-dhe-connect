@@ -287,8 +287,8 @@ def check_homeassistant_baseline() -> None:
     ):
         _fail("central HA baseline must pin core in the supported release series")
     if not re.fullmatch(
-        r"pytest-home-assistant @ git\+https://github[.]com/home-assistant/core[.]git@"
-        r"[0-9a-f]{40}#subdirectory=packages/pytest-home-assistant",
+        r"pytest-homeassistant @ git\+https://github[.]com/home-assistant/core[.]git@"
+        r"[0-9a-f]{40}#subdirectory=packages/pytest-homeassistant",
         requirements[1],
     ):
         _fail("central HA test helpers must be pinned to a full core commit SHA")

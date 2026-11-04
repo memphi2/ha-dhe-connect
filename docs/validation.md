@@ -106,17 +106,16 @@ No vendor logo, remote logo URL, alternate integration domain or runtime image
 downloader is introduced. See the
 [official brand image rules](https://contributors.home-assistant.io/core/integrations/brands/).
 
-## 2026.11 Release Readiness
+## Stable HA Baseline
 
-HA 2026.10.4 remains supported. Until the final HA 2026.11 release is published,
-`requirements-ha.txt` pins an available preview and the official test helpers
-from the same core revision. This is preparation, not stable-release validation.
+HA 2026.10.4 remains supported. `requirements-ha.txt` pins stable HA 2026.11.0
+and the official test helpers from that release's core commit.
 
-When 2026.11 is released, update only the two pins in `requirements-ha.txt` to
-the stable version and its matching core commit. Install `requirements.txt` in
-a clean environment, run `python -m pip check` and the full command set below.
-Do not publish v2.0.10 until that stable baseline passes. No API, minimum-version,
-translation or workflow changes should be needed solely to replace the preview.
+For future baseline updates, change both pins together. Install `requirements.txt`
+in a clean environment, run `python -m pip check` and the full command set below.
+Publication requires the stable baseline and the minimum-version environment
+to pass; a newer validation baseline does not automatically raise the supported
+minimum Home Assistant version.
 
 Do not duplicate HA's runtime pins in repository requirements or guards:
 `aiohttp`, `probatio` and `zeroconf` are installed transitively by core. This keeps
@@ -195,8 +194,8 @@ CI runs these checks on every PR update and pushes to `main` or `v*` release
 tags, along with the repository guards and the longer loopback soak below.
 Working branches without a PR use manual dispatch or the local commands above.
 New PR updates cancel obsolete runs for that PR without cancelling main, tag,
-scheduled or manually dispatched runs. The compatibility path does not need removal
-when HA 2026.11 is released.
+scheduled or manually dispatched runs. The HA 2026.10 compatibility path remains
+covered alongside the stable HA 2026.11 baseline.
 
 ## Loopback Runtime Soak
 

@@ -14,10 +14,9 @@ installation and update steps are in [installation.md](installation.md).
 - Use stable Home Assistant and matching official test helpers in
   `requirements-ha.txt` before publication. A preview-only validation run is not
   a stable release gate; follow [validation.md](validation.md).
-- Retain the HA 2026.10 compatibility path and minimum `2026.10.4` when moving
-  the HA 2026.11 baseline to stable. Replace only the two primary baseline pins,
-  validate a clean environment, then move the prepared changelog items into the
-  current version section and set its publication date.
+- Retain the HA 2026.10 compatibility path and minimum `2026.10.4` when updating
+  the stable HA baseline. Update both primary baseline pins together and validate
+  a clean environment before dating the current changelog version section.
 
 ## 2) Validation Gate
 

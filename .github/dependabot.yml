@@ -46,7 +46,7 @@ updates:
       - dependency-name: "*"
         update-types:
           - "version-update:semver-major"
-      # Core and the official pytest-home-assistant helpers move together in
+      # Core and the official pytest-homeassistant helpers move together in
       # requirements-ha.txt after validation against the matching core revision.
       #
       # Spelled as update-types rather than versions: ">=0" on purpose. A bare
@@ -58,7 +58,7 @@ updates:
           - "version-update:semver-major"
           - "version-update:semver-minor"
           - "version-update:semver-patch"
-      - dependency-name: "pytest-home-assistant"
+      - dependency-name: "pytest-homeassistant"
         update-types:
           - "version-update:semver-major"
           - "version-update:semver-minor"

@@ -2,9 +2,14 @@
 
 ## Unreleased
 
+- No changes yet.
+
+## v2.0.10 - 2026-11-04
+
 ### Compatibility
 
 - Support Home Assistant 2026.10.4 and newer; use v2.0.9 on HA 2026.10.1-2026.10.3.
+- Validate against stable Home Assistant 2026.11.0 and its matching official test helpers.
 - Use native climate temperature attributes with a narrow adapter for HA 2026.10.
 - Keep entity subscriptions active across in-place entity ID changes.
 - Use exception-based config-entry setup and unload results on HA 2026.11.
@@ -49,14 +54,15 @@
 - Centralize paired HA core/test-helper baselines and test both supported APIs.
 - Verify installed core/helper provenance and resolve matching latest-HA pairs.
 - Gate lifecycle/reconnect/idle task and memory growth with a loopback soak test.
+- Require at least 95% coverage across the integration and test continuous push
+  updates and confirmed writes without restarting the client.
+- Verify recorder retention, database repack and preserved energy/water statistics
+  across six simulated days.
+- Publish reproducible release assets through a tag-triggered workflow, comparing
+  downloaded draft files with committed source before publication.
 - Group routine tool updates quarterly while keeping security updates separate.
 - Document config-entry token storage and device-side revocation accurately.
 - Classify the integration as a water heater for catalog discovery.
-
-## v2.0.10 - Unreleased
-
-Release preparation for Home Assistant 2026.11. Changes are listed above until
-the final stable HA baseline has passed validation. No release date is set yet.
 
 ## v2.0.9 - 2026-10-14
 

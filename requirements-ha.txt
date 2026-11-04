@@ -1,4 +1,3 @@
-# Central HA validation baseline. Replace these two pins together for the stable
-# 2026.11 release; support metadata and application code need no further changes.
-homeassistant==2026.11.0b1
-pytest-home-assistant @ git+https://github.com/home-assistant/core.git@6cfd47af9851a1552ad6f58c926b5814689a9f1d#subdirectory=packages/pytest-home-assistant
+# Stable HA validation baseline. Update core and its official test helpers together.
+homeassistant==2026.11.0
+pytest-homeassistant @ git+https://github.com/home-assistant/core.git@74cf5a49c63ed8d4d87717844bf14f79c28c9cea#subdirectory=packages/pytest-homeassistant

@@ -64,6 +64,8 @@ class TestHABaseline(unittest.TestCase):
             self.assertEqual(baseline.read_baseline(path), pair)
             for invalid in (
                 pair.requirements().replace("==2026.11.0", ">=2026.11.0"),
+                pair.requirements().replace("pytest-homeassistant", "pytest-home-assistant"),
+                pair.requirements().replace(baseline.HELPER_SUBDIR, "packages/pytest-home-assistant"),
                 pair.requirements().replace(COMMIT, "dev"),
                 pair.requirements().replace(baseline.CORE_URL, "https://example.com/core.git"),
                 pair.requirements() + "pytest\n",
@@ -78,10 +80,11 @@ class TestHABaseline(unittest.TestCase):
         distribution = Mock()
         with (
             patch.object(baseline.metadata, "version", return_value="2026.11.0"),
-            patch.object(baseline.metadata, "distribution", return_value=distribution),
+            patch.object(baseline.metadata, "distribution", return_value=distribution) as get_distribution,
         ):
             distribution.read_text.return_value = json.dumps(origin())
             self.assertEqual(baseline.installed_baseline_errors(pair), [])
+            get_distribution.assert_called_once_with("pytest-homeassistant")
             for key, value in (("url", "https://example.com"), ("subdirectory", "wrong"), ("vcs_info", {"vcs": "git", "commit_id": "b" * 40})):
                 with self.subTest(field=key):
                     invalid = origin()

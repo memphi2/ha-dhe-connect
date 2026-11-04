@@ -51,9 +51,9 @@ COMPAT_HA_REQUIREMENTS_TEXT = (
 )
 VALIDATION_HA_REQUIREMENTS_TEXT = (
     "homeassistant==2026.11.0b1\n"
-    "pytest-home-assistant @ git+https://github.com/home-assistant/core.git@"
+    "pytest-homeassistant @ git+https://github.com/home-assistant/core.git@"
     "6cfd47af9851a1552ad6f58c926b5814689a9f1d"
-    "#subdirectory=packages/pytest-home-assistant\n"
+    "#subdirectory=packages/pytest-homeassistant\n"
 )
 
 
