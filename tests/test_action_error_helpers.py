@@ -36,6 +36,10 @@ class TestActionErrorHelpers(unittest.TestCase):
         self.assertEqual(getattr(error, "translation_domain", None), "stiebel_dhe_connect")
         self.assertEqual(getattr(error, "translation_key", None), "dhe_action_failed")
         self.assertIn("boom", str(error))
+        self.assertEqual(
+            error.translation_placeholders,
+            {"operation": "Could not set DHE temperature", "error": "boom"},
+        )
 
     def test_raise_if_dhe_unavailable_uses_translation_key(self) -> None:
         with self.assertRaises(HomeAssistantError) as ctx:
@@ -68,6 +72,13 @@ class TestActionErrorHelpers(unittest.TestCase):
             getattr(error, "translation_key", None),
             "dhe_weather_location_not_found",
         )
+        self.assertEqual(error.translation_placeholders, {"location_id": "abc"})
+
+    def test_translated_error_without_placeholders_uses_empty_mapping(self) -> None:
+        error = translated_homeassistant_error(
+            "DHE is not loaded", translation_key="dhe_not_loaded"
+        )
+        self.assertEqual(error.translation_placeholders, {})
 
 
 if __name__ == "__main__":

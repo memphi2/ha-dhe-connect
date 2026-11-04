@@ -16,13 +16,13 @@ from custom_components.stiebel_dhe_connect.wellness_programs import (
 )
 
 try:
-    from tests.test_client_weather_favorites import (
+    from tests.client_test_support import (
         _load_client,
         _load_component_module,
         _load_protocol,
     )
 except ModuleNotFoundError:
-    from test_client_weather_favorites import (  # type: ignore[no-redef]
+    from client_test_support import (  # type: ignore[no-redef]
         _load_client,
         _load_component_module,
         _load_protocol,

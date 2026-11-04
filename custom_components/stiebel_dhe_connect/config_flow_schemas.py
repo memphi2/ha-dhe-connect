@@ -19,6 +19,7 @@ from .const import DEFAULT_NAME, DEFAULT_PORT
 from .entity_state_helpers import (
     CONF_INTERNAL_SCALD_PROTECTION,
     INTERNAL_SCALD_PROTECTION_DEFAULT,
+    coerce_float,
     normalize_internal_scald_protection,
 )
 from .error_codes import INVALID_RANGE
@@ -116,16 +117,15 @@ def optional_float(value: Any, min_value: float, max_value: float) -> float | No
     text = str(value).strip().replace(",", ".")
     if not text:
         return None
-    parsed = float(text)
-    if parsed < min_value or parsed > max_value:
+    parsed = coerce_float(text)
+    if parsed is None or parsed < min_value or parsed > max_value:
         raise ValueError(INVALID_RANGE)
     return parsed
 
 
 def format_number_default(value: Any, *, precision: int = 2) -> str:
-    try:
-        numeric = float(value)
-    except (TypeError, ValueError):
+    numeric = coerce_float(value)
+    if numeric is None:
         return ""
     if numeric.is_integer():
         return str(int(numeric))

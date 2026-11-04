@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from copy import deepcopy
+from math import isfinite
 from typing import Any
 
 CONF_INTERNAL_SCALD_PROTECTION = "internal_scald_protection"
@@ -23,9 +24,10 @@ def coerce_float(value: Any) -> float | None:
     if value is None or isinstance(value, bool):
         return None
     try:
-        return float(value)
-    except (TypeError, ValueError):
+        result = float(value)
+    except (TypeError, ValueError, OverflowError):
         return None
+    return result if isfinite(result) else None
 
 
 def format_minutes_duration(value: Any) -> str | None:

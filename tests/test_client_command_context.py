@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 try:
-    from tests.test_client_weather_favorites import _load_component_module
+    from tests.client_test_support import _load_component_module
 except ModuleNotFoundError:
-    from test_client_weather_favorites import _load_component_module
+    from client_test_support import _load_component_module
 
 
 def test_client_context_helpers_are_runtime_noops() -> None:

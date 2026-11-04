@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, Any
 
@@ -15,7 +14,6 @@ from .client_value_helpers import (
 )
 from .device_info_helpers import product_id_prefix as _product_id_prefix
 from .protocol import (
-    APP_SETTING_SET_COMMAND_IDS,
     BRUSH_TIMER_PATH,
     CONSUMPTION_COMMAND_IDS,
     DEFAULT_TEMPERATURE_MEMORY_NAMES,
@@ -316,21 +314,6 @@ class DHEClientRuntimeAppMixin:
             return
 
         self._last_app_values[command] = raw_value
-        measurement_id = APP_SETTING_SET_COMMAND_IDS.get(command)
-        if measurement_id is None:
-            return
-
-        attributes = {
-            "source_command": command,
-            "raw_value": raw_value,
-        }
-        previous_attributes = self._last_measurement_attributes.get(measurement_id)
-        self._last_measurement_attributes[measurement_id] = attributes
-        self._handle_measurement(
-            measurement_id,
-            self._format_app_setting_value(raw_value),
-            force_update=previous_attributes != attributes,
-        )
 
     def _handle_temperature_max_override_value(self, command: str, raw_value: Any) -> None:
         """Track temporary DHE max-temperature bridge runtime updates."""
@@ -345,16 +328,6 @@ class DHEClientRuntimeAppMixin:
             temperature_max_override_active=active,
             temperature_max_override_source_command=command,
         )
-
-    @staticmethod
-    def _format_app_setting_value(raw_value: Any) -> str:
-        if raw_value in (None, ""):
-            return "unset"
-        if isinstance(raw_value, bool):
-            return "on" if raw_value else "off"
-        if isinstance(raw_value, (dict, list)):
-            return json.dumps(raw_value, sort_keys=True)
-        return str(raw_value)
 
     def _handle_wellness_programs_value(
         self,

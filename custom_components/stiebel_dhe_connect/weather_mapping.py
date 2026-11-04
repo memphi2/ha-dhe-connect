@@ -7,6 +7,8 @@ from datetime import date as date_type
 from datetime import time as time_type
 from typing import Any
 
+from .entity_state_helpers import coerce_float
+
 DHE_WEATHER_ICON_CONDITIONS = {
     1: "sunny",
     2: "sunny",
@@ -328,7 +330,7 @@ def current_temperature(
     tmax = number(day.get("tmax"))
     tmin = number(day.get("tmin"))
     if tmax is not None and tmin is not None:
-        return round((tmax + tmin) / 2.0, 1)
+        return round(tmax / 2.0 + tmin / 2.0, 1)
     return tmax if tmax is not None else tmin
 
 
@@ -444,11 +446,8 @@ def current_weather_period(now: datetime | None = None) -> str:
 
 
 def number(value: Any) -> float | None:
-    """Coerce a DHE weather value to float."""
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
+    """Coerce a finite DHE weather value, ignoring malformed fields."""
+    return coerce_float(value)
 
 
 def int_value(value: Any) -> int | None:

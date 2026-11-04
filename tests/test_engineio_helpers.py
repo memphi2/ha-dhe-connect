@@ -98,3 +98,22 @@ class TestEngineIOHelpers(unittest.TestCase):
             ),
             25.0,
         )
+
+    def test_decoder_handles_separators_and_incomplete_length_prefixes(self) -> None:
+        for payload, expected in (
+            ("2\x1e3\x1e ", ["2", "3"]),
+            ("2\ufffd3\ufffd ", ["2", "3"]),
+            ("1:2x1:3", ["2", "3"]),
+            ("10:short", ["10:short"]),
+            ("\u00b2:x", ["\u00b2:x"]),
+        ):
+            with self.subTest(payload=payload):
+                self.assertEqual(self.helpers.decode_engineio_payload(payload), expected)
+
+    def test_parser_rejects_absent_open_and_unterminated_arrays(self) -> None:
+        for packet in ("", "2", "0[]", "0:null"):
+            with self.subTest(packet=packet), self.assertRaises(ValueError):
+                self.helpers.parse_engineio_open_payload(packet)
+        for packet in ("no array", "[", '["unterminated', '["escaped\\'):
+            with self.subTest(packet=packet):
+                self.assertEqual(self.helpers.balanced_json_array(packet, 0), (None, -1))

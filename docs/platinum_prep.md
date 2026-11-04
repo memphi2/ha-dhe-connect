@@ -5,6 +5,30 @@ this custom integration.
 
 It does not claim official Home Assistant Core certification.
 
+## Quality Inventory
+
+Open rules: none
+
+The local inventory tracks all 54 rules in the
+[official rule list](https://contributors.home-assistant.io/core/quality-scale/rules/),
+checked on 2026-11-02. `scripts/check_quality_scale.py` parses YAML, rejects
+duplicate/missing/unknown rules and invalid statuses, requires a reason for
+every exemption or TODO and checks implementation/test/documentation evidence
+for every rule. The integration guard runs it in CI without network access.
+Revisit this snapshot when adopting a new HA baseline; it is not an upstream
+rule-change detector.
+
+There are no custom trigger or condition platforms, so `docs-triggers` and
+`docs-conditions` are exempt. Standard entity-state/numeric-state automation
+examples are in [examples.md](examples.md). `async-dependency` and
+`inject-websession` remain exempt because the async protocol client is owned
+by the integration, not an external dependency accepting a session.
+
+If a rule becomes `todo`, record its reason in the YAML and list its rule ID in
+the `Open rules:` line above. Required done rules cannot be silently downgraded.
+Evidence descriptions still require human review; the guard checks consistency,
+not fulfillment of Home Assistant's official review process.
+
 ## Scope
 
 - No protocol-semantic changes for hardening-only rounds
@@ -39,21 +63,18 @@ It does not claim official Home Assistant Core certification.
    - Explicit Protocol contracts across client mixins
    - Minimize `Any`, broad casts and unmanaged ignores
 
-## Mandatory Local Gate
+## Validation Gate
 
-```bash
-python scripts/check_coverage.py
-python scripts/check_integration.py
-python scripts/check_deprecations.py
-python scripts/check_typing.py
-python -m ruff check custom_components/stiebel_dhe_connect tests scripts
-```
+Use the maintained command set in [validation.md](validation.md), including
+coverage, HA baseline provenance, privacy/deprecation guards, strict typing and
+Ruff. Do not maintain a reduced duplicate checklist here.
 
-Optional release-style gate:
+The loopback runtime soak is a bounded regression test, not proof of multi-day
+device stability. Real-device evidence belongs in [firmware_matrix.md](firmware_matrix.md).
+Live smoke checks require a deliberately authorized test installation.
 
-```bash
-python scripts/release_check.py --run-local-checks --run-github-hygiene --expect-tag skip --expect-github-release skip
-```
+For publication, follow [release_process.md](release_process.md). Skipping tag
+or release checks during development is not a stable-release approval.
 
 ## Exit Criteria For Platinum-Track Rounds
 

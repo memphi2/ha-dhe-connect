@@ -98,6 +98,11 @@ class StiebelDHEBinarySensor(StiebelDHEEntityMixin, BinarySensorEntity):
         self._attr_is_on: bool | None = None
         self._last_written_binary_signature: tuple[Any, ...] | None = None
 
+    @callback
+    def async_entity_id_changed(self, old_entity_id: str) -> None:
+        """Keep device subscriptions active when the entity ID changes in place."""
+        super().async_entity_id_changed(old_entity_id)
+
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE measurements."""
         self.async_on_remove(

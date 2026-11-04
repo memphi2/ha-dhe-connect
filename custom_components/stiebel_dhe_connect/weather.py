@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-import inspect
 import logging
-from importlib import import_module
+from copy import deepcopy
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from homeassistant.components.weather import WeatherEntity
+from homeassistant.components.weather.const import WeatherEntityFeature
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
@@ -19,34 +19,15 @@ from . import weather_mapping as weather_model
 from .async_helpers import create_background_task
 from .client import DHEClient
 from .entity_helpers import StiebelDHEEntityMixin
-from .entity_state_helpers import connected_and_ready, filtered_state_attributes
+from .entity_state_helpers import connected_and_ready
 from .runtime_helpers import get_runtime_data
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable
-
     from homeassistant.components.weather import Forecast
 
 PARALLEL_UPDATES = 0
 _LOGGER = logging.getLogger(__name__)
 ForecastType = Literal["daily", "hourly", "twice_daily"]
-
-
-def _weather_feature_value(name: str, fallback: int = 0) -> Any:
-    """Return a weather feature value across HA module layouts."""
-    for module_name in (
-        "homeassistant.components.weather",
-        "homeassistant.components.weather.const",
-    ):
-        try:
-            feature_cls = import_module(module_name).WeatherEntityFeature
-        except (AttributeError, ImportError):
-            continue
-        return getattr(feature_cls, name, fallback)
-    return fallback
-
-
-SUPPORT_FORECAST_DAILY = _weather_feature_value("FORECAST_DAILY")
 
 
 async def async_setup_entry(
@@ -71,7 +52,7 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
     _attr_has_entity_name = True
     _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_should_poll = False
-    _attr_supported_features = SUPPORT_FORECAST_DAILY
+    _attr_supported_features = WeatherEntityFeature.FORECAST_DAILY
     _attr_translation_key = "weather"
     _unrecorded_attributes = frozenset({
         "favorite_locations",
@@ -99,6 +80,11 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
         self._forecast_listener_update_task: asyncio.Task[Any] | None = None
         self._forecast_listener_update_pending = False
         self._forecast_subscription_counts: dict[ForecastType, int] = {}
+
+    @callback
+    def async_entity_id_changed(self, old_entity_id: str) -> None:
+        """Keep device subscriptions active when the entity ID changes in place."""
+        super().async_entity_id_changed(old_entity_id)
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE weather updates."""
@@ -136,8 +122,10 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
     @callback
     def _handle_weather_update(self, state: dict[str, Any]) -> None:
         """Handle weather updates from the persistent client."""
+        previous_forecast = self._forecast
         self._apply_weather_state(state)
-        if self._write_weather_state():
+        self._write_weather_state()
+        if self._forecast != previous_forecast:
             self._schedule_forecast_listener_update()
 
     @callback
@@ -151,7 +139,7 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
         self._write_weather_state()
 
     def _write_weather_state(self, *, force: bool = False) -> bool:
-        """Write weather state only when recorder-visible state changed."""
+        """Publish changed HA state, including attributes excluded from history."""
         signature = self._weather_write_signature()
         if not force and signature == self._last_written_weather_signature:
             return False
@@ -167,19 +155,11 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
             self._attr_native_temperature,
             self._attr_name,
             list(self._forecast),
-            self._recorded_weather_attributes(),
-        )
-
-    def _recorded_weather_attributes(self) -> dict[str, Any]:
-        """Return weather attributes that should participate in recorder writes."""
-        return filtered_state_attributes(
-            self._attr_extra_state_attributes,
-            self._unrecorded_attributes,
+            deepcopy(self._attr_extra_state_attributes),
         )
 
     def _schedule_forecast_listener_update(self) -> None:
-        update_listeners = getattr(self, "async_update_listeners", None)
-        if update_listeners is None or not self._has_forecast_listeners():
+        if not self._has_forecast_listeners():
             self._forecast_listener_update_pending = False
             return
 
@@ -189,29 +169,17 @@ class StiebelDHEWeather(StiebelDHEEntityMixin, WeatherEntity):
             return
 
         self._forecast_listener_update_pending = False
-        try:
-            result = update_listeners(("daily",))
-        except TypeError:  # pragma: no cover - older HA compatibility
-            result = update_listeners()
-        if inspect.isawaitable(result):
-            task = create_background_task(
-                self.hass,
-                self._async_run_forecast_listener_update(result),
-                "stiebel_dhe_connect_weather_listener_update",
-            )
-            self._forecast_listener_update_task = task
-            task.add_done_callback(self._handle_forecast_listener_update_done)
+        task = create_background_task(
+            self.hass,
+            self.async_update_listeners(("daily",)),
+            "stiebel_dhe_connect_weather_listener_update",
+        )
+        self._forecast_listener_update_task = task
+        task.add_done_callback(self._handle_forecast_listener_update_done)
 
     def _has_forecast_listeners(self) -> bool:
         """Return whether HA has any forecast listeners to notify."""
         return self._forecast_subscription_counts.get("daily", 0) > 0
-
-    async def _async_run_forecast_listener_update(
-        self,
-        update: Awaitable[Any],
-    ) -> None:
-        """Run one HA forecast-listener update task."""
-        await update
 
     def _handle_forecast_listener_update_done(
         self,

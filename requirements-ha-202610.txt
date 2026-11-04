@@ -1,0 +1,3 @@
+# Stable compatibility baseline; the fixture pins this exact Home Assistant release.
+homeassistant==2026.10.4
+pytest-homeassistant-custom-component==0.13.375

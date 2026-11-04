@@ -46,6 +46,13 @@ class DeprecatedPattern:
 
 PATTERNS = (
     DeprecatedPattern(
+        re.compile(
+            r"\b(?:self[.])?_attr_(?:temperature_unit|current_temperature|"
+            r"target_temperature(?:_high|_low)?)(?:\b(?=[.\s,)]|$)|\s*[:=])"
+        ),
+        "Use native climate temperature attributes introduced in Home Assistant 2026.11.",
+    ),
+    DeprecatedPattern(
         re.compile(r"\basyncio[.]iscoroutinefunction\b"),
         "Use inspect.iscoroutinefunction instead of asyncio.iscoroutinefunction.",
     ),

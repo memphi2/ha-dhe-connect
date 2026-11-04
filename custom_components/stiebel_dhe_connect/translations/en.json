@@ -190,6 +190,9 @@
     "dhe_no_radio_favorites": {
       "message": "No DHE radio favorites available"
     },
+    "dhe_invalid_temperature": {
+      "message": "Temperature must be a finite number"
+    },
     "dhe_unsupported_hvac_mode": {
       "message": "Unsupported HVAC mode: {hvac_mode}"
     }

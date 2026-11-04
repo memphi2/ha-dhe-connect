@@ -109,6 +109,8 @@ def ensure_homeassistant_stubs() -> None:
             homeassistant.const = const
         homeassistant.const = const
 
+        _ensure_constant(const, "MAJOR_VERSION", 2026)
+        _ensure_constant(const, "MINOR_VERSION", 11)
         _ensure_constant(const, "PERCENTAGE", "%")
         _ensure_constant(const, "CONF_HOST", "host")
         _ensure_constant(const, "CONF_NAME", "name")
@@ -468,6 +470,8 @@ def ensure_homeassistant_stubs() -> None:
 
     # constants
     const = _module("homeassistant.const")
+    const.MAJOR_VERSION = 2026
+    const.MINOR_VERSION = 11
 
     class _Energy(_Units):
         KILO_WATT_HOUR = "kWh"

@@ -1,5 +1,11 @@
 {
   "version": 2,
+  "provenance": {
+    "kind": "synthetic",
+    "source": "docs/protocol.md",
+    "license": "MIT",
+    "contains_live_capture": false
+  },
   "firmware_profile": "firmware_c",
   "description": "Synthetic DHE metadata and catalog replay for parser and runtime regression tests. Values are artificial and contain no live host, credential or device identifiers.",
   "engineio_open": "0{\"sid\":\"fixture-c-polling-sid\",\"websocketSid\":\"fixture-c-websocket-sid\",\"pingInterval\":25000}",

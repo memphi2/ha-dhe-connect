@@ -45,9 +45,27 @@ from .engineio_helpers import (
 from .engineio_helpers import (
     parse_engineio_open_payload as _parse_engineio_open_payload,
 )
+from .http_helpers import (
+    IDENTITY_ENCODING_HEADERS,
+    PROTOCOL_RESPONSE_LIMIT,
+    read_bounded_response,
+)
 from .protocol import NS
 
 _LOGGER = logging.getLogger(__name__)
+
+
+async def _reject_redirect(
+    request: aiohttp.ClientRequest,
+    handler: aiohttp.ClientHandlerType,
+) -> aiohttp.ClientResponse:
+    """Reject redirects before aiohttp can forward a WebSocket cookie or token."""
+    response = await handler(request)
+    if 300 <= response.status < 400:
+        response.close()
+        raise DHEError("DHE WebSocket redirect refused")
+    return response
+
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -196,13 +214,15 @@ class DHEClientTransportMixin(
             ping_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await ping_task
-        with _suppress_transport_errors():
-            await self._post_packet(ctx, f"41/{NS}")
-        websocket = ctx.websocket
-        ctx.websocket = None
-        if websocket is not None and not websocket.closed:
+        try:
             with _suppress_transport_errors():
-                await websocket.close()
+                await self._post_packet(ctx, f"41/{NS}")
+        finally:
+            websocket = ctx.websocket
+            ctx.websocket = None
+            if websocket is not None and not websocket.closed:
+                with _suppress_transport_errors():
+                    await websocket.close()
 
     async def _force_reconnect(
         self,
@@ -247,6 +267,26 @@ class DHEClientTransportMixin(
             self._reconnect_count,
         )
 
+    async def _connect_websocket(self, url: str, sid: str) -> aiohttp.ClientWebSocketResponse:
+        # ws_connect has no allow_redirects option. Reuse HA's connector without
+        # taking ownership, and scope the redirect guard to this handshake.
+        async with aiohttp.ClientSession(
+            connector=self._session.connector,
+            connector_owner=False,
+            headers=self._session.headers,
+            timeout=self._session.timeout,
+            trust_env=self._session.trust_env,
+            middlewares=(_reject_redirect,),
+        ) as session:
+            return await session.ws_connect(
+                url,
+                autoping=True,
+                heartbeat=None,
+                headers=self._websocket_headers(sid),
+                timeout=_websocket_timeout(WEBSOCKET_UPGRADE_TIMEOUT),
+                max_msg_size=PROTOCOL_RESPONSE_LIMIT,
+            )
+
     async def _upgrade_to_websocket(self, ctx: DHESession) -> None:
         websocket = None
         try:
@@ -254,13 +294,7 @@ class DHEClientTransportMixin(
             for label, sid, url in self._websocket_url_candidates(ctx):
                 websocket = None
                 try:
-                    websocket = await self._session.ws_connect(
-                        url,
-                        autoping=True,
-                        heartbeat=None,
-                        headers=self._websocket_headers(sid),
-                        timeout=_websocket_timeout(WEBSOCKET_UPGRADE_TIMEOUT),
-                    )
+                    websocket = await self._connect_websocket(url, sid)
                     await websocket.send_str("2probe")
                     deadline = time.monotonic() + WEBSOCKET_UPGRADE_TIMEOUT
                     while time.monotonic() < deadline:
@@ -414,11 +448,13 @@ class DHEClientTransportMixin(
 
     async def _get_text(self, url: str, *, timeout: float = 70.0) -> str:
         client_timeout = aiohttp.ClientTimeout(total=timeout)
-        async with self._session.get(url, timeout=client_timeout) as resp:
-            body: bytes = await resp.read()
+        async with self._session.get(
+            url, timeout=client_timeout, allow_redirects=False,
+            auto_decompress=False, headers=IDENTITY_ENCODING_HEADERS,
+        ) as resp:
             if resp.status < 200 or resp.status >= 300:
-                text = body.decode("utf-8", errors="replace")
-                raise DHEError(f"GET {resp.status}: {text[:200]}")
+                raise DHEError(f"GET {resp.status}")
+            body = await read_bounded_response(resp, PROTOCOL_RESPONSE_LIMIT)
             decoded = body.decode("utf-8", errors="replace")
             return decoded
 
@@ -432,13 +468,14 @@ class DHEClientTransportMixin(
         async with self._session.post(
             self._poll_url(ctx.url_token, ctx.sid, ctx.websocket_sid),
             data=body.encode("utf-8"),
-            headers={"Content-Type": "text/plain;charset=UTF-8"},
+            headers={"Content-Type": "text/plain;charset=UTF-8", **IDENTITY_ENCODING_HEADERS},
             timeout=timeout,
+            allow_redirects=False,
+            auto_decompress=False,
         ) as resp:
-            response_body: bytes = await resp.read()
             if resp.status < 200 or resp.status >= 300:
-                text = response_body.decode("utf-8", errors="replace")
-                raise DHEError(f"POST {resp.status}: {text[:200]}")
+                raise DHEError(f"POST {resp.status}")
+            response_body = await read_bounded_response(resp, PROTOCOL_RESPONSE_LIMIT)
             decoded = response_body.decode("utf-8", errors="replace")
             return decoded
 

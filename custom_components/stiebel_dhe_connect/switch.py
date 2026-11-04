@@ -305,6 +305,11 @@ class StiebelDHEODBSwitch(StiebelDHEBaseSwitch):
         )
         self._attr_extra_state_attributes = {"odb_id": description.measurement_id}
 
+    @callback
+    def async_entity_id_changed(self, old_entity_id: str) -> None:
+        """Keep device subscriptions active when the entity ID changes in place."""
+        super().async_entity_id_changed(old_entity_id)
+
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE updates and restore last known state."""
         self._subscribe_to_switch_updates()
@@ -383,6 +388,11 @@ class StiebelDHEAppTimerSwitch(StiebelDHEBaseSwitch):
             "timer_property": "activation",
         }
 
+    @callback
+    def async_entity_id_changed(self, old_entity_id: str) -> None:
+        """Keep device subscriptions active when the entity ID changes in place."""
+        super().async_entity_id_changed(old_entity_id)
+
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE updates and restore last known state."""
         self._subscribe_to_switch_updates()
@@ -451,6 +461,11 @@ class StiebelDHEWellnessShowerProgramSwitch(
         self._attr_extra_state_attributes = self._program_attributes()
         self._last_program_value: ODBValue | None = None
         self._program_active: bool | None = None
+
+    @callback
+    def async_entity_id_changed(self, old_entity_id: str) -> None:
+        """Keep device subscriptions active when the entity ID changes in place."""
+        super().async_entity_id_changed(old_entity_id)
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to DHE updates and restore last known wellness state."""

@@ -11,7 +11,7 @@ from typing import Any, cast
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntry, ConfigFlowResult
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
@@ -34,7 +34,12 @@ from .const import (
     DOMAIN,
     PLATFORMS,
 )
-from .entity_helpers import device_registry_model, device_registry_sw_version
+from .entity_helpers import (
+    DEVICE_MANUFACTURER,
+    device_registry_model,
+    device_registry_sw_version,
+)
+from .ha_compat import HA_2026_11
 from .protocol import ID_DEVICE_INFO
 from .repair_issues import (
     DEVICE_UNREACHABLE_ISSUE,
@@ -109,7 +114,7 @@ def _entry_display_name(entry: ConfigEntry, data: Mapping[str, Any]) -> str:
     return str(data.get(CONF_NAME, entry.title or DEFAULT_NAME)).strip() or DEFAULT_NAME
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool | None:
     """Set up DHE Connect from a config entry."""
     data = merged_entry_data(entry)
     target = _entry_target_or_raise(entry)
@@ -180,7 +185,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _async_schedule_connected_issue_cleanup(hass, entry, client)
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
-    return True
+    return None if HA_2026_11 else True
 
 
 async def _async_first_reachable_entry_target(
@@ -280,7 +285,7 @@ def _async_update_device_registry_info(
     client: DHEClient,
     metadata: tuple[str, str | None],
 ) -> bool:
-    """Update one HA device registry entry with runtime model/firmware metadata."""
+    """Update the manufacturer and runtime model/firmware of one HA device."""
     device_registry = dr.async_get(hass)
     device_entry = _async_entry_device(device_registry, entry, client)
     if device_entry is None:
@@ -289,7 +294,7 @@ def _async_update_device_registry_info(
     model, sw_version = metadata
     device_registry.async_update_device(
         device_entry.id,
-        manufacturer=None,
+        manufacturer=DEVICE_MANUFACTURER,
         model=model,
         sw_version=sw_version,
     )
@@ -339,7 +344,7 @@ def _async_clear_stale_sensor_statistic_issues(
         )
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool | None:
     """Unload a config entry."""
     runtime = getattr(entry, "runtime_data", None)
     unloaded_result = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
@@ -354,7 +359,16 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if not any(iter_loaded_runtime_data(hass)):
             _async_unregister_services(hass)
 
-    return unloaded
+    if not unloaded:
+        if HA_2026_11:
+            raise ConfigEntryError("Could not unload DHE platforms")
+        return False
+    return None if HA_2026_11 else True
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Clear entry-owned Repairs, including on HA before native ownership."""
+    async_delete_repair_issues(hass, entry.entry_id)
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -408,13 +422,9 @@ def _start_client_background(
     client: DHEClient,
 ) -> asyncio.Task[Any]:
     """Start the persistent DHE session without blocking entity setup."""
-    create_task = getattr(entry, "async_create_background_task", None)
-    if create_task is not None:
-        return cast(
-            asyncio.Task[Any],
-            create_task(hass, client.start(), "stiebel_dhe_connect_start"),
-        )
-    return create_background_task(hass, client.start(), "stiebel_dhe_connect_start")
+    return entry.async_create_background_task(
+        hass, client.start(), "stiebel_dhe_connect_start"
+    )
 
 
 def _runtime_task_cancel_callback(

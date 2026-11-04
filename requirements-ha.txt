@@ -1,0 +1,3 @@
+# Stable HA validation baseline. Update core and its official test helpers together.
+homeassistant==2026.11.0
+pytest-homeassistant @ git+https://github.com/home-assistant/core.git@74cf5a49c63ed8d4d87717844bf14f79c28c9cea#subdirectory=packages/pytest-homeassistant

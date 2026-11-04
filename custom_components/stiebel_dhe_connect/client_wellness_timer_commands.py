@@ -12,7 +12,6 @@ from .client_value_helpers import raw_to_float as _raw_to_float
 from .protocol import (
     BRUSH_TIMER_DEFAULT_DURATION_MINUTES,
     BRUSH_TIMER_PATH,
-    CIRCULATION_BOOST_PROGRAM_ID,
     ID_BRUSH_TIMER_ACTIVATION,
     ID_BRUSH_TIMER_DURATION,
     ID_BRUSH_TIMER_REMAINING,
@@ -23,29 +22,11 @@ from .protocol import (
     ID_WELLNESS_SHOWER_PROGRAM,
     SHOWER_TIMER_DEFAULT_DURATION_MINUTES,
     SHOWER_TIMER_PATH,
-    SUMMER_FITNESS_PROGRAM_ID,
-    WELLNESS_COLD_PREVENTION_PROGRAM_ID,
-    WINTER_PICK_ME_UP_PROGRAM_ID,
 )
 
 
 class DHEClientWellnessTimerCommandsMixin:
     """Wellness shower and app timer write helpers."""
-
-    async def set_wellness_cold_prevention(self, enabled: bool) -> bool:
-        client = _command_context(self)
-        if enabled:
-            await client.write_odb_value(
-                ID_WELLNESS_SHOWER_PROGRAM,
-                WELLNESS_COLD_PREVENTION_PROGRAM_ID,
-            )
-            await client.write_odb_value(ID_WELLNESS_ACTIVE, True)
-            return True
-
-        await client.write_odb_value(ID_WELLNESS_ACTIVE, False)
-        client._handle_measurement(ID_WELLNESS_ACTIVE, False, force_update=True)
-        client._handle_measurement(ID_WELLNESS_SHOWER_PROGRAM, 0.0, force_update=True)
-        return False
 
     async def set_wellness_shower_program(self, program_id: int) -> bool:
         client = _command_context(self)
@@ -105,39 +86,6 @@ class DHEClientWellnessTimerCommandsMixin:
             ID_SHOWER_TIMER_REMAINING,
             SHOWER_TIMER_DEFAULT_DURATION_MINUTES,
         )
-
-    async def run_wellness_shower_program_winter_pick_me_up(self) -> bool:
-        """Trigger the wellness shower program 'Winter pick-me-up'."""
-        client = _command_context(self)
-        for _ in range(2):
-            await client.write_odb_value(
-                ID_WELLNESS_SHOWER_PROGRAM,
-                WINTER_PICK_ME_UP_PROGRAM_ID,
-            )
-            await client.write_odb_value(ID_WELLNESS_ACTIVE, True)
-        return True
-
-    async def run_wellness_shower_program_summer_fitness(self) -> bool:
-        """Trigger the wellness shower program 'Summer fitness'."""
-        client = _command_context(self)
-        for _ in range(2):
-            await client.write_odb_value(
-                ID_WELLNESS_SHOWER_PROGRAM,
-                SUMMER_FITNESS_PROGRAM_ID,
-            )
-            await client.write_odb_value(ID_WELLNESS_ACTIVE, True)
-        return True
-
-    async def run_wellness_shower_program_circulation_boost(self) -> bool:
-        """Trigger the wellness shower program 'Circulation boost'."""
-        client = _command_context(self)
-        for _ in range(2):
-            await client.write_odb_value(
-                ID_WELLNESS_SHOWER_PROGRAM,
-                CIRCULATION_BOOST_PROGRAM_ID,
-            )
-            await client.write_odb_value(ID_WELLNESS_ACTIVE, True)
-        return True
 
     async def _set_app_timer_duration_minutes(
         self,

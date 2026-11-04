@@ -28,6 +28,7 @@ class _FakeConfig:
 
 class _FakeHass:
     def __init__(self, base_path: Path) -> None:
+        self.data = {}
         self.config = _FakeConfig(base_path)
         self.config_entries = _FakeConfigEntries()
 
@@ -116,7 +117,7 @@ async def test_async_preserve_token_for_retarget_migrates_existing_token(
 
     assert migrated is True
     assert entry.data["token"] == token
-    assert not old_token.exists()
+    assert old_token.exists()
     assert not new_token.exists()
 
 
@@ -146,11 +147,11 @@ async def test_async_preserve_token_for_retarget_prefers_new_target_token(
 
     assert migrated is True
     assert entry.data["token"] == "new-target-token-value-0001"
-    assert not old_token.exists()
-    assert not new_token.exists()
+    assert old_token.exists()
+    assert new_token.exists()
 
 
-async def test_async_preserve_token_for_retarget_deletes_stale_files_when_token_exists(
+async def test_async_preserve_token_for_retarget_retains_sources_when_token_exists(
     tmp_path,
 ) -> None:
     hass = _FakeHass(tmp_path)
@@ -177,8 +178,8 @@ async def test_async_preserve_token_for_retarget_deletes_stale_files_when_token_
 
     assert migrated is False
     assert entry.data["token"] == "entry-token-value-000001"
-    assert not old_token.exists()
-    assert not new_token.exists()
+    assert old_token.exists()
+    assert new_token.exists()
 
 
 async def test_async_preserve_token_for_retarget_skips_when_target_is_unchanged(

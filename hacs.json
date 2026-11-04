@@ -1,6 +1,6 @@
 {
-  "name": "DHE Connect",
-  "homeassistant": "2026.10.1",
+  "name": "Stiebel Eltron DHE Connect",
+  "homeassistant": "2026.10.4",
   "render_readme": true,
   "country": [
     "DE"

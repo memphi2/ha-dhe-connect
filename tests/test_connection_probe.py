@@ -15,6 +15,9 @@ class _FakeResponse:
     def __init__(self, status: int) -> None:
         self.status = status
         self.read_called = False
+        self.headers = {}
+        self.content_length = 0
+        self.content = self
 
     async def __aenter__(self) -> Self:
         return self
@@ -22,9 +25,9 @@ class _FakeResponse:
     async def __aexit__(self, *_args: object) -> None:
         return None
 
-    async def read(self) -> bytes:
+    async def iter_chunked(self, _size: int):
         self.read_called = True
-        return b""
+        yield b""
 
 
 class _FakeSession:
@@ -34,9 +37,14 @@ class _FakeSession:
         self.requested_timeout: aiohttp.ClientTimeout | None = None
         self.closed = False
 
-    def get(self, url: str, *, timeout: aiohttp.ClientTimeout) -> _FakeResponse:
+    def get(self, url: str, *, timeout: aiohttp.ClientTimeout, **kwargs) -> _FakeResponse:
         self.requested_url = url
         self.requested_timeout = timeout
+        assert kwargs == {
+            "allow_redirects": False,
+            "auto_decompress": False,
+            "headers": {"Accept-Encoding": "identity"},
+        }
         if isinstance(self.response, BaseException):
             raise self.response
         return self.response

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from math import isfinite
 from typing import Any
 
 from .client_types import (
@@ -41,7 +42,13 @@ def raw_to_float(value: Any) -> float:
     """Decode numeric values published by the DHE protocol."""
     if isinstance(value, str):
         value = value.strip().replace(",", ".")
-    return float(value)
+    try:
+        result = float(value)
+    except OverflowError as err:
+        raise ValueError("DHE numeric value is out of range") from err
+    if not isfinite(result):
+        raise ValueError("DHE numeric value must be finite")
+    return result
 
 
 def build_req66(temp_c: float, addr: int) -> int:

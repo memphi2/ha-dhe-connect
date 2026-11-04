@@ -2,25 +2,17 @@
 
 from __future__ import annotations
 
-import importlib.util
+import math
 import unittest
 from datetime import datetime
-from pathlib import Path
 from zoneinfo import ZoneInfo
 
-ROOT = Path(__file__).resolve().parents[1]
-WEATHER_MAPPING = (
-    ROOT / "custom_components" / "stiebel_dhe_connect" / "weather_mapping.py"
-)
+from tests.client_test_support import _load_component_module
 
 
 def _load_weather_mapping():
-    spec = importlib.util.spec_from_file_location("weather_mapping", WEATHER_MAPPING)
-    assert spec is not None
-    module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(module)
-    return module
+    _load_component_module("entity_state_helpers")
+    return _load_component_module("weather_mapping")
 
 
 class TestWeatherForecastMapping(unittest.TestCase):
@@ -28,6 +20,24 @@ class TestWeatherForecastMapping(unittest.TestCase):
 
     def setUp(self) -> None:
         self.weather = _load_weather_mapping()
+
+    def test_invalid_numeric_fields_leave_valid_forecast_fields_intact(self) -> None:
+        for value in ("NaN", "inf", "-inf", "1e309", float("nan"), True, 10**400):
+            with self.subTest(value=value):
+                day = {"date": "2026-11-01", "icon_id_day": value,
+                       "preci_morning": value, "tmax": value, "tmin": 12}
+                self.assertIsNone(self.weather.number(value))
+                self.assertIsNone(self.weather.int_value(value))
+                self.assertEqual(self.weather.current_temperature(day), 12)
+                self.assertEqual(self.weather.forecast_from_day(day), {
+                    "datetime": "2026-11-01T00:00:00+00:00", "native_templow": 12.0,
+                })
+                self.assertNotIn("icon_id_day", self.weather.weather_attributes({}, day, []))
+
+    def test_finite_temperature_average_does_not_overflow(self) -> None:
+        value = self.weather.current_temperature({"tmax": 1e308, "tmin": 1e308})
+        self.assertTrue(math.isfinite(value))
+
 
     def test_forecast_source_days_prefers_complete_days_and_deduplicates(self) -> None:
         days = self.weather.forecast_source_days(

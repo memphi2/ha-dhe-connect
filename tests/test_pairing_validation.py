@@ -2,19 +2,22 @@
 
 from __future__ import annotations
 
+import asyncio
+import importlib
 import os
 import tempfile
 import types
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 try:
-    from tests.test_client_weather_favorites import (
+    from tests.client_test_support import (
         _load_client,
         _load_component_module,
     )
 except ModuleNotFoundError:
-    from test_client_weather_favorites import (  # type: ignore[no-redef]
+    from client_test_support import (  # type: ignore[no-redef]
         _load_client,
         _load_component_module,
     )
@@ -51,6 +54,7 @@ class _FakeHass:
         root: Path,
         entries: list[types.SimpleNamespace] | None = None,
     ) -> None:
+        self.data = {}
         self.config = _FakeConfig(root)
         self.config_entries = _FakeConfigEntries(entries or [])
 
@@ -95,7 +99,8 @@ class TestPairingValidation(unittest.IsolatedAsyncioTestCase):
             storage.mkdir()
             configured_entry = types.SimpleNamespace(
                 entry_id="configured",
-                data={"host": "configured.local", "port": 8443},
+                data={"host": "configured.local", "port": 8443,
+                      "legacy_token_files": ["stiebel_dhe_connect_token_previous.local_8443.txt"]},
                 options={},
             )
             hass = _FakeHass(root, [configured_entry])
@@ -105,7 +110,8 @@ class TestPairingValidation(unittest.IsolatedAsyncioTestCase):
             )
             keep_path = storage / "stiebel_dhe_connect_token_configured.local_8443.txt"
             unrelated_path = storage / "other.txt"
-            for path in (*remove_paths, keep_path, unrelated_path):
+            pending_path = storage / configured_entry.data["legacy_token_files"][0]
+            for path in (*remove_paths, keep_path, unrelated_path, pending_path):
                 path.write_text("token", encoding="utf-8")
 
             await self.module._async_clear_setup_token_files(
@@ -119,6 +125,40 @@ class TestPairingValidation(unittest.IsolatedAsyncioTestCase):
                 self.assertFalse(path.exists(), path)
             self.assertTrue(keep_path.exists())
             self.assertTrue(unrelated_path.exists())
+            self.assertTrue(pending_path.exists())
+
+    async def test_cleanup_keeps_inflight_unregistered_migration_sources(self) -> None:
+        token_storage = importlib.import_module("custom_components.stiebel_dhe_connect.token_storage")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            entry = types.SimpleNamespace(entry_id="configured", data={"host": "old.local", "port": 8443}, options={})
+            hass = _FakeHass(root, [entry])
+            path = ".storage/stiebel_dhe_connect_token_destination_8443.txt"
+            source = token_storage.LegacyFileTokenStore(hass, path)
+            await source.async_save_token("synthetic-legacy-token-000001")
+            reading = asyncio.Event()
+            original_load = token_storage.LegacyFileTokenStore.async_load_token
+
+            async def paused_load(store):
+                token = await original_load(store)
+                reading.set()
+                await asyncio.Event().wait()
+                return token
+
+            with patch.object(token_storage.LegacyFileTokenStore, "async_load_token", paused_load):
+                migration = asyncio.create_task(token_storage.async_migrate_legacy_token_file(hass, entry, path))
+                try:
+                    await asyncio.wait_for(reading.wait(), timeout=5)
+                    await self.module._async_clear_setup_token_files(
+                        hass, "unrelated.local", 8443,
+                        ".storage/stiebel_dhe_connect_token_unrelated.local_8443.txt",
+                    )
+                    self.assertTrue(Path(source.token_path).exists())
+                finally:
+                    migration.cancel()
+                    with self.assertRaises(asyncio.CancelledError):
+                        await migration
+            self.assertEqual(token_storage.owned_legacy_token_paths(hass, entry), ())
 
     async def test_validate_setup_pairing_maps_validation_errors(self) -> None:
         module = self.module

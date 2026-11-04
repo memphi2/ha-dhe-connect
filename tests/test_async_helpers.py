@@ -6,6 +6,9 @@ import asyncio
 import importlib.util
 import unittest
 from pathlib import Path
+from unittest.mock import Mock
+
+from homeassistant.core import HomeAssistant
 
 ROOT = Path(__file__).resolve().parents[1]
 ASYNC_HELPERS = ROOT / "custom_components" / "stiebel_dhe_connect" / "async_helpers.py"
@@ -25,6 +28,23 @@ class TestAsyncHelpers(unittest.IsolatedAsyncioTestCase):
 
     def setUp(self) -> None:
         self.helpers = _load_async_helpers()
+
+    async def test_background_task_uses_ha_background_api_and_preserves_result(self) -> None:
+        hass = Mock(spec=HomeAssistant)
+        hass.async_create_background_task.side_effect = (
+            lambda coro, name: asyncio.create_task(coro, name=name)
+        )
+
+        async def _work() -> str:
+            return "done"
+
+        coro = _work()
+        task = self.helpers.create_background_task(hass, coro, "dhe-test-background")
+
+        self.assertEqual(await task, "done")
+        self.assertEqual(task.get_name(), "dhe-test-background")
+        hass.async_create_background_task.assert_called_once_with(coro, "dhe-test-background")
+        hass.async_create_task.assert_not_called()
 
     async def test_cancel_task_if_pending_cancels_and_awaits_task(self) -> None:
         started = asyncio.Event()

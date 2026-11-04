@@ -10,7 +10,6 @@ import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -105,7 +104,6 @@ from .token_storage import (
 
 _LOGGER = logging.getLogger(__name__)
 DEVICE_INFO_REQUEST_TIMEOUT_SECONDS = 5.0
-RUNTIME_STARTUP_PROOF_IDS = frozenset(INITIAL_VALUE_IDS) - {ID_PROTOCOL_VERSION}
 
 
 class DHEClient(
@@ -149,15 +147,7 @@ class DHEClient(
             self._token_store = InMemoryTokenStore()
         else:
             self._token_store = LegacyFileTokenStore(hass, token_file)
-        self._owns_session = False
-        try:
-            self._session = async_get_clientsession(hass)
-        except RuntimeError as err:
-            # In early setup-test flows the HA frame helper may not yet be ready;
-            # keep setup robust by using a scoped local session.
-            _LOGGER.debug("Falling back to direct aiohttp.ClientSession: %s", err)
-            self._session = aiohttp.ClientSession()
-            self._owns_session = True
+        self._session = async_get_clientsession(hass)
         self._ctx: DHESession | None = None
         self._token: str | None = None
         self._runner: asyncio.Task[None] | None = None
@@ -343,21 +333,31 @@ class DHEClient(
             await cancel_task_if_pending(grace_task)
         runner = self._runner
         self._runner = None
-        if runner:
-            runner.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await runner
-        if getattr(self, "_owns_session", False):
-            await self._session.close()
+        try:
+            if runner:
+                runner.cancel()
+                try:
+                    await runner
+                except asyncio.CancelledError:
+                    pass
+                except Exception as err:  # noqa: BLE001 - unload must also release failed tasks
+                    _LOGGER.error("DHE session task failed (%s)", type(err).__name__)
+        finally:
+            await self._cleanup_runtime_session()
+            self._update_diagnostics(connection_state="stopped")
+
+    async def _cleanup_runtime_session(self) -> None:
+        """Release runtime ownership even after a failed session task."""
         ctx = self._ctx
         self._ctx = None
         self._ready.clear()
-        if ctx is not None:
-            await self._close_session(ctx)
+        self._clear_pending_future(None)
+        self._clear_pending_write_future(None)
         self._set_online(False)
         self._set_available(False, immediate=True)
         self._clear_stale_runtime_probe()
-        self._update_diagnostics(connection_state="stopped")
+        if ctx is not None:
+            await self._close_session(ctx)
 
     async def validate_setup_authentication(
         self, *, timeout_seconds: float = 180.0
@@ -449,11 +449,16 @@ class DHEClient(
         )
 
     async def _run_loop(self) -> None:
+        try:
+            await self._run_sessions()
+        finally:
+            await self._cleanup_runtime_session()
+
+    async def _run_sessions(self) -> None:
         while not self._stopped.is_set():
             try:
+                self._runtime_startup_proven = False
                 self._ctx = await self._open_authenticated_session()
-                self._record_session_connected()
-                self._cancel_reconnect_grace_timer()
                 self._update_diagnostics(
                     connection_state="initializing",
                     next_reconnect_delay_seconds=None,
@@ -464,9 +469,11 @@ class DHEClient(
                 self._set_online(True)
                 await self._request_initial_values(self._ctx)
                 await self._wait_for_initial_runtime_values(self._ctx)
+                self._record_session_connected()
+                self._cancel_reconnect_grace_timer()
                 self._ready.set()
                 self._set_available(True)
-                self._update_diagnostics(connection_state="connected")
+                self._update_diagnostics(connection_state="connected", auth_failure=None)
                 self._clear_stale_runtime_probe()
                 while not self._stopped.is_set() and self._ctx is not None:
                     current_ctx = self._ctx
@@ -718,10 +725,7 @@ class DHEClient(
 
     def _has_runtime_startup_proof(self) -> bool:
         """Return whether the authenticated runtime session produced DHE data."""
-        return any(
-            odb_id in self._last_measurements
-            for odb_id in RUNTIME_STARTUP_PROOF_IDS
-        )
+        return self._runtime_startup_proven
 
     def _new_setpoint_future(
         self, expected: float | None = None

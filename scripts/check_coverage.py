@@ -1,9 +1,9 @@
-"""Run the Silver coverage gate for deterministic integration modules.
+"""Enforce 95% line coverage across the integration and deterministic modules.
 
 The repository also has HA fixture, Fake-DHE and live smoke gates for platform
-setup, device I/O and Home Assistant callback glue. This coverage gate keeps
-the 95% threshold on deterministic parser, mapping, diagnostics and state
-helper modules where line coverage is a stable signal.
+setup, device I/O and Home Assistant callback glue. The full integration gate
+includes these modules without omissions. A second, narrower report preserves
+the independent 95% gate on deterministic parsers, mappings and state helpers.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 COVERAGE_TARGET = "custom_components/stiebel_dhe_connect"
 COVERAGE_FAIL_UNDER = 95
+FULL_COVERAGE_FAIL_UNDER = 95
 
 
 @dataclass(frozen=True)
@@ -216,7 +217,12 @@ def main() -> int:
     if pytest_result != 0:
         return pytest_result
 
-    return _run(
+    full_result = _run([
+        sys.executable, "-m", "coverage", "report",
+        f"--fail-under={FULL_COVERAGE_FAIL_UNDER}", "--precision=2",
+        "--skip-covered", "--show-missing",
+    ])
+    scoped_result = _run(
         [
             sys.executable,
             "-m",
@@ -228,6 +234,7 @@ def main() -> int:
             f"--omit={_coverage_omit_argument()}",
         ]
     )
+    return full_result or scoped_result
 
 
 if __name__ == "__main__":
